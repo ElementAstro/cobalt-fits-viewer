@@ -1,0 +1,88 @@
+{
+  "timestamp": "2026-02-14T08:30:37+00:00",
+  "projectRoot": "D:\\Project\\react-native-quick-starter",
+  "projectName": "react-native-quick-starter",
+  "version": "1.0.0",
+  "language": "TypeScript",
+  "framework": "React Native + Expo",
+  "modules": [
+    {
+      "path": "src/app",
+      "name": "app",
+      "type": "routing",
+      "description": "File-based routing with Expo Router",
+      "entryFiles": ["_layout.tsx", "index.tsx"],
+      "importantFiles": [
+        "src/app/_layout.tsx",
+        "src/app/index.tsx",
+        "src/app/[...missing].tsx",
+        "src/app/(tabs)/_layout.tsx",
+        "src/app/(tabs)/index.tsx",
+        "src/app/(tabs)/explore.tsx"
+      ],
+      "hasTests": false
+    },
+    {
+      "path": "src/i18n",
+      "name": "i18n",
+      "type": "internationalization",
+      "description": "Internationalization with i18n-js",
+      "entryFiles": ["index.ts"],
+      "importantFiles": [
+        "src/i18n/index.ts",
+        "src/i18n/useI18n.ts",
+        "src/i18n/locales/index.ts",
+        "src/i18n/locales/en.ts",
+        "src/i18n/locales/zh.ts"
+      ],
+      "hasTests": false
+    },
+    {
+      "path": "src/utils",
+      "name": "utils",
+      "type": "utilities",
+      "description": "Utility functions",
+      "entryFiles": ["cn.ts"],
+      "importantFiles": ["src/utils/cn.ts"],
+      "hasTests": false
+    }
+  ],
+  "rootModule": {
+    "entryFiles": ["src/app/_layout.tsx", "src/app/index.tsx"],
+    "configFiles": [
+      "package.json",
+      "tsconfig.json",
+      "app.json",
+      "eslint.config.mjs",
+      ".prettierrc",
+      ".editorconfig",
+      "commitlint.config.js",
+      ".lintstagedrc"
+    ],
+    "styleFiles": ["src/global.css", "src/uniwind-types.d.ts"],
+    "ciFiles": [".github/workflows/ci.yml"],
+    "gitHooks": [".husky/pre-commit", ".husky/commit-msg"]
+  },
+  "coverage": {
+    "totalFiles": 14,
+    "scannedFiles": 14,
+    "coveragePercent": 100,
+    "modulesCovered": 3,
+    "gaps": {
+      "missingTests": true,
+      "missingDataModels": true,
+      "missingApiDefinitions": true
+    }
+  },
+  "ignoredPatterns": [
+    "node_modules/**",
+    ".git/**",
+    ".expo/**",
+    "dist/**",
+    "web-build/**",
+    "*.lock",
+    "*.log"
+  ],
+  "truncated": false,
+  "nextSteps": []
+}
