@@ -1,6 +1,8 @@
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert } from "react-native";
+import { View, Text, ScrollView, Alert } from "react-native";
+import { useKeepAwake } from "expo-keep-awake";
+import * as Haptics from "expo-haptics";
 import { useState, useCallback, useEffect } from "react";
-import { Button, Card, useThemeColor } from "heroui-native";
+import { Button, Card, PressableFeedback, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -59,6 +61,7 @@ const ADVANCED_TOOLS: { key: string; icon: keyof typeof Ionicons.glyphMap; route
 ];
 
 export default function EditorDetailScreen() {
+  useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
@@ -105,6 +108,7 @@ export default function EditorDetailScreen() {
   }, [pixels, dimensions]);
 
   const handleToolPress = useCallback((tool: EditorTool & string) => {
+    Haptics.selectionAsync();
     setActiveTool((prev) => (prev === tool ? null : tool));
   }, []);
 
@@ -166,6 +170,7 @@ export default function EditorDetailScreen() {
     }
 
     if (op) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       editor.applyEdit(op);
     }
     setActiveTool(null);
@@ -325,7 +330,7 @@ export default function EditorDetailScreen() {
       <View className="flex-1 bg-black">
         {isLoading && !editor.rgbaData ? (
           <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color={successColor} />
+            <Spinner size="lg" color={successColor} />
             <Text className="mt-4 text-sm text-neutral-500">
               {fitsLoading ? "Loading FITS..." : "Processing..."}
             </Text>
@@ -569,7 +574,7 @@ export default function EditorDetailScreen() {
         {/* Processing indicator overlay */}
         {editor.isProcessing && (
           <View className="absolute inset-0 items-center justify-center bg-black/50">
-            <ActivityIndicator size="small" color={successColor} />
+            <Spinner size="sm" color={successColor} />
             <Text className="mt-2 text-xs text-white">Processing...</Text>
           </View>
         )}
@@ -592,7 +597,7 @@ export default function EditorDetailScreen() {
             {EDITOR_TOOLS.map((tool) => {
               const isActive = activeTool === tool.key;
               return (
-                <TouchableOpacity key={tool.key} onPress={() => handleToolPress(tool.key)}>
+                <PressableFeedback key={tool.key} onPress={() => handleToolPress(tool.key)}>
                   <View
                     className={`items-center justify-center px-3 py-2 rounded-lg ${isActive ? "bg-success/10" : ""}`}
                   >
@@ -607,7 +612,7 @@ export default function EditorDetailScreen() {
                       {t(`editor.${tool.key}` as any)}
                     </Text>
                   </View>
-                </TouchableOpacity>
+                </PressableFeedback>
               );
             })}
           </View>
@@ -619,7 +624,7 @@ export default function EditorDetailScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View className="flex-row gap-0.5">
             {ADVANCED_TOOLS.map((tool) => (
-              <TouchableOpacity
+              <PressableFeedback
                 key={tool.key}
                 onPress={() => {
                   if (tool.route) {
@@ -654,7 +659,7 @@ export default function EditorDetailScreen() {
                       : t(`editor.${tool.key}` as any)}
                   </Text>
                 </View>
-              </TouchableOpacity>
+              </PressableFeedback>
             ))}
           </View>
         </ScrollView>
@@ -677,7 +682,7 @@ export default function EditorDetailScreen() {
       {/* Export Loading Overlay */}
       {isExporting && (
         <View className="absolute inset-0 items-center justify-center bg-black/50 z-50">
-          <ActivityIndicator size="large" color={successColor} />
+          <Spinner size="lg" color={successColor} />
           <Text className="mt-2 text-sm text-white">{t("common.loading")}</Text>
         </View>
       )}

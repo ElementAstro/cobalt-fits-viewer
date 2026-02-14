@@ -77,8 +77,8 @@ export function LocationMapView({ files, onClusterPress, style }: LocationMapVie
 
   if (clusters.length === 0) {
     return (
-      <View style={[{ flex: 1, alignItems: "center", justifyContent: "center" }, style]}>
-        <Text style={{ color: "#888", fontSize: 14 }}>No location data available</Text>
+      <View className="flex-1 items-center justify-center" style={style}>
+        <Text className="text-sm text-muted">No location data available</Text>
       </View>
     );
   }
@@ -87,8 +87,8 @@ export function LocationMapView({ files, onClusterPress, style }: LocationMapVie
 
   if (!mapsAvailable) {
     return (
-      <View style={[{ flex: 1, alignItems: "center", justifyContent: "center" }, style]}>
-        <Text style={{ color: "#888", fontSize: 14 }}>
+      <View className="flex-1 items-center justify-center" style={style}>
+        <Text className="text-sm text-muted">
           Maps require a development build (not available in Expo Go)
         </Text>
       </View>
@@ -107,7 +107,7 @@ export function LocationMapView({ files, onClusterPress, style }: LocationMapVie
 
     return (
       <AppleMaps.View
-        style={[{ flex: 1 }, style]}
+        style={[{ flex: 1 }, style as any]}
         cameraPosition={cameraPosition}
         markers={markers}
         properties={{ isMyLocationEnabled: true }}
@@ -132,7 +132,7 @@ export function LocationMapView({ files, onClusterPress, style }: LocationMapVie
 
     return (
       <GoogleMaps.View
-        style={[{ flex: 1 }, style]}
+        style={[{ flex: 1 }, style as any]}
         cameraPosition={cameraPosition}
         markers={markers}
         properties={{ isMyLocationEnabled: true }}
@@ -150,8 +150,8 @@ export function LocationMapView({ files, onClusterPress, style }: LocationMapVie
   }
 
   return (
-    <View style={[{ flex: 1, alignItems: "center", justifyContent: "center" }, style]}>
-      <Text>Maps are only available on iOS and Android</Text>
+    <View className="flex-1 items-center justify-center" style={style}>
+      <Text className="text-sm text-muted">Maps are only available on iOS and Android</Text>
     </View>
   );
 }

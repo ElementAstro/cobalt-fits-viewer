@@ -5,6 +5,8 @@
 
 import { useState, useCallback } from "react";
 import { View, Text } from "react-native";
+import { Button, useThemeColor } from "heroui-native";
+import { useI18n } from "../../i18n/useI18n";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from "react-native-reanimated";
 
@@ -27,6 +29,10 @@ export function CropOverlay({
   onCropConfirm,
   onCropCancel,
 }: CropOverlayProps) {
+  const { t } = useI18n();
+  const successColor = useThemeColor("success");
+  const mutedColor = useThemeColor("muted");
+
   // Scale factor from image coords to container coords
   const scaleX = containerWidth / imageWidth;
   const scaleY = containerHeight / imageHeight;
@@ -157,7 +163,7 @@ export function CropOverlay({
             cropStyle,
             {
               borderWidth: 1.5,
-              borderColor: "#22c55e",
+              borderColor: successColor,
               borderStyle: "dashed",
             },
           ]}
@@ -174,10 +180,10 @@ export function CropOverlay({
           gap: 4,
         }}
       >
-        <Text style={{ color: "#22c55e", fontSize: 10, fontWeight: "600" }}>
+        <Text style={{ color: successColor, fontSize: 10, fontWeight: "600" }}>
           {cropRegion.w} × {cropRegion.h}
         </Text>
-        <Text style={{ color: "#999", fontSize: 10 }}>
+        <Text style={{ color: mutedColor, fontSize: 10 }}>
           ({cropRegion.x}, {cropRegion.y})
         </Text>
       </View>
@@ -198,24 +204,22 @@ export function CropOverlay({
           style={{
             backgroundColor: "rgba(0,0,0,0.7)",
             borderRadius: 8,
-            paddingHorizontal: 16,
-            paddingVertical: 8,
+            paddingHorizontal: 8,
+            paddingVertical: 4,
             flexDirection: "row",
-            gap: 24,
+            gap: 8,
           }}
         >
-          <Text
-            style={{ color: "#ef4444", fontSize: 12, fontWeight: "600" }}
-            onPress={onCropCancel}
-          >
-            Cancel
-          </Text>
-          <Text
-            style={{ color: "#22c55e", fontSize: 12, fontWeight: "600" }}
+          <Button size="sm" variant="danger" onPress={onCropCancel}>
+            <Button.Label className="text-xs">{t("common.cancel")}</Button.Label>
+          </Button>
+          <Button
+            size="sm"
+            variant="primary"
             onPress={() => onCropConfirm(cropRegion.x, cropRegion.y, cropRegion.w, cropRegion.h)}
           >
-            Apply
-          </Text>
+            <Button.Label className="text-xs">{t("editor.apply")}</Button.Label>
+          </Button>
         </View>
       </View>
     </View>

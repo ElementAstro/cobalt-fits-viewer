@@ -1,4 +1,4 @@
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { Button, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
@@ -97,24 +97,30 @@ export function ViewerControls({
             {t("viewer.stretch")}
           </Text>
           {onAutoStretch && (
-            <TouchableOpacity onPress={onAutoStretch}>
-              <View className="flex-row items-center bg-primary/20 rounded-md px-2 py-0.5">
-                <Ionicons name="flash-outline" size={10} color={successColor} />
-                <Text className="text-[9px] font-semibold text-primary ml-0.5">
-                  {t("viewer.autoStretch")}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={onAutoStretch}
+              className="flex-row items-center bg-primary/20 rounded-md px-2 py-0.5"
+            >
+              <Ionicons name="flash-outline" size={10} color={successColor} />
+              <Button.Label className="text-[9px] font-semibold text-primary ml-0.5">
+                {t("viewer.autoStretch")}
+              </Button.Label>
+            </Button>
           )}
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
           <View className="flex-row gap-1">
             {STRETCHES.map((s) => (
-              <TouchableOpacity key={s} onPress={() => onStretchChange(s)}>
-                <Chip size="sm" variant={stretch === s ? "primary" : "secondary"}>
-                  <Chip.Label className="text-[9px]">{s}</Chip.Label>
-                </Chip>
-              </TouchableOpacity>
+              <Chip
+                key={s}
+                size="sm"
+                variant={stretch === s ? "primary" : "secondary"}
+                onPress={() => onStretchChange(s)}
+              >
+                <Chip.Label className="text-[9px]">{s}</Chip.Label>
+              </Chip>
             ))}
           </View>
         </ScrollView>
@@ -126,11 +132,14 @@ export function ViewerControls({
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
           <View className="flex-row gap-1">
             {COLORMAPS.map((c) => (
-              <TouchableOpacity key={c} onPress={() => onColormapChange(c)}>
-                <Chip size="sm" variant={colormap === c ? "primary" : "secondary"}>
-                  <Chip.Label className="text-[9px]">{c}</Chip.Label>
-                </Chip>
-              </TouchableOpacity>
+              <Chip
+                key={c}
+                size="sm"
+                variant={colormap === c ? "primary" : "secondary"}
+                onPress={() => onColormapChange(c)}
+              >
+                <Chip.Label className="text-[9px]">{c}</Chip.Label>
+              </Chip>
             ))}
           </View>
         </ScrollView>
@@ -193,50 +202,54 @@ export function ViewerControls({
 
         {/* Overlay Toggles */}
         <View className="flex-row gap-2 mt-1">
-          <TouchableOpacity onPress={onToggleGrid}>
-            <View
-              className={`h-7 w-7 items-center justify-center rounded-md ${showGrid ? "bg-success/20" : "bg-surface-secondary"}`}
-            >
-              <Ionicons
-                name="grid-outline"
-                size={14}
-                color={showGrid ? successColor : mutedColor}
-              />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onToggleCrosshair}>
-            <View
-              className={`h-7 w-7 items-center justify-center rounded-md ${showCrosshair ? "bg-success/20" : "bg-surface-secondary"}`}
-            >
-              <Ionicons
-                name="add-outline"
-                size={14}
-                color={showCrosshair ? successColor : mutedColor}
-              />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onTogglePixelInfo}>
-            <View
-              className={`h-7 w-7 items-center justify-center rounded-md ${showPixelInfo ? "bg-success/20" : "bg-surface-secondary"}`}
-            >
-              <Ionicons
-                name="information-circle-outline"
-                size={14}
-                color={showPixelInfo ? successColor : mutedColor}
-              />
-            </View>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onToggleMinimap}>
-            <View
-              className={`h-7 w-7 items-center justify-center rounded-md ${showMinimap ? "bg-success/20" : "bg-surface-secondary"}`}
-            >
-              <Ionicons
-                name="map-outline"
-                size={14}
-                color={showMinimap ? successColor : mutedColor}
-              />
-            </View>
-          </TouchableOpacity>
+          <Button
+            size="sm"
+            variant={showGrid ? "primary" : "ghost"}
+            isIconOnly
+            onPress={onToggleGrid}
+            className="h-7 w-7"
+          >
+            <Ionicons name="grid-outline" size={14} color={showGrid ? successColor : mutedColor} />
+          </Button>
+          <Button
+            size="sm"
+            variant={showCrosshair ? "primary" : "ghost"}
+            isIconOnly
+            onPress={onToggleCrosshair}
+            className="h-7 w-7"
+          >
+            <Ionicons
+              name="add-outline"
+              size={14}
+              color={showCrosshair ? successColor : mutedColor}
+            />
+          </Button>
+          <Button
+            size="sm"
+            variant={showPixelInfo ? "primary" : "ghost"}
+            isIconOnly
+            onPress={onTogglePixelInfo}
+            className="h-7 w-7"
+          >
+            <Ionicons
+              name="information-circle-outline"
+              size={14}
+              color={showPixelInfo ? successColor : mutedColor}
+            />
+          </Button>
+          <Button
+            size="sm"
+            variant={showMinimap ? "primary" : "ghost"}
+            isIconOnly
+            onPress={onToggleMinimap}
+            className="h-7 w-7"
+          >
+            <Ionicons
+              name="map-outline"
+              size={14}
+              color={showMinimap ? successColor : mutedColor}
+            />
+          </Button>
         </View>
       </View>
     </ScrollView>

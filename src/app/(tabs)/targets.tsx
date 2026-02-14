@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
-import { View, Text, TextInput, ScrollView, TouchableOpacity } from "react-native";
-import { Button, Chip, Separator, useThemeColor } from "heroui-native";
+import { useState, useMemo, useCallback } from "react";
+import { View, Text, ScrollView, FlatList, Alert } from "react-native";
+import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -98,9 +98,30 @@ export default function TargetsScreen() {
     setShowAddSheet(false);
   };
 
-  return (
-    <>
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="px-4 py-14">
+  const renderTargetItem = useCallback(
+    ({ item: target }: { item: import("../../lib/fits/types").Target }) => {
+      const stats = statsMap.get(target.id);
+      const totalExposureMin = stats ? Math.round(stats.exposureStats.totalExposure / 60) : 0;
+      const completion = stats?.completion.overall;
+
+      return (
+        <View className="px-4 mb-3">
+          <TargetCard
+            target={target}
+            frameCount={target.imageIds.length}
+            totalExposureMinutes={totalExposureMin}
+            completionPercent={completion}
+            onPress={() => router.push(`/target/${target.id}`)}
+          />
+        </View>
+      );
+    },
+    [statsMap, router],
+  );
+
+  const ListHeader = useMemo(
+    () => (
+      <View className="px-4">
         <View className="flex-row items-center justify-between">
           <View>
             <Text className="text-2xl font-bold text-foreground">{t("targets.title")}</Text>
@@ -109,7 +130,19 @@ export default function TargetsScreen() {
             </Text>
           </View>
           <View className="flex-row gap-1">
-            <Button size="sm" variant="outline" onPress={scanAndAutoDetect}>
+            <Button
+              size="sm"
+              variant="outline"
+              onPress={() => {
+                const result = scanAndAutoDetect();
+                Alert.alert(
+                  t("common.success"),
+                  result.newCount > 0
+                    ? `${t("targets.scanNow")}: ${result.newCount} ${t("targets.title")}`
+                    : t("targets.noResults"),
+                );
+              }}
+            >
               <Ionicons name="scan-outline" size={14} color={mutedColor} />
             </Button>
             <Button size="sm" variant="primary" onPress={() => setShowAddSheet(true)}>
@@ -152,23 +185,35 @@ export default function TargetsScreen() {
         <Separator className="my-4" />
 
         {/* Search */}
-        <View className="mb-3 flex-row items-center gap-2">
-          <View className="flex-1 flex-row items-center rounded-xl border border-separator bg-background px-3">
-            <Ionicons name="search-outline" size={14} color={mutedColor} />
-            <TextInput
-              className="flex-1 py-2.5 pl-2 text-sm text-foreground"
-              placeholder={t("targets.searchPlaceholder")}
-              placeholderTextColor={mutedColor}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={14} color={mutedColor} />
-              </TouchableOpacity>
-            )}
-          </View>
+        <View className="mb-3">
+          <TextField>
+            <View className="w-full flex-row items-center">
+              <Input
+                className="flex-1 pl-9 pr-9"
+                placeholder={t("targets.searchPlaceholder")}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                autoCorrect={false}
+              />
+              <Ionicons
+                name="search-outline"
+                size={14}
+                color={mutedColor}
+                style={{ position: "absolute", left: 12 }}
+              />
+              {searchQuery.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  onPress={() => setSearchQuery("")}
+                  style={{ position: "absolute", right: 12 }}
+                >
+                  <Ionicons name="close-circle" size={14} color={mutedColor} />
+                </Button>
+              )}
+            </View>
+          </TextField>
         </View>
 
         {/* Filter Chips */}
@@ -176,45 +221,45 @@ export default function TargetsScreen() {
           <View className="flex-row gap-1.5">
             {/* Type filters */}
             {(["galaxy", "nebula", "cluster", "planet", "other"] as TargetType[]).map((tt) => (
-              <TouchableOpacity
+              <Chip
                 key={tt}
+                size="sm"
+                variant={filterType === tt ? "primary" : "secondary"}
                 onPress={() => setFilterType(filterType === tt ? null : tt)}
               >
-                <Chip size="sm" variant={filterType === tt ? "primary" : "secondary"}>
-                  <Chip.Label className="text-[9px]">
-                    {t(
-                      `targets.types.${tt}` as
-                        | "targets.types.galaxy"
-                        | "targets.types.nebula"
-                        | "targets.types.cluster"
-                        | "targets.types.planet"
-                        | "targets.types.other",
-                    )}
-                  </Chip.Label>
-                </Chip>
-              </TouchableOpacity>
+                <Chip.Label className="text-[9px]">
+                  {t(
+                    `targets.types.${tt}` as
+                      | "targets.types.galaxy"
+                      | "targets.types.nebula"
+                      | "targets.types.cluster"
+                      | "targets.types.planet"
+                      | "targets.types.other",
+                  )}
+                </Chip.Label>
+              </Chip>
             ))}
 
             <View className="w-px bg-separator mx-1" />
 
             {/* Status filters */}
             {(["planned", "acquiring", "completed", "processed"] as TargetStatus[]).map((s) => (
-              <TouchableOpacity
+              <Chip
                 key={s}
+                size="sm"
+                variant={filterStatus === s ? "primary" : "secondary"}
                 onPress={() => setFilterStatus(filterStatus === s ? null : s)}
               >
-                <Chip size="sm" variant={filterStatus === s ? "primary" : "secondary"}>
-                  <Chip.Label className="text-[9px]">
-                    {t(
-                      `targets.${s}` as
-                        | "targets.planned"
-                        | "targets.acquiring"
-                        | "targets.completed"
-                        | "targets.processed",
-                    )}
-                  </Chip.Label>
-                </Chip>
-              </TouchableOpacity>
+                <Chip.Label className="text-[9px]">
+                  {t(
+                    `targets.${s}` as
+                      | "targets.planned"
+                      | "targets.acquiring"
+                      | "targets.completed"
+                      | "targets.processed",
+                  )}
+                </Chip.Label>
+              </Chip>
             ))}
           </View>
         </ScrollView>
@@ -223,12 +268,13 @@ export default function TargetsScreen() {
         <View className="mb-3 flex-row items-center gap-1.5">
           <Ionicons name="swap-vertical-outline" size={12} color={mutedColor} />
           {(["date", "name", "frames", "exposure"] as SortKey[]).map((sk) => (
-            <TouchableOpacity key={sk} onPress={() => setSortKey(sk)}>
-              <Text
-                className={`text-[10px] px-2 py-1 rounded-md ${
-                  sortKey === sk ? "bg-primary/20 text-primary font-semibold" : "text-muted"
-                }`}
-              >
+            <Chip
+              key={sk}
+              size="sm"
+              variant={sortKey === sk ? "primary" : "secondary"}
+              onPress={() => setSortKey(sk)}
+            >
+              <Chip.Label className="text-[9px]">
                 {t(
                   `targets.sort.${sk}` as
                     | "targets.sort.date"
@@ -236,12 +282,12 @@ export default function TargetsScreen() {
                     | "targets.sort.frames"
                     | "targets.sort.exposure",
                 )}
-              </Text>
-            </TouchableOpacity>
+              </Chip.Label>
+            </Chip>
           ))}
         </View>
 
-        {filteredTargets.length === 0 && targets.length === 0 ? (
+        {filteredTargets.length === 0 && targets.length === 0 && (
           <EmptyState
             icon="telescope-outline"
             title={t("targets.noTargets")}
@@ -249,37 +295,40 @@ export default function TargetsScreen() {
             actionLabel={files.length > 0 ? t("targets.scanNow") : undefined}
             onAction={files.length > 0 ? scanAndAutoDetect : undefined}
           />
-        ) : filteredTargets.length === 0 ? (
-          <EmptyState icon="search-outline" title={t("targets.noResults")} />
-        ) : (
-          <View className="gap-3">
-            {filteredTargets.map((target) => {
-              const stats = statsMap.get(target.id);
-              const totalExposureMin = stats
-                ? Math.round(stats.exposureStats.totalExposure / 60)
-                : 0;
-              const completion = stats?.completion.overall;
-
-              return (
-                <TargetCard
-                  key={target.id}
-                  target={target}
-                  frameCount={target.imageIds.length}
-                  totalExposureMinutes={totalExposureMin}
-                  completionPercent={completion}
-                  onPress={() => router.push(`/target/${target.id}`)}
-                />
-              );
-            })}
-          </View>
         )}
-      </ScrollView>
+        {targets.length > 0 && filteredTargets.length === 0 && (
+          <EmptyState icon="search-outline" title={t("targets.noResults")} />
+        )}
+      </View>
+    ),
+    [
+      t,
+      targets,
+      mutedColor,
+      searchQuery,
+      filterType,
+      filterStatus,
+      sortKey,
+      filteredTargets,
+      files,
+      scanAndAutoDetect,
+    ],
+  );
 
+  return (
+    <View className="flex-1 bg-background pt-14">
+      <FlatList
+        data={filteredTargets}
+        keyExtractor={(item) => item.id}
+        renderItem={renderTargetItem}
+        ListHeaderComponent={ListHeader}
+        contentContainerClassName="pb-4"
+      />
       <AddTargetSheet
         visible={showAddSheet}
         onClose={() => setShowAddSheet(false)}
         onConfirm={handleAddTarget}
       />
-    </>
+    </View>
   );
 }

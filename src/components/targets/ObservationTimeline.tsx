@@ -1,5 +1,5 @@
 import { View, Text } from "react-native";
-import { useThemeColor } from "heroui-native";
+import { Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { formatExposureTime } from "../../lib/targets/exposureStats";
@@ -55,12 +55,11 @@ export function ObservationTimeline({ files }: ObservationTimelineProps) {
             {Object.keys(group.filterCounts).length > 0 && (
               <View className="flex-row flex-wrap gap-1 mt-1">
                 {Object.entries(group.filterCounts).map(([filter, count]) => (
-                  <Text
-                    key={filter}
-                    className="text-[8px] text-muted bg-surface-secondary rounded px-1.5 py-0.5"
-                  >
-                    {filter}×{count}
-                  </Text>
+                  <Chip key={filter} size="sm" variant="secondary">
+                    <Chip.Label className="text-[8px]">
+                      {filter}×{count}
+                    </Chip.Label>
+                  </Chip>
                 ))}
               </View>
             )}

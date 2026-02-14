@@ -2,10 +2,10 @@
  * 日志系统 Hook
  */
 
-import { useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { useLogStore } from "../stores/useLogStore";
-import { Logger, formatSystemInfo } from "../lib/logger";
-import type { LogLevel } from "../lib/logger";
+import { Logger, formatSystemInfo, exportLogsToFile, shareLogFile } from "../lib/logger";
+import type { LogLevel, LogExportOptions } from "../lib/logger";
 
 /**
  * 提供模块级别的日志记录能力
@@ -71,8 +71,28 @@ export function useLogViewer() {
 
   const entries = getFilteredEntries();
 
+  const [isExporting, setIsExporting] = useState(false);
+
   const exportLogs = useCallback((format: "json" | "text" = "text") => {
     return format === "json" ? Logger.exportJSON() : Logger.exportText();
+  }, []);
+
+  const exportToFile = useCallback(async (options?: LogExportOptions): Promise<string | null> => {
+    setIsExporting(true);
+    try {
+      return await exportLogsToFile(options ?? { format: "text" });
+    } finally {
+      setIsExporting(false);
+    }
+  }, []);
+
+  const shareLogs = useCallback(async (options?: LogExportOptions): Promise<boolean> => {
+    setIsExporting(true);
+    try {
+      return await shareLogFile(options ?? { format: "text" });
+    } finally {
+      setIsExporting(false);
+    }
   }, []);
 
   const setFilter = useCallback(
@@ -92,6 +112,9 @@ export function useLogViewer() {
     setFilterTag,
     clearLogs,
     exportLogs,
+    exportToFile,
+    shareLogs,
+    isExporting,
     totalCount: Logger.getCount(),
   };
 }

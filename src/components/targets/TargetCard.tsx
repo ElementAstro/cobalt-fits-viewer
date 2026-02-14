@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import { Card, Chip, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { Card, Chip, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Target } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
@@ -31,7 +31,8 @@ export function TargetCard({
   }[target.status];
 
   return (
-    <TouchableOpacity onPress={onPress}>
+    <PressableFeedback onPress={onPress}>
+      <PressableFeedback.Highlight />
       <Card variant="secondary">
         <Card.Body className="gap-2 p-4">
           <View className="flex-row items-center justify-between">
@@ -41,11 +42,11 @@ export function TargetCard({
                 size={16}
                 color={getTargetIcon(target.type).color}
               />
-              <Text className="text-base font-semibold text-foreground">{target.name}</Text>
+              <Card.Title>{target.name}</Card.Title>
             </View>
             <View className="flex-row items-center gap-1.5">
               <View className="h-2 w-2 rounded-full" style={{ backgroundColor: statusColor }} />
-              <Text className="text-[10px] text-muted">
+              <Card.Description className="text-[10px]">
                 {t(
                   `targets.${target.status}` as
                     | "targets.planned"
@@ -53,7 +54,7 @@ export function TargetCard({
                     | "targets.completed"
                     | "targets.processed",
                 )}
-              </Text>
+              </Card.Description>
             </View>
           </View>
 
@@ -98,6 +99,6 @@ export function TargetCard({
           )}
         </Card.Body>
       </Card>
-    </TouchableOpacity>
+    </PressableFeedback>
   );
 }

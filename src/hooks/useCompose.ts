@@ -7,6 +7,7 @@ import { useState, useCallback } from "react";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
 import { loadFitsFromBuffer, getImagePixels, getImageDimensions } from "../lib/fits/parser";
 import { composeRGB, type ChannelData } from "../lib/utils/rgbCompose";
+import { Logger } from "../lib/logger";
 
 interface ChannelState {
   fileId: string | null;
@@ -114,8 +115,11 @@ export function useCompose() {
             setLuminance(state);
             break;
         }
+        Logger.info("Compose", `Channel ${channel} loaded: ${filename}`);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load channel");
+        const msg = e instanceof Error ? e.message : "Failed to load channel";
+        Logger.error("Compose", `Channel ${channel} load failed: ${filename}`, e);
+        setError(msg);
       } finally {
         setIsLoading(false);
       }
@@ -213,8 +217,14 @@ export function useCompose() {
         width: refDimensions.width,
         height: refDimensions.height,
       });
+      Logger.info("Compose", "RGB composition completed", {
+        width: refDimensions.width,
+        height: refDimensions.height,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Composition failed");
+      const msg = e instanceof Error ? e.message : "Composition failed";
+      Logger.error("Compose", "Composition failed", e);
+      setError(msg);
     } finally {
       setIsComposing(false);
     }

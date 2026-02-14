@@ -1,4 +1,6 @@
-import { View, Text, TouchableOpacity, Image } from "react-native";
+import { memo } from "react";
+import { View, Text, Pressable, useWindowDimensions } from "react-native";
+import { Image } from "expo-image";
 import { useMemo } from "react";
 import { Card, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -11,8 +13,10 @@ interface AlbumCardProps {
   onLongPress?: () => void;
 }
 
-export function AlbumCard({ album, onPress, onLongPress }: AlbumCardProps) {
-  const [_successColor, mutedColor] = useThemeColor(["success", "muted"]);
+export const AlbumCard = memo(function AlbumCard({ album, onPress, onLongPress }: AlbumCardProps) {
+  const [mutedColor] = useThemeColor(["muted"]);
+  const { width: screenWidth } = useWindowDimensions();
+  const cardWidth = Math.max(140, Math.min(180, (screenWidth - 48) / 2.5));
   const getFileById = useFitsStore((s) => s.getFileById);
 
   const coverUri = useMemo(() => {
@@ -22,12 +26,18 @@ export function AlbumCard({ album, onPress, onLongPress }: AlbumCardProps) {
   }, [album.coverImageId, album.imageIds, getFileById]);
 
   return (
-    <TouchableOpacity onPress={onPress} onLongPress={onLongPress}>
-      <Card variant="secondary" className="w-36">
+    <Pressable onPress={onPress} onLongPress={onLongPress}>
+      <Card variant="secondary" style={{ width: cardWidth }}>
         <Card.Body className="p-0">
           <View className="h-28 w-full items-center justify-center rounded-t-lg bg-surface-secondary overflow-hidden">
             {coverUri ? (
-              <Image source={{ uri: coverUri }} className="h-full w-full" resizeMode="cover" />
+              <Image
+                source={{ uri: coverUri }}
+                className="h-full w-full"
+                contentFit="cover"
+                cachePolicy="memory-disk"
+                transition={200}
+              />
             ) : (
               <Ionicons name="albums-outline" size={32} color={mutedColor} />
             )}
@@ -45,6 +55,6 @@ export function AlbumCard({ album, onPress, onLongPress }: AlbumCardProps) {
           </View>
         </Card.Body>
       </Card>
-    </TouchableOpacity>
+    </Pressable>
   );
-}
+});

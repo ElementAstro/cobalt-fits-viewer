@@ -1,0 +1,260 @@
+/**
+ * 备份/恢复核心服务
+ * Provider 无关的备份逻辑
+ */
+
+import { File } from "expo-file-system";
+import type { ICloudProvider } from "./cloudProvider";
+import { createManifest } from "./manifest";
+import { Logger } from "../logger";
+import type { BackupOptions, BackupProgress, BackupInfo } from "./types";
+import { DEFAULT_BACKUP_OPTIONS, BACKUP_DIR, FITS_SUBDIR } from "./types";
+import type { FitsMetadata, Album, Target, ObservationSession } from "../fits/types";
+import { getFitsDir } from "../utils/fileManager";
+
+const TAG = "BackupService";
+
+export interface BackupDataSource {
+  getFiles(): FitsMetadata[];
+  getAlbums(): Album[];
+  getTargets(): Target[];
+  getSessions(): ObservationSession[];
+  getSettings(): Record<string, unknown>;
+}
+
+export interface RestoreTarget {
+  setFiles(files: FitsMetadata[]): void;
+  setAlbums(albums: Album[]): void;
+  setTargets(targets: Target[]): void;
+  setSessions(sessions: ObservationSession[]): void;
+  setSettings(settings: Record<string, unknown>): void;
+}
+
+/**
+ * 执行完整备份
+ */
+export async function performBackup(
+  provider: ICloudProvider,
+  dataSource: BackupDataSource,
+  options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
+  onProgress?: (progress: BackupProgress) => void,
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  Logger.info(TAG, `Starting backup to ${provider.displayName}`);
+
+  onProgress?.({
+    phase: "preparing",
+    current: 0,
+    total: 0,
+  });
+
+  // Ensure backup directory exists
+  await provider.ensureBackupDir();
+
+  // Collect data
+  const manifest = createManifest(
+    {
+      files: dataSource.getFiles(),
+      albums: dataSource.getAlbums(),
+      targets: dataSource.getTargets(),
+      sessions: dataSource.getSessions(),
+      settings: dataSource.getSettings(),
+    },
+    options,
+  );
+
+  const filesToUpload: FitsMetadata[] = options.includeFiles
+    ? manifest.files.filter((f) => {
+        const file = new File(f.filepath);
+        return file.exists;
+      })
+    : [];
+
+  const total = filesToUpload.length + 1; // +1 for manifest
+  let current = 0;
+
+  // Upload FITS files
+  if (filesToUpload.length > 0) {
+    onProgress?.({
+      phase: "uploading",
+      current: 0,
+      total: filesToUpload.length,
+    });
+
+    for (const meta of filesToUpload) {
+      if (abortSignal?.aborted) {
+        throw new Error("Backup cancelled");
+      }
+
+      try {
+        const remotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${meta.filename}`;
+        await provider.uploadFile(meta.filepath, remotePath);
+        current++;
+
+        onProgress?.({
+          phase: "uploading",
+          current,
+          total,
+          currentFile: meta.filename,
+        });
+      } catch (error) {
+        Logger.error(TAG, `Failed to upload: ${meta.filename}`, { error });
+        throw error;
+      }
+    }
+  }
+
+  // Upload manifest
+  onProgress?.({
+    phase: "finalizing",
+    current: total - 1,
+    total,
+  });
+
+  await provider.uploadManifest(manifest);
+
+  onProgress?.({
+    phase: "idle",
+    current: total,
+    total,
+  });
+
+  Logger.info(TAG, `Backup complete: ${filesToUpload.length} files`);
+}
+
+/**
+ * 执行恢复
+ */
+export async function performRestore(
+  provider: ICloudProvider,
+  restoreTarget: RestoreTarget,
+  options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
+  onProgress?: (progress: BackupProgress) => void,
+  abortSignal?: AbortSignal,
+): Promise<void> {
+  Logger.info(TAG, `Starting restore from ${provider.displayName}`);
+
+  onProgress?.({
+    phase: "preparing",
+    current: 0,
+    total: 0,
+  });
+
+  // Download manifest
+  onProgress?.({
+    phase: "downloading",
+    current: 0,
+    total: 1,
+    currentFile: "manifest.json",
+  });
+
+  const manifest = await provider.downloadManifest();
+  if (!manifest) {
+    throw new Error("No backup found or manifest is invalid");
+  }
+
+  // Restore metadata
+  if (options.includeAlbums && manifest.albums.length > 0) {
+    restoreTarget.setAlbums(manifest.albums);
+  }
+  if (options.includeTargets && manifest.targets.length > 0) {
+    restoreTarget.setTargets(manifest.targets);
+  }
+  if (options.includeSessions && manifest.sessions.length > 0) {
+    restoreTarget.setSessions(manifest.sessions);
+  }
+  if (options.includeSettings && Object.keys(manifest.settings).length > 0) {
+    restoreTarget.setSettings(manifest.settings);
+  }
+
+  // Download FITS files
+  if (options.includeFiles && manifest.files.length > 0) {
+    const fitsDir = getFitsDir();
+    const total = manifest.files.length;
+    let current = 0;
+
+    onProgress?.({
+      phase: "downloading",
+      current: 0,
+      total,
+    });
+
+    for (const meta of manifest.files) {
+      if (abortSignal?.aborted) {
+        throw new Error("Restore cancelled");
+      }
+
+      try {
+        const remotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${meta.filename}`;
+        const localPath = new File(fitsDir, meta.filename).uri;
+
+        // Skip if file already exists locally
+        const localFile = new File(localPath);
+        if (localFile.exists) {
+          current++;
+          onProgress?.({
+            phase: "downloading",
+            current,
+            total,
+            currentFile: meta.filename,
+          });
+          continue;
+        }
+
+        await provider.downloadFile(remotePath, localPath);
+        current++;
+
+        onProgress?.({
+          phase: "downloading",
+          current,
+          total,
+          currentFile: meta.filename,
+        });
+      } catch (error) {
+        Logger.error(TAG, `Failed to download: ${meta.filename}`, { error });
+        // Continue with remaining files
+      }
+    }
+
+    // Update file metadata with new local paths
+    const updatedFiles = manifest.files.map((f) => ({
+      ...f,
+      filepath: new File(fitsDir, f.filename).uri,
+    }));
+    restoreTarget.setFiles(updatedFiles);
+  }
+
+  onProgress?.({
+    phase: "idle",
+    current: 0,
+    total: 0,
+  });
+
+  Logger.info(TAG, "Restore complete");
+}
+
+/**
+ * 获取远端备份信息
+ */
+export async function getBackupInfo(provider: ICloudProvider): Promise<BackupInfo | null> {
+  try {
+    const manifest = await provider.downloadManifest();
+    if (!manifest) return null;
+
+    let totalSize = 0;
+    for (const f of manifest.files) {
+      totalSize += f.fileSize;
+    }
+
+    return {
+      provider: provider.name,
+      manifestDate: manifest.createdAt,
+      fileCount: manifest.files.length,
+      totalSize,
+      deviceName: manifest.deviceName,
+      appVersion: manifest.appVersion,
+    };
+  } catch {
+    return null;
+  }
+}

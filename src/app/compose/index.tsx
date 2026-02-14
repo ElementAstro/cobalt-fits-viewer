@@ -1,6 +1,15 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Alert } from "react-native";
 import { useState, useCallback } from "react";
-import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
+import {
+  Button,
+  Card,
+  Chip,
+  PressableFeedback,
+  Separator,
+  Spinner,
+  Switch,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -132,7 +141,7 @@ export default function ComposeScreen() {
 
   const handleCompose = useCallback(() => {
     if (composer.assignedCount < 2) {
-      Alert.alert(t("common.error"), "Assign at least 2 channels");
+      Alert.alert(t("common.error"), t("compose.assignAtLeast2"));
       return;
     }
     composer.compose();
@@ -147,7 +156,7 @@ export default function ComposeScreen() {
         <View className="flex-1">
           <Text className="text-lg font-bold text-foreground">{t("editor.compose")}</Text>
           <Text className="text-[10px] text-muted">
-            {composer.assignedCount}/3 channels assigned
+            {t("compose.channelsAssigned", { count: composer.assignedCount })}
           </Text>
         </View>
         {composer.result && (
@@ -165,7 +174,7 @@ export default function ComposeScreen() {
                   "png",
                 );
                 if (uri) {
-                  Alert.alert(t("common.success"), "Image saved");
+                  Alert.alert(t("common.success"), t("compose.imageSaved"));
                 }
               }}
             >
@@ -203,7 +212,9 @@ export default function ComposeScreen() {
       {/* Result Preview */}
       {composer.result && (
         <>
-          <Text className="mb-2 text-xs font-semibold uppercase text-muted">RGB Preview</Text>
+          <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+            {t("compose.rgbPreview")}
+          </Text>
           <View className="h-56 mb-3 rounded-lg overflow-hidden bg-black">
             <FitsCanvas
               rgbaData={composer.result.rgbaData}
@@ -231,25 +242,20 @@ export default function ComposeScreen() {
 
       {/* Linked Stretch Toggle */}
       <View className="flex-row items-center justify-between mb-3">
-        <Text className="text-xs text-muted">Linked Stretch</Text>
-        <TouchableOpacity onPress={() => composer.setLinkedStretch(!composer.linkedStretch)}>
-          <View
-            className={`px-3 py-1 rounded-full ${composer.linkedStretch ? "bg-success/20" : "bg-muted/20"}`}
-          >
-            <Text
-              className={`text-[9px] font-semibold ${composer.linkedStretch ? "text-success" : "text-muted"}`}
-            >
-              {composer.linkedStretch ? "Linked" : "Independent"}
-            </Text>
-          </View>
-        </TouchableOpacity>
+        <Text className="text-xs text-muted">{t("compose.linkedStretch")}</Text>
+        <Switch
+          isSelected={composer.linkedStretch}
+          onSelectedChange={(v) => composer.setLinkedStretch(v)}
+        >
+          <Switch.Thumb />
+        </Switch>
       </View>
 
       {/* Preset Selection */}
-      <Text className="mb-2 text-xs font-semibold uppercase text-muted">Preset</Text>
+      <Text className="mb-2 text-xs font-semibold uppercase text-muted">{t("compose.preset")}</Text>
       <View className="flex-row flex-wrap gap-2 mb-4">
         {PRESETS.map((p) => (
-          <TouchableOpacity key={p.key} onPress={() => autoAssign(p.key)}>
+          <PressableFeedback key={p.key} onPress={() => autoAssign(p.key)}>
             <Card variant="secondary" className={preset === p.key ? "border border-success" : ""}>
               <Card.Body className="p-2.5">
                 <Text
@@ -260,7 +266,7 @@ export default function ComposeScreen() {
                 <Text className="text-[9px] text-muted">{p.desc}</Text>
               </Card.Body>
             </Card>
-          </TouchableOpacity>
+          </PressableFeedback>
         ))}
       </View>
 
@@ -268,17 +274,20 @@ export default function ComposeScreen() {
 
       {/* Channel Assignment */}
       <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-xs font-semibold uppercase text-muted">Channels</Text>
-        <TouchableOpacity onPress={() => setShowWeights(!showWeights)}>
-          <Text className="text-[9px] text-primary">{showWeights ? "Hide" : "Show"} Weights</Text>
-        </TouchableOpacity>
+        <Text className="text-xs font-semibold uppercase text-muted">{t("compose.channels")}</Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="text-[9px] text-muted">{t("compose.weights")}</Text>
+          <Switch isSelected={showWeights} onSelectedChange={setShowWeights}>
+            <Switch.Thumb />
+          </Switch>
+        </View>
       </View>
       <View className="gap-2 mb-4">
         {CHANNEL_CONFIG.map((ch) => {
           const channelState = composer.channels[ch.key];
           return (
             <View key={ch.key}>
-              <TouchableOpacity
+              <PressableFeedback
                 onPress={() => setSelectingChannel(selectingChannel === ch.key ? null : ch.key)}
               >
                 <Card
@@ -295,24 +304,31 @@ export default function ComposeScreen() {
                           <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
                             {channelState.filename}
                           </Text>
-                          <Text className="text-[9px] text-success">Loaded</Text>
+                          <Text className="text-[9px] text-success">{t("compose.loaded")}</Text>
                         </>
                       ) : (
-                        <Text className="text-xs text-muted">{ch.desc} - tap to select</Text>
+                        <Text className="text-xs text-muted">
+                          {ch.desc} - {t("compose.tapToSelect")}
+                        </Text>
                       )}
                     </View>
                     {composer.isLoading && selectingChannel === ch.key ? (
-                      <ActivityIndicator size="small" color={successColor} />
+                      <Spinner size="sm" color={successColor} />
                     ) : channelState.pixels ? (
-                      <TouchableOpacity onPress={() => composer.clearChannel(ch.key)}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        isIconOnly
+                        onPress={() => composer.clearChannel(ch.key)}
+                      >
                         <Ionicons name="close-circle" size={18} color={mutedColor} />
-                      </TouchableOpacity>
+                      </Button>
                     ) : (
                       <Ionicons name="add-circle-outline" size={18} color={mutedColor} />
                     )}
                   </Card.Body>
                 </Card>
-              </TouchableOpacity>
+              </PressableFeedback>
 
               {/* Weight slider */}
               {showWeights && channelState.pixels && (
@@ -334,10 +350,12 @@ export default function ComposeScreen() {
 
       {/* Luminance Channel */}
       <View className="flex-row items-center justify-between mb-2 mt-2">
-        <Text className="text-xs font-semibold uppercase text-muted">Luminance (optional)</Text>
+        <Text className="text-xs font-semibold uppercase text-muted">
+          {t("compose.luminanceOptional")}
+        </Text>
       </View>
       <View className="gap-2 mb-4">
-        <TouchableOpacity
+        <PressableFeedback
           onPress={() => setSelectingChannel(selectingChannel === "luminance" ? null : "luminance")}
         >
           <Card
@@ -358,26 +376,31 @@ export default function ComposeScreen() {
                     <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
                       {composer.channels.luminance.filename}
                     </Text>
-                    <Text className="text-[9px] text-success">Loaded</Text>
+                    <Text className="text-[9px] text-success">{t("compose.loaded")}</Text>
                   </>
                 ) : (
                   <Text className="text-xs text-muted">
-                    {LUMINANCE_CONFIG.desc} - tap to select
+                    {LUMINANCE_CONFIG.desc} - {t("compose.tapToSelect")}
                   </Text>
                 )}
               </View>
               {composer.isLoading && selectingChannel === "luminance" ? (
-                <ActivityIndicator size="small" color={successColor} />
+                <Spinner size="sm" color={successColor} />
               ) : composer.channels.luminance.pixels ? (
-                <TouchableOpacity onPress={() => composer.clearChannel("luminance")}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  onPress={() => composer.clearChannel("luminance")}
+                >
                   <Ionicons name="close-circle" size={18} color={mutedColor} />
-                </TouchableOpacity>
+                </Button>
               ) : (
                 <Ionicons name="add-circle-outline" size={18} color={mutedColor} />
               )}
             </Card.Body>
           </Card>
-        </TouchableOpacity>
+        </PressableFeedback>
         {showWeights && composer.channels.luminance.pixels && (
           <View className="px-3 py-1">
             <SimpleSlider
@@ -397,11 +420,11 @@ export default function ComposeScreen() {
         <>
           <Separator className="mb-3" />
           <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-            Select file for {selectingChannel.toUpperCase()} channel
+            {t("compose.selectFileFor", { channel: selectingChannel.toUpperCase() })}
           </Text>
           <View className="gap-1 mb-4">
             {files.map((file) => (
-              <TouchableOpacity
+              <PressableFeedback
                 key={file.id}
                 onPress={() => assignFile(selectingChannel, file.id, file.filepath, file.filename)}
               >
@@ -415,10 +438,12 @@ export default function ComposeScreen() {
                     </Chip>
                   </Card.Body>
                 </Card>
-              </TouchableOpacity>
+              </PressableFeedback>
             ))}
             {files.length === 0 && (
-              <Text className="text-xs text-muted text-center py-4">No files available</Text>
+              <Text className="text-xs text-muted text-center py-4">
+                {t("compose.noFilesAvailable")}
+              </Text>
             )}
           </View>
         </>
@@ -432,7 +457,7 @@ export default function ComposeScreen() {
         isDisabled={composer.assignedCount < 2 || composer.isComposing || composer.isLoading}
       >
         {composer.isComposing ? (
-          <ActivityIndicator size="small" color="#fff" />
+          <Spinner size="sm" color="#fff" />
         ) : (
           <Ionicons name="color-palette-outline" size={16} color="#fff" />
         )}

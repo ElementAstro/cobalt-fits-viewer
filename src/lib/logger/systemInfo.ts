@@ -8,7 +8,7 @@ import * as Device from "expo-device";
 import * as Application from "expo-application";
 import * as Battery from "expo-battery";
 import * as Network from "expo-network";
-import Constants from "expo-constants";
+import { getAppVersionInfo } from "../version";
 import type {
   SystemInfo,
   DeviceInfo,
@@ -70,10 +70,7 @@ async function collectAppInfo(): Promise<AppInfo> {
     installTime = null;
   }
 
-  const runtimeVersion =
-    typeof Constants.expoConfig?.runtimeVersion === "string"
-      ? Constants.expoConfig.runtimeVersion
-      : null;
+  const versionInfo = getAppVersionInfo();
 
   return {
     appName: Application.applicationName,
@@ -81,8 +78,8 @@ async function collectAppInfo(): Promise<AppInfo> {
     buildVersion: Application.nativeBuildVersion,
     appId: Application.applicationId,
     installTime,
-    runtimeVersion,
-    sdkVersion: Constants.expoConfig?.sdkVersion,
+    runtimeVersion: versionInfo.runtimeVersion,
+    sdkVersion: versionInfo.sdkVersion,
     isDebugMode: __DEV__,
   };
 }

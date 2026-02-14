@@ -3,10 +3,10 @@
  */
 
 import { useState } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useThemeColor } from "heroui-native";
+import { Button, useThemeColor } from "heroui-native";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
 import { LocationMapView } from "../../components/gallery/LocationMapView";
@@ -40,10 +40,10 @@ export default function MapScreen() {
         className="absolute top-0 left-0 right-0 z-10 flex-row items-center justify-between px-4 pt-14 pb-3"
         style={{ backgroundColor: `${bgColor}CC` }}
       >
-        <TouchableOpacity onPress={() => router.back()} className="flex-row items-center gap-1">
+        <Button variant="ghost" size="sm" onPress={() => router.back()}>
           <Ionicons name="chevron-back" size={20} color={mutedColor} />
-          <Text className="text-sm text-muted">{t("common.goHome")}</Text>
-        </TouchableOpacity>
+          <Button.Label className="text-sm text-muted">{t("common.goHome")}</Button.Label>
+        </Button>
         <View className="flex-row items-center gap-2">
           <Ionicons name="map" size={16} color={mutedColor} />
           <Text className="text-base font-bold text-foreground">{t("location.mapView")}</Text>

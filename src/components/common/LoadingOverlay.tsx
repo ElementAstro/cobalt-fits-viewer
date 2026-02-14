@@ -1,4 +1,5 @@
-import { View, Text, ActivityIndicator, TouchableOpacity } from "react-native";
+import { View, Text } from "react-native";
+import { Button, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 
@@ -22,12 +23,13 @@ export function LoadingOverlay({
   onCancel,
 }: LoadingOverlayProps) {
   const { t } = useI18n();
+  const dangerColor = useThemeColor("danger");
   if (!visible) return null;
 
   return (
     <View className="absolute inset-0 z-50 items-center justify-center bg-black/60">
       <View className="w-72 items-center rounded-2xl bg-surface-secondary p-6">
-        <ActivityIndicator size="large" color="#22c55e" />
+        <Spinner size="lg" color="success" />
         <Text className="mt-3 text-sm font-semibold text-foreground">
           {message ?? t("common.loading")}
         </Text>
@@ -57,13 +59,10 @@ export function LoadingOverlay({
         )}
 
         {onCancel && (
-          <TouchableOpacity
-            onPress={onCancel}
-            className="mt-4 flex-row items-center gap-1 rounded-lg border border-separator px-4 py-2"
-          >
-            <Ionicons name="close-circle-outline" size={16} color="#ef4444" />
-            <Text className="text-xs text-danger">{t("files.cancelImport")}</Text>
-          </TouchableOpacity>
+          <Button size="sm" variant="outline" className="mt-4" onPress={onCancel}>
+            <Ionicons name="close-circle-outline" size={16} color={dangerColor} />
+            <Button.Label className="text-danger">{t("files.cancelImport")}</Button.Label>
+          </Button>
         )}
       </View>
     </View>

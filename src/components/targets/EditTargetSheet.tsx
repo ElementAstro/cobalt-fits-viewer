@@ -1,16 +1,16 @@
 import { useState, useEffect } from "react";
+import { View, ScrollView, Alert } from "react-native";
 import {
-  View,
-  Text,
-  TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
-import { Button, Chip, Separator, useThemeColor } from "heroui-native";
+  Button,
+  Chip,
+  Dialog,
+  Input,
+  Label,
+  Separator,
+  TextArea,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { FilterExposurePlan } from "./FilterExposurePlan";
@@ -45,7 +45,7 @@ export function EditTargetSheet({
   onDelete,
 }: EditTargetSheetProps) {
   const { t } = useI18n();
-  const [mutedColor] = useThemeColor(["muted"]);
+  const mutedColor = useThemeColor("muted");
 
   const [name, setName] = useState(target.name);
   const [type, setType] = useState<TargetType>(target.type);
@@ -119,89 +119,95 @@ export function EditTargetSheet({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 items-center justify-center bg-black/60"
-      >
-        <View className="mx-4 w-full max-w-md rounded-2xl bg-surface-secondary p-6 max-h-[85%]">
+    <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content className="mx-4 w-full max-w-md rounded-2xl bg-background p-6 max-h-[85%]">
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text className="text-lg font-bold text-foreground">{t("targets.editTarget")}</Text>
+            <View className="flex-row items-center justify-between mb-2">
+              <Dialog.Title>{t("targets.editTarget")}</Dialog.Title>
+              <Dialog.Close />
+            </View>
 
             {/* Name */}
-            <TextInput
-              className="mt-4 rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-              placeholder={t("targets.targetName")}
-              placeholderTextColor={mutedColor}
-              value={name}
-              onChangeText={setName}
-              autoCorrect={false}
-            />
+            <TextField isRequired>
+              <Label>{t("targets.targetName")}</Label>
+              <Input
+                placeholder={t("targets.targetName")}
+                value={name}
+                onChangeText={setName}
+                autoCorrect={false}
+              />
+            </TextField>
 
             {/* Type selector */}
-            <Text className="mt-4 mb-2 text-xs font-semibold text-muted">{t("targets.type")}</Text>
+            <Label className="mt-4 mb-2">{t("targets.type")}</Label>
             <View className="flex-row flex-wrap gap-1.5">
               {TARGET_TYPES.map((tt) => (
-                <TouchableOpacity key={tt} onPress={() => setType(tt)}>
-                  <Chip size="sm" variant={type === tt ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[10px]">
-                      {t(
-                        `targets.types.${tt}` as
-                          | "targets.types.galaxy"
-                          | "targets.types.nebula"
-                          | "targets.types.cluster"
-                          | "targets.types.planet"
-                          | "targets.types.moon"
-                          | "targets.types.sun"
-                          | "targets.types.comet"
-                          | "targets.types.other",
-                      )}
-                    </Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
+                <Chip
+                  key={tt}
+                  size="sm"
+                  variant={type === tt ? "primary" : "secondary"}
+                  onPress={() => setType(tt)}
+                >
+                  <Chip.Label className="text-[10px]">
+                    {t(
+                      `targets.types.${tt}` as
+                        | "targets.types.galaxy"
+                        | "targets.types.nebula"
+                        | "targets.types.cluster"
+                        | "targets.types.planet"
+                        | "targets.types.moon"
+                        | "targets.types.sun"
+                        | "targets.types.comet"
+                        | "targets.types.other",
+                    )}
+                  </Chip.Label>
+                </Chip>
               ))}
             </View>
 
             {/* Status selector */}
-            <Text className="mt-4 mb-2 text-xs font-semibold text-muted">
-              {t("targets.status")}
-            </Text>
+            <Label className="mt-4 mb-2">{t("targets.status")}</Label>
             <View className="flex-row flex-wrap gap-1.5">
               {TARGET_STATUSES.map((s) => (
-                <TouchableOpacity key={s} onPress={() => setStatus(s)}>
-                  <Chip size="sm" variant={status === s ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[10px]">
-                      {t(
-                        `targets.${s}` as
-                          | "targets.planned"
-                          | "targets.acquiring"
-                          | "targets.completed"
-                          | "targets.processed",
-                      )}
-                    </Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
+                <Chip
+                  key={s}
+                  size="sm"
+                  variant={status === s ? "primary" : "secondary"}
+                  onPress={() => setStatus(s)}
+                >
+                  <Chip.Label className="text-[10px]">
+                    {t(
+                      `targets.${s}` as
+                        | "targets.planned"
+                        | "targets.acquiring"
+                        | "targets.completed"
+                        | "targets.processed",
+                    )}
+                  </Chip.Label>
+                </Chip>
               ))}
             </View>
 
             {/* Aliases */}
-            <Text className="mt-4 mb-2 text-xs font-semibold text-muted">
-              {t("targets.aliases")}
-            </Text>
+            <Label className="mt-4 mb-2">{t("targets.aliases")}</Label>
             <View className="flex-row flex-wrap gap-1 mb-2">
               {aliases.map((alias) => (
-                <TouchableOpacity key={alias} onPress={() => handleRemoveAlias(alias)}>
-                  <Chip size="sm" variant="secondary">
-                    <Chip.Label className="text-[9px]">{alias} ×</Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
+                <Chip
+                  key={alias}
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => handleRemoveAlias(alias)}
+                >
+                  <Chip.Label className="text-[9px]">{alias} ×</Chip.Label>
+                </Chip>
               ))}
             </View>
             <View className="flex-row gap-2">
-              <TextInput
-                className="flex-1 rounded-xl border border-separator bg-background px-4 py-2 text-sm text-foreground"
+              <Input
+                className="flex-1"
                 placeholder={t("targets.addAlias")}
-                placeholderTextColor={mutedColor}
                 value={newAlias}
                 onChangeText={setNewAlias}
                 onSubmitEditing={handleAddAlias}
@@ -213,22 +219,20 @@ export function EditTargetSheet({
             </View>
 
             {/* Planned Filters & Exposure */}
-            <Text className="mt-4 mb-2 text-xs font-semibold text-muted">
-              {t("targets.plannedExposure")}
-            </Text>
+            <Label className="mt-4 mb-2">{t("targets.plannedExposure")}</Label>
             <FilterExposurePlan entries={filterEntries} onChange={setFilterEntries} />
 
             {/* Notes */}
-            <TextInput
-              className="mt-3 rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-              placeholder={t("targets.notes")}
-              placeholderTextColor={mutedColor}
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
-              autoCorrect={false}
-            />
+            <TextField className="mt-3">
+              <Label>{t("targets.notes")}</Label>
+              <TextArea
+                placeholder={t("targets.notes")}
+                value={notes}
+                onChangeText={setNotes}
+                numberOfLines={3}
+                autoCorrect={false}
+              />
+            </TextField>
 
             <Separator className="my-4" />
 
@@ -248,8 +252,8 @@ export function EditTargetSheet({
               </View>
             </View>
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog>
   );
 }

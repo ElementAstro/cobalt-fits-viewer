@@ -1,11 +1,13 @@
 /**
  * App update hook using expo-updates
  * Provides OTA update checking, downloading, and applying functionality.
+ * Uses the native useUpdates() hook for reactive state management.
  */
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import * as Updates from "expo-updates";
-import Constants from "expo-constants";
+import { Logger } from "../lib/logger";
+import { getAppVersionInfo } from "../lib/version";
 
 export type UpdateStatus =
   | "idle"
@@ -29,10 +31,12 @@ export interface AppUpdateState {
   isLoading: boolean;
   /** Timestamp of last successful check */
   lastCheckedAt: number | null;
-  /** App version from expo-constants */
+  /** App version (native binary version) */
   appVersion: string;
   /** Runtime version */
   runtimeVersion: string | null;
+  /** Whether currently running embedded (built-in) code */
+  isEmbeddedLaunch: boolean;
   /** Check for available updates */
   checkForUpdate: () => Promise<void>;
   /** Download the available update */
@@ -46,27 +50,36 @@ export interface AppUpdateState {
 }
 
 export function useAppUpdate(): AppUpdateState {
+  const {
+    currentlyRunning,
+    isUpdateAvailable: nativeUpdateAvailable,
+    isUpdatePending: nativeUpdatePending,
+  } = Updates.useUpdates();
+
   const [status, setStatus] = useState<UpdateStatus>("idle");
   const [error, setError] = useState<string | null>(null);
   const [lastCheckedAt, setLastCheckedAt] = useState<number | null>(null);
-  const isMounted = useRef(true);
 
+  const versionInfo = useMemo(() => getAppVersionInfo(), []);
+
+  // Sync native hook state → local status
   useEffect(() => {
-    return () => {
-      isMounted.current = false;
-    };
-  }, []);
+    if (nativeUpdatePending && status !== "ready") {
+      setStatus("ready");
+      Logger.info("AppUpdate", "Update downloaded, ready to apply");
+    } else if (
+      nativeUpdateAvailable &&
+      status !== "available" &&
+      status !== "downloading" &&
+      status !== "ready"
+    ) {
+      setStatus("available");
+      Logger.info("AppUpdate", "Update available");
+    }
+  }, [nativeUpdateAvailable, nativeUpdatePending, status]);
 
-  const appVersion =
-    Constants.expoConfig?.version ?? Constants.manifest2?.extra?.expoClient?.version ?? "1.0.0";
-
-  const runtimeVersion =
-    (typeof Constants.expoConfig?.runtimeVersion === "string"
-      ? Constants.expoConfig.runtimeVersion
-      : null) ?? null;
-
-  const isUpdateAvailable = status === "available";
-  const isUpdatePending = status === "ready";
+  const isUpdateAvailable = status === "available" || nativeUpdateAvailable;
+  const isUpdatePending = status === "ready" || nativeUpdatePending;
   const isLoading = status === "checking" || status === "downloading";
 
   const checkForUpdate = useCallback(async () => {
@@ -82,16 +95,16 @@ export function useAppUpdate(): AppUpdateState {
 
       const result = await Updates.checkForUpdateAsync();
 
-      if (!isMounted.current) return;
-
       if (result.isAvailable) {
         setStatus("available");
+        Logger.info("AppUpdate", "Update available");
       } else {
         setStatus("upToDate");
+        Logger.info("AppUpdate", "App is up to date");
       }
       setLastCheckedAt(Date.now());
     } catch (e) {
-      if (!isMounted.current) return;
+      Logger.error("AppUpdate", "Update check failed", e);
       setStatus("error");
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -106,10 +119,10 @@ export function useAppUpdate(): AppUpdateState {
 
       await Updates.fetchUpdateAsync();
 
-      if (!isMounted.current) return;
       setStatus("ready");
+      Logger.info("AppUpdate", "Update downloaded, ready to apply");
     } catch (e) {
-      if (!isMounted.current) return;
+      Logger.error("AppUpdate", "Update download failed", e);
       setStatus("error");
       setError(e instanceof Error ? e.message : "Download failed");
     }
@@ -121,7 +134,6 @@ export function useAppUpdate(): AppUpdateState {
     try {
       await Updates.reloadAsync();
     } catch (e) {
-      if (!isMounted.current) return;
       setStatus("error");
       setError(e instanceof Error ? e.message : "Restart failed");
     }
@@ -139,7 +151,6 @@ export function useAppUpdate(): AppUpdateState {
       setError(null);
 
       const checkResult = await Updates.checkForUpdateAsync();
-      if (!isMounted.current) return;
 
       if (!checkResult.isAvailable) {
         setStatus("upToDate");
@@ -149,12 +160,10 @@ export function useAppUpdate(): AppUpdateState {
 
       setStatus("downloading");
       await Updates.fetchUpdateAsync();
-      if (!isMounted.current) return;
 
       setStatus("ready");
       await Updates.reloadAsync();
     } catch (e) {
-      if (!isMounted.current) return;
       setStatus("error");
       setError(e instanceof Error ? e.message : "Update failed");
     }
@@ -172,8 +181,9 @@ export function useAppUpdate(): AppUpdateState {
     isUpdatePending,
     isLoading,
     lastCheckedAt,
-    appVersion,
-    runtimeVersion,
+    appVersion: versionInfo.nativeVersion,
+    runtimeVersion: versionInfo.runtimeVersion,
+    isEmbeddedLaunch: currentlyRunning.isEmbeddedLaunch,
     checkForUpdate,
     downloadUpdate,
     applyUpdate,

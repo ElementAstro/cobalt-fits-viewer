@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -134,31 +134,32 @@ export default function TargetDetailScreen() {
         {/* Quick Status Switch */}
         <View className="flex-row gap-1.5 mb-4">
           {STATUS_FLOW.map((s) => (
-            <TouchableOpacity key={s} className="flex-1" onPress={() => setStatus(target.id, s)}>
+            <Button
+              key={s}
+              variant={target.status === s ? "secondary" : "ghost"}
+              className={`flex-1 items-center rounded-lg py-2 ${
+                target.status === s ? "bg-primary/15" : "bg-surface-secondary"
+              }`}
+              onPress={() => setStatus(target.id, s)}
+            >
               <View
-                className={`items-center rounded-lg py-2 ${
-                  target.status === s ? "bg-primary/15" : "bg-surface-secondary"
+                className="h-2 w-2 rounded-full mb-1"
+                style={{ backgroundColor: STATUS_COLORS[s] }}
+              />
+              <Button.Label
+                className={`text-[9px] ${
+                  target.status === s ? "font-bold text-primary" : "text-muted"
                 }`}
               >
-                <View
-                  className="h-2 w-2 rounded-full mb-1"
-                  style={{ backgroundColor: STATUS_COLORS[s] }}
-                />
-                <Text
-                  className={`text-[9px] ${
-                    target.status === s ? "font-bold text-primary" : "text-muted"
-                  }`}
-                >
-                  {t(
-                    `targets.${s}` as
-                      | "targets.planned"
-                      | "targets.acquiring"
-                      | "targets.completed"
-                      | "targets.processed",
-                  )}
-                </Text>
-              </View>
-            </TouchableOpacity>
+                {t(
+                  `targets.${s}` as
+                    | "targets.planned"
+                    | "targets.acquiring"
+                    | "targets.completed"
+                    | "targets.processed",
+                )}
+              </Button.Label>
+            </Button>
           ))}
         </View>
 

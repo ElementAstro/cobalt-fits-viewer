@@ -1,3 +1,36 @@
+// Mock @react-native-async-storage/async-storage
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
+);
+
+// Mock @gorhom/bottom-sheet
+jest.mock("@gorhom/bottom-sheet", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  const BottomSheet = React.forwardRef((props, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      expand: jest.fn(),
+      close: jest.fn(),
+      collapse: jest.fn(),
+      snapToIndex: jest.fn(),
+      snapToPosition: jest.fn(),
+      forceClose: jest.fn(),
+    }));
+    return React.createElement(View, props, props.children);
+  });
+  BottomSheet.displayName = "BottomSheet";
+  return {
+    __esModule: true,
+    default: BottomSheet,
+    BottomSheetView: (props) => React.createElement(View, props, props.children),
+    BottomSheetModal: BottomSheet,
+    BottomSheetModalProvider: (props) => React.createElement(View, props, props.children),
+    BottomSheetScrollView: (props) => React.createElement(View, props, props.children),
+    BottomSheetFlatList: (props) => React.createElement(View, props, props.children),
+    BottomSheetTextInput: (props) => React.createElement(View, props),
+  };
+});
+
 // Mock expo-localization
 jest.mock("expo-localization", () => ({
   getLocales: () => [{ languageCode: "en", languageTag: "en-US" }],
@@ -31,24 +64,41 @@ jest.mock("@expo/vector-icons", () => {
 
 // Mock heroui-native
 jest.mock("heroui-native", () => {
-  const { View, Text } = require("react-native");
+  const { View, Text, TextInput } = require("react-native");
   const React = require("react");
 
-  const Button = (props) =>
-    React.createElement(View, { testID: "button", ...props }, props.children);
+  const c = (testID) => (props) =>
+    React.createElement(View, { testID, ...props }, props.children);
+
+  const Button = c("button");
   Button.Label = (props) => React.createElement(Text, props, props.children);
 
-  const Card = (props) => React.createElement(View, { testID: "card", ...props }, props.children);
-  Card.Body = (props) => React.createElement(View, props, props.children);
+  const Card = c("card");
+  Card.Body = c("card-body");
 
-  const Chip = (props) => React.createElement(View, { testID: "chip", ...props }, props.children);
+  const Chip = c("chip");
   Chip.Label = (props) => React.createElement(Text, props, props.children);
+
+  const Dialog = c("dialog");
+  Dialog.Portal = c("dialog-portal");
+  Dialog.Overlay = c("dialog-overlay");
+  Dialog.Content = c("dialog-content");
+  Dialog.Close = c("dialog-close");
+  Dialog.Title = (props) => React.createElement(Text, props, props.children);
+  Dialog.Description = (props) => React.createElement(Text, props, props.children);
+
+  const TextField = c("textfield");
 
   return {
     Button,
     Card,
     Chip,
-    Separator: (props) => React.createElement(View, { testID: "separator", ...props }),
+    Dialog,
+    TextField,
+    Input: (props) => React.createElement(TextInput, { testID: "input", ...props }),
+    PressableFeedback: c("pressable-feedback"),
+    Separator: c("separator"),
+    Spinner: c("spinner"),
     HeroUINativeProvider: (props) => React.createElement(View, null, props.children),
     useThemeColor: (keys) => (Array.isArray(keys) ? keys.map(() => "#000000") : "#000000"),
   };

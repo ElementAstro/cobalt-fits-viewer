@@ -1,28 +1,60 @@
 import React from "react";
 import { render, screen } from "@testing-library/react-native";
-import HomeScreen from "../index";
+import FilesScreen from "../index";
 
-describe("HomeScreen", () => {
-  it("should render the title", () => {
-    render(<HomeScreen />);
-    expect(screen.getByText("Quick Starter")).toBeTruthy();
+// Mock useFileManager hook
+jest.mock("../../../hooks/useFileManager", () => ({
+  useFileManager: () => ({
+    isImporting: false,
+    importProgress: { phase: "picking", percent: 0, current: 0, total: 0 },
+    importError: null,
+    lastImportResult: null,
+    pickAndImportFile: jest.fn(),
+    pickAndImportFolder: jest.fn(),
+    pickAndImportZip: jest.fn(),
+    importFromUrl: jest.fn(),
+    cancelImport: jest.fn(),
+    handleDeleteFiles: jest.fn(),
+  }),
+}));
+
+// Mock expo-image
+jest.mock("expo-image", () => {
+  const { View } = require("react-native");
+  const React = require("react");
+  return {
+    Image: (props: Record<string, unknown>) =>
+      React.createElement(View, { testID: "expo-image", ...props }),
+  };
+});
+
+// Mock react-native-gesture-handler Swipeable (already in jest.setup but FileListItem uses Swipeable directly)
+jest.mock("react-native-gesture-handler", () => {
+  const { View } = require("react-native");
+  const React = require("react");
+  return {
+    Swipeable: React.forwardRef((props: Record<string, unknown>, _ref: unknown) =>
+      React.createElement(View, props as object, props.children as React.ReactNode),
+    ),
+    GestureHandlerRootView: (props: Record<string, unknown>) =>
+      React.createElement(View, props as object, props.children as React.ReactNode),
+  };
+});
+
+describe("FilesScreen", () => {
+  it("should render the file manager title", () => {
+    render(<FilesScreen />);
+    expect(screen.getByText("File Manager")).toBeTruthy();
   });
 
-  it("should render the subtitle", () => {
-    render(<HomeScreen />);
-    expect(screen.getByText("Expo Router + HeroUI Native + Uniwind")).toBeTruthy();
+  it("should render the empty state when no files", () => {
+    render(<FilesScreen />);
+    expect(screen.getByText("No FITS files yet")).toBeTruthy();
+    expect(screen.getByText("Import files to get started")).toBeTruthy();
   });
 
-  it("should render feature chips", () => {
-    render(<HomeScreen />);
-    expect(screen.getByText("expo-router")).toBeTruthy();
-    expect(screen.getByText("heroui-native")).toBeTruthy();
-    expect(screen.getByText("uniwind")).toBeTruthy();
-    expect(screen.getByText("tailwindcss")).toBeTruthy();
-  });
-
-  it("should render action buttons", () => {
-    render(<HomeScreen />);
-    expect(screen.getByText("Explore Features")).toBeTruthy();
+  it("should render the import button", () => {
+    render(<FilesScreen />);
+    expect(screen.getAllByText("Import Options").length).toBeGreaterThanOrEqual(1);
   });
 });

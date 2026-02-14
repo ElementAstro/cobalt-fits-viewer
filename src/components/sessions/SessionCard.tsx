@@ -1,8 +1,9 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import { Card, Chip, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { Card, Chip, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { ObservationSession } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
+import { formatDuration } from "../../lib/sessions/format";
 
 interface SessionCardProps {
   session: ObservationSession;
@@ -10,6 +11,7 @@ interface SessionCardProps {
   onSyncToCalendar?: (session: ObservationSession) => void;
   onUnsyncFromCalendar?: (session: ObservationSession) => void;
   onOpenInCalendar?: (eventId: string) => void;
+  onDelete?: (session: ObservationSession) => void;
 }
 
 export function SessionCard({
@@ -18,18 +20,14 @@ export function SessionCard({
   onSyncToCalendar,
   onUnsyncFromCalendar: _onUnsyncFromCalendar,
   onOpenInCalendar,
+  onDelete,
 }: SessionCardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
 
-  const formatDuration = (seconds: number): string => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    return h > 0 ? `${h}h ${m}m` : `${m}m`;
-  };
-
   return (
-    <TouchableOpacity onPress={onPress}>
+    <PressableFeedback onPress={onPress}>
+      <PressableFeedback.Highlight />
       <Card variant="secondary">
         <Card.Body className="gap-2 p-4">
           <View className="flex-row items-center justify-between">
@@ -37,19 +35,27 @@ export function SessionCard({
               <Ionicons name="moon-outline" size={16} color={mutedColor} />
               <Text className="text-sm font-semibold text-foreground">{session.date}</Text>
               {session.calendarEventId && (
-                <TouchableOpacity
+                <PressableFeedback
                   onPress={() => onOpenInCalendar?.(session.calendarEventId!)}
                   hitSlop={8}
                 >
+                  <PressableFeedback.Highlight />
                   <Ionicons name="calendar" size={13} color={mutedColor} />
-                </TouchableOpacity>
+                </PressableFeedback>
               )}
             </View>
             <View className="flex-row items-center gap-2">
               {!session.calendarEventId && onSyncToCalendar && (
-                <TouchableOpacity onPress={() => onSyncToCalendar(session)} hitSlop={8}>
+                <PressableFeedback onPress={() => onSyncToCalendar(session)} hitSlop={8}>
+                  <PressableFeedback.Highlight />
                   <Ionicons name="calendar-outline" size={15} color={mutedColor} />
-                </TouchableOpacity>
+                </PressableFeedback>
+              )}
+              {onDelete && (
+                <PressableFeedback onPress={() => onDelete(session)} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="trash-outline" size={14} color={mutedColor} />
+                </PressableFeedback>
               )}
               <Text className="text-xs text-muted">{formatDuration(session.duration)}</Text>
             </View>
@@ -98,6 +104,6 @@ export function SessionCard({
           )}
         </Card.Body>
       </Card>
-    </TouchableOpacity>
+    </PressableFeedback>
   );
 }

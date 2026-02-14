@@ -1,12 +1,12 @@
 <div align="center">
 
-# React Native Quick Starter
+# Cobalt FITS Viewer
 
-A batteries-included, production-ready React Native starter template.
+A cross-platform FITS file viewer and astronomical image processor for astronomers.
 
-Build cross-platform apps for **iOS**, **Android**, and **Web** from a single codebase.
+View, analyze, stack, and convert astronomical FITS images on **iOS**, **Android**, and **Web**.
 
-[![CI](https://github.com/user/react-native-quick-starter/actions/workflows/ci.yml/badge.svg)](https://github.com/user/react-native-quick-starter/actions/workflows/ci.yml)
+[![CI](https://github.com/ElementAstro/cobalt-fits-viewer/actions/workflows/ci.yml/badge.svg)](https://github.com/ElementAstro/cobalt-fits-viewer/actions/workflows/ci.yml)
 [![Expo SDK](https://img.shields.io/badge/Expo_SDK-54-blue?logo=expo)](https://docs.expo.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue?logo=typescript)](https://www.typescriptlang.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
@@ -17,32 +17,49 @@ Build cross-platform apps for **iOS**, **Android**, and **Web** from a single co
 
 ## ✨ Features
 
+### FITS & Astronomy
+
+- **FITS File Management** — Import, browse, search, tag, and organize FITS files
+- **FITS Image Viewer** — Stretch, colormap, histogram, pixel info, HDU selection, grid overlay, crosshair, mini map
+- **Image Stacking** — Average, median, sigma clipping, min/max, winsorized, weighted stacking with alignment
+- **Format Converter** — Convert FITS to PNG / JPEG / WebP with presets (web, print, astrophotography)
+- **RGB Compose** — Combine mono FITS into color images
+- **Observation Targets** — Track galaxies, nebulae, clusters with exposure progress and filter planning
+- **Observation Sessions** — Calendar view, timeline, session log, statistics, calendar sync
+- **Gallery** — Grid / list / timeline views, albums, smart albums, batch export
+- **Location Tagging** — Auto-tag observation sites with map view
+
+### App & Platform
+
 - **[Expo SDK 54](https://docs.expo.dev/)** — Managed workflow for rapid development
 - **[Expo Router 6](https://docs.expo.dev/router/introduction/)** — File-based routing with deep linking
 - **[HeroUI Native](https://heroui.com/)** — Beautiful, themeable component library
 - **[TailwindCSS 4](https://tailwindcss.com/) + [Uniwind](https://docs.uniwind.dev/)** — Utility-first styling with automatic dark mode
-- **[React Native Reanimated](https://docs.swmansion.com/react-native-reanimated/)** — Performant 60fps animations
-- **[@gorhom/bottom-sheet](https://gorhom.github.io/react-native-bottom-sheet/)** — Smooth bottom sheet interactions
+- **[React Native Skia](https://shopify.github.io/react-native-skia/)** — GPU-accelerated 2D rendering for FITS images
+- **[Zustand](https://zustand-demo.pmnd.rs/)** — Lightweight state management
 - **[i18n-js](https://github.com/fnando/i18n)** — Internationalization (English & Chinese built-in)
 - **TypeScript 5.9** — Full type safety with strict mode
 - **Code Quality** — ESLint 9 (flat config) + Prettier + Commitlint + Husky + lint-staged
-- **Testing** — Jest + React Native Testing Library with coverage reports
 - **CI/CD** — GitHub Actions pipeline (type check → lint → test → build)
 
 ## 📦 Tech Stack
 
-| Category     | Packages                                                                |
-| ------------ | ----------------------------------------------------------------------- |
-| Framework    | `expo` 54, `react` 19, `react-native` 0.81                              |
-| Navigation   | `expo-router`, `react-native-screens`, `react-native-safe-area-context` |
-| UI           | `heroui-native`, `@expo/vector-icons`, `@gorhom/bottom-sheet`           |
-| Styling      | `tailwindcss` 4, `uniwind`, `tailwind-merge`, `tailwind-variants`       |
-| Animation    | `react-native-reanimated`, `react-native-gesture-handler`               |
-| Storage      | `@react-native-async-storage/async-storage`, `expo-secure-store`        |
-| i18n         | `i18n-js`, `expo-localization`                                          |
-| Utilities    | `expo-clipboard`, `expo-linear-gradient`, `react-native-svg`            |
-| Code Quality | `eslint` 9, `prettier`, `commitlint`, `husky`, `lint-staged`            |
-| Testing      | `jest`, `jest-expo`, `@testing-library/react-native`                    |
+| Category       | Packages                                                                |
+| -------------- | ----------------------------------------------------------------------- |
+| Framework      | `expo` 54, `react` 19, `react-native` 0.81                              |
+| Navigation     | `expo-router`, `react-native-screens`, `react-native-safe-area-context` |
+| UI             | `heroui-native`, `@expo/vector-icons`, `@gorhom/bottom-sheet`           |
+| Styling        | `tailwindcss` 4, `uniwind`, `tailwind-merge`, `tailwind-variants`       |
+| Rendering      | `@shopify/react-native-skia`, `react-native-svg`                        |
+| Animation      | `react-native-reanimated`, `react-native-gesture-handler`               |
+| State          | `zustand`                                                               |
+| FITS           | `fitsjs-ng`, `pako`                                                     |
+| Storage        | `@react-native-async-storage/async-storage`, `expo-secure-store`        |
+| Location & Map | `expo-location`, `expo-maps`                                            |
+| Calendar       | `expo-calendar`                                                         |
+| i18n           | `i18n-js`, `expo-localization`                                          |
+| Code Quality   | `eslint` 9, `prettier`, `commitlint`, `husky`, `lint-staged`            |
+| Testing        | `jest`, `jest-expo`, `@testing-library/react-native`                    |
 
 ## 🚀 Getting Started
 
@@ -57,8 +74,8 @@ Build cross-platform apps for **iOS**, **Android**, and **Web** from a single co
 
 ```sh
 # Clone the repository
-git clone https://github.com/user/react-native-quick-starter.git
-cd react-native-quick-starter
+git clone https://github.com/ElementAstro/cobalt-fits-viewer.git
+cd cobalt-fits-viewer
 
 # Install dependencies
 pnpm install
@@ -77,16 +94,45 @@ src/
 │   ├── _layout.tsx       # Root layout (Providers)
 │   ├── index.tsx         # Entry redirect
 │   ├── [...missing].tsx  # 404 catch-all page
-│   └── (tabs)/           # Tab navigation group
-│       ├── _layout.tsx   # Tab bar configuration
-│       ├── index.tsx     # Home tab
-│       └── explore.tsx   # Explore tab
-├── i18n/                 # Internationalization
-│   ├── locales/          # Translation files (en, zh)
-│   ├── index.ts          # i18n instance setup
-│   └── useI18n.ts        # React hook for translations
-├── utils/
-│   └── cn.ts             # className merge utility
+│   ├── (tabs)/           # Tab navigation group
+│   │   ├── index.tsx     # Files tab (FITS file manager)
+│   │   ├── gallery.tsx   # Gallery tab (image browser)
+│   │   ├── targets.tsx   # Targets tab (observation targets)
+│   │   ├── sessions.tsx  # Sessions tab (observation log)
+│   │   └── settings.tsx  # Settings tab
+│   ├── viewer/           # FITS image viewer
+│   ├── header/           # FITS header inspector
+│   ├── editor/           # Image editor
+│   ├── stacking/         # Image stacking
+│   ├── compose/          # RGB compose
+│   ├── convert/          # Format converter
+│   ├── album/            # Album detail
+│   ├── target/           # Target detail
+│   ├── session/          # Session detail
+│   └── map/              # Map view
+├── components/           # Reusable UI components
+│   ├── common/           # Shared components (EmptyState, LoadingOverlay, etc.)
+│   ├── fits/             # FITS-specific components
+│   ├── gallery/          # Gallery components
+│   ├── targets/          # Target components
+│   ├── sessions/         # Session components
+│   └── converter/        # Converter components
+├── hooks/                # Custom React hooks
+├── stores/               # Zustand state stores
+├── lib/                  # Core business logic
+│   ├── fits/             # FITS file parsing
+│   ├── stacking/         # Image stacking algorithms
+│   ├── converter/        # Format conversion
+│   ├── gallery/          # Gallery logic
+│   ├── targets/          # Target management
+│   ├── sessions/         # Session management
+│   ├── calendar/         # Calendar integration
+│   ├── logger/           # Logging system
+│   ├── backup/           # Backup & restore
+│   ├── theme/            # Theme configuration
+│   └── utils/            # Utility functions
+├── i18n/                 # Internationalization (en, zh)
+├── utils/                # General utilities
 ├── global.css            # TailwindCSS + Uniwind + HeroUI styles
 └── uniwind-types.d.ts    # Uniwind theme type definitions
 ```
@@ -125,7 +171,7 @@ import { useI18n } from "../i18n/useI18n";
 
 function MyComponent() {
   const { t, locale, setLocale } = useI18n();
-  return <Text>{t("tabs.home")}</Text>;
+  return <Text>{t("viewer.stretch")}</Text>;
 }
 ```
 

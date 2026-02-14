@@ -2,7 +2,7 @@
  * 会话管理 Hook
  */
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useSessionStore } from "../stores/useSessionStore";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
@@ -10,6 +10,7 @@ import { detectSessions, getDatesWithObservations } from "../lib/sessions/sessio
 import { generateLogFromFiles } from "../lib/sessions/observationLog";
 import { exportToCSV, exportToText } from "../lib/sessions/observationLog";
 import { calculateObservationStats, getMonthlyTrend } from "../lib/sessions/statsCalculator";
+import { Logger } from "../lib/logger";
 
 export function useSessions() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -24,9 +25,14 @@ export function useSessions() {
   const files = useFitsStore((s) => s.files);
   const sessionGapMinutes = useSettingsStore((s) => s.sessionGapMinutes);
 
-  const autoDetectSessions = useCallback(() => {
+  const autoDetectSessions = useCallback((): { newCount: number; totalDetected: number } => {
     const detected = detectSessions(files, sessionGapMinutes);
+    Logger.info(
+      "Sessions",
+      `Auto-detect: ${detected.length} sessions found from ${files.length} files`,
+    );
 
+    let newCount = 0;
     for (const session of detected) {
       const exists = sessions.some(
         (s) => s.date === session.date && s.startTime === session.startTime,
@@ -61,7 +67,10 @@ export function useSessions() {
 
       const entries = generateLogFromFiles(sessionFiles, session.id);
       addLogEntries(entries);
+      newCount++;
     }
+
+    return { newCount, totalDetected: detected.length };
   }, [files, sessionGapMinutes, sessions, addSession, addLogEntries]);
 
   const getSessionStats = useCallback(() => {
@@ -90,18 +99,34 @@ export function useSessions() {
     [logEntries],
   );
 
-  return {
-    sessions,
-    logEntries,
-    addSession,
-    updateSession,
-    removeSession,
-    mergeSessions,
-    autoDetectSessions,
-    getSessionStats,
-    getMonthlyData,
-    getObservationDates,
-    getDatesWithSessions,
-    exportSessionLog,
-  };
+  return useMemo(
+    () => ({
+      sessions,
+      logEntries,
+      addSession,
+      updateSession,
+      removeSession,
+      mergeSessions,
+      autoDetectSessions,
+      getSessionStats,
+      getMonthlyData,
+      getObservationDates,
+      getDatesWithSessions,
+      exportSessionLog,
+    }),
+    [
+      sessions,
+      logEntries,
+      addSession,
+      updateSession,
+      removeSession,
+      mergeSessions,
+      autoDetectSessions,
+      getSessionStats,
+      getMonthlyData,
+      getObservationDates,
+      getDatesWithSessions,
+      exportSessionLog,
+    ],
+  );
 }

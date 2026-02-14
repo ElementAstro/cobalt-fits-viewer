@@ -1,12 +1,13 @@
 {
   "expo": {
-    "scheme": "acme",
+    "scheme": "cobalt",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
     "web": {
       "output": "single"
     },
     "plugins": [
+      "@react-native-google-signin/google-signin",
       "expo-secure-store",
       "expo-updates",
       "expo-font",
@@ -43,8 +44,8 @@
         }
       ]
     ],
-    "name": "react-native-quick-starter",
-    "slug": "react-native-quick-starter",
+    "name": "Cobalt FITS Viewer",
+    "slug": "cobalt-fits-viewer",
     "runtimeVersion": {
       "policy": "appVersion"
     },

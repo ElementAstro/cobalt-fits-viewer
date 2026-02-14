@@ -15,6 +15,7 @@ import {
 import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
 import { generateFileId } from "../lib/utils/fileManager";
+import { Logger } from "../lib/logger";
 
 interface UseFitsFileReturn {
   fits: FITS | null;
@@ -79,8 +80,11 @@ export function useFitsFile(): UseFitsFileReturn {
 
         const px = await getImagePixels(f);
         setPixels(px);
+        Logger.info("FitsFile", `Loaded: ${filename}`, { fileSize });
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load FITS file");
+        const msg = e instanceof Error ? e.message : "Failed to load FITS file";
+        Logger.error("FitsFile", `Load failed: ${filename}`, e);
+        setError(msg);
       } finally {
         setIsLoading(false);
       }
@@ -98,8 +102,11 @@ export function useFitsFile(): UseFitsFileReturn {
 
         const px = await getImagePixels(f);
         setPixels(px);
+        Logger.info("FitsFile", `Loaded from buffer: ${filename}`);
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to parse FITS data");
+        const msg = e instanceof Error ? e.message : "Failed to parse FITS data";
+        Logger.error("FitsFile", `Buffer load failed: ${filename}`, e);
+        setError(msg);
       } finally {
         setIsLoading(false);
       }
@@ -114,8 +121,11 @@ export function useFitsFile(): UseFitsFileReturn {
       try {
         const px = await getImagePixels(fits, hduIndex, frame);
         setPixels(px);
+        Logger.debug("FitsFile", `Frame loaded: ${frame}`, { hduIndex });
       } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load frame");
+        const msg = e instanceof Error ? e.message : "Failed to load frame";
+        Logger.error("FitsFile", `Frame load failed: ${frame}`, e);
+        setError(msg);
       } finally {
         setIsLoading(false);
       }

@@ -1,6 +1,18 @@
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { View, Text, ScrollView, Alert } from "react-native";
+import { useKeepAwake } from "expo-keep-awake";
 import { useState, useCallback, useMemo } from "react";
-import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
+import {
+  Accordion,
+  Alert as HAlert,
+  Button,
+  Card,
+  Checkbox,
+  Chip,
+  Label,
+  PressableFeedback,
+  Separator,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -39,6 +51,7 @@ const ALIGNMENT_MODES: {
 ];
 
 export default function StackingScreen() {
+  useKeepAwake();
   const router = useRouter();
   const { t } = useI18n();
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
@@ -63,11 +76,9 @@ export default function StackingScreen() {
   const [method, setMethod] = useState<StackMethod>("average");
   const [sigmaValue, setSigmaValue] = useState(2.5);
   const [calibration, setCalibration] = useState<CalibrationFrames>({});
-  const [showCalibration, setShowCalibration] = useState(false);
   const [alignmentMode, setAlignmentMode] = useState<AlignmentMode>("none");
   const [enableQuality, setEnableQuality] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
-  const [showAdvanced, setShowAdvanced] = useState(false);
   const [filterGroup, setFilterGroup] = useState<string | null>(null);
 
   const stacking = useStacking();
@@ -222,7 +233,7 @@ export default function StackingScreen() {
           <View className="flex-1">
             <Text className="text-lg font-bold text-foreground">{t("editor.stacking")}</Text>
             <Text className="text-[10px] text-muted">
-              {selectedFiles.length} / {files.length} frames selected
+              {t("editor.framesSelected", { selected: selectedFiles.length, total: files.length })}
             </Text>
           </View>
           {stacking.result && (
@@ -240,7 +251,7 @@ export default function StackingScreen() {
         </Text>
         <View className="flex-row flex-wrap gap-2 mb-4">
           {METHODS.map((m) => (
-            <TouchableOpacity key={m.key} onPress={() => setMethod(m.key)}>
+            <PressableFeedback key={m.key} onPress={() => setMethod(m.key)}>
               <Card
                 variant="secondary"
                 className={`min-w-[70px] ${method === m.key ? "border border-success" : ""}`}
@@ -258,7 +269,7 @@ export default function StackingScreen() {
                   </Text>
                 </Card.Body>
               </Card>
-            </TouchableOpacity>
+            </PressableFeedback>
           ))}
         </View>
 
@@ -270,11 +281,14 @@ export default function StackingScreen() {
             </Text>
             <View className="flex-row gap-2">
               {[1.5, 2.0, 2.5, 3.0, 3.5].map((s) => (
-                <TouchableOpacity key={s} onPress={() => setSigmaValue(s)}>
-                  <Chip size="sm" variant={sigmaValue === s ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[9px]">{s}σ</Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
+                <Chip
+                  key={s}
+                  size="sm"
+                  variant={sigmaValue === s ? "primary" : "secondary"}
+                  onPress={() => setSigmaValue(s)}
+                >
+                  <Chip.Label className="text-[9px]">{s}σ</Chip.Label>
+                </Chip>
               ))}
             </View>
           </View>
@@ -286,7 +300,7 @@ export default function StackingScreen() {
         </Text>
         <View className="flex-row gap-2 mb-4">
           {ALIGNMENT_MODES.map((am) => (
-            <TouchableOpacity
+            <PressableFeedback
               key={am.key}
               onPress={() => setAlignmentMode(am.key)}
               className="flex-1"
@@ -308,142 +322,136 @@ export default function StackingScreen() {
                   </Text>
                 </Card.Body>
               </Card>
-            </TouchableOpacity>
+            </PressableFeedback>
           ))}
         </View>
 
         {/* Advanced Options */}
-        <TouchableOpacity
-          onPress={() => setShowAdvanced((v) => !v)}
-          className="flex-row items-center justify-between mb-2"
-        >
-          <Text className="text-xs font-semibold uppercase text-muted">
-            {t("editor.advancedOptions" as any)}
-          </Text>
-          <Ionicons
-            name={showAdvanced ? "chevron-up" : "chevron-down"}
-            size={14}
-            color={mutedColor}
-          />
-        </TouchableOpacity>
-
-        {showAdvanced && (
-          <View className="mb-4 gap-2">
-            {/* Quality Evaluation Toggle */}
-            <TouchableOpacity
-              onPress={() => setEnableQuality((v) => !v)}
-              className="flex-row items-center gap-2"
-            >
-              <View
-                className={`h-5 w-5 items-center justify-center rounded ${enableQuality ? "bg-success" : "bg-surface-secondary border border-separator"}`}
-              >
-                {enableQuality && <Ionicons name="checkmark" size={12} color="#fff" />}
-              </View>
-              <Text className="text-xs text-foreground">
-                {t("editor.enableQualityEval" as any)}
+        <Accordion variant="surface" className="mb-4">
+          <Accordion.Item value="advanced">
+            <Accordion.Trigger>
+              <Text className="text-xs font-semibold uppercase text-muted">
+                {t("editor.advancedOptions" as any)}
               </Text>
-            </TouchableOpacity>
+              <Accordion.Indicator />
+            </Accordion.Trigger>
+            <Accordion.Content>
+              <View className="gap-2">
+                {/* Quality Evaluation Toggle */}
+                <Checkbox isSelected={enableQuality} onSelectedChange={setEnableQuality}>
+                  <Checkbox.Indicator />
+                  <Label className="text-xs">{t("editor.enableQualityEval" as any)}</Label>
+                </Checkbox>
 
-            {/* Export Format */}
-            <View className="flex-row items-center gap-2">
-              <Text className="text-[10px] text-muted">{t("editor.exportFormat" as any)}:</Text>
-              {(["png", "jpeg", "tiff"] as ExportFormat[]).map((fmt) => (
-                <TouchableOpacity key={fmt} onPress={() => setExportFormat(fmt)}>
-                  <Chip size="sm" variant={exportFormat === fmt ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[9px]">{fmt.toUpperCase()}</Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+                {/* Export Format */}
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-[10px] text-muted">{t("editor.exportFormat" as any)}:</Text>
+                  {(["png", "jpeg", "tiff"] as ExportFormat[]).map((fmt) => (
+                    <Chip
+                      key={fmt}
+                      size="sm"
+                      variant={exportFormat === fmt ? "primary" : "secondary"}
+                      onPress={() => setExportFormat(fmt)}
+                    >
+                      <Chip.Label className="text-[9px]">{fmt.toUpperCase()}</Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </View>
+            </Accordion.Content>
+          </Accordion.Item>
+        </Accordion>
 
         <Separator className="mb-4" />
 
         {/* Calibration Frames */}
-        <TouchableOpacity
-          onPress={() => setShowCalibration((v) => !v)}
-          className="flex-row items-center justify-between mb-2"
-        >
-          <Text className="text-xs font-semibold uppercase text-muted">
-            {t("editor.calibrationFrames" as any)}
-          </Text>
-          <View className="flex-row items-center gap-1">
-            {(calibration.darkFilepath || calibration.flatFilepath || calibration.biasFilepath) && (
-              <View className="h-1.5 w-1.5 rounded-full bg-success" />
-            )}
-            <Ionicons
-              name={showCalibration ? "chevron-up" : "chevron-down"}
-              size={14}
-              color={mutedColor}
-            />
-          </View>
-        </TouchableOpacity>
-
-        {showCalibration && (
-          <View className="mb-4 gap-1.5">
-            {(["dark", "flat", "bias"] as const).map((type) => {
-              const key = `${type}Filepath` as "darkFilepath" | "flatFilepath" | "biasFilepath";
-              const filepath = calibration[key];
-              const labelKey = `editor.${type}Frame` as any;
-              const filename = filepath?.split("/").pop();
-              return (
-                <View key={type} className="flex-row items-center gap-2">
-                  <TouchableOpacity
-                    className="flex-1"
-                    onPress={() => handleSelectCalibrationFrame(type)}
-                  >
-                    <Card variant="secondary">
-                      <Card.Body className="flex-row items-center gap-2 p-2.5">
-                        <Ionicons
-                          name="flask-outline"
-                          size={14}
-                          color={filepath ? successColor : mutedColor}
-                        />
-                        <View className="flex-1 min-w-0">
-                          <Text className="text-[10px] font-semibold text-muted">
-                            {t(labelKey)}
-                          </Text>
-                          {filename ? (
-                            <Text className="text-xs text-foreground" numberOfLines={1}>
-                              {filename}
-                            </Text>
-                          ) : (
-                            <Text className="text-[10px] text-muted italic">
-                              {t(
-                                `editor.select${type.charAt(0).toUpperCase() + type.slice(1)}` as any,
+        <Accordion variant="surface" className="mb-4">
+          <Accordion.Item value="calibration">
+            <Accordion.Trigger>
+              <View className="flex-row items-center gap-1">
+                <Text className="text-xs font-semibold uppercase text-muted">
+                  {t("editor.calibrationFrames" as any)}
+                </Text>
+                {(calibration.darkFilepath ||
+                  calibration.flatFilepath ||
+                  calibration.biasFilepath) && (
+                  <View className="h-1.5 w-1.5 rounded-full bg-success" />
+                )}
+              </View>
+              <Accordion.Indicator />
+            </Accordion.Trigger>
+            <Accordion.Content>
+              <View className="gap-1.5">
+                {(["dark", "flat", "bias"] as const).map((type) => {
+                  const key = `${type}Filepath` as "darkFilepath" | "flatFilepath" | "biasFilepath";
+                  const filepath = calibration[key];
+                  const labelKey = `editor.${type}Frame` as any;
+                  const filename = filepath?.split("/").pop();
+                  return (
+                    <View key={type} className="flex-row items-center gap-2">
+                      <PressableFeedback
+                        className="flex-1"
+                        onPress={() => handleSelectCalibrationFrame(type)}
+                      >
+                        <Card variant="secondary">
+                          <Card.Body className="flex-row items-center gap-2 p-2.5">
+                            <Ionicons
+                              name="flask-outline"
+                              size={14}
+                              color={filepath ? successColor : mutedColor}
+                            />
+                            <View className="flex-1 min-w-0">
+                              <Text className="text-[10px] font-semibold text-muted">
+                                {t(labelKey)}
+                              </Text>
+                              {filename ? (
+                                <Text className="text-xs text-foreground" numberOfLines={1}>
+                                  {filename}
+                                </Text>
+                              ) : (
+                                <Text className="text-[10px] text-muted italic">
+                                  {t(
+                                    `editor.select${type.charAt(0).toUpperCase() + type.slice(1)}` as any,
+                                  )}
+                                </Text>
                               )}
-                            </Text>
-                          )}
-                        </View>
-                        {filepath && (
-                          <TouchableOpacity
-                            onPress={() =>
-                              setCalibration((prev) => ({
-                                ...prev,
-                                [key]: undefined,
-                              }))
-                            }
-                          >
-                            <Ionicons name="close-circle" size={16} color={mutedColor} />
-                          </TouchableOpacity>
-                        )}
-                      </Card.Body>
-                    </Card>
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
-          </View>
-        )}
+                            </View>
+                            {filepath && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isIconOnly
+                                onPress={() =>
+                                  setCalibration((prev) => ({
+                                    ...prev,
+                                    [key]: undefined,
+                                  }))
+                                }
+                              >
+                                <Ionicons name="close-circle" size={16} color={mutedColor} />
+                              </Button>
+                            )}
+                          </Card.Body>
+                        </Card>
+                      </PressableFeedback>
+                    </View>
+                  );
+                })}
+              </View>
+            </Accordion.Content>
+          </Accordion.Item>
+        </Accordion>
 
         <Separator className="mb-4" />
 
         {/* Error */}
         {stacking.error && (
-          <View className="mb-4 rounded-lg bg-danger/10 p-3">
-            <Text className="text-xs text-danger">{stacking.error}</Text>
-          </View>
+          <HAlert status="danger" className="mb-4">
+            <HAlert.Indicator />
+            <HAlert.Content>
+              <HAlert.Description>{stacking.error}</HAlert.Description>
+            </HAlert.Content>
+          </HAlert>
         )}
 
         {/* Result Preview */}
@@ -560,37 +568,43 @@ export default function StackingScreen() {
             {t("editor.frames" as any)} ({selectedFiles.length}/{files.length})
           </Text>
           <View className="flex-row gap-2">
-            <TouchableOpacity onPress={selectAll}>
-              <Text className="text-[10px] text-success">{t("editor.selectAll" as any)}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={clearSelection}>
-              <Text className="text-[10px] text-muted">{t("editor.deselectAll" as any)}</Text>
-            </TouchableOpacity>
+            <Button size="sm" variant="ghost" onPress={selectAll}>
+              <Button.Label className="text-[10px] text-success">
+                {t("editor.selectAll" as any)}
+              </Button.Label>
+            </Button>
+            <Button size="sm" variant="ghost" onPress={clearSelection}>
+              <Button.Label className="text-[10px] text-muted">
+                {t("editor.deselectAll" as any)}
+              </Button.Label>
+            </Button>
           </View>
         </View>
 
         {/* Filter Group Chips */}
         {Object.keys(filterGroups).length > 1 && (
           <View className="flex-row flex-wrap gap-1.5 mb-3">
-            <TouchableOpacity onPress={() => setFilterGroup(null)}>
-              <Chip size="sm" variant={filterGroup === null ? "primary" : "secondary"}>
-                <Chip.Label className="text-[9px]">{t("editor.allFilters" as any)}</Chip.Label>
-              </Chip>
-            </TouchableOpacity>
+            <Chip
+              size="sm"
+              variant={filterGroup === null ? "primary" : "secondary"}
+              onPress={() => setFilterGroup(null)}
+            >
+              <Chip.Label className="text-[9px]">{t("editor.allFilters" as any)}</Chip.Label>
+            </Chip>
             {Object.entries(filterGroups).map(([filter, count]) => (
-              <TouchableOpacity
+              <Chip
                 key={filter}
+                size="sm"
+                variant={filterGroup === filter ? "primary" : "secondary"}
                 onPress={() => {
                   setFilterGroup(filter);
                   handleSelectByFilter(filter);
                 }}
               >
-                <Chip size="sm" variant={filterGroup === filter ? "primary" : "secondary"}>
-                  <Chip.Label className="text-[9px]">
-                    {filter} ({count})
-                  </Chip.Label>
-                </Chip>
-              </TouchableOpacity>
+                <Chip.Label className="text-[9px]">
+                  {filter} ({count})
+                </Chip.Label>
+              </Chip>
             ))}
           </View>
         )}
@@ -602,14 +616,15 @@ export default function StackingScreen() {
             {displayFiles.map((file) => {
               const isSelected = selectedIds.includes(file.id);
               return (
-                <TouchableOpacity key={file.id} onPress={() => toggleSelection(file.id)}>
+                <PressableFeedback key={file.id} onPress={() => toggleSelection(file.id)}>
                   <Card variant="secondary" className={isSelected ? "border border-success" : ""}>
                     <Card.Body className="flex-row items-center gap-3 p-2.5">
-                      <View
-                        className={`h-5 w-5 items-center justify-center rounded ${isSelected ? "bg-success" : "bg-surface-secondary border border-separator"}`}
+                      <Checkbox
+                        isSelected={isSelected}
+                        onSelectedChange={() => toggleSelection(file.id)}
                       >
-                        {isSelected && <Ionicons name="checkmark" size={12} color="#fff" />}
-                      </View>
+                        <Checkbox.Indicator />
+                      </Checkbox>
                       <View className="flex-1 min-w-0">
                         <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
                           {file.filename}
@@ -625,7 +640,7 @@ export default function StackingScreen() {
                       )}
                     </Card.Body>
                   </Card>
-                </TouchableOpacity>
+                </PressableFeedback>
               );
             })}
           </View>

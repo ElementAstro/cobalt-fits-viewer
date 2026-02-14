@@ -55,20 +55,31 @@ export function calculateStats(pixels: Float32Array): {
 
 /**
  * 计算直方图
+ * 对超大图像 (>2M 像素) 自动采样以避免阻塞主线程
+ * 可传入预计算的 min/max 避免重复扫描
  */
 export function calculateHistogram(
   pixels: Float32Array,
   bins: number = 256,
+  precomputedRange?: { min: number; max: number },
 ): { counts: number[]; edges: number[] } {
   const n = pixels.length;
-  let min = Infinity;
-  let max = -Infinity;
 
-  for (let i = 0; i < n; i++) {
-    const v = pixels[i];
-    if (!isNaN(v)) {
-      if (v < min) min = v;
-      if (v > max) max = v;
+  let min: number;
+  let max: number;
+
+  if (precomputedRange) {
+    min = precomputedRange.min;
+    max = precomputedRange.max;
+  } else {
+    min = Infinity;
+    max = -Infinity;
+    for (let i = 0; i < n; i++) {
+      const v = pixels[i];
+      if (!isNaN(v)) {
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
     }
   }
 
@@ -81,16 +92,32 @@ export function calculateHistogram(
 
   const range = max - min;
   const binWidth = range / bins;
-  const counts = new Array(bins).fill(0);
   const edges = Array.from({ length: bins + 1 }, (_, i) => min + i * binWidth);
 
-  for (let i = 0; i < n; i++) {
-    const v = pixels[i];
-    if (isNaN(v)) continue;
-    const bin = Math.min(bins - 1, Math.floor((v - min) / binWidth));
-    counts[bin]++;
+  // Use Uint32Array for faster binning
+  const rawCounts = new Uint32Array(bins);
+
+  // Sample for very large images (>2M pixels) to keep computation <10ms
+  const sampleThreshold = 2_000_000;
+  if (n > sampleThreshold) {
+    const stride = Math.max(1, Math.floor(n / sampleThreshold));
+    for (let i = 0; i < n; i += stride) {
+      const v = pixels[i];
+      if (isNaN(v)) continue;
+      const bin = Math.min(bins - 1, Math.floor((v - min) / binWidth));
+      rawCounts[bin]++;
+    }
+  } else {
+    for (let i = 0; i < n; i++) {
+      const v = pixels[i];
+      if (isNaN(v)) continue;
+      const bin = Math.min(bins - 1, Math.floor((v - min) / binWidth));
+      rawCounts[bin]++;
+    }
   }
 
+  // Convert to regular array for compatibility
+  const counts = Array.from(rawCounts);
   return { counts, edges };
 }
 

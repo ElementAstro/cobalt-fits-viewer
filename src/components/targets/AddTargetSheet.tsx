@@ -1,15 +1,6 @@
 import { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TouchableOpacity,
-} from "react-native";
-import { Button, Chip, useThemeColor } from "heroui-native";
+import { View, ScrollView } from "react-native";
+import { Button, Chip, Dialog, FieldError, Input, Label, TextArea, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { parseRA, parseDec, formatRA, formatDec } from "../../lib/targets/coordinates";
 import type { TargetType } from "../../lib/fits/types";
@@ -39,7 +30,6 @@ interface AddTargetSheetProps {
 
 export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetProps) {
   const { t } = useI18n();
-  const [mutedColor] = useThemeColor(["muted"]);
   const [name, setName] = useState("");
   const [type, setType] = useState<TargetType>("other");
   const [ra, setRa] = useState("");
@@ -88,96 +78,95 @@ export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetPr
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 items-center justify-center bg-black/60"
-      >
-        <View className="mx-6 w-full max-w-sm rounded-2xl bg-surface-secondary p-6">
+    <Dialog isOpen={visible} onOpenChange={(open) => !open && handleClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content className="mx-6 w-full max-w-sm rounded-2xl bg-background p-6">
           <ScrollView showsVerticalScrollIndicator={false}>
-            <Text className="text-lg font-bold text-foreground">{t("targets.addTarget")}</Text>
+            <View className="flex-row items-center justify-between mb-2">
+              <Dialog.Title>{t("targets.addTarget")}</Dialog.Title>
+              <Dialog.Close />
+            </View>
 
-            <TextInput
-              className="mt-4 rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-              placeholder={t("targets.targetName")}
-              placeholderTextColor={mutedColor}
-              value={name}
-              onChangeText={setName}
-              autoFocus
-              autoCorrect={false}
-            />
+            <TextField isRequired>
+              <Label>{t("targets.targetName")}</Label>
+              <Input
+                placeholder={t("targets.targetName")}
+                value={name}
+                onChangeText={setName}
+                autoFocus
+                autoCorrect={false}
+              />
+            </TextField>
 
             {/* Type selector */}
-            <Text className="mt-4 mb-2 text-xs font-semibold text-muted">{t("targets.type")}</Text>
+            <Label className="mt-4 mb-2">{t("targets.type")}</Label>
             <View className="flex-row flex-wrap gap-1.5">
               {TARGET_TYPES.map((tt) => (
-                <TouchableOpacity key={tt} onPress={() => setType(tt)}>
-                  <Chip size="sm" variant={type === tt ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[10px]">
-                      {t(
-                        `targets.types.${tt}` as
-                          | "targets.types.galaxy"
-                          | "targets.types.nebula"
-                          | "targets.types.cluster"
-                          | "targets.types.planet"
-                          | "targets.types.moon"
-                          | "targets.types.sun"
-                          | "targets.types.comet"
-                          | "targets.types.other",
-                      )}
-                    </Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
+                <Chip
+                  key={tt}
+                  size="sm"
+                  variant={type === tt ? "primary" : "secondary"}
+                  onPress={() => setType(tt)}
+                >
+                  <Chip.Label className="text-[10px]">
+                    {t(
+                      `targets.types.${tt}` as
+                        | "targets.types.galaxy"
+                        | "targets.types.nebula"
+                        | "targets.types.cluster"
+                        | "targets.types.planet"
+                        | "targets.types.moon"
+                        | "targets.types.sun"
+                        | "targets.types.comet"
+                        | "targets.types.other",
+                    )}
+                  </Chip.Label>
+                </Chip>
               ))}
             </View>
 
             {/* RA / Dec */}
             <View className="mt-4 flex-row gap-2">
               <View className="flex-1">
-                <TextInput
-                  className={`rounded-xl border bg-background px-4 py-3 text-sm text-foreground ${
-                    !raValid ? "border-red-500" : "border-separator"
-                  }`}
-                  placeholder="RA (e.g. 05h 34m 31s)"
-                  placeholderTextColor={mutedColor}
-                  value={ra}
-                  onChangeText={setRa}
-                  onBlur={handleRABlur}
-                  autoCorrect={false}
-                />
-                {!raValid && (
-                  <Text className="mt-0.5 text-[9px] text-red-500">{t("targets.invalidRA")}</Text>
-                )}
+                <TextField isInvalid={!raValid}>
+                  <Label>RA</Label>
+                  <Input
+                    placeholder="RA (e.g. 05h 34m 31s)"
+                    value={ra}
+                    onChangeText={setRa}
+                    onBlur={handleRABlur}
+                    autoCorrect={false}
+                  />
+                  {!raValid && <FieldError>{t("targets.invalidRA")}</FieldError>}
+                </TextField>
               </View>
               <View className="flex-1">
-                <TextInput
-                  className={`rounded-xl border bg-background px-4 py-3 text-sm text-foreground ${
-                    !decValid ? "border-red-500" : "border-separator"
-                  }`}
-                  placeholder="Dec (e.g. +22° 00′ 52″)"
-                  placeholderTextColor={mutedColor}
-                  value={dec}
-                  onChangeText={setDec}
-                  onBlur={handleDecBlur}
-                  autoCorrect={false}
-                />
-                {!decValid && (
-                  <Text className="mt-0.5 text-[9px] text-red-500">{t("targets.invalidDec")}</Text>
-                )}
+                <TextField isInvalid={!decValid}>
+                  <Label>Dec</Label>
+                  <Input
+                    placeholder="Dec (e.g. +22° 00′ 52″)"
+                    value={dec}
+                    onChangeText={setDec}
+                    onBlur={handleDecBlur}
+                    autoCorrect={false}
+                  />
+                  {!decValid && <FieldError>{t("targets.invalidDec")}</FieldError>}
+                </TextField>
               </View>
             </View>
 
             {/* Notes */}
-            <TextInput
-              className="mt-3 rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-              placeholder={t("targets.notes")}
-              placeholderTextColor={mutedColor}
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={2}
-              autoCorrect={false}
-            />
+            <TextField className="mt-3">
+              <Label>{t("targets.notes")}</Label>
+              <TextArea
+                placeholder={t("targets.notes")}
+                value={notes}
+                onChangeText={setNotes}
+                numberOfLines={2}
+                autoCorrect={false}
+              />
+            </TextField>
 
             <View className="mt-4 flex-row justify-end gap-2">
               <Button variant="outline" onPress={handleClose}>
@@ -188,8 +177,8 @@ export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetPr
               </Button>
             </View>
           </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog>
   );
 }

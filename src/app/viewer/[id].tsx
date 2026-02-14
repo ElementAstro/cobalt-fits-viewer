@@ -1,18 +1,26 @@
 import { View, Text, Alert } from "react-native";
-import { useState, useEffect, useCallback } from "react";
-import { Button, Chip, useThemeColor } from "heroui-native";
+import { useKeepAwake } from "expo-keep-awake";
+import * as Haptics from "expo-haptics";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Alert as HAlert, Button, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useShallow } from "zustand/react/shallow";
 import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useViewerStore } from "../../stores/useViewerStore";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
 import { useExport } from "../../hooks/useExport";
+import { useThumbnail } from "../../hooks/useThumbnail";
 import { ViewerControls } from "../../components/fits/ViewerControls";
 import { PixelInspector } from "../../components/fits/PixelInspector";
 import { FitsHistogram } from "../../components/fits/FitsHistogram";
-import { FitsCanvas } from "../../components/fits/FitsCanvas";
+import {
+  FitsCanvas,
+  type CanvasTransform,
+  type FitsCanvasHandle,
+} from "../../components/fits/FitsCanvas";
 import { Minimap } from "../../components/fits/Minimap";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { ExportDialog } from "../../components/common/ExportDialog";
@@ -20,6 +28,7 @@ import type { ExportFormat } from "../../lib/fits/types";
 import { computeAutoStretch } from "../../lib/utils/pixelMath";
 
 export default function ViewerDetailScreen() {
+  useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
@@ -27,30 +36,51 @@ export default function ViewerDetailScreen() {
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
   const updateFile = useFitsStore((s) => s.updateFile);
+  const getAdjacentFileIds = useFitsStore((s) => s.getAdjacentFileIds);
+  const { prevId, nextId } = id ? getAdjacentFileIds(id) : { prevId: null, nextId: null };
 
-  const stretch = useViewerStore((s) => s.stretch);
-  const colormap = useViewerStore((s) => s.colormap);
-  const blackPoint = useViewerStore((s) => s.blackPoint);
-  const whitePoint = useViewerStore((s) => s.whitePoint);
-  const gamma = useViewerStore((s) => s.gamma);
+  // Display parameters — grouped to reduce re-renders
+  const { stretch, colormap, blackPoint, whitePoint, gamma } = useViewerStore(
+    useShallow((s) => ({
+      stretch: s.stretch,
+      colormap: s.colormap,
+      blackPoint: s.blackPoint,
+      whitePoint: s.whitePoint,
+      gamma: s.gamma,
+    })),
+  );
+
+  // Display parameter setters (stable references)
   const setStretch = useViewerStore((s) => s.setStretch);
   const setColormap = useViewerStore((s) => s.setColormap);
   const setBlackPoint = useViewerStore((s) => s.setBlackPoint);
   const setWhitePoint = useViewerStore((s) => s.setWhitePoint);
   const setGamma = useViewerStore((s) => s.setGamma);
-  const showGrid = useViewerStore((s) => s.showGrid);
-  const showCrosshair = useViewerStore((s) => s.showCrosshair);
-  const showPixelInfo = useViewerStore((s) => s.showPixelInfo);
-  const showMinimap = useViewerStore((s) => s.showMiniMap);
+
+  // Overlay toggles — grouped
+  const { showGrid, showCrosshair, showPixelInfo, showMinimap } = useViewerStore(
+    useShallow((s) => ({
+      showGrid: s.showGrid,
+      showCrosshair: s.showCrosshair,
+      showPixelInfo: s.showPixelInfo,
+      showMinimap: s.showMiniMap,
+    })),
+  );
   const toggleGrid = useViewerStore((s) => s.toggleGrid);
   const toggleCrosshair = useViewerStore((s) => s.toggleCrosshair);
   const togglePixelInfo = useViewerStore((s) => s.togglePixelInfo);
   const toggleMinimap = useViewerStore((s) => s.toggleMiniMap);
-  const cursorX = useViewerStore((s) => s.cursorX);
-  const cursorY = useViewerStore((s) => s.cursorY);
+
+  // Cursor & frame — grouped
+  const { cursorX, cursorY, currentFrame, totalFrames } = useViewerStore(
+    useShallow((s) => ({
+      cursorX: s.cursorX,
+      cursorY: s.cursorY,
+      currentFrame: s.currentFrame,
+      totalFrames: s.totalFrames,
+    })),
+  );
   const setCursorPosition = useViewerStore((s) => s.setCursorPosition);
-  const currentFrame = useViewerStore((s) => s.currentFrame);
-  const totalFrames = useViewerStore((s) => s.totalFrames);
   const setCurrentFrame = useViewerStore((s) => s.setCurrentFrame);
   const setTotalFrames = useViewerStore((s) => s.setTotalFrames);
 
@@ -61,18 +91,45 @@ export default function ViewerDetailScreen() {
     error: fitsError,
     loadFromPath,
     loadFrame,
+    reset: resetFits,
   } = useFitsFile();
 
-  const { rgbaData, histogram, processImage, getHistogram, getStats, stats, processingError } =
-    useImageProcessing();
+  const {
+    rgbaData,
+    displayWidth,
+    displayHeight,
+    histogram,
+    processImage,
+    processImagePreview,
+    getStatsAndHistogram,
+    stats,
+    processingError,
+  } = useImageProcessing();
 
   const { isExporting, exportImage, shareImage, saveImage, printImage, printToPdf } = useExport();
+  const { generateThumbnail } = useThumbnail();
 
   const [showControls, setShowControls] = useState(true);
   const [showExport, setShowExport] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const prevPixelsRef = useRef<Float32Array | null>(null);
+  const [canvasTransform, setCanvasTransform] = useState<CanvasTransform>({
+    scale: 1,
+    translateX: 0,
+    translateY: 0,
+    canvasWidth: 0,
+    canvasHeight: 0,
+  });
+  const canvasRef = useRef<FitsCanvasHandle>(null);
 
   const toggleFavorite = useFitsStore((s) => s.toggleFavorite);
+
+  const navigateTo = useCallback(
+    (fileId: string) => {
+      router.replace(`/viewer/${fileId}`);
+    },
+    [router],
+  );
 
   // --- Export handlers ---
   const handleExport = useCallback(
@@ -90,8 +147,10 @@ export default function ViewerDetailScreen() {
         quality,
       );
       if (path) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(t("common.success"), t("viewer.exportSuccess"));
       } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert(t("common.error"), t("viewer.exportFailed"));
       }
       setShowExport(false);
@@ -137,8 +196,10 @@ export default function ViewerDetailScreen() {
         quality,
       );
       if (uri) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         Alert.alert(t("common.success"), t("viewer.savedToDevice"));
       } else {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         Alert.alert(t("common.error"), t("viewer.exportFailed"));
       }
       setShowExport(false);
@@ -200,12 +261,15 @@ export default function ViewerDetailScreen() {
     [setCurrentFrame, loadFrame],
   );
 
-  // Load file on mount
+  // Load file on mount, cleanup on unmount
   useEffect(() => {
     if (file) {
       loadFromPath(file.filepath, file.filename, file.fileSize);
       updateFile(file.id, { lastViewed: Date.now() });
     }
+    return () => {
+      resetFits();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file?.id]);
 
@@ -216,10 +280,29 @@ export default function ViewerDetailScreen() {
     }
   }, [dimensions, setTotalFrames]);
 
-  // Process image when pixels or display params change (debounced for slider drags)
+  // Process image: use progressive preview for initial/new pixel data, chunked for param changes
   useEffect(() => {
     if (!pixels || !dimensions) return;
 
+    const isNewPixelData = prevPixelsRef.current !== pixels;
+    prevPixelsRef.current = pixels;
+
+    if (isNewPixelData) {
+      // New pixel data (initial load or frame change): show preview immediately
+      processImagePreview(
+        pixels,
+        dimensions.width,
+        dimensions.height,
+        stretch,
+        colormap,
+        blackPoint,
+        whitePoint,
+        gamma,
+      );
+      return;
+    }
+
+    // Parameter change (slider drag): debounce with chunked processing
     const timer = setTimeout(() => {
       processImage(
         pixels,
@@ -231,20 +314,28 @@ export default function ViewerDetailScreen() {
         whitePoint,
         gamma,
       );
-    }, 50);
+    }, 150);
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixels, dimensions, stretch, colormap, blackPoint, whitePoint, gamma]);
 
-  // Histogram and stats only on pixel/dimension change (not on display param tweaks)
+  // Histogram and stats only on pixel/dimension change (deferred after interactions)
   useEffect(() => {
     if (pixels) {
-      getHistogram(pixels, 256);
-      getStats(pixels);
+      getStatsAndHistogram(pixels, 256);
+    }
+  }, [pixels, getStatsAndHistogram]);
+
+  // Auto-generate thumbnail on first view if missing
+  useEffect(() => {
+    if (!file || file.thumbnailUri || !rgbaData || !dimensions) return;
+    const thumbUri = generateThumbnail(file.id, rgbaData, dimensions.width, dimensions.height);
+    if (thumbUri) {
+      updateFile(file.id, { thumbnailUri: thumbUri });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixels]);
+  }, [file?.id, file?.thumbnailUri, rgbaData, dimensions]);
 
   const pixelValue =
     pixels && dimensions && cursorX >= 0 && cursorY >= 0
@@ -269,9 +360,27 @@ export default function ViewerDetailScreen() {
 
       {/* Top Bar */}
       <View className="flex-row items-center justify-between px-4 pt-14 pb-2">
-        <Button size="sm" variant="outline" onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={16} color={mutedColor} />
-        </Button>
+        <View className="flex-row gap-1">
+          <Button size="sm" variant="outline" onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={16} color={mutedColor} />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            isDisabled={!prevId}
+            onPress={() => prevId && navigateTo(prevId)}
+          >
+            <Ionicons name="chevron-back" size={14} color={prevId ? mutedColor : "#555"} />
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            isDisabled={!nextId}
+            onPress={() => nextId && navigateTo(nextId)}
+          >
+            <Ionicons name="chevron-forward" size={14} color={nextId ? mutedColor : "#555"} />
+          </Button>
+        </View>
         <Text
           className="flex-1 mx-2 text-sm font-semibold text-foreground text-center"
           numberOfLines={1}
@@ -308,21 +417,28 @@ export default function ViewerDetailScreen() {
       {/* Canvas Area */}
       <View className="flex-1 bg-black">
         {fitsError || processingError ? (
-          <View className="flex-1 items-center justify-center">
-            <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
-            <Text className="mt-2 text-xs text-red-400">{fitsError || processingError}</Text>
+          <View className="flex-1 items-center justify-center px-6">
+            <HAlert status="danger">
+              <HAlert.Indicator />
+              <HAlert.Content>
+                <HAlert.Title>{t("common.error")}</HAlert.Title>
+                <HAlert.Description>{fitsError || processingError}</HAlert.Description>
+              </HAlert.Content>
+            </HAlert>
           </View>
         ) : rgbaData && dimensions ? (
           <View className="flex-1">
             <FitsCanvas
+              ref={canvasRef}
               rgbaData={rgbaData}
-              width={dimensions.width}
-              height={dimensions.height}
+              width={displayWidth || dimensions.width}
+              height={displayHeight || dimensions.height}
               showGrid={showGrid}
               showCrosshair={showCrosshair}
               cursorX={cursorX}
               cursorY={cursorY}
               onPixelTap={handlePixelTap}
+              onTransformChange={setCanvasTransform}
             />
 
             {/* Pixel Inspector */}
@@ -331,9 +447,15 @@ export default function ViewerDetailScreen() {
             {/* Minimap */}
             <Minimap
               rgbaData={rgbaData}
-              imgWidth={dimensions.width}
-              imgHeight={dimensions.height}
+              imgWidth={displayWidth || dimensions.width}
+              imgHeight={displayHeight || dimensions.height}
               visible={showMinimap}
+              viewportScale={canvasTransform.scale}
+              viewportTranslateX={canvasTransform.translateX}
+              viewportTranslateY={canvasTransform.translateY}
+              canvasWidth={canvasTransform.canvasWidth}
+              canvasHeight={canvasTransform.canvasHeight}
+              onNavigate={(tx: number, ty: number) => canvasRef.current?.setTransform(tx, ty)}
             />
 
             {/* Stats overlay */}
@@ -365,6 +487,8 @@ export default function ViewerDetailScreen() {
             edges={histogram.edges}
             blackPoint={blackPoint}
             whitePoint={whitePoint}
+            onBlackPointChange={setBlackPoint}
+            onWhitePointChange={setWhitePoint}
           />
         </View>
       )}

@@ -3,8 +3,8 @@
  * Shows current version, check/download/restart controls, and status feedback.
  */
 
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
-import { Card, Separator, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { Button, Card, Separator, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
@@ -58,7 +58,7 @@ export function UpdateChecker() {
     switch (status) {
       case "checking":
       case "downloading":
-        return <ActivityIndicator size="small" color={accentColor} />;
+        return <Spinner size="sm" color="default" />;
       case "available":
         return <Ionicons name="cloud-download-outline" size={18} color={accentColor} />;
       case "ready":
@@ -95,57 +95,41 @@ export function UpdateChecker() {
     switch (status) {
       case "available":
         return (
-          <TouchableOpacity
-            onPress={handleDownload}
-            className="flex-row items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5"
-          >
+          <Button size="sm" variant="ghost" onPress={handleDownload}>
             <Ionicons name="cloud-download-outline" size={14} color={accentColor} />
-            <Text style={{ color: accentColor }} className="text-xs font-semibold">
-              {t("settings.downloadAndInstall")}
-            </Text>
-          </TouchableOpacity>
+            <Button.Label>{t("settings.downloadAndInstall")}</Button.Label>
+          </Button>
         );
       case "ready":
         return (
-          <TouchableOpacity
-            onPress={handleRestart}
-            className="flex-row items-center gap-1.5 rounded-lg bg-success/10 px-3 py-1.5"
-          >
+          <Button size="sm" variant="ghost" onPress={handleRestart}>
             <Ionicons name="refresh-outline" size={14} color={successColor} />
-            <Text style={{ color: successColor }} className="text-xs font-semibold">
-              {t("settings.restart")}
-            </Text>
-          </TouchableOpacity>
+            <Button.Label className="text-success">{t("settings.restart")}</Button.Label>
+          </Button>
         );
       case "error":
         return (
-          <TouchableOpacity
+          <Button
+            size="sm"
+            variant="ghost"
             onPress={() => {
               clearError();
               handleCheck();
             }}
-            className="flex-row items-center gap-1.5 rounded-lg bg-danger/10 px-3 py-1.5"
           >
             <Ionicons name="refresh-outline" size={14} color={dangerColor} />
-            <Text style={{ color: dangerColor }} className="text-xs font-semibold">
-              {t("common.retry")}
-            </Text>
-          </TouchableOpacity>
+            <Button.Label className="text-danger">{t("common.retry")}</Button.Label>
+          </Button>
         );
       case "checking":
       case "downloading":
         return null;
       default:
         return (
-          <TouchableOpacity
-            onPress={handleCheck}
-            className="flex-row items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5"
-          >
+          <Button size="sm" variant="ghost" onPress={handleCheck}>
             <Ionicons name="refresh-outline" size={14} color={accentColor} />
-            <Text style={{ color: accentColor }} className="text-xs font-semibold">
-              {t("settings.checkForUpdate")}
-            </Text>
-          </TouchableOpacity>
+            <Button.Label>{t("settings.checkForUpdate")}</Button.Label>
+          </Button>
         );
     }
   };
@@ -201,19 +185,21 @@ export function UpdateChecker() {
         <Separator />
 
         {/* Licenses */}
-        <TouchableOpacity
+        <Button
+          variant="ghost"
+          className="w-full justify-between px-0"
           onPress={() => {}}
           accessibilityRole="button"
           accessibilityLabel={t("settings.licenses")}
         >
-          <View className="flex-row items-center justify-between py-3">
-            <View className="flex-row items-center gap-3">
-              <Ionicons name="document-text-outline" size={18} color={mutedColor} />
-              <Text className="text-sm text-foreground">{t("settings.licenses")}</Text>
-            </View>
-            <Text className="text-xs text-muted">{t("settings.licensesDetail")}</Text>
+          <View className="flex-row items-center gap-3">
+            <Ionicons name="document-text-outline" size={18} color={mutedColor} />
+            <Button.Label className="text-sm text-foreground">
+              {t("settings.licenses")}
+            </Button.Label>
           </View>
-        </TouchableOpacity>
+          <Text className="text-xs text-muted">{t("settings.licensesDetail")}</Text>
+        </Button>
       </Card.Body>
     </Card>
   );

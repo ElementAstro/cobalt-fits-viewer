@@ -1,6 +1,17 @@
 import { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
-import { Button, Card, Separator, useThemeColor } from "heroui-native";
+import { View, Text, Alert } from "react-native";
+import {
+  BottomSheet,
+  Button,
+  Card,
+  Chip,
+  Input,
+  Label,
+  Separator,
+  TextArea,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useCalendar } from "../../hooks/useCalendar";
@@ -23,7 +34,6 @@ const REMINDER_OPTIONS = [
 export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObservationSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
-  const accentColor = useThemeColor("accent");
   const { createObservationPlan, syncing } = useCalendar();
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
 
@@ -68,8 +78,6 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
     }
   };
 
-  if (!visible) return null;
-
   const formatDate = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 
@@ -77,43 +85,40 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
     `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 
   return (
-    <View className="absolute inset-0 z-50 bg-black/50">
-      <View className="flex-1 justify-end">
-        <View className="rounded-t-3xl bg-background px-4 pb-8 pt-4">
-          {/* Handle */}
-          <View className="mb-4 items-center">
-            <View className="h-1 w-10 rounded-full bg-muted/40" />
-          </View>
-
+    <BottomSheet
+      isOpen={visible}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content>
           {/* Header */}
           <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-lg font-bold text-foreground">
-              {t("sessions.planObservation")}
-            </Text>
-            <TouchableOpacity onPress={onClose}>
-              <Ionicons name="close" size={22} color={mutedColor} />
-            </TouchableOpacity>
+            <BottomSheet.Title>{t("sessions.planObservation")}</BottomSheet.Title>
+            <BottomSheet.Close />
           </View>
 
           {/* Target Name */}
-          <Text className="mb-1 text-xs font-medium text-muted">{t("sessions.targetName")} *</Text>
-          <TextInput
-            className="mb-3 rounded-lg border border-border bg-surface-secondary px-3 py-2.5 text-sm text-foreground"
-            value={targetName}
-            onChangeText={setTargetName}
-            placeholder="e.g. M42, NGC 7000..."
-            placeholderTextColor={mutedColor}
-          />
+          <TextField isRequired className="mb-3">
+            <Label>{t("sessions.targetName")}</Label>
+            <Input
+              value={targetName}
+              onChangeText={setTargetName}
+              placeholder="e.g. M42, NGC 7000..."
+            />
+          </TextField>
 
           {/* Title (optional) */}
-          <Text className="mb-1 text-xs font-medium text-muted">{t("sessions.planTitle")}</Text>
-          <TextInput
-            className="mb-3 rounded-lg border border-border bg-surface-secondary px-3 py-2.5 text-sm text-foreground"
-            value={title}
-            onChangeText={setTitle}
-            placeholder={targetName || t("sessions.planTitle")}
-            placeholderTextColor={mutedColor}
-          />
+          <TextField className="mb-3">
+            <Label>{t("sessions.planTitle")}</Label>
+            <Input
+              value={title}
+              onChangeText={setTitle}
+              placeholder={targetName || t("sessions.planTitle")}
+            />
+          </TextField>
 
           {/* Date & Time Info */}
           <Card variant="secondary" className="mb-3">
@@ -152,35 +157,29 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
             {REMINDER_OPTIONS.map((opt) => {
               const isActive = reminderMinutes === opt.value;
               return (
-                <TouchableOpacity
+                <Chip
                   key={opt.value}
+                  size="sm"
+                  variant={isActive ? "primary" : "secondary"}
+                  color={isActive ? "accent" : "default"}
                   onPress={() => setReminderMinutes(opt.value)}
-                  className={`rounded-lg border px-3 py-1.5 ${
-                    isActive ? "border-primary bg-primary/10" : "border-border bg-surface-secondary"
-                  }`}
                 >
-                  <Text
-                    className={`text-xs ${isActive ? "font-semibold" : ""}`}
-                    style={{ color: isActive ? accentColor : mutedColor }}
-                  >
-                    {t(`sessions.reminderOptions.${opt.labelKey}`)}
-                  </Text>
-                </TouchableOpacity>
+                  <Chip.Label>{t(`sessions.reminderOptions.${opt.labelKey}`)}</Chip.Label>
+                </Chip>
               );
             })}
           </View>
 
           {/* Notes */}
-          <Text className="mb-1 text-xs font-medium text-muted">{t("sessions.notes")}</Text>
-          <TextInput
-            className="mb-4 rounded-lg border border-border bg-surface-secondary px-3 py-2.5 text-sm text-foreground"
-            value={notes}
-            onChangeText={setNotes}
-            placeholder={t("sessions.notes")}
-            placeholderTextColor={mutedColor}
-            multiline
-            numberOfLines={2}
-          />
+          <TextField className="mb-4">
+            <Label>{t("sessions.notes")}</Label>
+            <TextArea
+              value={notes}
+              onChangeText={setNotes}
+              placeholder={t("sessions.notes")}
+              numberOfLines={2}
+            />
+          </TextField>
 
           {/* Create Button */}
           <Button
@@ -188,15 +187,11 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
             isDisabled={syncing || !targetName.trim()}
             className="w-full"
           >
-            <View className="flex-row items-center gap-2">
-              <Ionicons name="calendar" size={16} color="#fff" />
-              <Text className="font-semibold text-white">
-                {syncing ? t("common.loading") : t("sessions.createEvent")}
-              </Text>
-            </View>
+            <Ionicons name="calendar" size={16} color="#fff" />
+            <Button.Label>{syncing ? t("common.loading") : t("sessions.createEvent")}</Button.Label>
           </Button>
-        </View>
-      </View>
-    </View>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

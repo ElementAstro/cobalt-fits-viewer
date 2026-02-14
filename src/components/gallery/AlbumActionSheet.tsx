@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity, Modal } from "react-native";
-import { useThemeColor } from "heroui-native";
+import { View, Text, Pressable } from "react-native";
+import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 
@@ -48,20 +48,19 @@ export function AlbumActionSheet({
   ];
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onClose}
-        className="flex-1 justify-end bg-black/60"
-      >
-        <View className="mx-4 mb-8 rounded-2xl bg-surface-secondary overflow-hidden">
-          <View className="px-4 py-3 border-b border-separator">
-            <Text className="text-sm font-semibold text-foreground text-center" numberOfLines={1}>
-              {albumName}
-            </Text>
-          </View>
+    <BottomSheet
+      isOpen={visible}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content>
+          <BottomSheet.Title className="text-center">{albumName}</BottomSheet.Title>
+          <Separator className="my-1" />
           {actions.map((action, i) => (
-            <TouchableOpacity
+            <Pressable
               key={i}
               onPress={() => {
                 onClose();
@@ -79,15 +78,16 @@ export function AlbumActionSheet({
               >
                 {action.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           ))}
-          <TouchableOpacity onPress={onClose} className="border-t border-separator px-4 py-3.5">
-            <Text className="text-sm font-semibold text-foreground text-center">
-              {t("common.cancel")}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    </Modal>
+          <Separator className="my-1" />
+          <View className="px-4 py-2">
+            <Button variant="outline" onPress={onClose} className="w-full">
+              <Button.Label>{t("common.cancel")}</Button.Label>
+            </Button>
+          </View>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

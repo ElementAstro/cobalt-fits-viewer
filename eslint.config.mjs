@@ -11,6 +11,7 @@ export default tseslint.config(
       "dist/",
       ".expo/",
       "web-build/",
+      ".windsurf/",
       "expo-env.d.ts",
       "metro.config.js",
       "commitlint.config.js",

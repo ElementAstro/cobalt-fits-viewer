@@ -1,6 +1,4 @@
-import { View, Text, TouchableOpacity, Modal, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useThemeColor } from "heroui-native";
+import { Button, Dialog, Label, Radio, RadioGroup } from "heroui-native";
 import * as Haptics from "expo-haptics";
 
 interface OptionPickerModalProps<T extends string | number> {
@@ -20,59 +18,38 @@ export function OptionPickerModal<T extends string | number>({
   onSelect,
   onClose,
 }: OptionPickerModalProps<T>) {
-  const bgColor = useThemeColor("background");
-  const cardColor = useThemeColor("surface");
-  const accentColor = useThemeColor("accent");
-  const mutedColor = useThemeColor("muted");
-
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        className="flex-1 items-center justify-center"
-        style={{ backgroundColor: "rgba(0,0,0,0.5)" }}
-        onPress={onClose}
-      >
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{ backgroundColor: bgColor, borderRadius: 16, width: "80%", maxWidth: 340 }}
-        >
-          <View className="px-5 pt-5 pb-2">
-            <Text className="text-base font-semibold text-foreground">{title}</Text>
-          </View>
-          <View className="px-2 pb-3">
-            {options.map((opt) => {
-              const isSelected = opt.value === selectedValue;
-              return (
-                <TouchableOpacity
-                  key={String(opt.value)}
-                  className="flex-row items-center justify-between rounded-xl px-3 py-3"
-                  style={isSelected ? { backgroundColor: cardColor } : undefined}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: isSelected }}
-                  accessibilityLabel={opt.label}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    onSelect(opt.value);
-                    onClose();
-                  }}
-                >
-                  <Text className="text-sm text-foreground">{opt.label}</Text>
-                  {isSelected && <Ionicons name="checkmark-circle" size={20} color={accentColor} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-          <TouchableOpacity
-            className="items-center border-t py-3"
-            style={{ borderColor: mutedColor + "30" }}
-            onPress={onClose}
+    <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content className="mx-6 w-full max-w-sm rounded-2xl bg-background p-5">
+          <Dialog.Title className="mb-3">{title}</Dialog.Title>
+
+          <RadioGroup
+            value={String(selectedValue)}
+            onValueChange={(val) => {
+              Haptics.selectionAsync();
+              onSelect(val as T);
+              onClose();
+            }}
           >
-            <Text className="text-sm font-medium" style={{ color: accentColor }}>
-              OK
-            </Text>
-          </TouchableOpacity>
-        </Pressable>
-      </Pressable>
-    </Modal>
+            {options.map((opt) => (
+              <RadioGroup.Item
+                key={String(opt.value)}
+                value={String(opt.value)}
+                className="flex-row items-center gap-3 rounded-xl px-3 py-3"
+              >
+                <Radio />
+                <Label className="text-sm text-foreground">{opt.label}</Label>
+              </RadioGroup.Item>
+            ))}
+          </RadioGroup>
+
+          <Button variant="primary" className="mt-4" onPress={onClose}>
+            <Button.Label>OK</Button.Label>
+          </Button>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog>
   );
 }

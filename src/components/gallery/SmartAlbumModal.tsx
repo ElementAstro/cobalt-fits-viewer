@@ -1,15 +1,15 @@
 import { useState } from "react";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import {
-  View,
-  Text,
-  TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  TouchableOpacity,
-} from "react-native";
-import { Button, Chip, Separator, useThemeColor } from "heroui-native";
+  Button,
+  Chip,
+  CloseButton,
+  Dialog,
+  Input,
+  Separator,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { SmartAlbumRule } from "../../lib/fits/types";
@@ -41,7 +41,7 @@ export function SmartAlbumModal({
   suggestions = [],
 }: SmartAlbumModalProps) {
   const { t } = useI18n();
-  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const [successColor] = useThemeColor(["success"]);
 
   const [name, setName] = useState("");
   const [rules, setRules] = useState<SmartAlbumRule[]>([
@@ -91,16 +91,19 @@ export function SmartAlbumModal({
     name.trim().length > 0 && rules.some((r) => r.value !== "" && r.value !== undefined);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 items-center justify-center bg-black/60"
-      >
-        <View className="mx-4 w-full max-w-md max-h-[80%] rounded-2xl bg-surface-secondary">
+    <Dialog
+      isOpen={visible}
+      onOpenChange={(open) => {
+        if (!open) handleClose();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content className="mx-4 w-full max-w-md max-h-[80%]">
           <ScrollView className="p-6">
             <View className="flex-row items-center gap-2 mb-4">
               <Ionicons name="sparkles" size={18} color={successColor} />
-              <Text className="text-lg font-bold text-foreground">{t("gallery.smartAlbum")}</Text>
+              <Dialog.Title>{t("gallery.smartAlbum")}</Dialog.Title>
             </View>
 
             {/* Suggestions */}
@@ -111,12 +114,12 @@ export function SmartAlbumModal({
                 </Text>
                 <View className="flex-row flex-wrap gap-1.5">
                   {suggestions.map((s, i) => (
-                    <TouchableOpacity key={i} onPress={() => handleSuggestionPress(s)}>
+                    <Pressable key={i} onPress={() => handleSuggestionPress(s)}>
                       <Chip size="sm" variant="secondary">
                         <Ionicons name="add-circle-outline" size={10} color={successColor} />
                         <Chip.Label className="text-[10px]">{s.name}</Chip.Label>
                       </Chip>
-                    </TouchableOpacity>
+                    </Pressable>
                   ))}
                 </View>
                 <Separator className="mt-3" />
@@ -124,77 +127,74 @@ export function SmartAlbumModal({
             )}
 
             {/* Album Name */}
-            <TextInput
-              className="rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-              placeholder={t("gallery.albumName")}
-              placeholderTextColor={mutedColor}
-              value={name}
-              onChangeText={setName}
-              autoCorrect={false}
-            />
+            <TextField>
+              <Input
+                placeholder={t("gallery.albumName")}
+                value={name}
+                onChangeText={setName}
+                autoCorrect={false}
+              />
+            </TextField>
 
             {/* Rules */}
             <Text className="mt-4 mb-2 text-xs font-semibold text-muted">{t("album.rules")}</Text>
             {rules.map((rule, index) => (
               <View
                 key={index}
-                className="mb-2 flex-row items-center gap-1.5 rounded-xl border border-separator bg-background p-2"
+                className="mb-2 rounded-xl border border-separator bg-background p-2"
               >
-                {/* Field picker */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
-                  <View className="flex-row gap-1">
-                    {FIELDS.map((field) => (
-                      <TouchableOpacity key={field} onPress={() => updateRule(index, { field })}>
-                        <Chip size="sm" variant={rule.field === field ? "primary" : "secondary"}>
-                          <Chip.Label className="text-[9px]">{field}</Chip.Label>
-                        </Chip>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </ScrollView>
+                {/* Field picker + remove button */}
+                <View className="flex-row items-center gap-1.5">
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
+                    <View className="flex-row gap-1">
+                      {FIELDS.map((field) => (
+                        <Pressable key={field} onPress={() => updateRule(index, { field })}>
+                          <Chip size="sm" variant={rule.field === field ? "primary" : "secondary"}>
+                            <Chip.Label className="text-[9px]">{field}</Chip.Label>
+                          </Chip>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ScrollView>
 
-                {rules.length > 1 && (
-                  <TouchableOpacity onPress={() => removeRule(index)}>
-                    <Ionicons name="close-circle" size={16} color="#ef4444" />
-                  </TouchableOpacity>
-                )}
+                  {rules.length > 1 && <CloseButton size="sm" onPress={() => removeRule(index)} />}
+                </View>
 
                 {/* Operator + Value row */}
                 <View className="w-full flex-row items-center gap-1.5 mt-1.5">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     <View className="flex-row gap-1">
                       {OPERATORS.map((op) => (
-                        <TouchableOpacity
-                          key={op}
-                          onPress={() => updateRule(index, { operator: op })}
-                        >
+                        <Pressable key={op} onPress={() => updateRule(index, { operator: op })}>
                           <Chip size="sm" variant={rule.operator === op ? "primary" : "secondary"}>
                             <Chip.Label className="text-[9px]">{op}</Chip.Label>
                           </Chip>
-                        </TouchableOpacity>
+                        </Pressable>
                       ))}
                     </View>
                   </ScrollView>
-                  <TextInput
-                    className="flex-1 rounded-lg border border-separator bg-surface-secondary px-2 py-1.5 text-xs text-foreground"
-                    placeholder={t("album.ruleValue")}
-                    placeholderTextColor={mutedColor}
-                    value={String(rule.value)}
-                    onChangeText={(v) => updateRule(index, { value: v })}
-                    autoCorrect={false}
-                  />
+                  <TextField className="flex-1">
+                    <Input
+                      className="text-xs"
+                      placeholder={t("album.ruleValue")}
+                      value={String(rule.value)}
+                      onChangeText={(v) => updateRule(index, { value: v })}
+                      autoCorrect={false}
+                    />
+                  </TextField>
                 </View>
               </View>
             ))}
 
-            <TouchableOpacity onPress={addRule} className="flex-row items-center gap-1 mt-1">
+            <Pressable onPress={addRule} className="flex-row items-center gap-1 mt-1">
               <Ionicons name="add-outline" size={14} color={successColor} />
               <Text className="text-xs text-success">{t("album.addRule")}</Text>
-            </TouchableOpacity>
+            </Pressable>
           </ScrollView>
 
           {/* Bottom buttons */}
-          <View className="flex-row justify-end gap-2 px-6 py-4 border-t border-separator">
+          <Separator />
+          <View className="flex-row justify-end gap-2 px-6 py-4">
             <Button variant="outline" onPress={handleClose}>
               <Button.Label>{t("common.cancel")}</Button.Label>
             </Button>
@@ -202,8 +202,8 @@ export function SmartAlbumModal({
               <Button.Label>{t("common.confirm")}</Button.Label>
             </Button>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog>
   );
 }

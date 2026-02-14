@@ -2,9 +2,9 @@
  * 地图标记点详情底部弹窗 - 展示某位置的文件列表
  */
 
-import { View, Text, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Separator, useThemeColor } from "heroui-native";
+import { CloseButton, Separator, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import type { LocationCluster } from "./LocationMapView";
 import { ThumbnailGrid } from "./ThumbnailGrid";
@@ -18,7 +18,7 @@ interface LocationMarkerSheetProps {
 
 export function LocationMarkerSheet({ cluster, onClose, onFilePress }: LocationMarkerSheetProps) {
   const { t } = useI18n();
-  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const [successColor] = useThemeColor(["success"]);
 
   if (!cluster) return null;
 
@@ -46,9 +46,7 @@ export function LocationMarkerSheet({ cluster, onClose, onFilePress }: LocationM
             {loc.altitude ? ` · ${Math.round(loc.altitude)}m` : ""}
           </Text>
         </View>
-        <TouchableOpacity onPress={onClose} className="p-1">
-          <Ionicons name="close-circle" size={24} color={mutedColor} />
-        </TouchableOpacity>
+        <CloseButton onPress={onClose} />
       </View>
 
       <Separator className="mx-4" />

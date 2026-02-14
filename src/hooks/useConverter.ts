@@ -17,6 +17,7 @@ import {
   getSupportedBitDepths,
 } from "../lib/converter/convertPresets";
 import type { ExportFormat } from "../lib/fits/types";
+import { Logger } from "../lib/logger";
 
 interface BatchFileInfo {
   id: string;
@@ -45,6 +46,7 @@ export function useConverter() {
       setFormat(format);
       const defaults = getDefaultOptionsForFormat(format);
       setOptions(defaults);
+      Logger.debug("Converter", `Format changed: ${format}`);
     },
     [setFormat, setOptions],
   );
@@ -78,6 +80,11 @@ export function useConverter() {
       const controller = new AbortController();
       abortControllers.current.set(task.id, controller);
 
+      Logger.info("Converter", `Batch convert started: ${files.length} files`, {
+        format: currentOptions.format,
+        taskId: task.id,
+      });
+
       executeBatchConvert(
         task.id,
         files.map((f) => ({ filepath: f.filepath, filename: f.filename })),
@@ -107,6 +114,7 @@ export function useConverter() {
         controller.abort();
       }
       updateBatchTask(taskId, { status: "cancelled" });
+      Logger.info("Converter", `Batch task cancelled: ${taskId}`);
     },
     [updateBatchTask],
   );

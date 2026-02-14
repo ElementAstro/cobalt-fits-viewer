@@ -31,14 +31,19 @@ export function useTargets() {
   const files = useFitsStore((s) => s.files);
   const updateFile = useFitsStore((s) => s.updateFile);
 
-  const scanAndAutoDetect = useCallback(() => {
+  const scanAndAutoDetect = useCallback((): { newCount: number; updatedCount: number } => {
+    const localTargets = [...targets];
+    let newCount = 0;
+    let updatedCount = 0;
+
     for (const file of files) {
       if (file.targetId) continue;
 
-      const result = autoDetectTarget(file, targets);
+      const result = autoDetectTarget(file, localTargets);
       if (!result) continue;
 
       if (result.isNew) {
+        localTargets.push(result.target);
         addTarget(result.target);
         addImageToTarget(result.target.id, file.id);
         updateFile(file.id, { targetId: result.target.id });
@@ -47,6 +52,7 @@ export function useTargets() {
         for (const alias of aliases) {
           addAlias(result.target.id, alias);
         }
+        newCount++;
       } else {
         addImageToTarget(result.target.id, file.id);
         updateFile(file.id, { targetId: result.target.id });
@@ -54,8 +60,11 @@ export function useTargets() {
         if (result.coordinateUpdates) {
           updateTarget(result.target.id, result.coordinateUpdates);
         }
+        updatedCount++;
       }
     }
+
+    return { newCount, updatedCount };
   }, [files, targets, addTarget, addImageToTarget, addAlias, updateFile, updateTarget]);
 
   const createNewTarget = useCallback(

@@ -41,6 +41,7 @@ interface FitsStoreState {
   // Getters
   getFileById: (id: string) => FitsMetadata | undefined;
   getFilteredFiles: () => FitsMetadata[];
+  getAdjacentFileIds: (currentId: string) => { prevId: string | null; nextId: string | null };
 }
 
 export const useFitsStore = create<FitsStoreState>()(
@@ -120,6 +121,16 @@ export const useFitsStore = create<FitsStoreState>()(
       setFilterTags: (tags) => set({ filterTags: tags }),
 
       getFileById: (id) => get().files.find((f) => f.id === id),
+
+      getAdjacentFileIds: (currentId) => {
+        const { files } = get();
+        const idx = files.findIndex((f) => f.id === currentId);
+        if (idx === -1) return { prevId: null, nextId: null };
+        return {
+          prevId: idx > 0 ? files[idx - 1].id : null,
+          nextId: idx < files.length - 1 ? files[idx + 1].id : null,
+        };
+      },
 
       getFilteredFiles: () => {
         const { files, searchQuery, filterTags, sortBy, sortOrder } = get();

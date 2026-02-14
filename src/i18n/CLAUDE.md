@@ -52,11 +52,24 @@ setLocale("zh");
 ### Translation Keys Structure
 
 ```
-common.goHome
-tabs.home / tabs.explore
-home.title / home.subtitle / home.readyToBuild / ...
-explore.title / explore.subtitle / explore.features.* / ...
-notFound.title / notFound.description
+common.*                  # Shared strings (cancel, confirm, delete, save, etc.)
+tabs.*                    # Tab labels (files, gallery, targets, sessions, settings)
+files.*                   # FITS file manager (import, sort, search, batch ops)
+gallery.*                 # Gallery (views, albums, filters, batch export)
+targets.*                 # Observation targets (types, status, filters, coordinates)
+sessions.*                # Observation sessions (calendar, timeline, log, stats)
+viewer.*                  # FITS viewer (stretch, colormap, histogram, pixel info)
+header.*                  # FITS header inspector
+editor.*                  # Image editor (crop, rotate, calibration, stacking)
+converter.*               # Format converter (formats, presets, batch)
+settings.*                # App settings (viewer, gallery, export, display, storage)
+album.*                   # Album management
+systemInfo.*              # System info display
+logs.*                    # App logs
+share.*                   # Sharing
+location.*                # Location & map
+splash.*                  # Splash screen (appName, tagline)
+notFound.*                # 404 page
 ```
 
 ## Key Dependencies

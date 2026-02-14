@@ -1,5 +1,6 @@
-import { View, Text, TouchableOpacity, Modal, ScrollView } from "react-native";
-import { useThemeColor } from "heroui-native";
+import { View, Text, Pressable } from "react-native";
+import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { Album } from "../../lib/fits/types";
@@ -16,18 +17,17 @@ export function AlbumPickerSheet({ visible, albums, onClose, onSelect }: AlbumPi
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity
-        activeOpacity={1}
-        onPress={onClose}
-        className="flex-1 justify-end bg-black/60"
-      >
-        <View className="mx-4 mb-8 max-h-[60%] rounded-2xl bg-surface-secondary overflow-hidden">
-          <View className="px-4 py-3 border-b border-separator">
-            <Text className="text-sm font-semibold text-foreground text-center">
-              {t("gallery.addToAlbum")}
-            </Text>
-          </View>
+    <BottomSheet
+      isOpen={visible}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content>
+          <BottomSheet.Title className="text-center">{t("gallery.addToAlbum")}</BottomSheet.Title>
+          <Separator className="my-1" />
 
           {albums.length === 0 ? (
             <View className="items-center py-8">
@@ -35,11 +35,11 @@ export function AlbumPickerSheet({ visible, albums, onClose, onSelect }: AlbumPi
               <Text className="mt-2 text-xs text-muted">{t("gallery.emptyAlbum")}</Text>
             </View>
           ) : (
-            <ScrollView className="max-h-80">
+            <BottomSheetScrollView style={{ maxHeight: 320 }}>
               {albums
                 .filter((a) => !a.isSmart)
                 .map((album) => (
-                  <TouchableOpacity
+                  <Pressable
                     key={album.id}
                     onPress={() => {
                       onSelect(album.id);
@@ -63,18 +63,19 @@ export function AlbumPickerSheet({ visible, albums, onClose, onSelect }: AlbumPi
                       </Text>
                     </View>
                     <Ionicons name="chevron-forward" size={14} color={mutedColor} />
-                  </TouchableOpacity>
+                  </Pressable>
                 ))}
-            </ScrollView>
+            </BottomSheetScrollView>
           )}
 
-          <TouchableOpacity onPress={onClose} className="border-t border-separator px-4 py-3.5">
-            <Text className="text-sm font-semibold text-foreground text-center">
-              {t("common.cancel")}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </TouchableOpacity>
-    </Modal>
+          <Separator className="my-1" />
+          <View className="px-4 py-2">
+            <Button variant="outline" onPress={onClose} className="w-full">
+              <Button.Label>{t("common.cancel")}</Button.Label>
+            </Button>
+          </View>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

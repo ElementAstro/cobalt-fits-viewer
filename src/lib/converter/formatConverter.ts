@@ -375,6 +375,157 @@ export function estimateFileSize(width: number, height: number, options: Convert
   }
 }
 
+// ===== 非阻塞分块处理 =====
+
+const CHUNK_SIZE = 500_000;
+
+/**
+ * 让出主线程一帧，允许 UI 更新
+ */
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * 分块异步版 fitsToRGBA，不会长时间阻塞 JS 线程
+ * 每处理 CHUNK_SIZE 个像素后让出主线程
+ * 支持 AbortSignal 取消
+ */
+export async function fitsToRGBAChunked(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma">,
+  signal?: AbortSignal,
+): Promise<Uint8ClampedArray> {
+  const n = pixels.length;
+
+  // --- Phase 1: Compute extent (chunked) ---
+  let rawMin = Infinity;
+  let rawMax = -Infinity;
+  for (let start = 0; start < n; start += CHUNK_SIZE) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const end = Math.min(start + CHUNK_SIZE, n);
+    for (let i = start; i < end; i++) {
+      const v = pixels[i];
+      if (!isNaN(v)) {
+        if (v < rawMin) rawMin = v;
+        if (v > rawMax) rawMax = v;
+      }
+    }
+    if (start + CHUNK_SIZE < n) await yieldToMain();
+  }
+
+  const range = rawMax - rawMin;
+  if (range === 0) {
+    const rgba = new Uint8ClampedArray(n * 4);
+    const lut = getColormapLUT(options.colormap);
+    const mid = Math.floor((LUT_SIZE - 1) / 2) * 3;
+    for (let i = 0; i < n; i++) {
+      const off = i * 4;
+      rgba[off] = lut[mid];
+      rgba[off + 1] = lut[mid + 1];
+      rgba[off + 2] = lut[mid + 2];
+      rgba[off + 3] = 255;
+    }
+    return rgba;
+  }
+
+  // --- Phase 2: Compute black/white points ---
+  let bp: number, wp: number;
+  if (options.stretch === "zscale") {
+    const { z1, z2 } = computeZScale(pixels);
+    bp = z1;
+    wp = z2;
+  } else if (options.stretch === "percentile") {
+    const { z1, z2 } = computePercentile(pixels, 1, 99);
+    bp = z1;
+    wp = z2;
+  } else {
+    bp = rawMin + (options.blackPoint ?? 0) * range;
+    wp = rawMin + (options.whitePoint ?? 1) * range;
+  }
+  const span = wp - bp;
+  const stretchType = options.stretch;
+  const gamma = options.gamma ?? 1;
+  const invGamma = gamma !== 1 && gamma > 0 ? 1 / gamma : 1;
+  const applyGamma = gamma !== 1 && gamma > 0;
+
+  // --- Phase 3: Stretch + Colormap combined (chunked) ---
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  const lut = getColormapLUT(options.colormap);
+  const lutMax = LUT_SIZE - 1;
+
+  for (let start = 0; start < n; start += CHUNK_SIZE) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const end = Math.min(start + CHUNK_SIZE, n);
+    for (let i = start; i < end; i++) {
+      let v = (pixels[i] - bp) / span;
+      if (v < 0) v = 0;
+      else if (v > 1) v = 1;
+
+      switch (stretchType) {
+        case "sqrt":
+          v = Math.sqrt(v);
+          break;
+        case "log":
+          v = Math.log1p(v * 1000) / Math.log1p(1000);
+          break;
+        case "asinh":
+          v = Math.asinh(v * 10) / Math.asinh(10);
+          break;
+        case "power":
+          v = Math.pow(v, 0.5);
+          break;
+      }
+
+      if (applyGamma) v = Math.pow(v, invGamma);
+      if (v < 0) v = 0;
+      else if (v > 1) v = 1;
+
+      const idx = Math.round(v * lutMax) * 3;
+      const off = i * 4;
+      rgba[off] = lut[idx];
+      rgba[off + 1] = lut[idx + 1];
+      rgba[off + 2] = lut[idx + 2];
+      rgba[off + 3] = 255;
+    }
+    if (start + CHUNK_SIZE < n) await yieldToMain();
+  }
+
+  return rgba;
+}
+
+// ===== 像素降采样 =====
+
+/**
+ * 将 Float32Array 像素数据降采样到目标尺寸
+ * 用于渐进式加载：先显示低分辨率预览
+ */
+export function downsamplePixels(
+  pixels: Float32Array,
+  srcWidth: number,
+  srcHeight: number,
+  targetMaxDim: number,
+): { pixels: Float32Array; width: number; height: number } {
+  const scale = Math.min(targetMaxDim / srcWidth, targetMaxDim / srcHeight, 1);
+  if (scale >= 1) return { pixels, width: srcWidth, height: srcHeight };
+
+  const dstW = Math.max(1, Math.round(srcWidth * scale));
+  const dstH = Math.max(1, Math.round(srcHeight * scale));
+  const result = new Float32Array(dstW * dstH);
+
+  for (let dy = 0; dy < dstH; dy++) {
+    const sy = Math.floor(dy / scale);
+    for (let dx = 0; dx < dstW; dx++) {
+      const sx = Math.floor(dx / scale);
+      result[dy * dstW + dx] = pixels[sy * srcWidth + sx];
+    }
+  }
+
+  return { pixels: result, width: dstW, height: dstH };
+}
+
 // ===== Helpers =====
 
 function getExtent(pixels: Float32Array): [number, number] {

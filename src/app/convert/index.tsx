@@ -1,6 +1,15 @@
 import { useState, useCallback, useEffect } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
-import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
+import { View, Text, ScrollView, Alert } from "react-native";
+import {
+  Accordion,
+  Button,
+  Card,
+  Chip,
+  PressableFeedback,
+  Separator,
+  Tabs,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -10,8 +19,12 @@ import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { FormatSelector } from "../../components/converter/FormatSelector";
+import { BatchConvertContent } from "../../components/converter/BatchConvertContent";
+import { SimpleSlider } from "../../components/common/SimpleSlider";
 import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
+import { formatFileSize } from "../../lib/utils/fileManager";
+import { formatBytes } from "../../lib/utils/format";
 import type { ExportFormat, StretchType, ColormapType } from "../../lib/fits/types";
 
 const STRETCH_OPTIONS: { key: StretchType; label: string }[] = [
@@ -36,16 +49,12 @@ const COLORMAP_OPTIONS: { key: ColormapType; label: string }[] = [
 
 const DPI_OPTIONS = [72, 150, 300, 600];
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 export default function ConvertScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+
+  const [activeTab, setActiveTab] = useState("single");
 
   const files = useFitsStore((s) => s.files);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
@@ -140,6 +149,7 @@ export default function ConvertScreen() {
       <LoadingOverlay visible={isFitsLoading || isExporting} message={t("common.loading")} />
 
       <ScrollView className="flex-1" contentContainerClassName="px-4 py-14">
+        {/* Header */}
         <View className="flex-row items-center gap-3 mb-4">
           <Button size="sm" variant="outline" onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={16} color={mutedColor} />
@@ -152,209 +162,300 @@ export default function ConvertScreen() {
         <Separator className="mb-4" />
 
         {/* Mode Tabs */}
-        <View className="flex-row gap-2 mb-4">
-          <Chip size="sm" variant="primary">
-            <Chip.Label className="text-[10px]">{t("converter.singleConvert")}</Chip.Label>
-          </Chip>
-          <TouchableOpacity onPress={() => router.push("/convert/batch")}>
-            <Chip size="sm" variant="secondary">
-              <Chip.Label className="text-[10px]">{t("converter.batchConvert")}</Chip.Label>
-            </Chip>
-          </TouchableOpacity>
-        </View>
-
-        {/* Source File Selection */}
-        <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-          {t("converter.sourceFormat")}
-        </Text>
-        {files.length === 0 ? (
-          <Card variant="secondary" className="mb-4">
-            <Card.Body className="items-center p-4">
-              <Ionicons name="document-outline" size={24} color={mutedColor} />
-              <Text className="text-xs text-muted mt-1">{t("common.noData")}</Text>
-            </Card.Body>
-          </Card>
-        ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-            <View className="flex-row gap-2">
-              {files.map((f) => (
-                <TouchableOpacity key={f.id} onPress={() => setSelectedFileId(f.id)}>
-                  <Card
-                    variant="secondary"
-                    className={selectedFileId === f.id ? "border border-success" : ""}
-                  >
-                    <Card.Body className="p-2.5 min-w-[100px]">
-                      <Text className="text-[10px] font-semibold text-foreground" numberOfLines={1}>
-                        {f.filename}
-                      </Text>
-                      {f.object && (
-                        <Text className="text-[9px] text-muted" numberOfLines={1}>
-                          {f.object}
-                        </Text>
-                      )}
-                    </Card.Body>
-                  </Card>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </ScrollView>
-        )}
-
-        {/* Preview */}
-        {rgbaData && dimensions && (
-          <>
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("converter.preview")}
-            </Text>
-            <View className="h-48 mb-3 rounded-lg overflow-hidden bg-black">
-              <FitsCanvas
-                rgbaData={rgbaData}
-                width={dimensions.width}
-                height={dimensions.height}
-                showGrid={false}
-                showCrosshair={false}
-                cursorX={-1}
-                cursorY={-1}
+        <Tabs value={activeTab} onValueChange={setActiveTab} variant="primary">
+          <Tabs.List>
+            <Tabs.Indicator />
+            <Tabs.Trigger value="single">
+              <Ionicons
+                name="image-outline"
+                size={14}
+                color={activeTab === "single" ? successColor : mutedColor}
               />
-            </View>
-            <View className="flex-row gap-2 mb-3">
-              <Text className="text-[10px] text-muted">
-                {dimensions.width}×{dimensions.height}
+              <Tabs.Label>{t("converter.singleConvert")}</Tabs.Label>
+            </Tabs.Trigger>
+            <Tabs.Trigger value="batch">
+              <Ionicons
+                name="layers-outline"
+                size={14}
+                color={activeTab === "batch" ? successColor : mutedColor}
+              />
+              <Tabs.Label>{t("converter.batchConvert")}</Tabs.Label>
+            </Tabs.Trigger>
+          </Tabs.List>
+
+          {/* Single Convert Tab */}
+          <Tabs.Content value="single">
+            <View className="gap-4 mt-4">
+              {/* Source File Selection */}
+              <Text className="text-xs font-semibold uppercase text-muted">
+                {t("converter.sourceFormat")}
               </Text>
-              {estimatedSize != null && (
-                <Text className="text-[10px] text-muted">≈ {formatBytes(estimatedSize)}</Text>
+              {files.length === 0 ? (
+                <Card variant="secondary">
+                  <Card.Body className="items-center p-4">
+                    <Ionicons name="document-outline" size={24} color={mutedColor} />
+                    <Text className="text-xs text-muted mt-1">{t("common.noData")}</Text>
+                  </Card.Body>
+                </Card>
+              ) : (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row gap-2">
+                    {files.map((f) => (
+                      <PressableFeedback key={f.id} onPress={() => setSelectedFileId(f.id)}>
+                        <Card
+                          variant="secondary"
+                          className={selectedFileId === f.id ? "border border-success" : ""}
+                        >
+                          <Card.Body className="p-2.5 min-w-[100px]">
+                            <Text
+                              className="text-[10px] font-semibold text-foreground"
+                              numberOfLines={1}
+                            >
+                              {f.filename}
+                            </Text>
+                            <View className="flex-row items-center gap-1 mt-0.5">
+                              {f.object && (
+                                <Text className="text-[9px] text-muted" numberOfLines={1}>
+                                  {f.object}
+                                </Text>
+                              )}
+                              <Text className="text-[9px] text-muted">
+                                {formatFileSize(f.fileSize)}
+                              </Text>
+                            </View>
+                          </Card.Body>
+                        </Card>
+                      </PressableFeedback>
+                    ))}
+                  </View>
+                </ScrollView>
               )}
-            </View>
-            <Separator className="mb-4" />
-          </>
-        )}
 
-        {/* Target Format Selection */}
-        <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-          {t("converter.targetFormat")}
-        </Text>
-        <FormatSelector
-          selected={currentOptions.format}
-          onSelect={(fmt: ExportFormat) => setFormat(fmt)}
-        />
+              {/* Preview */}
+              {rgbaData && dimensions && (
+                <Card variant="secondary">
+                  <Card.Body className="p-0">
+                    <View className="h-48 rounded-t-lg overflow-hidden bg-black">
+                      <FitsCanvas
+                        rgbaData={rgbaData}
+                        width={dimensions.width}
+                        height={dimensions.height}
+                        showGrid={false}
+                        showCrosshair={false}
+                        cursorX={-1}
+                        cursorY={-1}
+                      />
+                    </View>
+                    <View className="flex-row items-center gap-2 px-3 py-2">
+                      <Chip size="sm" variant="secondary">
+                        <Chip.Label className="text-[9px]">
+                          {dimensions.width}×{dimensions.height}
+                        </Chip.Label>
+                      </Chip>
+                      {estimatedSize != null && (
+                        <Chip size="sm" variant="secondary">
+                          <Chip.Label className="text-[9px]">
+                            ≈ {formatBytes(estimatedSize)}
+                          </Chip.Label>
+                        </Chip>
+                      )}
+                    </View>
+                  </Card.Body>
+                </Card>
+              )}
 
-        <Separator className="my-4" />
+              {/* Target Format Selection */}
+              <Text className="text-xs font-semibold uppercase text-muted">
+                {t("converter.targetFormat")}
+              </Text>
+              <FormatSelector
+                selected={currentOptions.format}
+                onSelect={(fmt: ExportFormat) => setFormat(fmt)}
+              />
 
-        {/* Quality */}
-        {showQuality && (
-          <View className="mb-4">
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("converter.quality")}: {currentOptions.quality}%
-            </Text>
-            <View className="flex-row gap-2">
-              {[60, 75, 85, 95, 100].map((q) => (
-                <TouchableOpacity key={q} onPress={() => setQuality(q)}>
-                  <Chip size="sm" variant={currentOptions.quality === q ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[9px]">{q}%</Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+              <Separator />
 
-        {/* Bit Depth */}
-        {bitDepths.length > 1 && (
-          <View className="mb-4">
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("converter.bitDepth")}
-            </Text>
-            <View className="flex-row gap-2">
-              {bitDepths.map((d) => (
-                <TouchableOpacity key={d} onPress={() => setBitDepth(d as 8 | 16 | 32)}>
-                  <Chip size="sm" variant={currentOptions.bitDepth === d ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[9px]">{d}-bit</Chip.Label>
-                  </Chip>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        )}
+              {/* Output Settings — Accordion */}
+              <Accordion selectionMode="multiple" variant="surface" defaultValue={["output"]}>
+                {/* Output Settings */}
+                <Accordion.Item value="output">
+                  <Accordion.Trigger>
+                    <View className="flex-row items-center flex-1 gap-3">
+                      <Ionicons name="settings-outline" size={16} color={mutedColor} />
+                      <Text className="text-sm text-foreground">
+                        {t("converter.outputSettings")}
+                      </Text>
+                    </View>
+                    <Accordion.Indicator />
+                  </Accordion.Trigger>
+                  <Accordion.Content>
+                    <View className="gap-4 px-1">
+                      {/* Quality */}
+                      {showQuality && (
+                        <View>
+                          <Text className="mb-2 text-xs font-semibold text-muted">
+                            {t("converter.quality")}: {currentOptions.quality}%
+                          </Text>
+                          <SimpleSlider
+                            label={t("converter.quality")}
+                            value={currentOptions.quality}
+                            min={10}
+                            max={100}
+                            step={1}
+                            onValueChange={setQuality}
+                          />
+                          <View className="flex-row gap-1.5 mt-2">
+                            {[60, 75, 85, 95, 100].map((q) => (
+                              <Chip
+                                key={q}
+                                size="sm"
+                                variant={currentOptions.quality === q ? "primary" : "secondary"}
+                                onPress={() => setQuality(q)}
+                              >
+                                <Chip.Label className="text-[9px]">{q}%</Chip.Label>
+                              </Chip>
+                            ))}
+                          </View>
+                        </View>
+                      )}
 
-        {/* Stretch */}
-        <View className="mb-4">
-          <Text className="mb-2 text-xs font-semibold uppercase text-muted">Stretch</Text>
-          <View className="flex-row flex-wrap gap-2">
-            {STRETCH_OPTIONS.map((s) => (
-              <TouchableOpacity key={s.key} onPress={() => setOptions({ stretch: s.key })}>
-                <Chip
-                  size="sm"
-                  variant={currentOptions.stretch === s.key ? "primary" : "secondary"}
-                >
-                  <Chip.Label className="text-[9px]">{s.label}</Chip.Label>
-                </Chip>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+                      {/* Bit Depth */}
+                      {bitDepths.length > 1 && (
+                        <View>
+                          <Text className="mb-2 text-xs font-semibold text-muted">
+                            {t("converter.bitDepth")}
+                          </Text>
+                          <View className="flex-row gap-2">
+                            {bitDepths.map((d) => (
+                              <Chip
+                                key={d}
+                                size="sm"
+                                variant={currentOptions.bitDepth === d ? "primary" : "secondary"}
+                                onPress={() => setBitDepth(d as 8 | 16 | 32)}
+                              >
+                                <Chip.Label className="text-[9px]">{d}-bit</Chip.Label>
+                              </Chip>
+                            ))}
+                          </View>
+                        </View>
+                      )}
 
-        {/* Colormap */}
-        <View className="mb-4">
-          <Text className="mb-2 text-xs font-semibold uppercase text-muted">Colormap</Text>
-          <View className="flex-row flex-wrap gap-2">
-            {COLORMAP_OPTIONS.map((c) => (
-              <TouchableOpacity key={c.key} onPress={() => setOptions({ colormap: c.key })}>
-                <Chip
-                  size="sm"
-                  variant={currentOptions.colormap === c.key ? "primary" : "secondary"}
-                >
-                  <Chip.Label className="text-[9px]">{c.label}</Chip.Label>
-                </Chip>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+                      {/* DPI */}
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("converter.dpi")}
+                        </Text>
+                        <View className="flex-row gap-2">
+                          {DPI_OPTIONS.map((d) => (
+                            <Chip
+                              key={d}
+                              size="sm"
+                              variant={currentOptions.dpi === d ? "primary" : "secondary"}
+                              onPress={() => setDpi(d)}
+                            >
+                              <Chip.Label className="text-[9px]">{d}</Chip.Label>
+                            </Chip>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+                  </Accordion.Content>
+                </Accordion.Item>
 
-        {/* DPI */}
-        <View className="mb-4">
-          <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-            {t("converter.dpi")}
-          </Text>
-          <View className="flex-row gap-2">
-            {DPI_OPTIONS.map((d) => (
-              <TouchableOpacity key={d} onPress={() => setDpi(d)}>
-                <Chip size="sm" variant={currentOptions.dpi === d ? "primary" : "secondary"}>
-                  <Chip.Label className="text-[9px]">{d}</Chip.Label>
-                </Chip>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+                {/* Image Processing */}
+                <Accordion.Item value="processing">
+                  <Accordion.Trigger>
+                    <View className="flex-row items-center flex-1 gap-3">
+                      <Ionicons name="color-wand-outline" size={16} color={mutedColor} />
+                      <Text className="text-sm text-foreground">
+                        {t("converter.imageProcessing")}
+                      </Text>
+                    </View>
+                    <Accordion.Indicator />
+                  </Accordion.Trigger>
+                  <Accordion.Content>
+                    <View className="gap-4 px-1">
+                      {/* Stretch */}
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">Stretch</Text>
+                        <View className="flex-row flex-wrap gap-1.5">
+                          {STRETCH_OPTIONS.map((s) => (
+                            <Chip
+                              key={s.key}
+                              size="sm"
+                              variant={currentOptions.stretch === s.key ? "primary" : "secondary"}
+                              onPress={() => setOptions({ stretch: s.key })}
+                            >
+                              <Chip.Label className="text-[9px]">{s.label}</Chip.Label>
+                            </Chip>
+                          ))}
+                        </View>
+                      </View>
 
-        <Separator className="mb-4" />
+                      {/* Colormap */}
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">Colormap</Text>
+                        <View className="flex-row flex-wrap gap-1.5">
+                          {COLORMAP_OPTIONS.map((c) => (
+                            <Chip
+                              key={c.key}
+                              size="sm"
+                              variant={currentOptions.colormap === c.key ? "primary" : "secondary"}
+                              onPress={() => setOptions({ colormap: c.key })}
+                            >
+                              <Chip.Label className="text-[9px]">{c.label}</Chip.Label>
+                            </Chip>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+                  </Accordion.Content>
+                </Accordion.Item>
+              </Accordion>
 
-        {/* Presets */}
-        <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-          {t("converter.presets")}
-        </Text>
-        <View className="flex-row flex-wrap gap-2 mb-4">
-          {allPresets.map((preset) => (
-            <TouchableOpacity key={preset.id} onPress={() => applyPreset(preset.id)}>
+              <Separator />
+
+              {/* Presets */}
+              <Text className="text-xs font-semibold uppercase text-muted">
+                {t("converter.presets")}
+              </Text>
               <Card variant="secondary">
-                <Card.Body className="p-2.5">
-                  <Text className="text-xs font-semibold text-foreground">{preset.name}</Text>
-                  <Text className="text-[9px] text-muted">{preset.description}</Text>
+                <Card.Body className="p-3">
+                  <View className="flex-row flex-wrap gap-2">
+                    {allPresets.map((preset) => (
+                      <PressableFeedback key={preset.id} onPress={() => applyPreset(preset.id)}>
+                        <View className="rounded-lg bg-surface-secondary px-3 py-2">
+                          <Text className="text-xs font-semibold text-foreground">
+                            {preset.name}
+                          </Text>
+                          <Text className="text-[9px] text-muted">{preset.description}</Text>
+                        </View>
+                      </PressableFeedback>
+                    ))}
+                  </View>
                 </Card.Body>
               </Card>
-            </TouchableOpacity>
-          ))}
-        </View>
 
-        {/* Convert Button */}
-        <Button
-          variant="primary"
-          className="mt-2"
-          onPress={handleConvert}
-          isDisabled={!selectedFile || !rgbaData || isExporting}
-        >
-          <Ionicons name="swap-horizontal-outline" size={16} color="#fff" />
-          <Button.Label>{t("converter.convert")}</Button.Label>
-        </Button>
+              {/* Convert Button */}
+              <Button
+                variant="primary"
+                className="mt-2"
+                onPress={handleConvert}
+                isDisabled={!selectedFile || !rgbaData || isExporting}
+              >
+                <Ionicons name="swap-horizontal-outline" size={16} color="#fff" />
+                <Button.Label>{t("converter.convert")}</Button.Label>
+              </Button>
+            </View>
+          </Tabs.Content>
+
+          {/* Batch Convert Tab */}
+          <Tabs.Content value="batch">
+            <View className="mt-4">
+              <BatchConvertContent />
+            </View>
+          </Tabs.Content>
+        </Tabs>
       </ScrollView>
     </View>
   );

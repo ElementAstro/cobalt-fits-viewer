@@ -1,16 +1,15 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { View, Text, FlatList, Alert } from "react-native";
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-} from "react-native";
-import { Button, Chip, Separator, useThemeColor } from "heroui-native";
+  Button,
+  Chip,
+  Dialog,
+  Input,
+  PressableFeedback,
+  Separator,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
@@ -21,6 +20,7 @@ import type { ImportResult } from "../../hooks/useFileManager";
 import { FileListItem } from "../../components/gallery/FileListItem";
 import { EmptyState } from "../../components/common/EmptyState";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
+import { QuickLookModal } from "../../components/common/QuickLookModal";
 import { formatFileSize } from "../../lib/utils/fileManager";
 import type { FitsMetadata } from "../../lib/fits/types";
 
@@ -61,6 +61,7 @@ export default function FilesScreen() {
   const bottomSheetRef = useRef<BottomSheet>(null);
   const [showUrlDialog, setShowUrlDialog] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  const [quickLookFile, setQuickLookFile] = useState<FitsMetadata | null>(null);
 
   const storageStats = useMemo(() => {
     let totalSize = 0;
@@ -109,9 +110,9 @@ export default function FilesScreen() {
     }
   }, [importError, isImporting, t]);
 
-  const openImportSheet = () => {
+  const openImportSheet = useCallback(() => {
     bottomSheetRef.current?.expand();
-  };
+  }, []);
 
   const closeImportSheet = () => {
     bottomSheetRef.current?.close();
@@ -145,7 +146,7 @@ export default function FilesScreen() {
     importFromUrl(url);
   };
 
-  const handleBatchDelete = () => {
+  const handleBatchDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
     Alert.alert(t("common.delete"), `${t("files.deleteConfirm")} (${selectedIds.length})`, [
       { text: t("common.cancel"), style: "cancel" },
@@ -158,15 +159,18 @@ export default function FilesScreen() {
         },
       },
     ]);
-  };
+  }, [selectedIds, t, handleDeleteFiles, clearSelection]);
 
-  const handleSortToggle = (key: "name" | "date" | "size") => {
-    if (sortBy === key) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(key);
-    }
-  };
+  const handleSortToggle = useCallback(
+    (key: "name" | "date" | "size") => {
+      if (sortBy === key) {
+        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      } else {
+        setSortBy(key);
+      }
+    },
+    [sortBy, sortOrder, setSortBy, setSortOrder],
+  );
 
   const getPhaseLabel = (): string => {
     switch (importProgress.phase) {
@@ -195,13 +199,12 @@ export default function FilesScreen() {
         }}
         onLongPress={() => {
           if (!isSelectionMode) {
-            setSelectionMode(true);
-            toggleSelection(item.id);
+            setQuickLookFile(item);
           }
         }}
       />
     ),
-    [selectedIds, isSelectionMode, toggleSelection, setSelectionMode, router],
+    [selectedIds, isSelectionMode, toggleSelection, router],
   );
 
   const keyExtractor = useCallback((item: FitsMetadata) => item.id, []);
@@ -231,22 +234,34 @@ export default function FilesScreen() {
         <Separator />
 
         {/* Search Bar */}
-        <View className="flex-row items-center gap-2 rounded-xl border border-separator bg-surface-secondary px-3 py-2">
-          <Ionicons name="search-outline" size={16} color={mutedColor} />
-          <TextInput
-            className="flex-1 text-sm text-foreground"
-            placeholder={t("files.searchPlaceholder")}
-            placeholderTextColor={mutedColor}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={16} color={mutedColor} />
-            </TouchableOpacity>
-          )}
-        </View>
+        <TextField>
+          <View className="w-full flex-row items-center">
+            <Input
+              className="flex-1 pl-9 pr-9"
+              placeholder={t("files.searchPlaceholder")}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoCorrect={false}
+            />
+            <Ionicons
+              name="search-outline"
+              size={16}
+              color={mutedColor}
+              style={{ position: "absolute", left: 12 }}
+            />
+            {searchQuery.length > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                isIconOnly
+                onPress={() => setSearchQuery("")}
+                style={{ position: "absolute", right: 12 }}
+              >
+                <Ionicons name="close-circle" size={16} color={mutedColor} />
+              </Button>
+            )}
+          </View>
+        </TextField>
 
         {/* Import Actions */}
         <View className="flex-row gap-2">
@@ -264,28 +279,36 @@ export default function FilesScreen() {
               </Button>
             </View>
           ) : (
-            <Button variant="outline" onPress={() => router.push("/convert")}>
-              <Ionicons name="swap-horizontal-outline" size={16} color={mutedColor} />
-            </Button>
+            <>
+              <Button variant="outline" onPress={() => setSelectionMode(true)}>
+                <Ionicons name="checkmark-circle-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button variant="outline" onPress={() => router.push("/convert")}>
+                <Ionicons name="swap-horizontal-outline" size={16} color={mutedColor} />
+              </Button>
+            </>
           )}
         </View>
 
         {/* Sort Chips */}
         <View className="flex-row items-center gap-2">
           {(["name", "date", "size"] as const).map((key) => (
-            <TouchableOpacity key={key} onPress={() => handleSortToggle(key)}>
-              <Chip size="sm" variant={sortBy === key ? "primary" : "secondary"}>
-                <Chip.Label className="text-xs">
-                  {t(
-                    `files.sortBy${key.charAt(0).toUpperCase() + key.slice(1)}` as
-                      | "files.sortByName"
-                      | "files.sortByDate"
-                      | "files.sortBySize",
-                  )}
-                  {sortBy === key && (sortOrder === "asc" ? " ↑" : " ↓")}
-                </Chip.Label>
-              </Chip>
-            </TouchableOpacity>
+            <Chip
+              key={key}
+              size="sm"
+              variant={sortBy === key ? "primary" : "secondary"}
+              onPress={() => handleSortToggle(key)}
+            >
+              <Chip.Label className="text-xs">
+                {t(
+                  `files.sortBy${key.charAt(0).toUpperCase() + key.slice(1)}` as
+                    | "files.sortByName"
+                    | "files.sortByDate"
+                    | "files.sortBySize",
+                )}
+                {sortBy === key && (sortOrder === "asc" ? " ↑" : " ↓")}
+              </Chip.Label>
+            </Chip>
           ))}
         </View>
 
@@ -303,11 +326,11 @@ export default function FilesScreen() {
       sortBy,
       sortOrder,
       clearSelection,
+      setSelectionMode,
       router,
       openImportSheet,
       handleBatchDelete,
       handleSortToggle,
-      successColor,
     ],
   );
 
@@ -361,7 +384,7 @@ export default function FilesScreen() {
           <Text className="mb-4 text-xs text-muted">{t("files.selectImportMethod")}</Text>
 
           <View className="gap-2">
-            <TouchableOpacity
+            <PressableFeedback
               onPress={handleImportFile}
               className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
             >
@@ -375,9 +398,9 @@ export default function FilesScreen() {
                 <Text className="text-xs text-muted">FITS, FIT, FTS</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-            </TouchableOpacity>
+            </PressableFeedback>
 
-            <TouchableOpacity
+            <PressableFeedback
               onPress={handleImportFolder}
               className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
             >
@@ -391,9 +414,9 @@ export default function FilesScreen() {
                 <Text className="text-xs text-muted">{t("files.scanning")}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-            </TouchableOpacity>
+            </PressableFeedback>
 
-            <TouchableOpacity
+            <PressableFeedback
               onPress={handleImportZip}
               className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
             >
@@ -407,9 +430,9 @@ export default function FilesScreen() {
                 <Text className="text-xs text-muted">ZIP</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-            </TouchableOpacity>
+            </PressableFeedback>
 
-            <TouchableOpacity
+            <PressableFeedback
               onPress={handleImportUrl}
               className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
             >
@@ -423,35 +446,29 @@ export default function FilesScreen() {
                 <Text className="text-xs text-muted">HTTP / HTTPS</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-            </TouchableOpacity>
+            </PressableFeedback>
           </View>
         </BottomSheetView>
       </BottomSheet>
 
       {/* URL Input Dialog */}
-      <Modal
-        visible={showUrlDialog}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowUrlDialog(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          className="flex-1 items-center justify-center bg-black/60"
-        >
-          <View className="mx-6 w-full max-w-sm rounded-2xl bg-surface-secondary p-6">
-            <Text className="text-lg font-bold text-foreground">{t("files.enterUrl")}</Text>
-            <Text className="mt-1 text-xs text-muted">{t("files.enterUrlHint")}</Text>
-            <TextInput
-              className="mt-4 rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-              placeholder="https://example.com/file.fits"
-              placeholderTextColor={mutedColor}
-              value={urlInput}
-              onChangeText={setUrlInput}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-            />
+      <Dialog isOpen={showUrlDialog} onOpenChange={setShowUrlDialog}>
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content>
+            <Dialog.Close />
+            <Dialog.Title>{t("files.enterUrl")}</Dialog.Title>
+            <Dialog.Description>{t("files.enterUrlHint")}</Dialog.Description>
+            <TextField className="mt-4">
+              <Input
+                placeholder="https://example.com/file.fits"
+                value={urlInput}
+                onChangeText={setUrlInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+            </TextField>
             <View className="mt-4 flex-row justify-end gap-2">
               <Button variant="outline" onPress={() => setShowUrlDialog(false)}>
                 <Button.Label>{t("common.cancel")}</Button.Label>
@@ -460,9 +477,18 @@ export default function FilesScreen() {
                 <Button.Label>{t("files.downloading")}</Button.Label>
               </Button>
             </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
+
+      {/* Quick Look Preview */}
+      <QuickLookModal
+        visible={!!quickLookFile}
+        file={quickLookFile}
+        onClose={() => setQuickLookFile(null)}
+        onOpenViewer={(id) => router.push(`/viewer/${id}`)}
+        onOpenEditor={(id) => router.push(`/editor/${id}`)}
+      />
     </View>
   );
 }

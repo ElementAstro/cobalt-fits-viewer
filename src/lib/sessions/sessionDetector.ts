@@ -54,7 +54,7 @@ export function detectSessions(
     const dateStr = new Date(startTime).toISOString().split("T")[0];
 
     return {
-      id: `session_${dateStr}_${Math.random().toString(36).substring(2, 7)}`,
+      id: `session_${dateStr}_${startTime}`,
       date: dateStr,
       startTime,
       endTime: endTime + lastExptime * 1000,

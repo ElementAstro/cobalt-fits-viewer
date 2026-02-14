@@ -17,6 +17,7 @@ import {
   openEventInSystemCalendar,
 } from "../lib/calendar";
 import type { ObservationSession, ObservationPlan } from "../lib/fits/types";
+import { Logger } from "../lib/logger";
 
 export function useCalendar() {
   const [syncing, setSyncing] = useState(false);
@@ -53,8 +54,10 @@ export function useCalendar() {
         const eventId = await syncSessionToCalendar(session, defaultReminderMinutes);
         updateSession(session.id, { calendarEventId: eventId });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Logger.info("Calendar", `Session synced: ${session.id}`);
         return true;
-      } catch {
+      } catch (e) {
+        Logger.error("Calendar", `Session sync failed: ${session.id}`, e);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         return false;
       } finally {
@@ -127,9 +130,11 @@ export function useCalendar() {
         fullPlan.calendarEventId = eventId;
         addPlan(fullPlan);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Logger.info("Calendar", `Plan created: ${fullPlan.id}`);
         return true;
-      } catch {
+      } catch (e) {
         // 即使日历同步失败，也保存计划到本地
+        Logger.warn("Calendar", "Calendar sync failed for plan, saved locally", e);
         addPlan(fullPlan);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
         return true;

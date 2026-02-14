@@ -8,6 +8,7 @@ import { InteractionManager } from "react-native";
 import { applyOperation, type ImageEditOperation } from "../lib/utils/imageOperations";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
 import type { StretchType, ColormapType } from "../lib/fits/types";
+import { Logger } from "../lib/logger";
 
 interface ImageState {
   pixels: Float32Array;
@@ -54,6 +55,7 @@ export function useImageEditor() {
       });
       setRgbaData(rgba);
     } catch (e) {
+      Logger.error("ImageEditor", "RGBA conversion failed", e);
       setError(e instanceof Error ? e.message : "RGBA conversion failed");
     }
   }, []);
@@ -120,7 +122,9 @@ export function useImageEditor() {
           pushHistory(newState);
           setCurrent(newState);
           updateRGBA(newState);
+          Logger.debug("ImageEditor", `Edit applied: ${op.type}`);
         } catch (e) {
+          Logger.error("ImageEditor", `Edit failed: ${op.type}`, e);
           setError(e instanceof Error ? e.message : "Edit operation failed");
         } finally {
           setIsProcessing(false);

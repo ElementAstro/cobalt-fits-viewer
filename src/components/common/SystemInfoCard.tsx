@@ -2,8 +2,8 @@
  * 系统信息展示卡片
  */
 
-import { View, Text, TouchableOpacity, ActivityIndicator } from "react-native";
-import { Card, Separator, useThemeColor } from "heroui-native";
+import { View, Text, ActivityIndicator } from "react-native";
+import { Button, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -147,28 +147,22 @@ export function SystemInfoCard() {
 
         {/* Actions */}
         <View className="flex-row items-center justify-between py-2">
-          <TouchableOpacity
+          <Button
+            size="sm"
+            variant="ghost"
             onPress={() => {
               Haptics.selectionAsync();
               refreshSystemInfo();
             }}
-            className="flex-row items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5"
           >
             <Ionicons name="refresh-outline" size={14} color={accentColor} />
-            <Text style={{ color: accentColor }} className="text-xs font-semibold">
-              {t("systemInfo.refresh")}
-            </Text>
-          </TouchableOpacity>
+            <Button.Label>{t("systemInfo.refresh")}</Button.Label>
+          </Button>
 
-          <TouchableOpacity
-            onPress={handleCopy}
-            className="flex-row items-center gap-1.5 rounded-lg bg-primary/10 px-3 py-1.5"
-          >
+          <Button size="sm" variant="ghost" onPress={handleCopy}>
             <Ionicons name="copy-outline" size={14} color={accentColor} />
-            <Text style={{ color: accentColor }} className="text-xs font-semibold">
-              {t("systemInfo.copy")}
-            </Text>
-          </TouchableOpacity>
+            <Button.Label>{t("systemInfo.copy")}</Button.Label>
+          </Button>
         </View>
       </Card.Body>
     </Card>

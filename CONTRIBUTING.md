@@ -1,4 +1,4 @@
-# Contributing to React Native Quick Starter
+# Contributing to Cobalt FITS Viewer
 
 Thank you for your interest in contributing! Here's how you can help.
 
@@ -8,8 +8,8 @@ Thank you for your interest in contributing! Here's how you can help.
 2. **Clone** your fork locally
 
 ```sh
-git clone https://github.com/<your-username>/react-native-quick-starter.git
-cd react-native-quick-starter
+git clone https://github.com/<your-username>/cobalt-fits-viewer.git
+cd cobalt-fits-viewer
 pnpm install
 ```
 

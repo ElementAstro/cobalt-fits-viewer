@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { View, Text, TextInput, Modal, KeyboardAvoidingView, Platform } from "react-native";
-import { Button, useThemeColor } from "heroui-native";
+import { View } from "react-native";
+import { Button, Dialog, Input, TextArea, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 
 interface CreateAlbumModalProps {
@@ -11,7 +11,6 @@ interface CreateAlbumModalProps {
 
 export function CreateAlbumModal({ visible, onClose, onConfirm }: CreateAlbumModalProps) {
   const { t } = useI18n();
-  const [mutedColor] = useThemeColor(["muted"]);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
 
@@ -30,34 +29,38 @@ export function CreateAlbumModal({ visible, onClose, onConfirm }: CreateAlbumMod
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        className="flex-1 items-center justify-center bg-black/60"
-      >
-        <View className="mx-6 w-full max-w-sm rounded-2xl bg-surface-secondary p-6">
-          <Text className="text-lg font-bold text-foreground">{t("gallery.createAlbum")}</Text>
+    <Dialog
+      isOpen={visible}
+      onOpenChange={(open) => {
+        if (!open) handleClose();
+      }}
+    >
+      <Dialog.Portal>
+        <Dialog.Overlay />
+        <Dialog.Content>
+          <Dialog.Title>{t("gallery.createAlbum")}</Dialog.Title>
 
-          <TextInput
-            className="mt-4 rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-            placeholder={t("gallery.albumName")}
-            placeholderTextColor={mutedColor}
-            value={name}
-            onChangeText={setName}
-            autoFocus
-            autoCorrect={false}
-          />
+          <View className="mt-4 gap-3">
+            <TextField>
+              <Input
+                placeholder={t("gallery.albumName")}
+                value={name}
+                onChangeText={setName}
+                autoFocus
+                autoCorrect={false}
+              />
+            </TextField>
 
-          <TextInput
-            className="mt-3 rounded-xl border border-separator bg-background px-4 py-3 text-sm text-foreground"
-            placeholder={t("gallery.albumDescription")}
-            placeholderTextColor={mutedColor}
-            value={description}
-            onChangeText={setDescription}
-            multiline
-            numberOfLines={2}
-            autoCorrect={false}
-          />
+            <TextField>
+              <TextArea
+                placeholder={t("gallery.albumDescription")}
+                value={description}
+                onChangeText={setDescription}
+                numberOfLines={2}
+                autoCorrect={false}
+              />
+            </TextField>
+          </View>
 
           <View className="mt-4 flex-row justify-end gap-2">
             <Button variant="outline" onPress={handleClose}>
@@ -67,8 +70,8 @@ export function CreateAlbumModal({ visible, onClose, onConfirm }: CreateAlbumMod
               <Button.Label>{t("common.confirm")}</Button.Label>
             </Button>
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog>
   );
 }

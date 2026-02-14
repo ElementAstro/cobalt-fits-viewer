@@ -1,17 +1,23 @@
 import { useState, useCallback } from "react";
-import { View, Text, ScrollView, TouchableOpacity, Switch, Alert } from "react-native";
-import { Card, Separator, useThemeColor } from "heroui-native";
+import { View, Text, ScrollView, TouchableOpacity, Alert } from "react-native";
+import { useRouter } from "expo-router";
+import { Button, Card, Separator, Switch, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useThumbnail } from "../../hooks/useThumbnail";
+import { readFileAsArrayBuffer } from "../../lib/utils/fileManager";
+import { loadFitsFromBuffer, getImagePixels, getImageDimensions } from "../../lib/fits/parser";
+import { fitsToRGBA } from "../../lib/converter/formatConverter";
+import { generateAndSaveThumbnail } from "../../lib/gallery/thumbnailCache";
 import { OptionPickerModal } from "../../components/common/OptionPickerModal";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { UpdateChecker } from "../../components/common/UpdateChecker";
 import { SystemInfoCard } from "../../components/common/SystemInfoCard";
 import { LogViewer } from "../../components/common/LogViewer";
+import { formatBytes } from "../../lib/utils/format";
 import type { StretchType, ColormapType, ExportFormat } from "../../lib/fits/types";
 import {
   ACCENT_PRESETS,
@@ -85,7 +91,8 @@ type PickerType =
 
 export default function SettingsScreen() {
   const { t } = useI18n();
-  const dangerColor = useThemeColor("danger");
+  const router = useRouter();
+  const _dangerColor = useThemeColor("danger");
 
   const [activePicker, setActivePicker] = useState<PickerType>(null);
 
@@ -127,14 +134,14 @@ export default function SettingsScreen() {
   const lang = language === "zh" ? "zh" : "en";
   const { getFontFamily } = useFontFamily();
 
-  const filesCount = useFitsStore((s) => s.files.length);
+  const allFiles = useFitsStore((s) => s.files);
+  const updateFile = useFitsStore((s) => s.updateFile);
+  const filesCount = allFiles.length;
   const { clearCache, getCacheSize } = useThumbnail();
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
   const formatCacheSize = useCallback(() => {
-    const bytes = getCacheSize();
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    return formatBytes(getCacheSize());
   }, [getCacheSize]);
 
   const handleClearCache = () => {
@@ -148,6 +155,70 @@ export default function SettingsScreen() {
           clearCache();
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           Alert.alert(t("common.success"), t("settings.cacheCleared"));
+        },
+      },
+    ]);
+  };
+
+  const handleRegenerateThumbnails = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    Alert.alert(t("settings.regenerateThumbnails"), t("settings.regenerateConfirm"), [
+      { text: t("common.cancel"), style: "cancel" },
+      {
+        text: t("common.confirm"),
+        onPress: async () => {
+          setIsRegenerating(true);
+          let success = 0;
+          let skipped = 0;
+
+          for (const file of allFiles) {
+            try {
+              const buffer = await readFileAsArrayBuffer(file.filepath);
+              const fitsObj = loadFitsFromBuffer(buffer);
+              const dims = getImageDimensions(fitsObj);
+              if (!dims) {
+                skipped++;
+                continue;
+              }
+              const pixels = await getImagePixels(fitsObj);
+              if (!pixels) {
+                skipped++;
+                continue;
+              }
+              const rgba = fitsToRGBA(pixels, dims.width, dims.height, {
+                stretch: "asinh",
+                colormap: "grayscale",
+                blackPoint: 0,
+                whitePoint: 1,
+                gamma: 1,
+              });
+              const thumbUri = generateAndSaveThumbnail(
+                file.id,
+                rgba,
+                dims.width,
+                dims.height,
+                thumbnailSize,
+                thumbnailQuality,
+              );
+              if (thumbUri) {
+                updateFile(file.id, { thumbnailUri: thumbUri });
+                success++;
+              } else {
+                skipped++;
+              }
+            } catch {
+              skipped++;
+            }
+          }
+
+          setIsRegenerating(false);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          Alert.alert(
+            t("settings.regenerateDone"),
+            t("settings.regenerateResult")
+              .replace("{success}", String(success))
+              .replace("{skipped}", String(skipped)),
+          );
         },
       },
     ]);
@@ -285,13 +356,11 @@ export default function SettingsScreen() {
             label={t("settings.autoGroupByObject")}
             rightElement={
               <Switch
-                value={autoGroupByObject}
-                onValueChange={(v) => {
+                isSelected={autoGroupByObject}
+                onSelectedChange={(v: boolean) => {
                   Haptics.selectionAsync();
                   setAutoGroupByObject(v);
                 }}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: autoGroupByObject }}
               />
             }
           />
@@ -301,13 +370,11 @@ export default function SettingsScreen() {
             label={t("location.autoTag")}
             rightElement={
               <Switch
-                value={autoTagLocation}
-                onValueChange={(v) => {
+                isSelected={autoTagLocation}
+                onSelectedChange={(v: boolean) => {
                   Haptics.selectionAsync();
                   setAutoTagLocation(v);
                 }}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: autoTagLocation }}
               />
             }
           />
@@ -324,13 +391,11 @@ export default function SettingsScreen() {
             label={t("settings.calendarSync")}
             rightElement={
               <Switch
-                value={calendarSyncEnabled}
-                onValueChange={(v) => {
+                isSelected={calendarSyncEnabled}
+                onSelectedChange={(v: boolean) => {
                   Haptics.selectionAsync();
                   setCalendarSyncEnabled(v);
                 }}
-                accessibilityRole="switch"
-                accessibilityState={{ checked: calendarSyncEnabled }}
               />
             }
           />
@@ -527,10 +592,16 @@ export default function SettingsScreen() {
           />
           <Separator />
           <SettingsRow
+            icon="refresh-outline"
+            label={t("settings.regenerateThumbnails")}
+            onPress={handleRegenerateThumbnails}
+            disabled={isRegenerating || filesCount === 0}
+          />
+          <Separator />
+          <SettingsRow
             icon="cloud-upload-outline"
             label={t("settings.backup")}
-            value={t("common.comingSoon")}
-            disabled
+            onPress={() => router.push("/backup")}
           />
         </Card.Body>
       </Card>
@@ -557,16 +628,14 @@ export default function SettingsScreen() {
       <Separator className="my-4" />
 
       {/* Reset */}
-      <TouchableOpacity
-        className="items-center rounded-xl py-3"
+      <Button
+        variant="danger-soft"
+        className="rounded-xl"
         onPress={handleResetAll}
-        accessibilityRole="button"
         accessibilityLabel={t("settings.resetAll")}
       >
-        <Text className="text-sm font-medium" style={{ color: dangerColor }}>
-          {t("settings.resetAll")}
-        </Text>
-      </TouchableOpacity>
+        <Button.Label>{t("settings.resetAll")}</Button.Label>
+      </Button>
 
       <View className="h-8" />
 

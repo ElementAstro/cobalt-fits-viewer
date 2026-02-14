@@ -4,8 +4,8 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, Animated } from "react-native";
-import { useThemeColor } from "heroui-native";
+import { View, Text, Animated } from "react-native";
+import { Button, CloseButton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
@@ -79,17 +79,12 @@ export function UpdateBanner() {
             {status === "ready" ? t("settings.restart") : t("settings.downloadAndInstall")}
           </Text>
         </View>
-        <TouchableOpacity onPress={handleAction} className="rounded-lg bg-accent/10 px-3 py-1.5">
-          <Text
-            style={{ color: status === "ready" ? successColor : accentColor }}
-            className="text-xs font-semibold"
-          >
+        <Button size="sm" variant="ghost" onPress={handleAction}>
+          <Button.Label style={{ color: status === "ready" ? successColor : accentColor }}>
             {status === "ready" ? t("settings.restart") : t("settings.updateAndRestart")}
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleDismiss} hitSlop={8}>
-          <Ionicons name="close" size={16} color={accentColor} />
-        </TouchableOpacity>
+          </Button.Label>
+        </Button>
+        <CloseButton onPress={handleDismiss} />
       </View>
     </Animated.View>
   );

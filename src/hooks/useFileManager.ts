@@ -5,6 +5,7 @@
  */
 
 import { useState, useCallback, useRef } from "react";
+import { InteractionManager } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import { File, Directory, Paths } from "expo-file-system";
 import { Logger } from "../lib/logger";
@@ -20,7 +21,18 @@ import {
   getTempExtractDir,
   cleanTempExtractDir,
 } from "../lib/utils/fileManager";
-import { loadFitsFromBuffer, extractMetadata } from "../lib/fits/parser";
+import {
+  loadFitsFromBuffer,
+  extractMetadata,
+  getImagePixels,
+  getImageDimensions,
+} from "../lib/fits/parser";
+import { fitsToRGBA } from "../lib/converter/formatConverter";
+import {
+  generateAndSaveThumbnail,
+  deleteThumbnail,
+  deleteThumbnails,
+} from "../lib/gallery/thumbnailCache";
 import { autoDetectTarget } from "../lib/targets/targetManager";
 import { findKnownAliases } from "../lib/targets/targetMatcher";
 import * as Location from "expo-location";
@@ -65,6 +77,8 @@ export function useFileManager() {
 
   const autoGroupByObject = useSettingsStore((s) => s.autoGroupByObject);
   const autoTagLocation = useSettingsStore((s) => s.autoTagLocation);
+  const thumbnailSize = useSettingsStore((s) => s.thumbnailSize);
+  const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
   const locationCacheRef = useRef<{ location: GeoLocation; timestamp: number } | null>(null);
 
   const cancelImport = useCallback(() => {
@@ -140,9 +154,44 @@ export function useFileManager() {
           tags: [],
           albumIds: [],
           location,
+          thumbnailUri: undefined,
         };
 
         addFile(fullMeta);
+
+        // Defer thumbnail generation to avoid blocking UI during batch imports
+        const capturedThumbSize = thumbnailSize;
+        const capturedThumbQuality = thumbnailQuality;
+        InteractionManager.runAfterInteractions(async () => {
+          try {
+            const dims = getImageDimensions(fitsObj);
+            if (dims) {
+              const pixels = await getImagePixels(fitsObj);
+              if (pixels) {
+                const rgba = fitsToRGBA(pixels, dims.width, dims.height, {
+                  stretch: "asinh",
+                  colormap: "grayscale",
+                  blackPoint: 0,
+                  whitePoint: 1,
+                  gamma: 1,
+                });
+                const thumbUri = generateAndSaveThumbnail(
+                  fileId,
+                  rgba,
+                  dims.width,
+                  dims.height,
+                  capturedThumbSize,
+                  capturedThumbQuality,
+                );
+                if (thumbUri) {
+                  useFitsStore.getState().updateFile(fileId, { thumbnailUri: thumbUri });
+                }
+              }
+            }
+          } catch {
+            // Thumbnail generation failure is non-critical
+          }
+        });
 
         if (autoGroupByObject) {
           const currentTargets = useTargetStore.getState().targets;
@@ -171,6 +220,8 @@ export function useFileManager() {
       addFile,
       autoGroupByObject,
       autoTagLocation,
+      thumbnailSize,
+      thumbnailQuality,
       fetchLocationForImport,
       addTarget,
       addImageToTarget,
@@ -423,6 +474,7 @@ export function useFileManager() {
       const file = files.find((f) => f.id === fileId);
       if (file) {
         deleteFile(file.filepath);
+        deleteThumbnail(fileId);
         removeFile(fileId);
       }
     },
@@ -433,6 +485,7 @@ export function useFileManager() {
     (fileIds: string[]) => {
       const paths = files.filter((f) => fileIds.includes(f.id)).map((f) => f.filepath);
       deleteFiles(paths);
+      deleteThumbnails(fileIds);
       removeFiles(fileIds);
     },
     [files, removeFiles],

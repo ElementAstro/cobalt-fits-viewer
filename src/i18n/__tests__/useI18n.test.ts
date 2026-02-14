@@ -9,7 +9,7 @@ describe("useI18n", () => {
 
   it("should translate keys", () => {
     const { result } = renderHook(() => useI18n());
-    expect(result.current.t("home.title")).toBe("Quick Starter");
+    expect(result.current.t("files.title")).toBe("File Manager");
   });
 
   it("should change locale via setLocale", () => {
@@ -20,7 +20,7 @@ describe("useI18n", () => {
     });
 
     expect(result.current.locale).toBe("zh");
-    expect(result.current.t("home.title")).toBe("快速启动");
+    expect(result.current.t("files.title")).toBe("文件管理");
   });
 
   it("should fallback to default locale for missing keys", () => {

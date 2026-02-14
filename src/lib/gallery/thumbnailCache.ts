@@ -4,6 +4,8 @@
  */
 
 import { Paths, File, Directory } from "expo-file-system";
+import { Skia, AlphaType, ColorType, ImageFormat } from "@shopify/react-native-skia";
+import { Logger } from "../logger/logger";
 
 const THUMBNAIL_SUBDIR = "thumbnails";
 
@@ -66,6 +68,83 @@ export function getThumbnailCacheSize(): number {
     }
   }
   return totalSize;
+}
+
+/**
+ * 删除指定文件的缩略图缓存
+ */
+export function deleteThumbnail(fileId: string): void {
+  const file = new File(getThumbnailDir(), `${fileId}.jpg`);
+  if (file.exists) {
+    file.delete();
+  }
+}
+
+/**
+ * 批量删除缩略图缓存
+ */
+export function deleteThumbnails(fileIds: string[]): void {
+  for (const id of fileIds) {
+    deleteThumbnail(id);
+  }
+}
+
+/**
+ * 纯函数：从 RGBA 数据生成缩略图并保存到缓存
+ * 可在非组件上下文中调用（如导入流程）
+ * @returns 缩略图 URI，失败返回 null
+ */
+export function generateAndSaveThumbnail(
+  fileId: string,
+  rgba: Uint8ClampedArray,
+  srcWidth: number,
+  srcHeight: number,
+  targetSize: number = 256,
+  quality: number = 80,
+): string | null {
+  try {
+    ensureThumbnailDir();
+    const downsampled = downsampleRGBA(rgba, srcWidth, srcHeight, targetSize);
+
+    const data = Skia.Data.fromBytes(
+      new Uint8Array(
+        downsampled.data.buffer,
+        downsampled.data.byteOffset,
+        downsampled.data.byteLength,
+      ),
+    );
+    const skImage = Skia.Image.MakeImage(
+      {
+        width: downsampled.width,
+        height: downsampled.height,
+        alphaType: AlphaType.Unpremul,
+        colorType: ColorType.RGBA_8888,
+      },
+      data,
+      downsampled.width * 4,
+    );
+
+    if (!skImage) {
+      Logger.warn("Thumbnail", `Failed to create Skia image for ${fileId}`);
+      return null;
+    }
+
+    const bytes = skImage.encodeToBytes(ImageFormat.JPEG, quality);
+    if (!bytes || bytes.length === 0) {
+      Logger.warn("Thumbnail", `Failed to encode thumbnail for ${fileId}`);
+      return null;
+    }
+
+    const thumbPath = getThumbnailPath(fileId);
+    const thumbFile = new File(thumbPath);
+    thumbFile.write(bytes);
+
+    Logger.debug("Thumbnail", `Generated thumbnail for ${fileId} (${bytes.length} bytes)`);
+    return thumbPath;
+  } catch (err) {
+    Logger.warn("Thumbnail", `Thumbnail generation failed for ${fileId}`, err);
+    return null;
+  }
 }
 
 /**

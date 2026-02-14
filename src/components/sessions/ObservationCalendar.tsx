@@ -1,7 +1,8 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import { useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { PressableFeedback, useThemeColor } from "heroui-native";
 import { useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
+import { useI18n } from "../../i18n/useI18n";
 
 interface ObservationCalendarProps {
   datesWithData: number[];
@@ -13,21 +14,21 @@ interface ObservationCalendarProps {
   onDateLongPress?: (date: number) => void;
 }
 
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
+const MONTH_KEYS = [
+  "jan",
+  "feb",
+  "mar",
+  "apr",
+  "may",
+  "jun",
+  "jul",
+  "aug",
+  "sep",
+  "oct",
+  "nov",
+  "dec",
+] as const;
 
 export function ObservationCalendar({
   datesWithData,
@@ -38,7 +39,11 @@ export function ObservationCalendar({
   onDatePress,
   onDateLongPress,
 }: ObservationCalendarProps) {
+  const { t } = useI18n();
   const [_successColor, mutedColor, _accentColor] = useThemeColor(["success", "muted", "accent"]);
+
+  const weekdayLabels = WEEKDAY_KEYS.map((k) => t(`sessions.weekdays.${k}` as any));
+  const monthName = t(`sessions.months.${MONTH_KEYS[month]}` as any);
 
   const calendarDays = useMemo(() => {
     const firstDay = new Date(year, month, 1).getDay();
@@ -65,21 +70,23 @@ export function ObservationCalendar({
     <View className="rounded-xl bg-surface-secondary p-3">
       {/* Month Navigation */}
       <View className="flex-row items-center justify-between mb-3">
-        <TouchableOpacity onPress={goToPrevMonth}>
+        <PressableFeedback onPress={goToPrevMonth} className="rounded-full p-1">
+          <PressableFeedback.Highlight />
           <Ionicons name="chevron-back" size={18} color={mutedColor} />
-        </TouchableOpacity>
+        </PressableFeedback>
         <Text className="text-sm font-semibold text-foreground">
-          {MONTH_NAMES[month]} {year}
+          {monthName} {year}
         </Text>
-        <TouchableOpacity onPress={goToNextMonth}>
+        <PressableFeedback onPress={goToNextMonth} className="rounded-full p-1">
+          <PressableFeedback.Highlight />
           <Ionicons name="chevron-forward" size={18} color={mutedColor} />
-        </TouchableOpacity>
+        </PressableFeedback>
       </View>
 
       {/* Weekday Headers */}
       <View className="flex-row mb-1">
-        {WEEKDAY_LABELS.map((label) => (
-          <View key={label} className="flex-1 items-center">
+        {weekdayLabels.map((label, idx) => (
+          <View key={idx} className="flex-1 items-center">
             <Text className="text-[9px] font-semibold text-muted">{label}</Text>
           </View>
         ))}
@@ -91,13 +98,14 @@ export function ObservationCalendar({
           const hasData = day !== null && datesWithData.includes(day);
           const hasPlanned = day !== null && plannedDates.includes(day);
           return (
-            <TouchableOpacity
+            <PressableFeedback
               key={i}
               className="w-[14.28%] items-center py-1.5"
-              disabled={day === null}
+              isDisabled={day === null}
               onPress={() => day !== null && onDatePress?.(day)}
               onLongPress={() => day !== null && onDateLongPress?.(day)}
             >
+              <PressableFeedback.Highlight />
               {day !== null ? (
                 <View
                   className={`h-7 w-7 items-center justify-center rounded-full ${
@@ -123,7 +131,7 @@ export function ObservationCalendar({
               ) : (
                 <View className="h-7 w-7" />
               )}
-            </TouchableOpacity>
+            </PressableFeedback>
           );
         })}
       </View>

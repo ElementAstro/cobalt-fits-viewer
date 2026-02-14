@@ -5,6 +5,7 @@
 import { useState, useCallback, useRef } from "react";
 import * as Location from "expo-location";
 import type { GeoLocation } from "../lib/fits/types";
+import { Logger } from "../lib/logger";
 
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 分钟缓存
 
@@ -30,8 +31,10 @@ export function useLocation() {
       const { status } = await Location.requestForegroundPermissionsAsync();
       const granted = status === "granted";
       setState((prev) => ({ ...prev, permissionGranted: granted }));
+      Logger.info("Location", `Permission request: ${status}`);
       return granted;
-    } catch {
+    } catch (e) {
+      Logger.error("Location", "Failed to request location permission", e);
       setState((prev) => ({
         ...prev,
         permissionGranted: false,
@@ -127,9 +130,16 @@ export function useLocation() {
         permissionGranted: true,
       });
 
+      Logger.info("Location", "Location acquired", {
+        lat: latitude.toFixed(4),
+        lon: longitude.toFixed(4),
+        place: placeInfo.placeName ?? placeInfo.city,
+      });
+
       return geoLocation;
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to get location";
+      Logger.warn("Location", "Failed to get location", err);
       setState((prev) => ({
         ...prev,
         loading: false,

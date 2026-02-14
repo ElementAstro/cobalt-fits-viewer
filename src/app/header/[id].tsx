@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { useState, useEffect, useMemo } from "react";
 import { Button, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,11 +79,14 @@ export default function HeaderDetailScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
           <View className="flex-row gap-2">
             {GROUPS.map((group) => (
-              <TouchableOpacity key={group.key} onPress={() => setSelectedGroup(group.key)}>
-                <Chip size="sm" variant={selectedGroup === group.key ? "primary" : "secondary"}>
-                  <Chip.Label className="text-[10px]">{t(group.labelKey as any)}</Chip.Label>
-                </Chip>
-              </TouchableOpacity>
+              <Chip
+                key={group.key}
+                size="sm"
+                variant={selectedGroup === group.key ? "primary" : "secondary"}
+                onPress={() => setSelectedGroup(group.key)}
+              >
+                <Chip.Label className="text-[10px]">{t(group.labelKey as any)}</Chip.Label>
+              </Chip>
             ))}
           </View>
         </ScrollView>

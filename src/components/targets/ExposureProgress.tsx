@@ -1,5 +1,5 @@
 import { View, Text } from "react-native";
-import { useThemeColor } from "heroui-native";
+import { Surface, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { formatExposureTime } from "../../lib/targets/exposureStats";
 
@@ -31,7 +31,7 @@ export function ExposureProgress({ filters, overallPercent }: ExposureProgressPr
   const mutedColor = useThemeColor("muted");
 
   return (
-    <View className="rounded-lg bg-surface-secondary p-3">
+    <Surface variant="secondary" className="rounded-lg p-3">
       <View className="flex-row items-center justify-between mb-2">
         <Text className="text-xs font-semibold text-foreground">
           {t("targets.exposureProgress")}
@@ -70,6 +70,6 @@ export function ExposureProgress({ filters, overallPercent }: ExposureProgressPr
           </View>
         </View>
       ))}
-    </View>
+    </Surface>
   );
 }

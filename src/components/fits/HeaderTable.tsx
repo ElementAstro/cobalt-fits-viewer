@@ -1,6 +1,5 @@
-import { View, Text, TextInput } from "react-native";
-import { Card, Separator, useThemeColor } from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text } from "react-native";
+import { Card, Input, Separator, TextField } from "heroui-native";
 import { useState, useMemo } from "react";
 import type { HeaderKeyword } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
@@ -12,7 +11,6 @@ interface HeaderTableProps {
 
 export function HeaderTable({ keywords }: HeaderTableProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
   const { getMonoFontFamily } = useFontFamily();
   const monoFont = getMonoFontFamily("regular");
   const monoBoldFont = getMonoFontFamily("semibold");
@@ -31,16 +29,14 @@ export function HeaderTable({ keywords }: HeaderTableProps) {
 
   return (
     <View>
-      <View className="flex-row items-center gap-2 mb-3 rounded-lg bg-surface-secondary px-3 py-2">
-        <Ionicons name="search-outline" size={14} color={mutedColor} />
-        <TextInput
-          className="flex-1 text-xs text-foreground"
+      <TextField className="mb-3">
+        <Input
           placeholder={t("header.searchKeyword")}
-          placeholderTextColor={mutedColor}
           value={search}
           onChangeText={setSearch}
+          className="text-xs"
         />
-      </View>
+      </TextField>
 
       <Card variant="secondary">
         <Card.Body className="p-0">
