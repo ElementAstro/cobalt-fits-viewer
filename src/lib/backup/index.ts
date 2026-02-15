@@ -32,6 +32,9 @@ export { createManifest, parseManifest, serializeManifest, getManifestSummary } 
 export { performBackup, performRestore, getBackupInfo } from "./backupService";
 export type { BackupDataSource, RestoreTarget } from "./backupService";
 
+export { exportLocalBackup, importLocalBackup, previewLocalBackup } from "./localBackup";
+export { authenticateOneDrive, authenticateDropbox } from "./oauthHelper";
+
 export { GoogleDriveProvider } from "./providers/googleDrive";
 export { OneDriveProvider, ONEDRIVE_DISCOVERY, ONEDRIVE_SCOPES } from "./providers/onedrive";
 export { DropboxProvider, DROPBOX_DISCOVERY } from "./providers/dropbox";

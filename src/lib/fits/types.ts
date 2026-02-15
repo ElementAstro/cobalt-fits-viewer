@@ -33,6 +33,9 @@ export type ColormapType =
   | "green"
   | "blue";
 
+// ===== 帧类型 =====
+export type FrameType = "light" | "dark" | "flat" | "bias" | "unknown";
+
 // ===== HDU 数据类型 =====
 export type HDUDataType = "Image" | "BinaryTable" | "Table" | "CompressedImage" | null;
 
@@ -63,6 +66,9 @@ export interface FitsMetadata {
   naxis2?: number;
   naxis3?: number;
 
+  // 帧类型
+  frameType: FrameType;
+
   // 观测信息
   object?: string;
   dateObs?: string;
@@ -87,6 +93,12 @@ export interface FitsMetadata {
   sessionId?: string;
   thumbnailUri?: string;
   hash?: string;
+
+  // 质量评分
+  qualityScore?: number; // 0-100
+
+  // 用户备注
+  notes?: string;
 
   // 地理位置
   location?: GeoLocation;
@@ -171,7 +183,8 @@ export interface SmartAlbumRule {
     | "instrument"
     | "telescope"
     | "tag"
-    | "location";
+    | "location"
+    | "frameType";
   operator: "equals" | "contains" | "gt" | "lt" | "between" | "in";
   value: string | number | string[] | [number, number];
 }
@@ -222,6 +235,9 @@ export interface ObservationSession {
   notes?: string;
   createdAt: number;
   calendarEventId?: string;
+  rating?: number; // 1-5 session quality rating
+  bortle?: number; // 1-9 Bortle scale
+  tags?: string[]; // e.g. "deep sky", "planetary", "first light"
 }
 
 // ===== 观测计划 =====
@@ -237,6 +253,7 @@ export interface ObservationPlan {
   reminderMinutes: number;
   calendarEventId?: string;
   createdAt: number;
+  status?: "planned" | "completed" | "cancelled";
 }
 
 export interface SessionEquipment {
@@ -275,6 +292,8 @@ export interface ConvertOptions {
   blackPoint: number;
   whitePoint: number;
   gamma: number;
+  outputBlack: number;
+  outputWhite: number;
   includeAnnotations: boolean;
   includeWatermark: boolean;
 }
@@ -301,6 +320,8 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       blackPoint: 0,
       whitePoint: 1,
       gamma: 1,
+      outputBlack: 0,
+      outputWhite: 1,
       includeAnnotations: false,
       includeWatermark: false,
     },
@@ -319,6 +340,8 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       blackPoint: 0,
       whitePoint: 1,
       gamma: 1,
+      outputBlack: 0,
+      outputWhite: 1,
       includeAnnotations: true,
       includeWatermark: false,
     },
@@ -337,6 +360,8 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       blackPoint: 0,
       whitePoint: 1,
       gamma: 1,
+      outputBlack: 0,
+      outputWhite: 1,
       includeAnnotations: false,
       includeWatermark: false,
     },

@@ -4,6 +4,7 @@
 
 import { create } from "zustand";
 import type { StretchType, ColormapType, Annotation } from "../lib/fits/types";
+import { useSettingsStore } from "./useSettingsStore";
 
 interface ViewerStoreState {
   // 当前文件
@@ -33,6 +34,14 @@ interface ViewerStoreState {
   annotations: Annotation[];
   activeAnnotationId: string | null;
 
+  // 色阶参数
+  midtone: number;
+  outputBlack: number;
+  outputWhite: number;
+
+  // 区域选择
+  regionSelection: { x: number; y: number; w: number; h: number } | null;
+
   // 像素信息
   cursorX: number;
   cursorY: number;
@@ -48,6 +57,11 @@ interface ViewerStoreState {
   setBlackPoint: (value: number) => void;
   setWhitePoint: (value: number) => void;
   setGamma: (value: number) => void;
+  setMidtone: (value: number) => void;
+  setOutputBlack: (value: number) => void;
+  setOutputWhite: (value: number) => void;
+  setRegionSelection: (region: { x: number; y: number; w: number; h: number } | null) => void;
+  resetLevels: () => void;
 
   setCurrentHDU: (index: number) => void;
   setCurrentFrame: (frame: number) => void;
@@ -66,6 +80,7 @@ interface ViewerStoreState {
 
   setCursorPosition: (x: number, y: number, value: number | null) => void;
 
+  initFromSettings: () => void;
   resetViewerState: () => void;
 }
 
@@ -85,6 +100,10 @@ const DEFAULT_STATE = {
   showCrosshair: false,
   showPixelInfo: true,
   showMiniMap: false,
+  midtone: 0.5,
+  outputBlack: 0,
+  outputWhite: 1,
+  regionSelection: null,
   annotations: [] as Annotation[],
   activeAnnotationId: null,
   cursorX: 0,
@@ -104,6 +123,19 @@ export const useViewerStore = create<ViewerStoreState>((set) => ({
   setBlackPoint: (value) => set({ blackPoint: value }),
   setWhitePoint: (value) => set({ whitePoint: value }),
   setGamma: (value) => set({ gamma: value }),
+  setMidtone: (value) => set({ midtone: value }),
+  setOutputBlack: (value) => set({ outputBlack: value }),
+  setOutputWhite: (value) => set({ outputWhite: value }),
+  setRegionSelection: (region) => set({ regionSelection: region }),
+  resetLevels: () =>
+    set({
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      midtone: 0.5,
+      outputBlack: 0,
+      outputWhite: 1,
+    }),
 
   setCurrentHDU: (index) => set({ currentHDU: index }),
   setCurrentFrame: (frame) => set({ currentFrame: frame }),
@@ -133,5 +165,34 @@ export const useViewerStore = create<ViewerStoreState>((set) => ({
 
   setCursorPosition: (x, y, value) => set({ cursorX: x, cursorY: y, cursorValue: value }),
 
-  resetViewerState: () => set(DEFAULT_STATE),
+  initFromSettings: () => {
+    const s = useSettingsStore.getState();
+    set({
+      stretch: s.defaultStretch as StretchType,
+      colormap: s.defaultColormap as ColormapType,
+      blackPoint: s.defaultBlackPoint,
+      whitePoint: s.defaultWhitePoint,
+      gamma: s.defaultGamma,
+      showGrid: s.defaultShowGrid,
+      showCrosshair: s.defaultShowCrosshair,
+      showPixelInfo: s.defaultShowPixelInfo,
+      showMiniMap: s.defaultShowMinimap,
+    });
+  },
+
+  resetViewerState: () => {
+    const s = useSettingsStore.getState();
+    set({
+      ...DEFAULT_STATE,
+      stretch: s.defaultStretch as StretchType,
+      colormap: s.defaultColormap as ColormapType,
+      blackPoint: s.defaultBlackPoint,
+      whitePoint: s.defaultWhitePoint,
+      gamma: s.defaultGamma,
+      showGrid: s.defaultShowGrid,
+      showCrosshair: s.defaultShowCrosshair,
+      showPixelInfo: s.defaultShowPixelInfo,
+      showMiniMap: s.defaultShowMinimap,
+    });
+  },
 }));

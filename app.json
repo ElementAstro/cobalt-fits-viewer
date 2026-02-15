@@ -3,10 +3,19 @@
     "scheme": "cobalt",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
+    "ios": {
+      "requireFullScreen": true
+    },
     "web": {
       "output": "single"
     },
     "plugins": [
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ],
       "@react-native-google-signin/google-signin",
       "expo-secure-store",
       "expo-updates",

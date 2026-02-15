@@ -4,6 +4,7 @@ import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useTargets } from "../../hooks/useTargets";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { TargetCard } from "../../components/targets/TargetCard";
@@ -17,6 +18,7 @@ export default function TargetsScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const { isLandscape } = useScreenOrientation();
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterType, setFilterType] = useState<TargetType | null>(null);
@@ -316,7 +318,7 @@ export default function TargetsScreen() {
   );
 
   return (
-    <View className="flex-1 bg-background pt-14">
+    <View className={`flex-1 bg-background ${isLandscape ? "pt-2" : "pt-14"}`}>
       <FlatList
         data={filteredTargets}
         keyExtractor={(item) => item.id}

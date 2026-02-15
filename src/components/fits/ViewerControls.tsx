@@ -1,6 +1,8 @@
+import { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Button, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { SimpleSlider } from "../common/SimpleSlider";
 import type { StretchType, ColormapType } from "../../lib/fits/types";
@@ -33,6 +35,36 @@ const COLORMAPS: ColormapType[] = [
   "green",
   "blue",
 ];
+
+const STRETCH_I18N_KEYS: Record<StretchType, string> = {
+  linear: "viewer.stretchLinear",
+  sqrt: "viewer.stretchSqrt",
+  log: "viewer.stretchLog",
+  asinh: "viewer.stretchAsinh",
+  power: "viewer.stretchPower",
+  zscale: "viewer.stretchZscale",
+  minmax: "viewer.stretchMinmax",
+  percentile: "viewer.stretchPercentile",
+};
+
+const COLORMAP_I18N_KEYS: Record<ColormapType, string> = {
+  grayscale: "viewer.colormapGrayscale",
+  inverted: "viewer.colormapInverted",
+  heat: "viewer.colormapHeat",
+  cool: "viewer.colormapCool",
+  thermal: "viewer.colormapThermal",
+  rainbow: "viewer.colormapRainbow",
+  jet: "viewer.colormapJet",
+  viridis: "viewer.colormapViridis",
+  plasma: "viewer.colormapPlasma",
+  magma: "viewer.colormapMagma",
+  inferno: "viewer.colormapInferno",
+  cividis: "viewer.colormapCividis",
+  cubehelix: "viewer.colormapCubehelix",
+  red: "viewer.colormapRed",
+  green: "viewer.colormapGreen",
+  blue: "viewer.colormapBlue",
+};
 
 interface ViewerControlsProps {
   stretch: StretchType;
@@ -117,9 +149,12 @@ export function ViewerControls({
                 key={s}
                 size="sm"
                 variant={stretch === s ? "primary" : "secondary"}
-                onPress={() => onStretchChange(s)}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  onStretchChange(s);
+                }}
               >
-                <Chip.Label className="text-[9px]">{s}</Chip.Label>
+                <Chip.Label className="text-[9px]">{t(STRETCH_I18N_KEYS[s])}</Chip.Label>
               </Chip>
             ))}
           </View>
@@ -136,9 +171,12 @@ export function ViewerControls({
                 key={c}
                 size="sm"
                 variant={colormap === c ? "primary" : "secondary"}
-                onPress={() => onColormapChange(c)}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  onColormapChange(c);
+                }}
               >
-                <Chip.Label className="text-[9px]">{c}</Chip.Label>
+                <Chip.Label className="text-[9px]">{t(COLORMAP_I18N_KEYS[c])}</Chip.Label>
               </Chip>
             ))}
           </View>
@@ -174,30 +212,13 @@ export function ViewerControls({
 
         {/* Frame Navigation (Data Cube) */}
         {isDataCube && totalFrames > 1 && (
-          <View className="flex-row items-center gap-2 mb-2">
-            <Text className="text-[9px] font-semibold uppercase text-muted">
-              {t("viewer.frame")}
-            </Text>
-            <Button
-              size="sm"
-              variant="outline"
-              isDisabled={currentFrame <= 0}
-              onPress={() => onFrameChange(currentFrame - 1)}
-            >
-              <Ionicons name="chevron-back" size={12} color={mutedColor} />
-            </Button>
-            <Text className="text-[10px] text-foreground min-w-[40px] text-center">
-              {currentFrame + 1} / {totalFrames}
-            </Text>
-            <Button
-              size="sm"
-              variant="outline"
-              isDisabled={currentFrame >= totalFrames - 1}
-              onPress={() => onFrameChange(currentFrame + 1)}
-            >
-              <Ionicons name="chevron-forward" size={12} color={mutedColor} />
-            </Button>
-          </View>
+          <FrameNavigation
+            currentFrame={currentFrame}
+            totalFrames={totalFrames}
+            onFrameChange={onFrameChange}
+            mutedColor={mutedColor}
+            successColor={successColor}
+          />
         )}
 
         {/* Overlay Toggles */}
@@ -206,7 +227,10 @@ export function ViewerControls({
             size="sm"
             variant={showGrid ? "primary" : "ghost"}
             isIconOnly
-            onPress={onToggleGrid}
+            onPress={() => {
+              Haptics.selectionAsync();
+              onToggleGrid();
+            }}
             className="h-7 w-7"
           >
             <Ionicons name="grid-outline" size={14} color={showGrid ? successColor : mutedColor} />
@@ -215,7 +239,10 @@ export function ViewerControls({
             size="sm"
             variant={showCrosshair ? "primary" : "ghost"}
             isIconOnly
-            onPress={onToggleCrosshair}
+            onPress={() => {
+              Haptics.selectionAsync();
+              onToggleCrosshair();
+            }}
             className="h-7 w-7"
           >
             <Ionicons
@@ -228,7 +255,10 @@ export function ViewerControls({
             size="sm"
             variant={showPixelInfo ? "primary" : "ghost"}
             isIconOnly
-            onPress={onTogglePixelInfo}
+            onPress={() => {
+              Haptics.selectionAsync();
+              onTogglePixelInfo();
+            }}
             className="h-7 w-7"
           >
             <Ionicons
@@ -241,7 +271,10 @@ export function ViewerControls({
             size="sm"
             variant={showMinimap ? "primary" : "ghost"}
             isIconOnly
-            onPress={onToggleMinimap}
+            onPress={() => {
+              Haptics.selectionAsync();
+              onToggleMinimap();
+            }}
             className="h-7 w-7"
           >
             <Ionicons
@@ -253,5 +286,103 @@ export function ViewerControls({
         </View>
       </View>
     </ScrollView>
+  );
+}
+
+// --- Frame Navigation with play/pause ---
+interface FrameNavigationProps {
+  currentFrame: number;
+  totalFrames: number;
+  onFrameChange: (frame: number) => void;
+  mutedColor: string;
+  successColor: string;
+}
+
+function FrameNavigation({
+  currentFrame,
+  totalFrames,
+  onFrameChange,
+  mutedColor,
+  successColor,
+}: FrameNavigationProps) {
+  const { t } = useI18n();
+  const [isPlaying, setIsPlaying] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const frameRef = useRef(currentFrame);
+
+  // Keep frameRef in sync
+  useEffect(() => {
+    frameRef.current = currentFrame;
+  }, [currentFrame]);
+
+  const stopPlayback = useCallback(() => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsPlaying(false);
+  }, []);
+
+  const startPlayback = useCallback(() => {
+    stopPlayback();
+    setIsPlaying(true);
+    timerRef.current = setInterval(() => {
+      const next = frameRef.current + 1;
+      if (next >= totalFrames) {
+        onFrameChange(0);
+        frameRef.current = 0;
+      } else {
+        onFrameChange(next);
+        frameRef.current = next;
+      }
+    }, 200);
+  }, [totalFrames, onFrameChange, stopPlayback]);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, []);
+
+  return (
+    <View className="flex-row items-center gap-2 mb-2">
+      <Text className="text-[9px] font-semibold uppercase text-muted">{t("viewer.frame")}</Text>
+      <Button
+        size="sm"
+        variant="ghost"
+        isIconOnly
+        onPress={() => {
+          Haptics.selectionAsync();
+          if (isPlaying) stopPlayback();
+          else startPlayback();
+        }}
+        className="h-6 w-6"
+      >
+        <Ionicons
+          name={isPlaying ? "pause" : "play"}
+          size={12}
+          color={isPlaying ? successColor : mutedColor}
+        />
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        isDisabled={currentFrame <= 0 || isPlaying}
+        onPress={() => onFrameChange(currentFrame - 1)}
+      >
+        <Ionicons name="chevron-back" size={12} color={mutedColor} />
+      </Button>
+      <Text className="text-[10px] text-foreground min-w-[40px] text-center">
+        {currentFrame + 1} / {totalFrames}
+      </Text>
+      <Button
+        size="sm"
+        variant="outline"
+        isDisabled={currentFrame >= totalFrames - 1 || isPlaying}
+        onPress={() => onFrameChange(currentFrame + 1)}
+      >
+        <Ionicons name="chevron-forward" size={12} color={mutedColor} />
+      </Button>
+    </View>
   );
 }

@@ -4,6 +4,7 @@ import { Button, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useAlbumStore } from "../../stores/useAlbumStore";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
@@ -18,6 +19,7 @@ export default function AlbumDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const { isLandscape } = useScreenOrientation();
 
   const album = useAlbumStore((s) => s.getAlbumById(id ?? ""));
   const updateAlbum = useAlbumStore((s) => s.updateAlbum);
@@ -104,15 +106,34 @@ export default function AlbumDetailScreen() {
     setShowRenamePrompt(true);
   }, [album]);
 
+  const albumColumns = isLandscape ? 5 : 3;
+
   const AlbumHeader = useMemo(() => {
     if (!album) return null;
     return (
-      <View className="gap-3">
+      <View className={isLandscape ? "gap-1.5" : "gap-3"}>
         {/* Top Bar */}
         <View className="flex-row items-center justify-between">
-          <Button size="sm" variant="outline" onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={16} color={mutedColor} />
-          </Button>
+          <View className="flex-row items-center gap-2">
+            <Button size="sm" variant="outline" onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={16} color={mutedColor} />
+            </Button>
+            {isLandscape && (
+              <View className="flex-row items-center gap-1.5">
+                <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
+                  {album.name}
+                </Text>
+                {album.isSmart && (
+                  <View className="rounded bg-success/20 px-1.5 py-0.5">
+                    <Ionicons name="sparkles" size={10} color={successColor} />
+                  </View>
+                )}
+                <Text className="text-xs text-muted">
+                  {albumFiles.length} {t("album.images")}
+                </Text>
+              </View>
+            )}
+          </View>
           <View className="flex-row gap-1">
             <Button size="sm" variant="outline" onPress={handleRename}>
               <Ionicons name="pencil-outline" size={14} color={mutedColor} />
@@ -123,33 +144,35 @@ export default function AlbumDetailScreen() {
           </View>
         </View>
 
-        {/* Album Info */}
-        <View>
-          <View className="flex-row items-center gap-2">
-            <Text className="text-2xl font-bold text-foreground">{album.name}</Text>
-            {album.isSmart && (
-              <View className="rounded bg-success/20 px-2 py-0.5">
-                <Ionicons name="sparkles" size={12} color={successColor} />
-              </View>
+        {/* Album Info — full in portrait, hidden in landscape (inline above) */}
+        {!isLandscape && (
+          <View>
+            <View className="flex-row items-center gap-2">
+              <Text className="text-2xl font-bold text-foreground">{album.name}</Text>
+              {album.isSmart && (
+                <View className="rounded bg-success/20 px-2 py-0.5">
+                  <Ionicons name="sparkles" size={12} color={successColor} />
+                </View>
+              )}
+            </View>
+            {album.description && (
+              <Text className="mt-1 text-sm text-muted">{album.description}</Text>
             )}
-          </View>
-          {album.description && (
-            <Text className="mt-1 text-sm text-muted">{album.description}</Text>
-          )}
-          <View className="mt-2 flex-row items-center gap-3">
-            <Text className="text-xs text-muted">
-              {albumFiles.length} {t("album.images")}
-            </Text>
-            <Text className="text-xs text-muted">
-              {t("album.created")}: {formatDate(album.createdAt)}
-            </Text>
-            {album.updatedAt !== album.createdAt && (
+            <View className="mt-2 flex-row items-center gap-3">
               <Text className="text-xs text-muted">
-                {t("album.updated")}: {formatDate(album.updatedAt)}
+                {albumFiles.length} {t("album.images")}
               </Text>
-            )}
+              <Text className="text-xs text-muted">
+                {t("album.created")}: {formatDate(album.createdAt)}
+              </Text>
+              {album.updatedAt !== album.createdAt && (
+                <Text className="text-xs text-muted">
+                  {t("album.updated")}: {formatDate(album.updatedAt)}
+                </Text>
+              )}
+            </View>
           </View>
-        </View>
+        )}
 
         {/* Smart Album Rules */}
         {album.isSmart && album.smartRules && album.smartRules.length > 0 && (
@@ -208,6 +231,7 @@ export default function AlbumDetailScreen() {
     handleRemoveSelected,
     handleRename,
     handleDeleteAlbum,
+    isLandscape,
   ]);
 
   if (!album) {
@@ -224,7 +248,7 @@ export default function AlbumDetailScreen() {
 
   return (
     <>
-      <View className="flex-1 bg-background px-4 pt-14">
+      <View className={`flex-1 bg-background px-4 ${isLandscape ? "pt-2" : "pt-14"}`}>
         {albumFiles.length === 0 ? (
           <View className="flex-1">
             {AlbumHeader}
@@ -233,7 +257,7 @@ export default function AlbumDetailScreen() {
         ) : (
           <ThumbnailGrid
             files={albumFiles}
-            columns={3}
+            columns={albumColumns}
             selectionMode={isSelectionMode}
             selectedIds={selectedIds}
             onPress={handleFilePress}

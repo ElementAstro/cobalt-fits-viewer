@@ -14,6 +14,8 @@ import {
   performRestore,
   getBackupInfo as getBackupInfoService,
 } from "../lib/backup/backupService";
+import { exportLocalBackup, importLocalBackup } from "../lib/backup/localBackup";
+import { authenticateOneDrive, authenticateDropbox } from "../lib/backup/oauthHelper";
 import type { ICloudProvider } from "../lib/backup/cloudProvider";
 import { GoogleDriveProvider } from "../lib/backup/providers/googleDrive";
 import { OneDriveProvider } from "../lib/backup/providers/onedrive";
@@ -28,6 +30,7 @@ import type {
 } from "../lib/backup/types";
 import { DEFAULT_BACKUP_OPTIONS } from "../lib/backup/types";
 import type { BackupDataSource, RestoreTarget } from "../lib/backup/backupService";
+import * as Network from "expo-network";
 
 // Provider singletons
 const providers: Partial<Record<CloudProvider, ICloudProvider>> = {};
@@ -89,23 +92,85 @@ export function useBackup() {
       getSettings: () => {
         const s = settingsStore.getState();
         return {
+          // Viewer defaults
           defaultStretch: s.defaultStretch,
           defaultColormap: s.defaultColormap,
           defaultGridColumns: s.defaultGridColumns,
           thumbnailQuality: s.thumbnailQuality,
           thumbnailSize: s.thumbnailSize,
           defaultExportFormat: s.defaultExportFormat,
+          // Target / session / location
           autoGroupByObject: s.autoGroupByObject,
           autoTagLocation: s.autoTagLocation,
           sessionGapMinutes: s.sessionGapMinutes,
           calendarSyncEnabled: s.calendarSyncEnabled,
           defaultReminderMinutes: s.defaultReminderMinutes,
+          // Display / theme
           language: s.language,
           theme: s.theme,
           accentColor: s.accentColor,
           activePreset: s.activePreset,
           fontFamily: s.fontFamily,
           monoFontFamily: s.monoFontFamily,
+          // Viewer overlay defaults
+          defaultShowGrid: s.defaultShowGrid,
+          defaultShowCrosshair: s.defaultShowCrosshair,
+          defaultShowPixelInfo: s.defaultShowPixelInfo,
+          defaultShowMinimap: s.defaultShowMinimap,
+          defaultBlackPoint: s.defaultBlackPoint,
+          defaultWhitePoint: s.defaultWhitePoint,
+          defaultGamma: s.defaultGamma,
+          // Histogram
+          defaultHistogramMode: s.defaultHistogramMode,
+          histogramHeight: s.histogramHeight,
+          pixelInfoDecimalPlaces: s.pixelInfoDecimalPlaces,
+          // Gallery sorting
+          defaultGallerySortBy: s.defaultGallerySortBy,
+          defaultGallerySortOrder: s.defaultGallerySortOrder,
+          // Stacking
+          defaultStackMethod: s.defaultStackMethod,
+          defaultSigmaValue: s.defaultSigmaValue,
+          defaultAlignmentMode: s.defaultAlignmentMode,
+          defaultEnableQuality: s.defaultEnableQuality,
+          // Grid/crosshair styles
+          gridColor: s.gridColor,
+          gridOpacity: s.gridOpacity,
+          crosshairColor: s.crosshairColor,
+          crosshairOpacity: s.crosshairOpacity,
+          // Canvas
+          canvasMinScale: s.canvasMinScale,
+          canvasMaxScale: s.canvasMaxScale,
+          canvasDoubleTapScale: s.canvasDoubleTapScale,
+          // Thumbnail overlays
+          thumbnailShowFilename: s.thumbnailShowFilename,
+          thumbnailShowObject: s.thumbnailShowObject,
+          thumbnailShowFilter: s.thumbnailShowFilter,
+          thumbnailShowExposure: s.thumbnailShowExposure,
+          // File list / converter / editor
+          fileListStyle: s.fileListStyle,
+          defaultConverterFormat: s.defaultConverterFormat,
+          defaultConverterQuality: s.defaultConverterQuality,
+          batchNamingRule: s.batchNamingRule,
+          defaultBlurSigma: s.defaultBlurSigma,
+          defaultSharpenAmount: s.defaultSharpenAmount,
+          defaultDenoiseRadius: s.defaultDenoiseRadius,
+          editorMaxUndo: s.editorMaxUndo,
+          // Timeline / session display
+          timelineGrouping: s.timelineGrouping,
+          sessionShowExposureCount: s.sessionShowExposureCount,
+          sessionShowTotalExposure: s.sessionShowTotalExposure,
+          sessionShowFilters: s.sessionShowFilters,
+          // Target sorting
+          targetSortBy: s.targetSortBy,
+          targetSortOrder: s.targetSortOrder,
+          // Compose
+          defaultComposePreset: s.defaultComposePreset,
+          composeRedWeight: s.composeRedWeight,
+          composeGreenWeight: s.composeGreenWeight,
+          composeBlueWeight: s.composeBlueWeight,
+          // Performance
+          imageProcessingDebounce: s.imageProcessingDebounce,
+          useHighQualityPreview: s.useHighQualityPreview,
         };
       },
     };
@@ -153,12 +218,99 @@ export function useBackup() {
         }
       },
       setSettings: (settings) => {
-        const store = settingsStore.getState();
         const s = settings as Record<string, unknown>;
-        if (s.language) store.setLanguage(s.language as "en" | "zh");
-        if (s.theme) store.setTheme(s.theme as "light" | "dark" | "system");
-        if (s.defaultStretch) store.setDefaultStretch(s.defaultStretch as string as never);
-        if (s.defaultColormap) store.setDefaultColormap(s.defaultColormap as string as never);
+        // Bulk-apply all known settings keys via zustand setState
+        // This ensures every backed-up setting is restored, not just a subset
+        const knownKeys = [
+          // Viewer defaults
+          "defaultStretch",
+          "defaultColormap",
+          "defaultGridColumns",
+          "thumbnailQuality",
+          "thumbnailSize",
+          "defaultExportFormat",
+          // Target / session / location
+          "autoGroupByObject",
+          "autoTagLocation",
+          "sessionGapMinutes",
+          "calendarSyncEnabled",
+          "defaultReminderMinutes",
+          // Display / theme
+          "language",
+          "theme",
+          "accentColor",
+          "activePreset",
+          "fontFamily",
+          "monoFontFamily",
+          // Viewer overlay defaults
+          "defaultShowGrid",
+          "defaultShowCrosshair",
+          "defaultShowPixelInfo",
+          "defaultShowMinimap",
+          "defaultBlackPoint",
+          "defaultWhitePoint",
+          "defaultGamma",
+          // Histogram
+          "defaultHistogramMode",
+          "histogramHeight",
+          "pixelInfoDecimalPlaces",
+          // Gallery sorting
+          "defaultGallerySortBy",
+          "defaultGallerySortOrder",
+          // Stacking
+          "defaultStackMethod",
+          "defaultSigmaValue",
+          "defaultAlignmentMode",
+          "defaultEnableQuality",
+          // Grid/crosshair styles
+          "gridColor",
+          "gridOpacity",
+          "crosshairColor",
+          "crosshairOpacity",
+          // Canvas
+          "canvasMinScale",
+          "canvasMaxScale",
+          "canvasDoubleTapScale",
+          // Thumbnail overlays
+          "thumbnailShowFilename",
+          "thumbnailShowObject",
+          "thumbnailShowFilter",
+          "thumbnailShowExposure",
+          // File list / converter / editor
+          "fileListStyle",
+          "defaultConverterFormat",
+          "defaultConverterQuality",
+          "batchNamingRule",
+          "defaultBlurSigma",
+          "defaultSharpenAmount",
+          "defaultDenoiseRadius",
+          "editorMaxUndo",
+          // Timeline / session display
+          "timelineGrouping",
+          "sessionShowExposureCount",
+          "sessionShowTotalExposure",
+          "sessionShowFilters",
+          // Target sorting
+          "targetSortBy",
+          "targetSortOrder",
+          // Compose
+          "defaultComposePreset",
+          "composeRedWeight",
+          "composeGreenWeight",
+          "composeBlueWeight",
+          // Performance
+          "imageProcessingDebounce",
+          "useHighQualityPreview",
+        ] as const;
+        const patch: Record<string, unknown> = {};
+        for (const key of knownKeys) {
+          if (s[key] !== undefined) {
+            patch[key] = s[key];
+          }
+        }
+        if (Object.keys(patch).length > 0) {
+          settingsStore.setState(patch);
+        }
       },
     };
   }, [fitsStore, albumStore, targetStore, sessionStore, settingsStore]);
@@ -169,8 +321,21 @@ export function useBackup() {
   const connectProvider = useCallback(
     async (providerType: CloudProvider, config?: CloudProviderConfig): Promise<boolean> => {
       try {
+        let resolvedConfig = config;
+
+        // For OAuth providers without pre-existing tokens, initiate OAuth flow
+        if (!resolvedConfig?.accessToken) {
+          if (providerType === "onedrive") {
+            resolvedConfig = await authenticateOneDrive();
+          } else if (providerType === "dropbox") {
+            resolvedConfig = await authenticateDropbox();
+          }
+          // google-drive handles its own sign-in inside connect()
+          // webdav requires config with url/username/password
+        }
+
         const provider = getOrCreateProvider(providerType);
-        await provider.connect(config);
+        await provider.connect(resolvedConfig);
 
         const userInfo = await provider.getUserInfo();
         const quota = await provider.getQuota();
@@ -217,13 +382,27 @@ export function useBackup() {
     async (
       providerType: CloudProvider,
       options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
-    ): Promise<boolean> => {
-      if (backupInProgress || restoreInProgress) return false;
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (backupInProgress || restoreInProgress)
+        return { success: false, error: "Operation in progress" };
 
       const provider = getOrCreateProvider(providerType);
       if (!provider.isConnected()) {
-        setLastError("Provider not connected");
-        return false;
+        const msg = "Provider not connected";
+        setLastError(msg);
+        return { success: false, error: msg };
+      }
+
+      // Check network connectivity
+      try {
+        const networkState = await Network.getNetworkStateAsync();
+        if (!networkState.isConnected || !networkState.isInternetReachable) {
+          const msg = "No internet connection";
+          setLastError(msg);
+          return { success: false, error: msg };
+        }
+      } catch {
+        /* proceed if check fails */
       }
 
       const abortController = new AbortController();
@@ -248,12 +427,12 @@ export function useBackup() {
         });
 
         resetProgress();
-        return true;
+        return { success: true };
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Backup failed";
         setLastError(msg);
         resetProgress();
-        return false;
+        return { success: false, error: msg };
       } finally {
         setBackupInProgress(false);
         abortRef.current = null;
@@ -278,13 +457,27 @@ export function useBackup() {
     async (
       providerType: CloudProvider,
       options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
-    ): Promise<boolean> => {
-      if (backupInProgress || restoreInProgress) return false;
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (backupInProgress || restoreInProgress)
+        return { success: false, error: "Operation in progress" };
 
       const provider = getOrCreateProvider(providerType);
       if (!provider.isConnected()) {
-        setLastError("Provider not connected");
-        return false;
+        const msg = "Provider not connected";
+        setLastError(msg);
+        return { success: false, error: msg };
+      }
+
+      // Check network connectivity
+      try {
+        const networkState = await Network.getNetworkStateAsync();
+        if (!networkState.isConnected || !networkState.isInternetReachable) {
+          const msg = "No internet connection";
+          setLastError(msg);
+          return { success: false, error: msg };
+        }
+      } catch {
+        /* proceed if check fails */
       }
 
       const abortController = new AbortController();
@@ -305,12 +498,12 @@ export function useBackup() {
         );
 
         resetProgress();
-        return true;
+        return { success: true };
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Restore failed";
         setLastError(msg);
         resetProgress();
-        return false;
+        return { success: false, error: msg };
       } finally {
         setRestoreInProgress(false);
         abortRef.current = null;
@@ -354,6 +547,94 @@ export function useBackup() {
     return provider.testConnection();
   }, []);
 
+  /**
+   * 导出本地备份
+   */
+  const localExport = useCallback(
+    async (
+      options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (backupInProgress || restoreInProgress)
+        return { success: false, error: "Operation in progress" };
+
+      try {
+        setBackupInProgress(true);
+        setLastError(null);
+
+        const dataSource = buildDataSource();
+        const result = await exportLocalBackup(dataSource, options, (p: BackupProgress) =>
+          setProgress(p),
+        );
+
+        resetProgress();
+        if (!result.success) {
+          setLastError(result.error ?? "Export failed");
+        }
+        return result;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Export failed";
+        setLastError(msg);
+        resetProgress();
+        return { success: false, error: msg };
+      } finally {
+        setBackupInProgress(false);
+      }
+    },
+    [
+      backupInProgress,
+      restoreInProgress,
+      buildDataSource,
+      setBackupInProgress,
+      setLastError,
+      setProgress,
+      resetProgress,
+    ],
+  );
+
+  /**
+   * 从本地文件导入备份
+   */
+  const localImport = useCallback(
+    async (
+      options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
+    ): Promise<{ success: boolean; error?: string }> => {
+      if (backupInProgress || restoreInProgress)
+        return { success: false, error: "Operation in progress" };
+
+      try {
+        setRestoreInProgress(true);
+        setLastError(null);
+
+        const restoreTarget = buildRestoreTarget();
+        const result = await importLocalBackup(restoreTarget, options, (p: BackupProgress) =>
+          setProgress(p),
+        );
+
+        resetProgress();
+        if (!result.success) {
+          setLastError(result.error ?? "Import failed");
+        }
+        return result;
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : "Import failed";
+        setLastError(msg);
+        resetProgress();
+        return { success: false, error: msg };
+      } finally {
+        setRestoreInProgress(false);
+      }
+    },
+    [
+      backupInProgress,
+      restoreInProgress,
+      buildRestoreTarget,
+      setRestoreInProgress,
+      setLastError,
+      setProgress,
+      resetProgress,
+    ],
+  );
+
   return {
     // State
     connections,
@@ -370,5 +651,7 @@ export function useBackup() {
     cancelOperation,
     getBackupInfo,
     testConnection,
+    localExport,
+    localImport,
   };
 }

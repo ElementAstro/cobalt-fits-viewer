@@ -37,6 +37,18 @@ export function generateLogFromFiles(
 }
 
 /**
+ * Escape a value for CSV (RFC 4180)
+ */
+export function escapeCSV(value: string | number | null | undefined): string {
+  if (value == null) return "";
+  const str = String(value);
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+/**
  * 导出日志为 CSV
  */
 export function exportToCSV(entries: ObservationLogEntry[]): string {
@@ -54,15 +66,15 @@ export function exportToCSV(entries: ObservationLogEntry[]): string {
 
   const rows = entries.map((e) =>
     [
-      `"${e.dateTime}"`,
-      `"${e.object}"`,
-      `"${e.filter}"`,
+      escapeCSV(e.dateTime),
+      escapeCSV(e.object),
+      escapeCSV(e.filter),
       e.exptime,
       e.gain ?? "",
-      `"${e.telescope ?? ""}"`,
-      `"${e.camera ?? ""}"`,
+      escapeCSV(e.telescope),
+      escapeCSV(e.camera),
       e.ccdTemp ?? "",
-      `"${e.notes ?? ""}"`,
+      escapeCSV(e.notes),
     ].join(","),
   );
 
@@ -85,6 +97,83 @@ export function exportToText(entries: ObservationLogEntry[]): string {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * 导出单个会话为 JSON
+ */
+export function exportSessionToJSON(
+  session: import("../fits/types").ObservationSession,
+  entries: ObservationLogEntry[],
+): string {
+  return JSON.stringify(
+    {
+      session: {
+        id: session.id,
+        date: session.date,
+        startTime: new Date(session.startTime).toISOString(),
+        endTime: new Date(session.endTime).toISOString(),
+        duration: session.duration,
+        targets: session.targets,
+        imageCount: session.imageIds.length,
+        equipment: session.equipment,
+        location: session.location,
+        weather: session.weather,
+        seeing: session.seeing,
+        notes: session.notes,
+        rating: session.rating,
+        bortle: session.bortle,
+        tags: session.tags,
+      },
+      logEntries: entries.map((e) => ({
+        dateTime: e.dateTime,
+        object: e.object,
+        filter: e.filter,
+        exptime: e.exptime,
+        gain: e.gain,
+        telescope: e.telescope,
+        camera: e.camera,
+        ccdTemp: e.ccdTemp,
+        notes: e.notes,
+      })),
+      exportedAt: new Date().toISOString(),
+    },
+    null,
+    2,
+  );
+}
+
+/**
+ * 导出所有会话汇总为 JSON
+ */
+export function exportAllSessionsToJSON(
+  sessions: import("../fits/types").ObservationSession[],
+): string {
+  return JSON.stringify(
+    {
+      sessions: sessions.map((s) => ({
+        id: s.id,
+        date: s.date,
+        startTime: new Date(s.startTime).toISOString(),
+        endTime: new Date(s.endTime).toISOString(),
+        duration: s.duration,
+        targets: s.targets,
+        imageCount: s.imageIds.length,
+        equipment: s.equipment,
+        weather: s.weather,
+        seeing: s.seeing,
+        notes: s.notes,
+        rating: s.rating,
+        bortle: s.bortle,
+        tags: s.tags,
+      })),
+      totalSessions: sessions.length,
+      totalDuration: sessions.reduce((sum, s) => sum + s.duration, 0),
+      exportedAt: new Date().toISOString(),
+    },
+    null,
+    2,
+  );
 }
 
 /**

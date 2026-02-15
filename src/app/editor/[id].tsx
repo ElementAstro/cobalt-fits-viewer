@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Alert } from "react-native";
+import { View, Text, ScrollView, Alert, TextInput } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
 import { useState, useCallback, useEffect } from "react";
@@ -33,23 +33,54 @@ type EditorTool =
   | "levels"
   | "background"
   | "rotateCustom"
+  | "mtf"
+  | "curves"
+  | "clahe"
+  | "hdr"
+  | "morphology"
+  | "starMask"
+  | "rangeMask"
+  | "binarize"
+  | "rescale"
+  | "deconvolution"
+  | "pixelMath"
   | null;
 
-const EDITOR_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const GEOMETRY_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "crop", icon: "crop-outline" },
   { key: "rotate", icon: "refresh-outline" },
   { key: "flip", icon: "swap-horizontal-outline" },
-  { key: "invert", icon: "contrast-outline" },
+  { key: "rotateCustom", icon: "sync-outline" },
+];
+
+const ADJUST_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "brightness", icon: "sunny-outline" },
   { key: "contrast", icon: "options-outline" },
   { key: "gamma", icon: "pulse-outline" },
   { key: "levels", icon: "analytics-outline" },
+  { key: "curves", icon: "trending-up-outline" },
+  { key: "mtf", icon: "color-wand-outline" },
+  { key: "invert", icon: "contrast-outline" },
+  { key: "histogram", icon: "bar-chart-outline" },
+];
+
+const PROCESS_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "blur", icon: "water-outline" },
   { key: "sharpen", icon: "sparkles-outline" },
   { key: "denoise", icon: "layers-outline" },
-  { key: "histogram", icon: "bar-chart-outline" },
+  { key: "clahe", icon: "grid-outline" },
+  { key: "hdr", icon: "aperture-outline" },
+  { key: "deconvolution", icon: "flashlight-outline" },
+  { key: "morphology", icon: "shapes-outline" },
   { key: "background", icon: "globe-outline" },
-  { key: "rotateCustom", icon: "sync-outline" },
+];
+
+const MASK_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "starMask", icon: "star-half-outline" },
+  { key: "rangeMask", icon: "funnel-outline" },
+  { key: "binarize", icon: "moon-outline" },
+  { key: "rescale", icon: "resize-outline" },
+  { key: "pixelMath", icon: "calculator-outline" },
 ];
 
 const ADVANCED_TOOLS: { key: string; icon: keyof typeof Ionicons.glyphMap; route?: string }[] = [
@@ -90,6 +121,33 @@ export default function EditorDetailScreen() {
   const [rotateAngle, setRotateAngle] = useState(0);
   const [canvasLayout, setCanvasLayout] = useState({ width: 0, height: 0 });
   const [detectedStars, setDetectedStars] = useState<DetectedStar[]>([]);
+
+  // New tool state
+  const [mtfMidtone, setMtfMidtone] = useState(0.25);
+  const [mtfShadows, setMtfShadows] = useState(0);
+  const [mtfHighlights, setMtfHighlights] = useState(1);
+  const [claheTileSize, setClaheTileSize] = useState(8);
+  const [claheClipLimit, setClaheClipLimit] = useState(3.0);
+  const [hdrLayers, setHdrLayers] = useState(5);
+  const [hdrAmount, setHdrAmount] = useState(0.7);
+  const [morphOp, setMorphOp] = useState<"erode" | "dilate" | "open" | "close">("dilate");
+  const [morphRadius, setMorphRadius] = useState(1);
+  const [starMaskScale, setStarMaskScale] = useState(1.5);
+  const [starMaskInvert, setStarMaskInvert] = useState(false);
+  const [rangeMaskLow, setRangeMaskLow] = useState(0);
+  const [rangeMaskHigh, setRangeMaskHigh] = useState(1);
+  const [rangeMaskFuzz, setRangeMaskFuzz] = useState(0.1);
+  const [binarizeThreshold, setBinarizeThreshold] = useState(0.5);
+  const [deconvPsfSigma, setDeconvPsfSigma] = useState(2.0);
+  const [deconvIterations, setDeconvIterations] = useState(20);
+  const [deconvRegularization, setDeconvRegularization] = useState(0.1);
+  const [pixelMathExpr, setPixelMathExpr] = useState("$T");
+  const [activeToolGroup, setActiveToolGroup] = useState<
+    "geometry" | "adjust" | "process" | "mask"
+  >("adjust");
+  const [curvesPreset, setCurvesPreset] = useState<
+    "linear" | "sCurve" | "brighten" | "darken" | "highContrast"
+  >("sCurve");
 
   // Load FITS file
   useEffect(() => {
@@ -167,6 +225,89 @@ export default function EditorDetailScreen() {
       case "crop":
         setShowCrop(true);
         return;
+      case "mtf":
+        op = {
+          type: "mtf",
+          midtone: mtfMidtone,
+          shadowsClip: mtfShadows,
+          highlightsClip: mtfHighlights,
+        };
+        break;
+      case "clahe":
+        op = { type: "clahe", tileSize: claheTileSize, clipLimit: claheClipLimit };
+        break;
+      case "curves": {
+        const CURVE_PRESETS: Record<string, { x: number; y: number }[]> = {
+          linear: [
+            { x: 0, y: 0 },
+            { x: 1, y: 1 },
+          ],
+          sCurve: [
+            { x: 0, y: 0 },
+            { x: 0.25, y: 0.15 },
+            { x: 0.5, y: 0.5 },
+            { x: 0.75, y: 0.85 },
+            { x: 1, y: 1 },
+          ],
+          brighten: [
+            { x: 0, y: 0 },
+            { x: 0.25, y: 0.35 },
+            { x: 0.5, y: 0.65 },
+            { x: 0.75, y: 0.85 },
+            { x: 1, y: 1 },
+          ],
+          darken: [
+            { x: 0, y: 0 },
+            { x: 0.25, y: 0.15 },
+            { x: 0.5, y: 0.35 },
+            { x: 0.75, y: 0.65 },
+            { x: 1, y: 1 },
+          ],
+          highContrast: [
+            { x: 0, y: 0 },
+            { x: 0.2, y: 0.05 },
+            { x: 0.5, y: 0.5 },
+            { x: 0.8, y: 0.95 },
+            { x: 1, y: 1 },
+          ],
+        };
+        op = { type: "curves", points: CURVE_PRESETS[curvesPreset] ?? CURVE_PRESETS.sCurve };
+        break;
+      }
+      case "hdr":
+        op = { type: "hdr", layers: hdrLayers, amount: hdrAmount };
+        break;
+      case "morphology":
+        op = { type: "morphology", operation: morphOp, radius: morphRadius };
+        break;
+      case "starMask":
+        op = { type: "starMask", scale: starMaskScale, invert: starMaskInvert };
+        break;
+      case "rangeMask":
+        op = {
+          type: "rangeMask",
+          low: rangeMaskLow,
+          high: rangeMaskHigh,
+          fuzziness: rangeMaskFuzz,
+        };
+        break;
+      case "binarize":
+        op = { type: "binarize", threshold: binarizeThreshold };
+        break;
+      case "rescale":
+        op = { type: "rescale" };
+        break;
+      case "deconvolution":
+        op = {
+          type: "deconvolution",
+          psfSigma: deconvPsfSigma,
+          iterations: deconvIterations,
+          regularization: deconvRegularization,
+        };
+        break;
+      case "pixelMath":
+        op = { type: "pixelMath", expression: pixelMathExpr };
+        break;
     }
 
     if (op) {
@@ -189,6 +330,26 @@ export default function EditorDetailScreen() {
     bgGridSize,
     rotateAngle,
     editor,
+    mtfMidtone,
+    mtfShadows,
+    mtfHighlights,
+    claheTileSize,
+    claheClipLimit,
+    hdrLayers,
+    hdrAmount,
+    morphOp,
+    morphRadius,
+    starMaskScale,
+    starMaskInvert,
+    rangeMaskLow,
+    rangeMaskHigh,
+    rangeMaskFuzz,
+    binarizeThreshold,
+    deconvPsfSigma,
+    deconvIterations,
+    deconvRegularization,
+    pixelMathExpr,
+    curvesPreset,
   ]);
 
   const handleQuickAction = useCallback(
@@ -522,6 +683,248 @@ export default function EditorDetailScreen() {
                   />
                 )}
 
+                {/* Curves preset selector */}
+                {activeTool === "curves" && (
+                  <View className="flex-row flex-wrap gap-1">
+                    {[
+                      { key: "linear" as const, label: "Linear" },
+                      { key: "sCurve" as const, label: "S-Curve" },
+                      { key: "brighten" as const, label: "Brighten" },
+                      { key: "darken" as const, label: "Darken" },
+                      { key: "highContrast" as const, label: "High Contrast" },
+                    ].map((p) => (
+                      <Button
+                        key={p.key}
+                        size="sm"
+                        variant={curvesPreset === p.key ? "primary" : "outline"}
+                        onPress={() => setCurvesPreset(p.key)}
+                      >
+                        <Button.Label className="text-[9px]">{p.label}</Button.Label>
+                      </Button>
+                    ))}
+                  </View>
+                )}
+
+                {/* MTF parameters */}
+                {activeTool === "mtf" && (
+                  <View>
+                    <SimpleSlider
+                      label="Midtone"
+                      value={mtfMidtone}
+                      min={0.01}
+                      max={0.99}
+                      step={0.01}
+                      onValueChange={setMtfMidtone}
+                    />
+                    <SimpleSlider
+                      label="Shadows Clip"
+                      value={mtfShadows}
+                      min={0}
+                      max={0.5}
+                      step={0.01}
+                      onValueChange={setMtfShadows}
+                    />
+                    <SimpleSlider
+                      label="Highlights Clip"
+                      value={mtfHighlights}
+                      min={0.5}
+                      max={1}
+                      step={0.01}
+                      onValueChange={setMtfHighlights}
+                    />
+                  </View>
+                )}
+
+                {/* CLAHE parameters */}
+                {activeTool === "clahe" && (
+                  <View>
+                    <SimpleSlider
+                      label="Tile Size"
+                      value={claheTileSize}
+                      min={4}
+                      max={16}
+                      step={1}
+                      onValueChange={(v) => setClaheTileSize(Math.round(v))}
+                    />
+                    <SimpleSlider
+                      label="Clip Limit"
+                      value={claheClipLimit}
+                      min={1.0}
+                      max={10.0}
+                      step={0.5}
+                      onValueChange={setClaheClipLimit}
+                    />
+                  </View>
+                )}
+
+                {/* HDR parameters */}
+                {activeTool === "hdr" && (
+                  <View>
+                    <SimpleSlider
+                      label="Layers"
+                      value={hdrLayers}
+                      min={3}
+                      max={8}
+                      step={1}
+                      onValueChange={(v) => setHdrLayers(Math.round(v))}
+                    />
+                    <SimpleSlider
+                      label="Amount"
+                      value={hdrAmount}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onValueChange={setHdrAmount}
+                    />
+                  </View>
+                )}
+
+                {/* Morphology parameters */}
+                {activeTool === "morphology" && (
+                  <View>
+                    <View className="flex-row gap-1 mb-2">
+                      {(["erode", "dilate", "open", "close"] as const).map((op) => (
+                        <Button
+                          key={op}
+                          size="sm"
+                          variant={morphOp === op ? "primary" : "outline"}
+                          onPress={() => setMorphOp(op)}
+                        >
+                          <Button.Label className="text-[9px] capitalize">{op}</Button.Label>
+                        </Button>
+                      ))}
+                    </View>
+                    <SimpleSlider
+                      label="Radius"
+                      value={morphRadius}
+                      min={1}
+                      max={5}
+                      step={1}
+                      onValueChange={(v) => setMorphRadius(Math.round(v))}
+                    />
+                  </View>
+                )}
+
+                {/* StarMask parameters */}
+                {activeTool === "starMask" && (
+                  <View>
+                    <SimpleSlider
+                      label="Scale"
+                      value={starMaskScale}
+                      min={0.5}
+                      max={4.0}
+                      step={0.1}
+                      onValueChange={setStarMaskScale}
+                    />
+                    <View className="flex-row gap-2 mt-1">
+                      <Button
+                        size="sm"
+                        variant={!starMaskInvert ? "primary" : "outline"}
+                        onPress={() => setStarMaskInvert(false)}
+                      >
+                        <Button.Label className="text-[9px]">Isolate Stars</Button.Label>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={starMaskInvert ? "primary" : "outline"}
+                        onPress={() => setStarMaskInvert(true)}
+                      >
+                        <Button.Label className="text-[9px]">Remove Stars</Button.Label>
+                      </Button>
+                    </View>
+                  </View>
+                )}
+
+                {/* RangeMask parameters */}
+                {activeTool === "rangeMask" && (
+                  <View>
+                    <SimpleSlider
+                      label="Low Bound"
+                      value={rangeMaskLow}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onValueChange={setRangeMaskLow}
+                    />
+                    <SimpleSlider
+                      label="High Bound"
+                      value={rangeMaskHigh}
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      onValueChange={setRangeMaskHigh}
+                    />
+                    <SimpleSlider
+                      label="Fuzziness"
+                      value={rangeMaskFuzz}
+                      min={0}
+                      max={0.5}
+                      step={0.01}
+                      onValueChange={setRangeMaskFuzz}
+                    />
+                  </View>
+                )}
+
+                {/* Binarize parameters */}
+                {activeTool === "binarize" && (
+                  <SimpleSlider
+                    label="Threshold"
+                    value={binarizeThreshold}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    onValueChange={setBinarizeThreshold}
+                  />
+                )}
+
+                {/* Deconvolution parameters */}
+                {activeTool === "deconvolution" && (
+                  <View>
+                    <SimpleSlider
+                      label="PSF Sigma"
+                      value={deconvPsfSigma}
+                      min={0.5}
+                      max={5}
+                      step={0.1}
+                      onValueChange={setDeconvPsfSigma}
+                    />
+                    <SimpleSlider
+                      label="Iterations"
+                      value={deconvIterations}
+                      min={5}
+                      max={50}
+                      step={1}
+                      onValueChange={(v) => setDeconvIterations(Math.round(v))}
+                    />
+                    <SimpleSlider
+                      label="Regularization"
+                      value={deconvRegularization}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onValueChange={setDeconvRegularization}
+                    />
+                  </View>
+                )}
+
+                {/* PixelMath parameters */}
+                {activeTool === "pixelMath" && (
+                  <View>
+                    <Text className="text-[9px] text-muted mb-1">
+                      Variables: $T, $mean, $median, $min, $max
+                    </Text>
+                    <TextInput
+                      className="h-8 px-2 text-xs text-foreground bg-background rounded border border-separator"
+                      value={pixelMathExpr}
+                      onChangeText={setPixelMathExpr}
+                      placeholder="($T - $min) / ($max - $min)"
+                      placeholderTextColor="#666"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                )}
+
                 {/* Quick actions for rotate/flip */}
                 {activeTool === "rotate" && (
                   <View className="flex-row gap-2 mt-1">
@@ -590,11 +993,44 @@ export default function EditorDetailScreen() {
         </View>
       )}
 
-      {/* Basic Tools */}
+      {/* Tool Group Tabs */}
+      <View className="border-t border-separator bg-background px-2 pt-1">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View className="flex-row gap-1">
+            {[
+              { key: "geometry" as const, label: t("editor.geometry" as any) },
+              { key: "adjust" as const, label: t("editor.adjust" as any) },
+              { key: "process" as const, label: t("editor.process" as any) },
+              { key: "mask" as const, label: t("editor.maskTools" as any) },
+            ].map((tab) => (
+              <PressableFeedback key={tab.key} onPress={() => setActiveToolGroup(tab.key)}>
+                <View
+                  className={`px-3 py-1 rounded-full ${activeToolGroup === tab.key ? "bg-success/15" : ""}`}
+                >
+                  <Text
+                    className={`text-[10px] font-semibold ${activeToolGroup === tab.key ? "text-success" : "text-muted"}`}
+                  >
+                    {tab.label}
+                  </Text>
+                </View>
+              </PressableFeedback>
+            ))}
+          </View>
+        </ScrollView>
+      </View>
+
+      {/* Tools Row */}
       <View className="border-t border-separator bg-background px-2 py-2">
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View className="flex-row gap-0.5">
-            {EDITOR_TOOLS.map((tool) => {
+            {(activeToolGroup === "geometry"
+              ? GEOMETRY_TOOLS
+              : activeToolGroup === "adjust"
+                ? ADJUST_TOOLS
+                : activeToolGroup === "process"
+                  ? PROCESS_TOOLS
+                  : MASK_TOOLS
+            ).map((tool) => {
               const isActive = activeTool === tool.key;
               return (
                 <PressableFeedback key={tool.key} onPress={() => handleToolPress(tool.key)}>

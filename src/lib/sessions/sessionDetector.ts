@@ -110,36 +110,19 @@ export function generateLogEntries(
 }
 
 /**
- * 导出日志为 CSV 格式字符串
+ * 判断 candidate 是否与已有 sessions 中的某个重复
+ * 规则：同日期+同开始时间，或 >50% 图像重叠
  */
-export function exportLogToCSV(entries: ObservationLogEntry[]): string {
-  const headers = [
-    "DateTime",
-    "Object",
-    "Filter",
-    "Exposure(s)",
-    "Gain",
-    "Telescope",
-    "Camera",
-    "CCD Temp(°C)",
-    "Notes",
-  ];
-
-  const rows = entries.map((e) =>
-    [
-      e.dateTime,
-      e.object,
-      e.filter,
-      e.exptime,
-      e.gain ?? "",
-      e.telescope ?? "",
-      e.camera ?? "",
-      e.ccdTemp ?? "",
-      e.notes ?? "",
-    ].join(","),
-  );
-
-  return [headers.join(","), ...rows].join("\n");
+export function isSessionDuplicate(
+  candidate: ObservationSession,
+  existingSessions: ObservationSession[],
+): boolean {
+  return existingSessions.some((s) => {
+    if (s.date === candidate.date && s.startTime === candidate.startTime) return true;
+    if (candidate.imageIds.length === 0) return false;
+    const overlap = candidate.imageIds.filter((id) => s.imageIds.includes(id)).length;
+    return overlap > candidate.imageIds.length * 0.5;
+  });
 }
 
 /**

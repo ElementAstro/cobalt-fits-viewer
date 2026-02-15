@@ -3,7 +3,8 @@
  * 提供像素级的图像变换操作：旋转、翻转、裁剪、反转、模糊、锐化、降噪、直方图均衡
  */
 
-import { quickSelect } from "./pixelMath";
+import { quickSelect, computeMAD } from "./pixelMath";
+import { detectStars } from "../stacking/starDetection";
 
 // ===== 几何变换 =====
 
@@ -544,6 +545,1187 @@ export function applyLevels(
   return result;
 }
 
+// ===== MTF (Midtone Transfer Function) =====
+
+/**
+ * PixInsight-style Midtone Transfer Function
+ * f(x, m) = ((m-1)*x) / ((2m-1)*x - m)
+ */
+function mtf(m: number, x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  if (x === m) return 0.5;
+  return ((m - 1) * x) / ((2 * m - 1) * x - m);
+}
+
+/**
+ * 应用 MTF 中间调传递函数
+ * midtone: 中间调平衡 [0.001, 0.999]，<0.5 提亮，>0.5 压暗
+ * shadowsClip/highlightsClip: 归一化裁剪点 [0,1]
+ */
+export function applyMTF(
+  pixels: Float32Array,
+  midtone: number,
+  shadowsClip: number = 0,
+  highlightsClip: number = 1,
+): Float32Array {
+  midtone = Math.max(0.001, Math.min(0.999, midtone));
+  shadowsClip = Math.max(0, Math.min(1, shadowsClip));
+  highlightsClip = Math.max(0, Math.min(1, highlightsClip));
+  const n = pixels.length;
+  let min = Infinity,
+    max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min;
+  if (range === 0) return new Float32Array(pixels);
+
+  const clipLow = min + shadowsClip * range;
+  const clipHigh = min + highlightsClip * range;
+  const clipSpan = clipHigh - clipLow;
+  if (clipSpan <= 0) return new Float32Array(pixels);
+
+  // Build 256-entry LUT for speed
+  const LUT_SIZE = 256;
+  const lut = new Float32Array(LUT_SIZE);
+  for (let i = 0; i < LUT_SIZE; i++) {
+    lut[i] = mtf(midtone, i / (LUT_SIZE - 1));
+  }
+
+  const result = new Float32Array(n);
+  const lutMax = LUT_SIZE - 1;
+  for (let i = 0; i < n; i++) {
+    let v = (pixels[i] - clipLow) / clipSpan;
+    v = Math.max(0, Math.min(1, v));
+    const idx = Math.round(v * lutMax);
+    result[i] = min + lut[idx] * range;
+  }
+  return result;
+}
+
+// ===== StarMask 星点掩膜 =====
+
+/**
+ * 生成星点掩膜图像
+ * 基于星点检测结果，在每颗星位置绘制高斯轮廓
+ * scale: 掩膜扩展系数 (1.0 = FWHM 大小)
+ */
+export function generateStarMask(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  scale: number = 1.5,
+): Float32Array {
+  const stars = detectStars(pixels, width, height);
+  const mask = new Float32Array(width * height);
+
+  for (const star of stars) {
+    const sigma = (star.fwhm * scale) / 2.3548;
+    const r = Math.ceil(sigma * 3);
+    const s2 = 2 * sigma * sigma;
+    const cx = Math.round(star.cx);
+    const cy = Math.round(star.cy);
+
+    for (let dy = -r; dy <= r; dy++) {
+      const py = cy + dy;
+      if (py < 0 || py >= height) continue;
+      for (let dx = -r; dx <= r; dx++) {
+        const px = cx + dx;
+        if (px < 0 || px >= width) continue;
+        const dist2 = dx * dx + dy * dy;
+        const val = Math.exp(-dist2 / s2);
+        const idx = py * width + px;
+        if (val > mask[idx]) mask[idx] = val;
+      }
+    }
+  }
+
+  return mask;
+}
+
+/**
+ * 使用掩膜混合原始像素和处理后像素
+ * result = original * (1 - mask) + processed * mask
+ * 当 invert=true 时: result = original * mask + processed * (1 - mask)
+ */
+export function applyWithMask(
+  original: Float32Array,
+  processed: Float32Array,
+  mask: Float32Array,
+  invert: boolean = false,
+): Float32Array {
+  const n = original.length;
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const m = invert ? 1 - mask[i] : mask[i];
+    result[i] = original[i] * (1 - m) + processed[i] * m;
+  }
+  return result;
+}
+
+/**
+ * 应用星点掩膜保护或隔离星点
+ * 当 invert=false: 保留星点，非星点区域置零 (隔离星点)
+ * 当 invert=true: 移除星点，保留非星点区域 (无星图像)
+ */
+export function applyStarMask(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  scale: number = 1.5,
+  invert: boolean = false,
+): Float32Array {
+  const mask = generateStarMask(pixels, width, height, scale);
+  const n = pixels.length;
+  const result = new Float32Array(n);
+
+  // 计算背景中值用于填充星点区域
+  const { median } = computeMAD(pixels);
+
+  for (let i = 0; i < n; i++) {
+    const m = invert ? 1 - mask[i] : mask[i];
+    result[i] = pixels[i] * m + median * (1 - m);
+  }
+  return result;
+}
+
+// ===== Binarize / Rescale =====
+
+/**
+ * 二值化：像素值 > threshold → 1, 否则 → 0
+ * threshold: 归一化阈值 [0,1]
+ */
+export function binarize(pixels: Float32Array, threshold: number): Float32Array {
+  threshold = Math.max(0, Math.min(1, threshold));
+  const n = pixels.length;
+  let min = Infinity,
+    max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min;
+  if (range === 0) return new Float32Array(n);
+
+  const absThreshold = min + threshold * range;
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    result[i] = pixels[i] > absThreshold ? max : min;
+  }
+  return result;
+}
+
+/**
+ * 重缩放：将像素值映射到 [min, max] → [0, 1]
+ */
+export function rescalePixels(pixels: Float32Array): Float32Array {
+  const n = pixels.length;
+  let min = Infinity,
+    max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min;
+  if (range === 0) return new Float32Array(n).fill(0.5);
+
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    result[i] = (pixels[i] - min) / range;
+  }
+  return result;
+}
+
+// ===== SCNR (Subtractive Chromatic Noise Reduction) =====
+
+/**
+ * SCNR 去绿噪 — 在 RGBA 数据上操作
+ * method: "averageNeutral" | "maximumNeutral"
+ * amount: 强度 [0, 1]
+ */
+export function applySCNR(
+  rgbaData: Uint8ClampedArray,
+  method: "averageNeutral" | "maximumNeutral" = "averageNeutral",
+  amount: number = 1.0,
+): Uint8ClampedArray {
+  const result = new Uint8ClampedArray(rgbaData);
+  const n = rgbaData.length / 4;
+
+  for (let i = 0; i < n; i++) {
+    const off = i * 4;
+    const r = rgbaData[off];
+    const g = rgbaData[off + 1];
+    const b = rgbaData[off + 2];
+
+    let gNew: number;
+    if (method === "averageNeutral") {
+      gNew = Math.min(g, (r + b) / 2);
+    } else {
+      gNew = Math.min(g, Math.max(r, b));
+    }
+
+    result[off + 1] = Math.round(g * (1 - amount) + gNew * amount);
+  }
+
+  return result;
+}
+
+/**
+ * SCNR 在 Float32Array 单通道上的简化版
+ * 当图像为灰度时无效果，返回原数据
+ */
+export function applySCNRGray(pixels: Float32Array): Float32Array {
+  return new Float32Array(pixels);
+}
+
+// ===== CLAHE (Contrast Limited Adaptive Histogram Equalization) =====
+
+/**
+ * CLAHE 局部自适应直方图均衡
+ * tileSize: 块大小 (4-16)
+ * clipLimit: 对比度限制 (1.0-10.0)
+ */
+export function clahe(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  tileSize: number = 8,
+  clipLimit: number = 3.0,
+): Float32Array {
+  tileSize = Math.max(2, Math.min(64, Math.round(tileSize)));
+  clipLimit = Math.max(1, Math.min(20, clipLimit));
+  const n = width * height;
+
+  // 归一化到 [0,1]
+  let min = Infinity,
+    max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min;
+  if (range === 0) return new Float32Array(pixels);
+
+  const tilesX = Math.max(1, Math.ceil(width / tileSize));
+  const tilesY = Math.max(1, Math.ceil(height / tileSize));
+  const tileW = Math.ceil(width / tilesX);
+  const tileH = Math.ceil(height / tilesY);
+  const BINS = 256;
+
+  // 为每个 tile 计算裁剪后的 CDF
+  const cdfs = new Array<Float32Array>(tilesX * tilesY);
+
+  for (let ty = 0; ty < tilesY; ty++) {
+    for (let tx = 0; tx < tilesX; tx++) {
+      const startX = tx * tileW;
+      const startY = ty * tileH;
+      const endX = Math.min(startX + tileW, width);
+      const endY = Math.min(startY + tileH, height);
+      const tilePixelCount = (endX - startX) * (endY - startY);
+
+      // 计算直方图
+      const hist = new Uint32Array(BINS);
+      for (let y = startY; y < endY; y++) {
+        for (let x = startX; x < endX; x++) {
+          const v = (pixels[y * width + x] - min) / range;
+          const bin = Math.min(BINS - 1, Math.floor(v * (BINS - 1)));
+          hist[bin]++;
+        }
+      }
+
+      // 裁剪直方图
+      const limit = Math.max(1, Math.floor((clipLimit * tilePixelCount) / BINS));
+      let excess = 0;
+      for (let i = 0; i < BINS; i++) {
+        if (hist[i] > limit) {
+          excess += hist[i] - limit;
+          hist[i] = limit;
+        }
+      }
+      // 重分配超出部分
+      const increment = Math.floor(excess / BINS);
+      const remainder = excess - increment * BINS;
+      for (let i = 0; i < BINS; i++) {
+        hist[i] += increment + (i < remainder ? 1 : 0);
+      }
+
+      // 计算 CDF
+      const cdf = new Float32Array(BINS);
+      cdf[0] = hist[0];
+      for (let i = 1; i < BINS; i++) {
+        cdf[i] = cdf[i - 1] + hist[i];
+      }
+      // 归一化 CDF
+      const cdfMax = cdf[BINS - 1];
+      if (cdfMax > 0) {
+        for (let i = 0; i < BINS; i++) {
+          cdf[i] /= cdfMax;
+        }
+      }
+      cdfs[ty * tilesX + tx] = cdf;
+    }
+  }
+
+  // 双线性插值应用 CLAHE
+  const result = new Float32Array(n);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const v = (pixels[y * width + x] - min) / range;
+      const bin = Math.min(BINS - 1, Math.max(0, Math.floor(v * (BINS - 1))));
+
+      // 像素在 tile 网格中的位置
+      const txf = (x + 0.5) / tileW - 0.5;
+      const tyf = (y + 0.5) / tileH - 0.5;
+      const tx0 = Math.max(0, Math.min(tilesX - 2, Math.floor(txf)));
+      const ty0 = Math.max(0, Math.min(tilesY - 2, Math.floor(tyf)));
+      const tx1 = Math.min(tilesX - 1, tx0 + 1);
+      const ty1 = Math.min(tilesY - 1, ty0 + 1);
+      const fx = Math.max(0, Math.min(1, txf - tx0));
+      const fy = Math.max(0, Math.min(1, tyf - ty0));
+
+      const v00 = cdfs[ty0 * tilesX + tx0][bin];
+      const v10 = cdfs[ty0 * tilesX + tx1][bin];
+      const v01 = cdfs[ty1 * tilesX + tx0][bin];
+      const v11 = cdfs[ty1 * tilesX + tx1][bin];
+
+      const mapped =
+        v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) + v01 * (1 - fx) * fy + v11 * fx * fy;
+
+      result[y * width + x] = min + mapped * range;
+    }
+  }
+
+  return result;
+}
+
+// ===== CurvesTransformation 曲线变换 =====
+
+/**
+ * Akima 子样条插值
+ * 给定控制点数组 (已按 x 排序)，生成 LUT
+ */
+function akimaInterpolate(points: { x: number; y: number }[], lutSize: number): Float32Array {
+  const n = points.length;
+  const lut = new Float32Array(lutSize);
+
+  if (n === 0) {
+    for (let i = 0; i < lutSize; i++) lut[i] = i / (lutSize - 1);
+    return lut;
+  }
+  if (n === 1) {
+    lut.fill(points[0].y);
+    return lut;
+  }
+  if (n === 2) {
+    const p0 = points[0],
+      p1 = points[1];
+    const slope = (p1.y - p0.y) / (p1.x - p0.x || 1);
+    for (let i = 0; i < lutSize; i++) {
+      const t = i / (lutSize - 1);
+      if (t <= p0.x) lut[i] = p0.y;
+      else if (t >= p1.x) lut[i] = p1.y;
+      else lut[i] = p0.y + slope * (t - p0.x);
+    }
+    return lut;
+  }
+
+  // 计算差值斜率
+  const m = new Float32Array(n - 1);
+  for (let i = 0; i < n - 1; i++) {
+    m[i] = (points[i + 1].y - points[i].y) / (points[i + 1].x - points[i].x || 1e-10);
+  }
+
+  // Akima 权重计算切线
+  const t = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    if (i === 0) {
+      t[i] = m[0];
+    } else if (i === n - 1) {
+      t[i] = m[n - 2];
+    } else if (i === 1 || i === n - 2) {
+      t[i] = (m[i - 1] + m[i]) / 2;
+    } else {
+      const w1 = Math.abs(m[i + 1] - m[i]);
+      const w2 = Math.abs(m[i - 1] - m[i - 2]);
+      if (w1 + w2 === 0) {
+        t[i] = (m[i - 1] + m[i]) / 2;
+      } else {
+        t[i] = (w1 * m[i - 1] + w2 * m[i]) / (w1 + w2);
+      }
+    }
+  }
+
+  // 对每个 LUT 位置进行 Hermite 插值
+  for (let i = 0; i < lutSize; i++) {
+    const x = i / (lutSize - 1);
+
+    if (x <= points[0].x) {
+      lut[i] = points[0].y;
+      continue;
+    }
+    if (x >= points[n - 1].x) {
+      lut[i] = points[n - 1].y;
+      continue;
+    }
+
+    // 找到区间
+    let seg = 0;
+    for (let j = 0; j < n - 1; j++) {
+      if (x >= points[j].x && x < points[j + 1].x) {
+        seg = j;
+        break;
+      }
+    }
+
+    const h = points[seg + 1].x - points[seg].x;
+    const s = (x - points[seg].x) / (h || 1e-10);
+    const s2 = s * s;
+    const s3 = s2 * s;
+
+    // Hermite 基函数
+    const h00 = 2 * s3 - 3 * s2 + 1;
+    const h10 = s3 - 2 * s2 + s;
+    const h01 = -2 * s3 + 3 * s2;
+    const h11 = s3 - s2;
+
+    lut[i] = Math.max(
+      0,
+      Math.min(
+        1,
+        h00 * points[seg].y + h10 * h * t[seg] + h01 * points[seg + 1].y + h11 * h * t[seg + 1],
+      ),
+    );
+  }
+
+  return lut;
+}
+
+/**
+ * 曲线变换
+ * points: 控制点数组 [{x, y}], x/y 范围 [0,1], 必须按 x 排序
+ */
+export function applyCurves(
+  pixels: Float32Array,
+  points: { x: number; y: number }[],
+): Float32Array {
+  const n = pixels.length;
+
+  // 获取范围
+  let min = Infinity,
+    max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min;
+  if (range === 0) return new Float32Array(pixels);
+
+  // 生成 LUT
+  const LUT_SIZE = 4096;
+  const lut = akimaInterpolate(points, LUT_SIZE);
+  const lutMax = LUT_SIZE - 1;
+
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const normalized = (pixels[i] - min) / range;
+    const clamped = Math.max(0, Math.min(1, normalized));
+    const idx = Math.round(clamped * lutMax);
+    result[i] = min + lut[idx] * range;
+  }
+
+  return result;
+}
+
+// ===== Morphological Operations 形态学操作 =====
+
+/**
+ * 形态学腐蚀 (Erosion)：取圆形邻域最小值
+ */
+export function morphErode(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  radius: number = 1,
+): Float32Array {
+  const result = new Float32Array(width * height);
+  const r2 = radius * radius;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let minVal = Infinity;
+      for (let ky = -radius; ky <= radius; ky++) {
+        for (let kx = -radius; kx <= radius; kx++) {
+          if (kx * kx + ky * ky > r2) continue;
+          const sy = Math.min(Math.max(y + ky, 0), height - 1);
+          const sx = Math.min(Math.max(x + kx, 0), width - 1);
+          const v = pixels[sy * width + sx];
+          if (v < minVal) minVal = v;
+        }
+      }
+      result[y * width + x] = minVal;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 形态学膨胀 (Dilation)：取圆形邻域最大值
+ */
+export function morphDilate(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  radius: number = 1,
+): Float32Array {
+  const result = new Float32Array(width * height);
+  const r2 = radius * radius;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let maxVal = -Infinity;
+      for (let ky = -radius; ky <= radius; ky++) {
+        for (let kx = -radius; kx <= radius; kx++) {
+          if (kx * kx + ky * ky > r2) continue;
+          const sy = Math.min(Math.max(y + ky, 0), height - 1);
+          const sx = Math.min(Math.max(x + kx, 0), width - 1);
+          const v = pixels[sy * width + sx];
+          if (v > maxVal) maxVal = v;
+        }
+      }
+      result[y * width + x] = maxVal;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 形态学操作: erode, dilate, open (erode→dilate), close (dilate→erode)
+ */
+export function morphologicalOp(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  operation: "erode" | "dilate" | "open" | "close",
+  radius: number = 1,
+): Float32Array {
+  radius = Math.max(1, Math.min(10, Math.round(radius)));
+  switch (operation) {
+    case "erode":
+      return morphErode(pixels, width, height, radius);
+    case "dilate":
+      return morphDilate(pixels, width, height, radius);
+    case "open":
+      return morphDilate(morphErode(pixels, width, height, radius), width, height, radius);
+    case "close":
+      return morphErode(morphDilate(pixels, width, height, radius), width, height, radius);
+  }
+}
+
+// ===== HDR Multiscale Transform =====
+
+/**
+ * B3 样条 à trous 小波分解核
+ */
+const B3_KERNEL = [
+  1 / 256,
+  1 / 64,
+  3 / 128,
+  1 / 64,
+  1 / 256,
+  1 / 64,
+  1 / 16,
+  3 / 32,
+  1 / 16,
+  1 / 64,
+  3 / 128,
+  3 / 32,
+  9 / 64,
+  3 / 32,
+  3 / 128,
+  1 / 64,
+  1 / 16,
+  3 / 32,
+  1 / 16,
+  1 / 64,
+  1 / 256,
+  1 / 64,
+  3 / 128,
+  1 / 64,
+  1 / 256,
+];
+
+/**
+ * à trous 平滑 (单层)
+ */
+function atrousSmooth(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  scale: number,
+): Float32Array {
+  const n = width * height;
+  const result = new Float32Array(n);
+  const step = 1 << scale; // 2^scale
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let sum = 0;
+      let ki = 0;
+      for (let ky = -2; ky <= 2; ky++) {
+        for (let kx = -2; kx <= 2; kx++) {
+          const sy = Math.min(Math.max(y + ky * step, 0), height - 1);
+          const sx = Math.min(Math.max(x + kx * step, 0), width - 1);
+          sum += pixels[sy * width + sx] * B3_KERNEL[ki++];
+        }
+      }
+      result[y * width + x] = sum;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * HDR Multiscale Transform
+ * 使用 à trous 小波分解进行动态范围压缩
+ * layers: 分解层数 (3-8)
+ * amount: 压缩强度 [0, 1]
+ */
+export function hdrMultiscaleTransform(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  layers: number = 5,
+  amount: number = 0.7,
+): Float32Array {
+  layers = Math.max(1, Math.min(10, Math.round(layers)));
+  amount = Math.max(0, Math.min(1, amount));
+  const n = width * height;
+
+  // 归一化到 [0,1]
+  let min = Infinity,
+    max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min;
+  if (range === 0) return new Float32Array(pixels);
+
+  const normalized = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    normalized[i] = (pixels[i] - min) / range;
+  }
+
+  // à trous 小波分解
+  const waveletLayers: Float32Array[] = [];
+  let current: Float32Array = normalized;
+  for (let s = 0; s < layers; s++) {
+    const smoothed = atrousSmooth(current, width, height, s);
+    const detail = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      detail[i] = current[i] - smoothed[i];
+    }
+    waveletLayers.push(detail);
+    current = smoothed;
+  }
+  const residual = current;
+
+  // 计算中值用于非线性压缩
+  const { median } = computeMAD(normalized);
+
+  // 非线性压缩小波系数
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) result[i] = residual[i];
+  for (let s = 0; s < layers; s++) {
+    const detail = waveletLayers[s];
+    for (let i = 0; i < n; i++) {
+      const w = detail[i];
+      // 压缩公式: w' = w * (median / (median + |w|))^amount
+      const compression = Math.pow(median / (median + Math.abs(w) + 1e-10), amount);
+      result[i] += w * compression;
+    }
+  }
+
+  // 映射回原始范围
+  const output = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    output[i] = min + Math.max(0, Math.min(1, result[i])) * range;
+  }
+
+  return output;
+}
+
+// ===== Range Selection / Luminance Mask =====
+
+/**
+ * 创建亮度范围掩膜
+ * lowBound/highBound: 归一化亮度范围 [0,1]
+ * fuzziness: 边界平滑度 [0, 0.5]
+ */
+export function createRangeMask(
+  pixels: Float32Array,
+  lowBound: number,
+  highBound: number,
+  fuzziness: number = 0.1,
+): Float32Array {
+  const n = pixels.length;
+
+  let min = Infinity,
+    max = -Infinity;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < min) min = v;
+      if (v > max) max = v;
+    }
+  }
+  const range = max - min;
+  if (range === 0) return new Float32Array(n).fill(1);
+
+  const mask = new Float32Array(n);
+  const fuzz = Math.max(0.001, fuzziness);
+
+  for (let i = 0; i < n; i++) {
+    const v = (pixels[i] - min) / range;
+
+    // 下界平滑过渡
+    let lo = 1;
+    if (v < lowBound) {
+      lo = Math.max(0, 1 - (lowBound - v) / fuzz);
+    }
+    // 上界平滑过渡
+    let hi = 1;
+    if (v > highBound) {
+      hi = Math.max(0, 1 - (v - highBound) / fuzz);
+    }
+
+    mask[i] = lo * hi;
+  }
+
+  return mask;
+}
+
+/**
+ * 应用亮度范围掩膜：仅处理指定亮度范围内的像素
+ */
+export function applyRangeMask(
+  pixels: Float32Array,
+  lowBound: number,
+  highBound: number,
+  fuzziness: number = 0.1,
+): Float32Array {
+  const mask = createRangeMask(pixels, lowBound, highBound, fuzziness);
+  const n = pixels.length;
+
+  // 计算中值作为填充值
+  const { median } = computeMAD(pixels);
+
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    result[i] = pixels[i] * mask[i] + median * (1 - mask[i]);
+  }
+  return result;
+}
+
+// ===== Color Saturation =====
+
+/**
+ * 调整 RGBA 数据的颜色饱和度
+ * amount: 饱和度倍数 (-1 到 2)，0=不变，>0 增加，<0 减少
+ */
+export function adjustSaturation(rgbaData: Uint8ClampedArray, amount: number): Uint8ClampedArray {
+  const result = new Uint8ClampedArray(rgbaData);
+  const n = rgbaData.length / 4;
+  const factor = 1 + amount;
+
+  for (let i = 0; i < n; i++) {
+    const off = i * 4;
+    const r = rgbaData[off] / 255;
+    const g = rgbaData[off + 1] / 255;
+    const b = rgbaData[off + 2] / 255;
+
+    // RGB → HSL
+    const cMax = Math.max(r, g, b);
+    const cMin = Math.min(r, g, b);
+    const delta = cMax - cMin;
+    const l = (cMax + cMin) / 2;
+
+    if (delta === 0) continue; // 无色相，跳过
+
+    let h = 0;
+    if (cMax === r) h = ((g - b) / delta) % 6;
+    else if (cMax === g) h = (b - r) / delta + 2;
+    else h = (r - g) / delta + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+
+    let s = delta / (1 - Math.abs(2 * l - 1));
+    s = Math.max(0, Math.min(1, s * factor));
+
+    // HSL → RGB
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+    const m = l - c / 2;
+
+    let r1 = 0,
+      g1 = 0,
+      b1 = 0;
+    if (h < 60) {
+      r1 = c;
+      g1 = x;
+    } else if (h < 120) {
+      r1 = x;
+      g1 = c;
+    } else if (h < 180) {
+      g1 = c;
+      b1 = x;
+    } else if (h < 240) {
+      g1 = x;
+      b1 = c;
+    } else if (h < 300) {
+      r1 = x;
+      b1 = c;
+    } else {
+      r1 = c;
+      b1 = x;
+    }
+
+    result[off] = Math.round((r1 + m) * 255);
+    result[off + 1] = Math.round((g1 + m) * 255);
+    result[off + 2] = Math.round((b1 + m) * 255);
+  }
+
+  return result;
+}
+
+// ===== PixelMath Expression Evaluator =====
+
+/**
+ * 简易 PixelMath 表达式解析器
+ * 支持: +, -, *, /, ^, min, max, abs, sqrt, log, exp, clamp
+ * 变量: $T (当前像素值), $mean, $median, $min, $max
+ */
+export function evaluatePixelExpression(pixels: Float32Array, expression: string): Float32Array {
+  const n = pixels.length;
+
+  // 预计算统计量
+  let pMin = Infinity,
+    pMax = -Infinity,
+    sum = 0;
+  for (let i = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!isNaN(v)) {
+      if (v < pMin) pMin = v;
+      if (v > pMax) pMax = v;
+      sum += v;
+    }
+  }
+  const pMean = sum / n;
+  const { median: pMedian } = computeMAD(pixels);
+
+  // 词法分析器
+  const tokenize = (expr: string): string[] => {
+    const tokens: string[] = [];
+    let i = 0;
+    while (i < expr.length) {
+      if (/\s/.test(expr[i])) {
+        i++;
+        continue;
+      }
+      if (/[0-9.]/.test(expr[i])) {
+        let num = "";
+        while (i < expr.length && /[0-9.eE\-+]/.test(expr[i])) {
+          if (
+            (expr[i] === "-" || expr[i] === "+") &&
+            num.length > 0 &&
+            !/[eE]/.test(num[num.length - 1])
+          )
+            break;
+          num += expr[i++];
+        }
+        tokens.push(num);
+      } else if (expr[i] === "$") {
+        let varName = "$";
+        i++;
+        while (i < expr.length && /[a-zA-Z]/.test(expr[i])) varName += expr[i++];
+        tokens.push(varName);
+      } else if (/[a-z]/i.test(expr[i])) {
+        let fn = "";
+        while (i < expr.length && /[a-z0-9]/i.test(expr[i])) fn += expr[i++];
+        tokens.push(fn);
+      } else {
+        tokens.push(expr[i++]);
+      }
+    }
+    return tokens;
+  };
+
+  // 递归下降解析器
+  const createEvaluator = (tokens: string[]) => {
+    let pos = 0;
+
+    const peek = () => tokens[pos] ?? "";
+    const consume = (expected?: string) => {
+      if (expected && tokens[pos] !== expected) {
+        throw new Error(`Expected '${expected}' at position ${pos}`);
+      }
+      return tokens[pos++];
+    };
+
+    const parseExpr = (pixelVal: number): number => {
+      let left = parseTerm(pixelVal);
+      while (peek() === "+" || peek() === "-") {
+        const op = consume();
+        const right = parseTerm(pixelVal);
+        left = op === "+" ? left + right : left - right;
+      }
+      return left;
+    };
+
+    const parseTerm = (pixelVal: number): number => {
+      let left = parsePower(pixelVal);
+      while (peek() === "*" || peek() === "/") {
+        const op = consume();
+        const right = parsePower(pixelVal);
+        left = op === "*" ? left * right : left / (right || 1e-10);
+      }
+      return left;
+    };
+
+    const parsePower = (pixelVal: number): number => {
+      let base = parseUnary(pixelVal);
+      while (peek() === "^") {
+        consume();
+        const exp = parseUnary(pixelVal);
+        base = Math.pow(base, exp);
+      }
+      return base;
+    };
+
+    const parseUnary = (pixelVal: number): number => {
+      if (peek() === "-") {
+        consume();
+        return -parseAtom(pixelVal);
+      }
+      return parseAtom(pixelVal);
+    };
+
+    const parseAtom = (pixelVal: number): number => {
+      const tok = peek();
+
+      // 数字
+      if (/^[0-9.]/.test(tok)) {
+        consume();
+        return parseFloat(tok);
+      }
+
+      // 变量
+      if (tok === "$T") {
+        consume();
+        return pixelVal;
+      }
+      if (tok === "$mean") {
+        consume();
+        return pMean;
+      }
+      if (tok === "$median") {
+        consume();
+        return pMedian;
+      }
+      if (tok === "$min") {
+        consume();
+        return pMin;
+      }
+      if (tok === "$max") {
+        consume();
+        return pMax;
+      }
+
+      // 括号
+      if (tok === "(") {
+        consume("(");
+        const val = parseExpr(pixelVal);
+        consume(")");
+        return val;
+      }
+
+      // 函数
+      const fnName = consume();
+      consume("(");
+      const arg1 = parseExpr(pixelVal);
+      let arg2: number | undefined;
+      if (peek() === ",") {
+        consume(",");
+        arg2 = parseExpr(pixelVal);
+      }
+      consume(")");
+
+      switch (fnName) {
+        case "min":
+          return Math.min(arg1, arg2 ?? arg1);
+        case "max":
+          return Math.max(arg1, arg2 ?? arg1);
+        case "abs":
+          return Math.abs(arg1);
+        case "sqrt":
+          return Math.sqrt(Math.max(0, arg1));
+        case "log":
+          return Math.log1p(Math.max(0, arg1));
+        case "ln":
+          return Math.log(Math.max(1e-10, arg1));
+        case "log10":
+          return Math.log10(Math.max(1e-10, arg1));
+        case "exp":
+          return Math.exp(Math.min(20, arg1));
+        case "sin":
+          return Math.sin(arg1);
+        case "cos":
+          return Math.cos(arg1);
+        case "atan2":
+          return Math.atan2(arg1, arg2 ?? 0);
+        case "clamp":
+          return Math.max(0, Math.min(arg2 ?? 1, arg1));
+        case "pow":
+          return Math.pow(Math.max(0, arg1), arg2 ?? 1);
+        case "avg":
+          return arg2 !== undefined ? (arg1 + arg2) / 2 : arg1;
+        case "round":
+          return Math.round(arg1 * (arg2 ?? 1)) / (arg2 ?? 1);
+        case "floor":
+          return Math.floor(arg1);
+        case "ceil":
+          return Math.ceil(arg1);
+        case "iif": {
+          // iif(condition, trueVal) — condition > 0 returns trueVal, else 0
+          return arg1 > 0 ? (arg2 ?? 1) : 0;
+        }
+        default:
+          throw new Error(`Unknown function: ${fnName}`);
+      }
+    };
+
+    return (pixelVal: number): number => {
+      pos = 0;
+      return parseExpr(pixelVal);
+    };
+  };
+
+  const tokens = tokenize(expression);
+  const evaluate = createEvaluator(tokens);
+
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    try {
+      result[i] = evaluate(pixels[i]);
+    } catch {
+      result[i] = pixels[i];
+    }
+  }
+
+  return result;
+}
+
+// ===== Deconvolution (Richardson-Lucy) =====
+
+/**
+ * Richardson-Lucy 去卷积
+ * psfSigma: PSF 高斯宽度
+ * iterations: 迭代次数
+ * regularization: 正则化强度 [0, 1]
+ */
+export function richardsonLucy(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  psfSigma: number = 2.0,
+  iterations: number = 20,
+  regularization: number = 0.1,
+): Float32Array {
+  psfSigma = Math.max(0.3, Math.min(10, psfSigma));
+  iterations = Math.max(0, Math.min(100, Math.round(iterations)));
+  regularization = Math.max(0, Math.min(1, regularization));
+  const n = width * height;
+
+  // 确保非负
+  let minVal = Infinity;
+  for (let i = 0; i < n; i++) {
+    if (pixels[i] < minVal) minVal = pixels[i];
+  }
+  const offset = minVal < 0 ? -minVal : 0;
+  const observed = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    observed[i] = pixels[i] + offset + 1e-10; // 避免零值
+  }
+
+  // 初始估计 = 观测图像
+  let estimate = new Float32Array(observed);
+
+  for (let iter = 0; iter < iterations; iter++) {
+    // 正向卷积: conv(estimate, PSF)
+    const blurred = gaussianBlur(estimate, width, height, psfSigma);
+
+    // 计算比率: observed / blurred
+    const ratio = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      ratio[i] = observed[i] / (blurred[i] + 1e-10);
+    }
+
+    // 反向卷积: conv(ratio, PSF_flip) — 高斯 PSF 对称，所以一样
+    const correction = gaussianBlur(ratio, width, height, psfSigma);
+
+    // 更新估计
+    const newEstimate = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      newEstimate[i] = estimate[i] * correction[i];
+    }
+
+    // 可选正则化：轻微平滑抑制噪声放大
+    if (regularization > 0) {
+      const regSigma = psfSigma * regularization * 0.5;
+      if (regSigma > 0.3) {
+        const smoothed = gaussianBlur(newEstimate, width, height, regSigma);
+        for (let i = 0; i < n; i++) {
+          newEstimate[i] =
+            newEstimate[i] * (1 - regularization * 0.3) + smoothed[i] * regularization * 0.3;
+        }
+      }
+    }
+
+    estimate = newEstimate;
+  }
+
+  // 移除偏移
+  const result = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    result[i] = estimate[i] - offset;
+  }
+
+  return result;
+}
+
 // ===== 操作类型定义 =====
 
 export type ImageEditOperation =
@@ -570,7 +1752,18 @@ export type ImageEditOperation =
       outputWhite: number;
     }
   | { type: "rotateArbitrary"; angle: number }
-  | { type: "backgroundExtract"; gridSize: number };
+  | { type: "backgroundExtract"; gridSize: number }
+  | { type: "mtf"; midtone: number; shadowsClip: number; highlightsClip: number }
+  | { type: "starMask"; scale: number; invert: boolean }
+  | { type: "binarize"; threshold: number }
+  | { type: "rescale" }
+  | { type: "clahe"; tileSize: number; clipLimit: number }
+  | { type: "curves"; points: { x: number; y: number }[] }
+  | { type: "morphology"; operation: "erode" | "dilate" | "open" | "close"; radius: number }
+  | { type: "hdr"; layers: number; amount: number }
+  | { type: "rangeMask"; low: number; high: number; fuzziness: number }
+  | { type: "pixelMath"; expression: string }
+  | { type: "deconvolution"; psfSigma: number; iterations: number; regularization: number };
 
 /**
  * 应用编辑操作到像素数据
@@ -627,5 +1820,50 @@ export function applyOperation(
       return rotateArbitrary(pixels, width, height, op.angle);
     case "backgroundExtract":
       return { pixels: extractBackground(pixels, width, height, op.gridSize), width, height };
+    case "mtf":
+      return {
+        pixels: applyMTF(pixels, op.midtone, op.shadowsClip, op.highlightsClip),
+        width,
+        height,
+      };
+    case "starMask":
+      return { pixels: applyStarMask(pixels, width, height, op.scale, op.invert), width, height };
+    case "binarize":
+      return { pixels: binarize(pixels, op.threshold), width, height };
+    case "rescale":
+      return { pixels: rescalePixels(pixels), width, height };
+    case "clahe":
+      return { pixels: clahe(pixels, width, height, op.tileSize, op.clipLimit), width, height };
+    case "curves":
+      return { pixels: applyCurves(pixels, op.points), width, height };
+    case "morphology":
+      return {
+        pixels: morphologicalOp(pixels, width, height, op.operation, op.radius),
+        width,
+        height,
+      };
+    case "hdr":
+      return {
+        pixels: hdrMultiscaleTransform(pixels, width, height, op.layers, op.amount),
+        width,
+        height,
+      };
+    case "rangeMask":
+      return { pixels: applyRangeMask(pixels, op.low, op.high, op.fuzziness), width, height };
+    case "pixelMath":
+      return { pixels: evaluatePixelExpression(pixels, op.expression), width, height };
+    case "deconvolution":
+      return {
+        pixels: richardsonLucy(
+          pixels,
+          width,
+          height,
+          op.psfSigma,
+          op.iterations,
+          op.regularization,
+        ),
+        width,
+        height,
+      };
   }
 }

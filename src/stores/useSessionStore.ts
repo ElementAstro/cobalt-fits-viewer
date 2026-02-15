@@ -8,14 +8,33 @@ import { useShallow } from "zustand/shallow";
 import { zustandMMKVStorage } from "../lib/storage";
 import type { ObservationSession, ObservationLogEntry, ObservationPlan } from "../lib/fits/types";
 
+interface ActiveSessionState {
+  id: string;
+  startedAt: number;
+  pausedAt?: number;
+  totalPausedMs: number;
+  notes: { timestamp: number; text: string }[];
+  status: "running" | "paused";
+}
+
 interface SessionStoreState {
   sessions: ObservationSession[];
   logEntries: ObservationLogEntry[];
   plans: ObservationPlan[];
+  activeSession: ActiveSessionState | null;
+
+  // Live session actions
+  startLiveSession: () => void;
+  pauseLiveSession: () => void;
+  resumeLiveSession: () => void;
+  endLiveSession: () => ObservationSession | null;
+  addActiveNote: (text: string) => void;
 
   // Actions
   addSession: (session: ObservationSession) => void;
   removeSession: (id: string) => void;
+  removeMultipleSessions: (ids: string[]) => void;
+  clearAllSessions: () => void;
   updateSession: (id: string, updates: Partial<ObservationSession>) => void;
   mergeSessions: (ids: string[]) => void;
 
@@ -44,6 +63,84 @@ export const useSessionStore = create<SessionStoreState>()(
       sessions: [],
       logEntries: [],
       plans: [],
+      activeSession: null,
+
+      startLiveSession: () => {
+        const now = Date.now();
+        set({
+          activeSession: {
+            id: `live-${now}`,
+            startedAt: now,
+            totalPausedMs: 0,
+            notes: [],
+            status: "running",
+          },
+        });
+      },
+
+      pauseLiveSession: () =>
+        set((state) => ({
+          activeSession: state.activeSession
+            ? { ...state.activeSession, status: "paused", pausedAt: Date.now() }
+            : null,
+        })),
+
+      resumeLiveSession: () =>
+        set((state) => {
+          if (!state.activeSession?.pausedAt) return {};
+          const pausedDuration = Date.now() - state.activeSession.pausedAt;
+          return {
+            activeSession: {
+              ...state.activeSession,
+              status: "running",
+              pausedAt: undefined,
+              totalPausedMs: state.activeSession.totalPausedMs + pausedDuration,
+            },
+          };
+        }),
+
+      endLiveSession: () => {
+        const active = get().activeSession;
+        if (!active) return null;
+        const now = Date.now();
+        let totalPaused = active.totalPausedMs;
+        if (active.pausedAt) totalPaused += now - active.pausedAt;
+        const duration = Math.floor((now - active.startedAt - totalPaused) / 1000);
+        const startDate = new Date(active.startedAt);
+        const dateStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-${String(startDate.getDate()).padStart(2, "0")}`;
+
+        const session: ObservationSession = {
+          id: active.id,
+          date: dateStr,
+          startTime: active.startedAt,
+          endTime: now,
+          duration,
+          targets: [],
+          imageIds: [],
+          equipment: {},
+          createdAt: now,
+          notes:
+            active.notes
+              .map((n) => `[${new Date(n.timestamp).toLocaleTimeString()}] ${n.text}`)
+              .join("\n") || undefined,
+        };
+
+        set((state) => ({
+          activeSession: null,
+          sessions: [...state.sessions, session],
+        }));
+        return session;
+      },
+
+      addActiveNote: (text) =>
+        set((state) => ({
+          activeSession: state.activeSession
+            ? {
+                ...state.activeSession,
+                notes: [...state.activeSession.notes, { timestamp: Date.now(), text }],
+              }
+            : null,
+        })),
 
       addSession: (session) => set((state) => ({ sessions: [...state.sessions, session] })),
 
@@ -52,6 +149,14 @@ export const useSessionStore = create<SessionStoreState>()(
           sessions: state.sessions.filter((s) => s.id !== id),
           logEntries: state.logEntries.filter((e) => e.sessionId !== id),
         })),
+
+      removeMultipleSessions: (ids) =>
+        set((state) => ({
+          sessions: state.sessions.filter((s) => !ids.includes(s.id)),
+          logEntries: state.logEntries.filter((e) => !ids.includes(e.sessionId)),
+        })),
+
+      clearAllSessions: () => set({ sessions: [], logEntries: [] }),
 
       updateSession: (id, updates) =>
         set((state) => ({
@@ -145,6 +250,7 @@ export const useSessionStore = create<SessionStoreState>()(
       partialize: (state) => ({
         sessions: state.sessions,
         logEntries: state.logEntries,
+        activeSession: state.activeSession,
         plans: state.plans,
       }),
     },

@@ -41,6 +41,8 @@ const DEFAULT_OPTIONS: ConvertOptions = {
   blackPoint: 0,
   whitePoint: 1,
   gamma: 1,
+  outputBlack: 0,
+  outputWhite: 1,
   includeAnnotations: false,
   includeWatermark: false,
 };

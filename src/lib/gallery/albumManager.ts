@@ -80,6 +80,8 @@ function getFieldValue(
       return file.tags.join(",");
     case "location":
       return file.location?.city ?? file.location?.placeName ?? file.location?.region;
+    case "frameType":
+      return file.frameType;
     default:
       return undefined;
   }

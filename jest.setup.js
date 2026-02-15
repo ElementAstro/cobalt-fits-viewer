@@ -96,6 +96,8 @@ jest.mock("heroui-native", () => {
     Dialog,
     TextField,
     Input: (props) => React.createElement(TextInput, { testID: "input", ...props }),
+    Label: (props) => React.createElement(Text, { testID: "label", ...props }, props.children),
+    Switch: c("switch"),
     PressableFeedback: c("pressable-feedback"),
     Separator: c("separator"),
     Spinner: c("spinner"),
@@ -103,6 +105,44 @@ jest.mock("heroui-native", () => {
     useThemeColor: (keys) => (Array.isArray(keys) ? keys.map(() => "#000000") : "#000000"),
   };
 });
+
+// Mock react-native-safe-area-context
+jest.mock("react-native-safe-area-context", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    SafeAreaProvider: (props) => React.createElement(View, props, props.children),
+    SafeAreaView: (props) => React.createElement(View, props, props.children),
+    useSafeAreaInsets: () => ({ top: 47, bottom: 34, left: 0, right: 0 }),
+    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
+  };
+});
+
+// Mock expo-screen-orientation
+jest.mock("expo-screen-orientation", () => ({
+  Orientation: {
+    UNKNOWN: 0,
+    PORTRAIT_UP: 1,
+    PORTRAIT_DOWN: 2,
+    LANDSCAPE_LEFT: 3,
+    LANDSCAPE_RIGHT: 4,
+  },
+  OrientationLock: {
+    DEFAULT: 0,
+    ALL: 1,
+    PORTRAIT: 2,
+    PORTRAIT_UP: 3,
+    PORTRAIT_DOWN: 4,
+    LANDSCAPE: 5,
+    LANDSCAPE_LEFT: 6,
+    LANDSCAPE_RIGHT: 7,
+  },
+  getOrientationAsync: jest.fn().mockResolvedValue(1), // PORTRAIT_UP
+  lockAsync: jest.fn().mockResolvedValue(undefined),
+  unlockAsync: jest.fn().mockResolvedValue(undefined),
+  addOrientationChangeListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
+  removeOrientationChangeListener: jest.fn(),
+}));
 
 // Mock react-native-gesture-handler
 jest.mock("react-native-gesture-handler", () => {

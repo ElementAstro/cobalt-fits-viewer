@@ -41,14 +41,26 @@ export function createManifest(
  */
 export function parseManifest(json: string): BackupManifest | null {
   try {
-    const data = JSON.parse(json) as BackupManifest;
-    if (!data.version || !data.createdAt || !Array.isArray(data.files)) {
+    const data = JSON.parse(json) as Partial<BackupManifest>;
+    if (!data.version || !data.createdAt) {
       return null;
     }
     if (data.version > MANIFEST_VERSION) {
       return null;
     }
-    return data;
+    // Fill defaults for missing fields to handle older manifests gracefully
+    return {
+      version: data.version,
+      appVersion: data.appVersion ?? "unknown",
+      createdAt: data.createdAt,
+      deviceName: data.deviceName ?? "Unknown Device",
+      platform: data.platform ?? "unknown",
+      files: Array.isArray(data.files) ? data.files : [],
+      albums: Array.isArray(data.albums) ? data.albums : [],
+      targets: Array.isArray(data.targets) ? data.targets : [],
+      sessions: Array.isArray(data.sessions) ? data.sessions : [],
+      settings: data.settings && typeof data.settings === "object" ? data.settings : {},
+    };
   } catch {
     return null;
   }

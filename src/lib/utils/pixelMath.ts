@@ -144,6 +144,32 @@ export function calculateRegionStats(
   return calculateStats(region);
 }
 
+/**
+ * 计算区域直方图
+ * 提取指定区域内的像素，计算直方图分布
+ */
+export function calculateRegionHistogram(
+  pixels: Float32Array,
+  width: number,
+  x: number,
+  y: number,
+  regionWidth: number,
+  regionHeight: number,
+  bins: number = 256,
+  globalRange?: { min: number; max: number },
+): { counts: number[]; edges: number[] } {
+  const regionPixels = new Float32Array(regionWidth * regionHeight);
+  let idx = 0;
+
+  for (let ry = y; ry < y + regionHeight; ry++) {
+    for (let rx = x; rx < x + regionWidth; rx++) {
+      regionPixels[idx++] = pixels[ry * width + rx];
+    }
+  }
+
+  return calculateHistogram(regionPixels, bins, globalRange);
+}
+
 // ===== 自动拉伸算法 =====
 
 /**

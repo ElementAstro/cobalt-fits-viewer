@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { View, Text, FlatList, Alert } from "react-native";
+import { View, Text, FlatList, Alert, useWindowDimensions } from "react-native";
 import {
   Button,
   Chip,
@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useFileManager } from "../../hooks/useFileManager";
 import type { ImportResult } from "../../hooks/useFileManager";
@@ -30,6 +31,8 @@ export default function FilesScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const { height: screenHeight } = useWindowDimensions();
+  const { isLandscape } = useScreenOrientation();
 
   const allFiles = useFitsStore((s) => s.files);
   const files = useFitsStore((s) => s.getFilteredFiles());
@@ -347,7 +350,7 @@ export default function FilesScreen() {
       />
 
       {files.length === 0 && !searchQuery ? (
-        <View className="flex-1 px-4 pt-14">
+        <View className={`flex-1 px-4 ${isLandscape ? "pt-2" : "pt-14"}`}>
           {ListHeader}
           <EmptyState
             icon="telescope-outline"
@@ -364,7 +367,7 @@ export default function FilesScreen() {
           keyExtractor={keyExtractor}
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={<EmptyState icon="search-outline" title={t("files.noFitsFound")} />}
-          contentContainerClassName="px-4 py-14"
+          contentContainerClassName={`px-4 ${isLandscape ? "py-2" : "py-14"}`}
           ItemSeparatorComponent={ListItemSeparator}
           showsVerticalScrollIndicator={false}
         />
@@ -374,7 +377,7 @@ export default function FilesScreen() {
       <BottomSheet
         ref={bottomSheetRef}
         index={-1}
-        snapPoints={[320]}
+        snapPoints={[Math.min(320, screenHeight * 0.6)]}
         enablePanDownToClose
         backgroundStyle={{ backgroundColor: "rgba(30, 30, 30, 0.95)" }}
         handleIndicatorStyle={{ backgroundColor: mutedColor }}

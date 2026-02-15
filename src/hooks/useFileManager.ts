@@ -21,6 +21,7 @@ import {
   getTempExtractDir,
   cleanTempExtractDir,
 } from "../lib/utils/fileManager";
+import { computeQuickHash, findDuplicateOnImport } from "../lib/gallery/duplicateDetector";
 import {
   loadFitsFromBuffer,
   extractMetadata,
@@ -35,10 +36,8 @@ import {
 } from "../lib/gallery/thumbnailCache";
 import { autoDetectTarget } from "../lib/targets/targetManager";
 import { findKnownAliases } from "../lib/targets/targetMatcher";
-import * as Location from "expo-location";
-import type { FitsMetadata, GeoLocation } from "../lib/fits/types";
-
-const LOCATION_CACHE_MS = 5 * 60 * 1000; // 5 分钟缓存
+import { LocationService } from "./useLocation";
+import type { FitsMetadata } from "../lib/fits/types";
 
 export interface ImportProgress {
   phase: "picking" | "extracting" | "scanning" | "importing" | "downloading";
@@ -77,57 +76,16 @@ export function useFileManager() {
 
   const autoGroupByObject = useSettingsStore((s) => s.autoGroupByObject);
   const autoTagLocation = useSettingsStore((s) => s.autoTagLocation);
+  const autoDetectDuplicates = useSettingsStore((s) => s.autoDetectDuplicates);
   const thumbnailSize = useSettingsStore((s) => s.thumbnailSize);
   const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
-  const locationCacheRef = useRef<{ location: GeoLocation; timestamp: number } | null>(null);
-
   const cancelImport = useCallback(() => {
     cancelRef.current = true;
   }, []);
 
-  const fetchLocationForImport = useCallback(async (): Promise<GeoLocation | undefined> => {
-    if (
-      locationCacheRef.current &&
-      Date.now() - locationCacheRef.current.timestamp < LOCATION_CACHE_MS
-    ) {
-      return locationCacheRef.current.location;
-    }
-    try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      if (status !== "granted") return undefined;
-
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      const { latitude, longitude, altitude } = position.coords;
-
-      let placeInfo: Partial<GeoLocation> = {};
-      try {
-        const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-        if (results.length > 0) {
-          const place = results[0];
-          placeInfo = {
-            placeName: place.name ?? undefined,
-            city: place.city ?? undefined,
-            region: place.region ?? undefined,
-            country: place.country ?? undefined,
-          };
-        }
-      } catch {
-        // reverse geocode failure is non-critical
-      }
-
-      const geo: GeoLocation = {
-        latitude,
-        longitude,
-        altitude: altitude ?? undefined,
-        ...placeInfo,
-      };
-      locationCacheRef.current = { location: geo, timestamp: Date.now() };
-      return geo;
-    } catch {
-      return undefined;
-    }
+  const fetchLocationForImport = useCallback(async () => {
+    const loc = await LocationService.getCurrentLocation();
+    return loc ?? undefined;
   }, []);
 
   const processAndImportFile = useCallback(
@@ -135,6 +93,20 @@ export function useFileManager() {
       try {
         const importedFile = importFile(uri, name);
         const buffer = await importedFile.arrayBuffer();
+
+        // Duplicate detection
+        const hash = computeQuickHash(buffer, size ?? buffer.byteLength);
+        if (autoDetectDuplicates) {
+          const currentFiles = useFitsStore.getState().files;
+          const duplicate = findDuplicateOnImport(hash, currentFiles);
+          if (duplicate) {
+            Logger.info(
+              "FileManager",
+              `Skipping duplicate: ${name} (matches ${duplicate.filename})`,
+            );
+            return false;
+          }
+        }
 
         const fitsObj = loadFitsFromBuffer(buffer);
         const partialMeta = extractMetadata(fitsObj, {
@@ -155,11 +127,12 @@ export function useFileManager() {
           albumIds: [],
           location,
           thumbnailUri: undefined,
+          hash,
         };
 
         addFile(fullMeta);
 
-        // Defer thumbnail generation to avoid blocking UI during batch imports
+        // Defer thumbnail generation and quality evaluation to avoid blocking UI
         const capturedThumbSize = thumbnailSize;
         const capturedThumbQuality = thumbnailQuality;
         InteractionManager.runAfterInteractions(async () => {
@@ -183,8 +156,25 @@ export function useFileManager() {
                   capturedThumbSize,
                   capturedThumbQuality,
                 );
+                const updates: Partial<FitsMetadata> = {};
                 if (thumbUri) {
-                  useFitsStore.getState().updateFile(fileId, { thumbnailUri: thumbUri });
+                  updates.thumbnailUri = thumbUri;
+                }
+
+                // Quality evaluation (only for light frames)
+                try {
+                  const meta = useFitsStore.getState().getFileById(fileId);
+                  if (meta && meta.frameType === "light" && pixels instanceof Float32Array) {
+                    const { evaluateFrameQuality } = require("../lib/stacking/frameQuality");
+                    const quality = evaluateFrameQuality(pixels, dims.width, dims.height);
+                    updates.qualityScore = quality.score;
+                  }
+                } catch {
+                  // Quality evaluation failure is non-critical
+                }
+
+                if (Object.keys(updates).length > 0) {
+                  useFitsStore.getState().updateFile(fileId, updates);
                 }
               }
             }
@@ -220,6 +210,7 @@ export function useFileManager() {
       addFile,
       autoGroupByObject,
       autoTagLocation,
+      autoDetectDuplicates,
       thumbnailSize,
       thumbnailQuality,
       fetchLocationForImport,

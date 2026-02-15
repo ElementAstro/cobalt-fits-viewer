@@ -23,6 +23,7 @@ export function useGallery() {
   const filterDateRange = useGalleryStore((s) => s.filterDateRange);
   const filterFavoriteOnly = useGalleryStore((s) => s.filterFavoriteOnly);
   const filterTag = useGalleryStore((s) => s.filterTag);
+  const filterFrameType = useGalleryStore((s) => s.filterFrameType);
 
   const metadataIndex = useMemo(() => buildMetadataIndex(files), [files]);
 
@@ -48,9 +49,20 @@ export function useGallery() {
     if (filterTag) {
       result = result.filter((f) => f.tags.includes(filterTag));
     }
+    if (filterFrameType) {
+      result = result.filter((f) => f.frameType === filterFrameType);
+    }
 
     return result;
-  }, [files, filterObject, filterFilter, filterDateRange, filterFavoriteOnly, filterTag]);
+  }, [
+    files,
+    filterObject,
+    filterFilter,
+    filterDateRange,
+    filterFavoriteOnly,
+    filterTag,
+    filterFrameType,
+  ]);
 
   const groupedByDate = useMemo(() => groupByDate(filteredFiles), [filteredFiles]);
   const groupedByObject = useMemo(() => groupByObject(filteredFiles), [filteredFiles]);

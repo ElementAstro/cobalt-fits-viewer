@@ -8,19 +8,21 @@ import { useRouter } from "expo-router";
 import { Alert, Button, Card, Dialog, Separator, Switch, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useBackup } from "../../hooks/useBackup";
 import { useBackupStore } from "../../stores/useBackupStore";
 import { ProviderCard } from "../../components/backup/ProviderCard";
 import { BackupProgressSheet } from "../../components/backup/BackupProgressSheet";
 import { AddProviderSheet } from "../../components/backup/AddProviderSheet";
 import { WebDAVConfigSheet } from "../../components/backup/WebDAVConfigSheet";
-import type { CloudProvider } from "../../lib/backup/types";
-import { DEFAULT_BACKUP_OPTIONS } from "../../lib/backup/types";
+import { BackupOptionsSheet } from "../../components/backup/BackupOptionsSheet";
+import type { CloudProvider, BackupOptions } from "../../lib/backup/types";
 
 export default function BackupScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const mutedColor = useThemeColor("muted");
+  const { isLandscape } = useScreenOrientation();
 
   const {
     connections,
@@ -32,6 +34,9 @@ export default function BackupScreen() {
     backup,
     restore,
     cancelOperation,
+    localExport,
+    localImport,
+    getBackupInfo,
   } = useBackup();
 
   const lastError = useBackupStore((s) => s.lastError);
@@ -40,6 +45,11 @@ export default function BackupScreen() {
 
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [showWebDAVConfig, setShowWebDAVConfig] = useState(false);
+  const [optionsSheet, setOptionsSheet] = useState<{
+    visible: boolean;
+    isBackup: boolean;
+    provider: CloudProvider | null;
+  }>({ visible: false, isBackup: true, provider: null });
   const [confirmDialog, setConfirmDialog] = useState<{
     visible: boolean;
     title: string;
@@ -99,59 +109,76 @@ export default function BackupScreen() {
     [connectProvider],
   );
 
-  const handleBackup = useCallback(
-    (provider: CloudProvider) => {
-      showConfirm({
-        title: t("backup.backupNow"),
-        description: t("backup.confirmBackup"),
-        onConfirm: async () => {
-          closeConfirm();
-          const success = await backup(provider, DEFAULT_BACKUP_OPTIONS);
-          if (success) {
-            showConfirm({
-              title: t("backup.backupComplete"),
-              description: "",
-              onConfirm: closeConfirm,
-            });
-          } else {
-            showConfirm({
-              title: t("backup.backupFailed"),
-              description: lastError ?? "",
-              onConfirm: closeConfirm,
-            });
-          }
-        },
-      });
+  const handleBackup = useCallback((provider: CloudProvider) => {
+    setOptionsSheet({ visible: true, isBackup: true, provider });
+  }, []);
+
+  const handleBackupWithOptions = useCallback(
+    async (options: BackupOptions) => {
+      const provider = optionsSheet.provider;
+      if (!provider) return;
+      const result = await backup(provider, options);
+      if (result.success) {
+        showConfirm({
+          title: t("backup.backupComplete"),
+          description: "",
+          onConfirm: closeConfirm,
+        });
+      } else {
+        showConfirm({
+          title: t("backup.backupFailed"),
+          description: result.error ?? "",
+          onConfirm: closeConfirm,
+        });
+      }
     },
-    [backup, lastError, t, showConfirm, closeConfirm],
+    [backup, optionsSheet.provider, t, showConfirm, closeConfirm],
   );
 
   const handleRestore = useCallback(
-    (provider: CloudProvider) => {
+    async (provider: CloudProvider) => {
+      // Fetch backup info for preview before restoring
+      const info = await getBackupInfo(provider);
+      const previewDesc = info
+        ? `${t("backup.lastBackup")}: ${new Date(info.manifestDate).toLocaleString()}\n` +
+          `${t("backup.optionFiles")}: ${info.fileCount}\n` +
+          `${info.deviceName} (${info.appVersion})\n\n` +
+          t("backup.confirmRestore")
+        : t("backup.confirmRestore");
+
       showConfirm({
         title: t("backup.restoreNow"),
-        description: t("backup.confirmRestore"),
+        description: previewDesc,
         destructive: true,
-        onConfirm: async () => {
+        onConfirm: () => {
           closeConfirm();
-          const success = await restore(provider, DEFAULT_BACKUP_OPTIONS);
-          if (success) {
-            showConfirm({
-              title: t("backup.restoreComplete"),
-              description: "",
-              onConfirm: closeConfirm,
-            });
-          } else {
-            showConfirm({
-              title: t("backup.restoreFailed"),
-              description: lastError ?? "",
-              onConfirm: closeConfirm,
-            });
-          }
+          setOptionsSheet({ visible: true, isBackup: false, provider });
         },
       });
     },
-    [restore, lastError, t, showConfirm, closeConfirm],
+    [getBackupInfo, t, showConfirm, closeConfirm],
+  );
+
+  const handleRestoreWithOptions = useCallback(
+    async (options: BackupOptions) => {
+      const provider = optionsSheet.provider;
+      if (!provider) return;
+      const result = await restore(provider, options);
+      if (result.success) {
+        showConfirm({
+          title: t("backup.restoreComplete"),
+          description: "",
+          onConfirm: closeConfirm,
+        });
+      } else {
+        showConfirm({
+          title: t("backup.restoreFailed"),
+          description: result.error ?? "",
+          onConfirm: closeConfirm,
+        });
+      }
+    },
+    [restore, optionsSheet.provider, t, showConfirm, closeConfirm],
   );
 
   const handleDisconnect = useCallback(
@@ -169,12 +196,54 @@ export default function BackupScreen() {
     [disconnectProvider, t, showConfirm, closeConfirm],
   );
 
+  const handleLocalExport = useCallback(async () => {
+    const result = await localExport();
+    if (result.success) {
+      showConfirm({
+        title: t("backup.exportComplete"),
+        description: "",
+        onConfirm: closeConfirm,
+      });
+    } else if (result.error !== "No file selected") {
+      showConfirm({
+        title: t("backup.exportFailed"),
+        description: result.error ?? "",
+        onConfirm: closeConfirm,
+      });
+    }
+  }, [localExport, t, showConfirm, closeConfirm]);
+
+  const handleLocalImport = useCallback(() => {
+    showConfirm({
+      title: t("backup.importNow"),
+      description: t("backup.confirmImport"),
+      destructive: true,
+      onConfirm: async () => {
+        closeConfirm();
+        const result = await localImport();
+        if (result.success) {
+          showConfirm({
+            title: t("backup.importComplete"),
+            description: "",
+            onConfirm: closeConfirm,
+          });
+        } else if (result.error !== "No file selected") {
+          showConfirm({
+            title: t("backup.importFailed"),
+            description: result.error ?? "",
+            onConfirm: closeConfirm,
+          });
+        }
+      },
+    });
+  }, [localImport, t, showConfirm, closeConfirm]);
+
   const isOperating = backupInProgress || restoreInProgress;
 
   return (
     <View className="flex-1 bg-background">
       {/* Header */}
-      <View className="flex-row items-center gap-3 px-4 pb-2 pt-14">
+      <View className={`flex-row items-center gap-3 px-4 pb-2 ${isLandscape ? "pt-2" : "pt-14"}`}>
         <Button variant="ghost" size="sm" isIconOnly onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={mutedColor} />
         </Button>
@@ -203,6 +272,42 @@ export default function BackupScreen() {
             ))}
           </View>
         )}
+
+        {/* Local backup section */}
+        <View className="mt-4">
+          <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+            {t("backup.localBackup")}
+          </Text>
+          <Card>
+            <Card.Body>
+              <Text className="mb-3 text-xs text-muted">{t("backup.localBackupDesc")}</Text>
+              <View className="flex-row gap-2">
+                <View className="flex-1">
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onPress={handleLocalExport}
+                    isDisabled={isOperating}
+                  >
+                    <Ionicons name="download-outline" size={16} color="#fff" />
+                    <Button.Label>{t("backup.exportFile")}</Button.Label>
+                  </Button>
+                </View>
+                <View className="flex-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onPress={handleLocalImport}
+                    isDisabled={isOperating}
+                  >
+                    <Ionicons name="push-outline" size={16} color={mutedColor} />
+                    <Button.Label>{t("backup.importFile")}</Button.Label>
+                  </Button>
+                </View>
+              </View>
+            </Card.Body>
+          </Card>
+        </View>
 
         <Separator className="my-4" />
 
@@ -274,6 +379,14 @@ export default function BackupScreen() {
         visible={showWebDAVConfig}
         onConnect={handleWebDAVConnect}
         onClose={() => setShowWebDAVConfig(false)}
+      />
+
+      {/* Backup/Restore options sheet */}
+      <BackupOptionsSheet
+        visible={optionsSheet.visible}
+        isBackup={optionsSheet.isBackup}
+        onConfirm={optionsSheet.isBackup ? handleBackupWithOptions : handleRestoreWithOptions}
+        onClose={() => setOptionsSheet((prev) => ({ ...prev, visible: false }))}
       />
 
       {/* Confirm dialog */}

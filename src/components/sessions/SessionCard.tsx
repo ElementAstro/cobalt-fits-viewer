@@ -3,6 +3,7 @@ import { Card, Chip, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { ObservationSession } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { formatDuration } from "../../lib/sessions/format";
 
 interface SessionCardProps {
@@ -24,6 +25,9 @@ export function SessionCard({
 }: SessionCardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const showExposureCount = useSettingsStore((s) => s.sessionShowExposureCount);
+  const showTotalExposure = useSettingsStore((s) => s.sessionShowTotalExposure);
+  const showFilters = useSettingsStore((s) => s.sessionShowFilters);
 
   return (
     <PressableFeedback onPress={onPress}>
@@ -61,21 +65,41 @@ export function SessionCard({
             </View>
           </View>
 
-          <View className="flex-row flex-wrap gap-1.5">
-            {session.targets.map((target) => (
-              <Chip key={target} size="sm" variant="secondary">
-                <Chip.Label className="text-[9px]">{target}</Chip.Label>
-              </Chip>
-            ))}
-          </View>
+          {session.targets.length > 0 && (
+            <View className="flex-row flex-wrap gap-1.5">
+              {session.targets.map((target) => (
+                <Chip key={target} size="sm" variant="secondary">
+                  <Chip.Label className="text-[9px]">{target}</Chip.Label>
+                </Chip>
+              ))}
+            </View>
+          )}
+
+          {showFilters && session.equipment.filters && session.equipment.filters.length > 0 && (
+            <View className="flex-row flex-wrap gap-1">
+              {session.equipment.filters.map((f) => (
+                <Chip key={f} size="sm" variant="secondary">
+                  <Chip.Label className="text-[9px]">{f}</Chip.Label>
+                </Chip>
+              ))}
+            </View>
+          )}
 
           <View className="flex-row items-center gap-3">
-            <View className="flex-row items-center gap-1">
-              <Ionicons name="images-outline" size={11} color={mutedColor} />
-              <Text className="text-[10px] text-muted">
-                {session.imageIds.length} {t("sessions.imageCount").toLowerCase()}
-              </Text>
-            </View>
+            {showExposureCount && (
+              <View className="flex-row items-center gap-1">
+                <Ionicons name="images-outline" size={11} color={mutedColor} />
+                <Text className="text-[10px] text-muted">
+                  {session.imageIds.length} {t("sessions.imageCount").toLowerCase()}
+                </Text>
+              </View>
+            )}
+            {showTotalExposure && (
+              <View className="flex-row items-center gap-1">
+                <Ionicons name="timer-outline" size={11} color={mutedColor} />
+                <Text className="text-[10px] text-muted">{formatDuration(session.duration)}</Text>
+              </View>
+            )}
             {session.equipment.telescope && (
               <View className="flex-row items-center gap-1">
                 <Ionicons name="telescope-outline" size={11} color={mutedColor} />

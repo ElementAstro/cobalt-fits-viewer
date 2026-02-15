@@ -11,7 +11,7 @@ import {
 } from "../../stores/useSessionStore";
 import { useTargetStore } from "../../stores/useTargetStore";
 import { useFitsStore } from "../../stores/useFitsStore";
-import { exportToCSV } from "../../lib/sessions/observationLog";
+import { exportToCSV, exportSessionToJSON } from "../../lib/sessions/observationLog";
 import { formatDuration } from "../../lib/sessions/format";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { EditSessionSheet } from "../../components/sessions/EditSessionSheet";
@@ -40,9 +40,22 @@ export default function SessionDetailScreen() {
     notes: string;
   } | null>(null);
 
-  const handleExportLog = useCallback(() => {
-    return exportToCSV(logEntries);
-  }, [logEntries]);
+  const handleExportLog = useCallback(async () => {
+    const csv = exportToCSV(logEntries);
+    await Share.share({
+      message: csv,
+      title: t("sessions.exportLog"),
+    });
+  }, [logEntries, t]);
+
+  const handleExportJSON = useCallback(async () => {
+    if (!session) return;
+    const json = exportSessionToJSON(session, logEntries);
+    await Share.share({
+      message: json,
+      title: `${t("sessions.exportJSON")} - ${session.date}`,
+    });
+  }, [session, logEntries, t]);
 
   const handleFilePress = (file: FitsMetadata) => {
     router.push(`/viewer/${file.id}`);
@@ -243,8 +256,46 @@ export default function SessionDetailScreen() {
           </View>
         )}
 
+        {/* Rating & Bortle */}
+        {(session.rating != null || session.bortle != null) && (
+          <View className="flex-row gap-2 mb-4">
+            {session.rating != null && (
+              <View className="flex-1 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
+                <View className="flex-row gap-0.5">
+                  {[1, 2, 3, 4, 5].map((r) => (
+                    <Ionicons
+                      key={r}
+                      name={session.rating != null && session.rating >= r ? "star" : "star-outline"}
+                      size={12}
+                      color={session.rating != null && session.rating >= r ? "#f59e0b" : mutedColor}
+                    />
+                  ))}
+                </View>
+                <Text className="text-[10px] text-muted">{t("sessions.rating")}</Text>
+              </View>
+            )}
+            {session.bortle != null && (
+              <View className="flex-1 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
+                <Text className="text-sm font-bold text-foreground">{session.bortle}</Text>
+                <Text className="text-[10px] text-muted">{t("sessions.bortle")}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Tags */}
+        {session.tags && session.tags.length > 0 && (
+          <View className="flex-row flex-wrap gap-1 mb-4">
+            {session.tags.map((tag) => (
+              <Chip key={tag} size="sm" variant="secondary">
+                <Chip.Label className="text-[9px]">#{tag}</Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        )}
+
         {/* Equipment */}
-        {session.equipment.telescope && (
+        {(session.equipment.telescope || session.equipment.camera || session.equipment.mount) && (
           <>
             <Text className="mb-2 text-xs font-semibold uppercase text-muted">
               {t("sessions.equipment")}
@@ -261,6 +312,12 @@ export default function SessionDetailScreen() {
                   <View className="flex-row items-center gap-2">
                     <Ionicons name="camera-outline" size={12} color={mutedColor} />
                     <Text className="text-xs text-foreground">{session.equipment.camera}</Text>
+                  </View>
+                )}
+                {session.equipment.mount && (
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="hardware-chip-outline" size={12} color={mutedColor} />
+                    <Text className="text-xs text-foreground">{session.equipment.mount}</Text>
                   </View>
                 )}
                 {session.equipment.filters && session.equipment.filters.length > 0 && (
@@ -344,10 +401,16 @@ export default function SessionDetailScreen() {
           <Text className="text-xs font-semibold uppercase text-muted">
             {t("sessions.log")} ({logEntries.length})
           </Text>
-          <Button size="sm" variant="outline" onPress={handleExportLog}>
-            <Ionicons name="download-outline" size={12} color={mutedColor} />
-            <Button.Label className="text-[10px]">{t("sessions.exportLog")}</Button.Label>
-          </Button>
+          <View className="flex-row gap-1">
+            <Button size="sm" variant="outline" onPress={handleExportJSON}>
+              <Ionicons name="code-slash-outline" size={12} color={mutedColor} />
+              <Button.Label className="text-[10px]">JSON</Button.Label>
+            </Button>
+            <Button size="sm" variant="outline" onPress={handleExportLog}>
+              <Ionicons name="download-outline" size={12} color={mutedColor} />
+              <Button.Label className="text-[10px]">CSV</Button.Label>
+            </Button>
+          </View>
         </View>
 
         {logEntries.length > 0 ? (

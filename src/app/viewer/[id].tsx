@@ -1,21 +1,24 @@
-import { View, Text, Alert } from "react-native";
+import { View, Text, Alert, ScrollView, StatusBar, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
-import { useState, useEffect, useCallback, useRef } from "react";
-import { Alert as HAlert, Button, Chip, useThemeColor } from "heroui-native";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Alert as HAlert, Button, Skeleton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
+import Animated, { FadeIn } from "react-native-reanimated";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useViewerStore } from "../../stores/useViewerStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
-import { useExport } from "../../hooks/useExport";
+import { useViewerExport } from "../../hooks/useViewerExport";
 import { useThumbnail } from "../../hooks/useThumbnail";
-import { ViewerControls } from "../../components/fits/ViewerControls";
 import { PixelInspector } from "../../components/fits/PixelInspector";
-import { FitsHistogram } from "../../components/fits/FitsHistogram";
+import { RegionSelectOverlay } from "../../components/fits/RegionSelectOverlay";
 import {
   FitsCanvas,
   type CanvasTransform,
@@ -26,6 +29,16 @@ import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { ExportDialog } from "../../components/common/ExportDialog";
 import type { ExportFormat } from "../../lib/fits/types";
 import { computeAutoStretch } from "../../lib/utils/pixelMath";
+import { useAstrometry } from "../../hooks/useAstrometry";
+import { useAstrometryStore } from "../../stores/useAstrometryStore";
+import { AstrometryAnnotationOverlay } from "../../components/astrometry/AstrometryAnnotationOverlay";
+import { ViewerControlPanel } from "../../components/fits/ViewerControlPanel";
+import { ViewerBottomSheet } from "../../components/fits/ViewerBottomSheet";
+import { ViewerToolbar } from "../../components/fits/ViewerToolbar";
+import { StatsOverlay } from "../../components/fits/StatsOverlay";
+import { ZoomControls } from "../../components/fits/ZoomControls";
+import { AstrometryBadge } from "../../components/fits/AstrometryBadge";
+import { shareWCS } from "../../lib/astrometry/wcsExport";
 
 export default function ViewerDetailScreen() {
   useKeepAwake();
@@ -33,22 +46,41 @@ export default function ViewerDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const { isLandscape } = useScreenOrientation();
+  const insets = useSafeAreaInsets();
+  const { width: screenWidth } = useWindowDimensions();
+  const sidePanelWidth = useMemo(
+    () => Math.min(Math.max(Math.round(screenWidth * 0.32), 240), 360),
+    [screenWidth],
+  );
 
-  const file = useFitsStore((s) => s.getFileById(id ?? ""));
+  const file = useFitsStore((s) => s.files.find((f) => f.id === (id ?? "")));
   const updateFile = useFitsStore((s) => s.updateFile);
-  const getAdjacentFileIds = useFitsStore((s) => s.getAdjacentFileIds);
-  const { prevId, nextId } = id ? getAdjacentFileIds(id) : { prevId: null, nextId: null };
+  const allFiles = useFitsStore((s) => s.files);
+  const { prevId, nextId } = useMemo(() => {
+    if (!id) return { prevId: null, nextId: null };
+    const idx = allFiles.findIndex((f) => f.id === id);
+    if (idx === -1) return { prevId: null, nextId: null };
+    return {
+      prevId: idx > 0 ? allFiles[idx - 1].id : null,
+      nextId: idx < allFiles.length - 1 ? allFiles[idx + 1].id : null,
+    };
+  }, [allFiles, id]);
 
   // Display parameters — grouped to reduce re-renders
-  const { stretch, colormap, blackPoint, whitePoint, gamma } = useViewerStore(
-    useShallow((s) => ({
-      stretch: s.stretch,
-      colormap: s.colormap,
-      blackPoint: s.blackPoint,
-      whitePoint: s.whitePoint,
-      gamma: s.gamma,
-    })),
-  );
+  const { stretch, colormap, blackPoint, whitePoint, gamma, midtone, outputBlack, outputWhite } =
+    useViewerStore(
+      useShallow((s) => ({
+        stretch: s.stretch,
+        colormap: s.colormap,
+        blackPoint: s.blackPoint,
+        whitePoint: s.whitePoint,
+        gamma: s.gamma,
+        midtone: s.midtone,
+        outputBlack: s.outputBlack,
+        outputWhite: s.outputWhite,
+      })),
+    );
 
   // Display parameter setters (stable references)
   const setStretch = useViewerStore((s) => s.setStretch);
@@ -56,6 +88,12 @@ export default function ViewerDetailScreen() {
   const setBlackPoint = useViewerStore((s) => s.setBlackPoint);
   const setWhitePoint = useViewerStore((s) => s.setWhitePoint);
   const setGamma = useViewerStore((s) => s.setGamma);
+  const setMidtone = useViewerStore((s) => s.setMidtone);
+  const setOutputBlack = useViewerStore((s) => s.setOutputBlack);
+  const setOutputWhite = useViewerStore((s) => s.setOutputWhite);
+  const resetLevels = useViewerStore((s) => s.resetLevels);
+  const _regionSelection = useViewerStore((s) => s.regionSelection);
+  const setRegionSelection = useViewerStore((s) => s.setRegionSelection);
 
   // Overlay toggles — grouped
   const { showGrid, showCrosshair, showPixelInfo, showMinimap } = useViewerStore(
@@ -70,6 +108,19 @@ export default function ViewerDetailScreen() {
   const toggleCrosshair = useViewerStore((s) => s.toggleCrosshair);
   const togglePixelInfo = useViewerStore((s) => s.togglePixelInfo);
   const toggleMinimap = useViewerStore((s) => s.toggleMiniMap);
+  const initFromSettings = useViewerStore((s) => s.initFromSettings);
+
+  const defaultHistogramMode = useSettingsStore((s) => s.defaultHistogramMode);
+  const settingsHistogramHeight = useSettingsStore((s) => s.histogramHeight);
+  const settingsDebounce = useSettingsStore((s) => s.imageProcessingDebounce);
+  const pixelInfoDecimalPlaces = useSettingsStore((s) => s.pixelInfoDecimalPlaces);
+  const settingsGridColor = useSettingsStore((s) => s.gridColor);
+  const settingsGridOpacity = useSettingsStore((s) => s.gridOpacity);
+  const settingsCrosshairColor = useSettingsStore((s) => s.crosshairColor);
+  const settingsCrosshairOpacity = useSettingsStore((s) => s.crosshairOpacity);
+  const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
+  const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
+  const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
 
   // Cursor & frame — grouped
   const { cursorX, cursorY, currentFrame, totalFrames } = useViewerStore(
@@ -99,19 +150,42 @@ export default function ViewerDetailScreen() {
     displayWidth,
     displayHeight,
     histogram,
+    regionHistogram,
     processImage,
     processImagePreview,
     getStatsAndHistogram,
+    getRegionHistogram,
+    clearRegionHistogram,
     stats,
     processingError,
   } = useImageProcessing();
 
-  const { isExporting, exportImage, shareImage, saveImage, printImage, printToPdf } = useExport();
   const { generateThumbnail } = useThumbnail();
 
   const [showControls, setShowControls] = useState(true);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isRegionSelectActive, setIsRegionSelectActive] = useState(false);
   const [showExport, setShowExport] = useState(false);
+  const [showAstrometryResult, setShowAstrometryResult] = useState(false);
+  const [showAnnotations, setShowAnnotations] = useState(true);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+
+  const closeExportDialog = useCallback(() => setShowExport(false), []);
+  const {
+    isExporting,
+    handleExport,
+    handleShare,
+    handleSaveToDevice,
+    handlePrint,
+    handlePrintToPdf,
+  } = useViewerExport({
+    rgbaData,
+    width: dimensions?.width,
+    height: dimensions?.height,
+    filename: file?.filename ?? "fits",
+    format: exportFormat,
+    onDone: closeExportDialog,
+  });
   const prevPixelsRef = useRef<Float32Array | null>(null);
   const [canvasTransform, setCanvasTransform] = useState<CanvasTransform>({
     scale: 1,
@@ -122,7 +196,52 @@ export default function ViewerDetailScreen() {
   });
   const canvasRef = useRef<FitsCanvasHandle>(null);
 
+  useEffect(() => {
+    StatusBar.setHidden(isLandscape || isFullscreen, "fade");
+    return () => {
+      StatusBar.setHidden(false, "fade");
+    };
+  }, [isLandscape, isFullscreen]);
+
+  const toggleFullscreen = useCallback(() => {
+    setIsFullscreen((prev) => !prev);
+  }, []);
+
   const toggleFavorite = useFitsStore((s) => s.toggleFavorite);
+
+  // Astrometry integration
+  const { submitFile: astrometrySubmit, config: astrometryConfig } = useAstrometry();
+  const allAstrometryJobs = useAstrometryStore((s) => s.jobs);
+  const astrometryJobs = useMemo(
+    () => allAstrometryJobs.filter((j) => j.fileId === (id ?? "")),
+    [allAstrometryJobs, id],
+  );
+  const latestSolvedJob = astrometryJobs.find((j) => j.status === "success" && j.result);
+  const activeAstrometryJob = astrometryJobs.find(
+    (j) => j.status === "uploading" || j.status === "submitted" || j.status === "solving",
+  );
+
+  const handleSolveThis = useCallback(() => {
+    if (!astrometryConfig.apiKey) {
+      Alert.alert(t("common.error"), t("astrometry.noApiKey"));
+      return;
+    }
+    if (!id) return;
+    astrometrySubmit(id);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [astrometryConfig.apiKey, id, astrometrySubmit, t]);
+
+  const handleViewerExportWCS = useCallback(async () => {
+    if (!latestSolvedJob?.result || !file) return;
+    try {
+      const shared = await shareWCS(latestSolvedJob.result, file.filename);
+      if (shared) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch {
+      Alert.alert(t("common.error"), "Failed to export WCS.");
+    }
+  }, [latestSolvedJob, file, t]);
 
   const navigateTo = useCallback(
     (fileId: string) => {
@@ -131,107 +250,12 @@ export default function ViewerDetailScreen() {
     [router],
   );
 
-  // --- Export handlers ---
-  const handleExport = useCallback(
-    async (quality: number) => {
-      if (!rgbaData || !dimensions) {
-        Alert.alert(t("common.error"), t("viewer.noImageData"));
-        return;
-      }
-      const path = await exportImage(
-        rgbaData,
-        dimensions.width,
-        dimensions.height,
-        file?.filename ?? "fits",
-        exportFormat,
-        quality,
-      );
-      if (path) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(t("common.success"), t("viewer.exportSuccess"));
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert(t("common.error"), t("viewer.exportFailed"));
-      }
-      setShowExport(false);
+  const navigateToAstrometryResult = useCallback(
+    (jobId: string) => {
+      router.push(`/astrometry/result/${jobId}`);
     },
-    [rgbaData, dimensions, exportImage, file?.filename, exportFormat, t],
+    [router],
   );
-
-  const handleShare = useCallback(
-    async (quality: number) => {
-      if (!rgbaData || !dimensions) {
-        Alert.alert(t("common.error"), t("viewer.noImageData"));
-        return;
-      }
-      try {
-        await shareImage(
-          rgbaData,
-          dimensions.width,
-          dimensions.height,
-          file?.filename ?? "fits",
-          exportFormat,
-          quality,
-        );
-      } catch {
-        Alert.alert(t("common.error"), t("share.failed"));
-      }
-      setShowExport(false);
-    },
-    [rgbaData, dimensions, shareImage, file?.filename, exportFormat, t],
-  );
-
-  const handleSaveToDevice = useCallback(
-    async (quality: number) => {
-      if (!rgbaData || !dimensions) {
-        Alert.alert(t("common.error"), t("viewer.noImageData"));
-        return;
-      }
-      const uri = await saveImage(
-        rgbaData,
-        dimensions.width,
-        dimensions.height,
-        file?.filename ?? "fits",
-        exportFormat,
-        quality,
-      );
-      if (uri) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(t("common.success"), t("viewer.savedToDevice"));
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        Alert.alert(t("common.error"), t("viewer.exportFailed"));
-      }
-      setShowExport(false);
-    },
-    [rgbaData, dimensions, saveImage, file?.filename, exportFormat, t],
-  );
-
-  const handlePrint = useCallback(async () => {
-    if (!rgbaData || !dimensions) {
-      Alert.alert(t("common.error"), t("viewer.noImageData"));
-      return;
-    }
-    try {
-      await printImage(rgbaData, dimensions.width, dimensions.height, file?.filename ?? "fits");
-    } catch {
-      Alert.alert(t("common.error"), t("viewer.printFailed"));
-    }
-    setShowExport(false);
-  }, [rgbaData, dimensions, printImage, file?.filename, t]);
-
-  const handlePrintToPdf = useCallback(async () => {
-    if (!rgbaData || !dimensions) {
-      Alert.alert(t("common.error"), t("viewer.noImageData"));
-      return;
-    }
-    try {
-      await printToPdf(rgbaData, dimensions.width, dimensions.height, file?.filename ?? "fits");
-    } catch {
-      Alert.alert(t("common.error"), t("viewer.printFailed"));
-    }
-    setShowExport(false);
-  }, [rgbaData, dimensions, printToPdf, file?.filename, t]);
 
   // --- Pixel tap handler ---
   const handlePixelTap = useCallback(
@@ -249,8 +273,49 @@ export default function ViewerDetailScreen() {
     const { blackPoint: bp, whitePoint: wp } = computeAutoStretch(pixels);
     setBlackPoint(bp);
     setWhitePoint(wp);
+    setMidtone(0.5);
     setStretch("asinh");
-  }, [pixels, setBlackPoint, setWhitePoint, setStretch]);
+  }, [pixels, setBlackPoint, setWhitePoint, setMidtone, setStretch]);
+
+  // --- Midtone change handler (converts midtone position to gamma) ---
+  const handleMidtoneChange = useCallback(
+    (value: number) => {
+      setMidtone(value);
+      // Convert midtone slider position to gamma: gamma = -log(2) / log(midtonePos)
+      if (value > 0.001 && value < 0.999) {
+        const newGamma = -Math.log(2) / Math.log(value);
+        setGamma(Math.max(0.1, Math.min(5, newGamma)));
+      }
+    },
+    [setMidtone, setGamma],
+  );
+
+  // --- Region selection handlers ---
+  const handleToggleRegionSelect = useCallback(() => {
+    if (isRegionSelectActive) {
+      setIsRegionSelectActive(false);
+      setRegionSelection(null);
+      clearRegionHistogram();
+    } else {
+      setIsRegionSelectActive(true);
+    }
+  }, [isRegionSelectActive, setRegionSelection, clearRegionHistogram]);
+
+  const handleRegionChange = useCallback(
+    (region: { x: number; y: number; w: number; h: number }) => {
+      setRegionSelection(region);
+      if (pixels && dimensions) {
+        getRegionHistogram(pixels, dimensions.width, region, 256);
+      }
+    },
+    [pixels, dimensions, setRegionSelection, getRegionHistogram],
+  );
+
+  const handleRegionClear = useCallback(() => {
+    setRegionSelection(null);
+    clearRegionHistogram();
+    setIsRegionSelectActive(false);
+  }, [setRegionSelection, clearRegionHistogram]);
 
   // --- Frame change handler ---
   const handleFrameChange = useCallback(
@@ -264,6 +329,7 @@ export default function ViewerDetailScreen() {
   // Load file on mount, cleanup on unmount
   useEffect(() => {
     if (file) {
+      initFromSettings();
       loadFromPath(file.filepath, file.filename, file.fileSize);
       updateFile(file.id, { lastViewed: Date.now() });
     }
@@ -298,6 +364,8 @@ export default function ViewerDetailScreen() {
         blackPoint,
         whitePoint,
         gamma,
+        outputBlack,
+        outputWhite,
       );
       return;
     }
@@ -313,12 +381,24 @@ export default function ViewerDetailScreen() {
         blackPoint,
         whitePoint,
         gamma,
+        outputBlack,
+        outputWhite,
       );
-    }, 150);
+    }, settingsDebounce);
 
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixels, dimensions, stretch, colormap, blackPoint, whitePoint, gamma]);
+  }, [
+    pixels,
+    dimensions,
+    stretch,
+    colormap,
+    blackPoint,
+    whitePoint,
+    gamma,
+    outputBlack,
+    outputWhite,
+  ]);
 
   // Histogram and stats only on pixel/dimension change (deferred after interactions)
   useEffect(() => {
@@ -342,6 +422,125 @@ export default function ViewerDetailScreen() {
       ? (pixels[cursorY * dimensions.width + cursorX] ?? null)
       : null;
 
+  // Compute RA/Dec from WCS calibration for PixelInspector
+  const pixelWcs = useMemo(() => {
+    const cal = latestSolvedJob?.result?.calibration;
+    if (!cal || !dimensions || cursorX < 0 || cursorY < 0) return null;
+    const cx = dimensions.width / 2;
+    const cy = dimensions.height / 2;
+    const dx = cursorX - cx;
+    const dy = cursorY - cy;
+    const rad = (Math.PI / 180) * cal.orientation;
+    const cosR = Math.cos(rad);
+    const sinR = Math.sin(rad);
+    const rotX = dx * cosR - dy * sinR;
+    const rotY = dx * sinR + dy * cosR;
+    const degPerPx = cal.pixscale / 3600;
+    const decOffset = -rotY * degPerPx;
+    const raOffset = (rotX * degPerPx) / Math.cos((cal.dec * Math.PI) / 180);
+    return {
+      ra: ((cal.ra + raOffset) / 15).toFixed(4) + "h",
+      dec: (cal.dec + decOffset >= 0 ? "+" : "") + (cal.dec + decOffset).toFixed(4) + "°",
+    };
+  }, [latestSolvedJob, dimensions, cursorX, cursorY]);
+
+  const handleToggleAnnotations = useCallback(() => setShowAnnotations((prev) => !prev), []);
+
+  const controlPanelProps = useMemo(
+    () => ({
+      file: file!,
+      histogram,
+      regionHistogram,
+      blackPoint,
+      whitePoint,
+      midtone,
+      outputBlack,
+      outputWhite,
+      histogramHeight: settingsHistogramHeight,
+      defaultHistogramMode,
+      onBlackPointChange: setBlackPoint,
+      onWhitePointChange: setWhitePoint,
+      onMidtoneChange: handleMidtoneChange,
+      onOutputBlackChange: setOutputBlack,
+      onOutputWhiteChange: setOutputWhite,
+      onAutoStretch: handleAutoStretch,
+      onResetLevels: resetLevels,
+      onToggleRegionSelect: handleToggleRegionSelect,
+      isRegionSelectActive,
+      stretch,
+      colormap,
+      gamma,
+      showGrid,
+      showCrosshair,
+      showPixelInfo,
+      showMinimap,
+      currentFrame,
+      totalFrames,
+      isDataCube: dimensions?.isDataCube ?? false,
+      onStretchChange: setStretch,
+      onColormapChange: setColormap,
+      onGammaChange: setGamma,
+      onToggleGrid: toggleGrid,
+      onToggleCrosshair: toggleCrosshair,
+      onTogglePixelInfo: togglePixelInfo,
+      onToggleMinimap: toggleMinimap,
+      onFrameChange: handleFrameChange,
+      showAstrometryResult,
+      latestSolvedJob,
+      showAnnotations,
+      onToggleAnnotations: handleToggleAnnotations,
+      onExportWCS: handleViewerExportWCS,
+      onNavigateToAstrometryResult: navigateToAstrometryResult,
+      showControls,
+    }),
+    [
+      file,
+      histogram,
+      regionHistogram,
+      blackPoint,
+      whitePoint,
+      midtone,
+      outputBlack,
+      outputWhite,
+      settingsHistogramHeight,
+      defaultHistogramMode,
+      setBlackPoint,
+      setWhitePoint,
+      handleMidtoneChange,
+      setOutputBlack,
+      setOutputWhite,
+      handleAutoStretch,
+      resetLevels,
+      handleToggleRegionSelect,
+      isRegionSelectActive,
+      stretch,
+      colormap,
+      gamma,
+      showGrid,
+      showCrosshair,
+      showPixelInfo,
+      showMinimap,
+      currentFrame,
+      totalFrames,
+      dimensions?.isDataCube,
+      setStretch,
+      setColormap,
+      setGamma,
+      toggleGrid,
+      toggleCrosshair,
+      togglePixelInfo,
+      toggleMinimap,
+      handleFrameChange,
+      showAstrometryResult,
+      latestSolvedJob,
+      showAnnotations,
+      handleToggleAnnotations,
+      handleViewerExportWCS,
+      navigateToAstrometryResult,
+      showControls,
+    ],
+  );
+
   if (!file) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
@@ -354,178 +553,215 @@ export default function ViewerDetailScreen() {
     );
   }
 
-  return (
-    <View className="flex-1 bg-background">
-      <LoadingOverlay visible={isFitsLoading || isExporting} message={t("common.loading")} />
-
-      {/* Top Bar */}
-      <View className="flex-row items-center justify-between px-4 pt-14 pb-2">
-        <View className="flex-row gap-1">
-          <Button size="sm" variant="outline" onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={16} color={mutedColor} />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            isDisabled={!prevId}
-            onPress={() => prevId && navigateTo(prevId)}
-          >
-            <Ionicons name="chevron-back" size={14} color={prevId ? mutedColor : "#555"} />
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            isDisabled={!nextId}
-            onPress={() => nextId && navigateTo(nextId)}
-          >
-            <Ionicons name="chevron-forward" size={14} color={nextId ? mutedColor : "#555"} />
-          </Button>
+  const canvasArea = (
+    <View className="flex-1 bg-black">
+      {fitsError || processingError ? (
+        <View className="flex-1 items-center justify-center px-6">
+          <HAlert status="danger">
+            <HAlert.Indicator />
+            <HAlert.Content>
+              <HAlert.Title>{t("common.error")}</HAlert.Title>
+              <HAlert.Description>{fitsError || processingError}</HAlert.Description>
+            </HAlert.Content>
+          </HAlert>
         </View>
-        <Text
-          className="flex-1 mx-2 text-sm font-semibold text-foreground text-center"
-          numberOfLines={1}
-        >
-          {file.filename}
-        </Text>
-        <View className="flex-row gap-1">
-          <Button size="sm" variant="outline" onPress={() => file && toggleFavorite(file.id)}>
-            <Ionicons
-              name={file.isFavorite ? "heart" : "heart-outline"}
-              size={14}
-              color={file.isFavorite ? "#ef4444" : mutedColor}
-            />
-          </Button>
-          <Button size="sm" variant="outline" onPress={() => router.push(`/header/${id}`)}>
-            <Ionicons name="code-outline" size={14} color={mutedColor} />
-          </Button>
-          <Button size="sm" variant="outline" onPress={() => router.push(`/editor/${id}`)}>
-            <Ionicons name="create-outline" size={14} color={mutedColor} />
-          </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowExport(true)}>
-            <Ionicons name="share-outline" size={14} color={mutedColor} />
-          </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowControls(!showControls)}>
-            <Ionicons
-              name={showControls ? "chevron-down" : "chevron-up"}
-              size={14}
-              color={mutedColor}
-            />
-          </Button>
-        </View>
-      </View>
-
-      {/* Canvas Area */}
-      <View className="flex-1 bg-black">
-        {fitsError || processingError ? (
-          <View className="flex-1 items-center justify-center px-6">
-            <HAlert status="danger">
-              <HAlert.Indicator />
-              <HAlert.Content>
-                <HAlert.Title>{t("common.error")}</HAlert.Title>
-                <HAlert.Description>{fitsError || processingError}</HAlert.Description>
-              </HAlert.Content>
-            </HAlert>
-          </View>
-        ) : rgbaData && dimensions ? (
-          <View className="flex-1">
-            <FitsCanvas
-              ref={canvasRef}
-              rgbaData={rgbaData}
-              width={displayWidth || dimensions.width}
-              height={displayHeight || dimensions.height}
-              showGrid={showGrid}
-              showCrosshair={showCrosshair}
-              cursorX={cursorX}
-              cursorY={cursorY}
-              onPixelTap={handlePixelTap}
-              onTransformChange={setCanvasTransform}
-            />
-
-            {/* Pixel Inspector */}
-            <PixelInspector x={cursorX} y={cursorY} value={pixelValue} visible={showPixelInfo} />
-
-            {/* Minimap */}
-            <Minimap
-              rgbaData={rgbaData}
-              imgWidth={displayWidth || dimensions.width}
-              imgHeight={displayHeight || dimensions.height}
-              visible={showMinimap}
-              viewportScale={canvasTransform.scale}
-              viewportTranslateX={canvasTransform.translateX}
-              viewportTranslateY={canvasTransform.translateY}
-              canvasWidth={canvasTransform.canvasWidth}
-              canvasHeight={canvasTransform.canvasHeight}
-              onNavigate={(tx: number, ty: number) => canvasRef.current?.setTransform(tx, ty)}
-            />
-
-            {/* Stats overlay */}
-            {stats && (
-              <View className="absolute top-2 left-2 bg-black/60 rounded-md px-2 py-1">
-                <Text className="text-[9px] text-neutral-300">
-                  {dimensions.width}×{dimensions.height}
-                  {dimensions.isDataCube && ` ×${dimensions.depth}f`}
-                </Text>
-                <Text className="text-[9px] text-neutral-400">
-                  Min:{stats.min.toFixed(1)} Max:{stats.max.toFixed(1)} μ:{stats.mean.toFixed(1)}
-                </Text>
-              </View>
-            )}
-          </View>
-        ) : (
-          <View className="flex-1 items-center justify-center">
-            <Ionicons name="image-outline" size={80} color="#333" />
-            <Text className="mt-4 text-sm text-neutral-500">{t("common.loading")}</Text>
-          </View>
-        )}
-      </View>
-
-      {/* Histogram */}
-      {histogram && showControls && (
-        <View className="px-3 py-2 bg-background">
-          <FitsHistogram
-            counts={histogram.counts}
-            edges={histogram.edges}
-            blackPoint={blackPoint}
-            whitePoint={whitePoint}
-            onBlackPointChange={setBlackPoint}
-            onWhitePointChange={setWhitePoint}
+      ) : rgbaData && dimensions ? (
+        <Animated.View entering={FadeIn.duration(250)} className="flex-1">
+          <FitsCanvas
+            ref={canvasRef}
+            rgbaData={rgbaData}
+            width={displayWidth || dimensions.width}
+            height={displayHeight || dimensions.height}
+            showGrid={showGrid}
+            showCrosshair={showCrosshair}
+            cursorX={cursorX}
+            cursorY={cursorY}
+            onPixelTap={handlePixelTap}
+            onTransformChange={setCanvasTransform}
+            gridColor={settingsGridColor}
+            gridOpacity={settingsGridOpacity}
+            crosshairColor={settingsCrosshairColor}
+            crosshairOpacity={settingsCrosshairOpacity}
+            minScale={settingsMinScale}
+            maxScale={settingsMaxScale}
+            doubleTapScale={settingsDoubleTapScale}
+            onSwipeLeft={() => nextId && navigateTo(nextId)}
+            onSwipeRight={() => prevId && navigateTo(prevId)}
+            onLongPress={toggleFullscreen}
           />
+
+          {/* Pixel Inspector */}
+          <PixelInspector
+            x={cursorX}
+            y={cursorY}
+            value={pixelValue}
+            visible={showPixelInfo}
+            decimalPlaces={pixelInfoDecimalPlaces}
+            ra={pixelWcs?.ra}
+            dec={pixelWcs?.dec}
+          />
+
+          {/* Minimap */}
+          <Minimap
+            rgbaData={rgbaData}
+            imgWidth={displayWidth || dimensions.width}
+            imgHeight={displayHeight || dimensions.height}
+            visible={showMinimap}
+            viewportScale={canvasTransform.scale}
+            viewportTranslateX={canvasTransform.translateX}
+            viewportTranslateY={canvasTransform.translateY}
+            canvasWidth={canvasTransform.canvasWidth}
+            canvasHeight={canvasTransform.canvasHeight}
+            onNavigate={(tx: number, ty: number) => canvasRef.current?.setTransform(tx, ty)}
+          />
+
+          {/* Astrometry Annotation Overlay */}
+          {latestSolvedJob?.result && showAnnotations && dimensions && (
+            <View className="absolute inset-0" pointerEvents="none">
+              <AstrometryAnnotationOverlay
+                annotations={latestSolvedJob.result.annotations}
+                imageWidth={displayWidth || dimensions.width}
+                imageHeight={displayHeight || dimensions.height}
+                transform={canvasTransform}
+                visible={showAnnotations}
+              />
+            </View>
+          )}
+
+          {/* Region selection overlay */}
+          {isRegionSelectActive && dimensions && (
+            <RegionSelectOverlay
+              imageWidth={displayWidth || dimensions.width}
+              imageHeight={displayHeight || dimensions.height}
+              containerWidth={canvasTransform.canvasWidth || 300}
+              containerHeight={canvasTransform.canvasHeight || 300}
+              onRegionChange={handleRegionChange}
+              onClear={handleRegionClear}
+            />
+          )}
+
+          {/* Stats overlay */}
+          {stats && (
+            <StatsOverlay
+              width={dimensions.width}
+              height={dimensions.height}
+              isDataCube={dimensions.isDataCube}
+              depth={dimensions.depth}
+              min={stats.min}
+              max={stats.max}
+              mean={stats.mean}
+            />
+          )}
+
+          {/* Astrometry status badge */}
+          {activeAstrometryJob && (
+            <AstrometryBadge
+              status={activeAstrometryJob.status}
+              progress={activeAstrometryJob.progress}
+            />
+          )}
+
+          {/* Zoom controls */}
+          <ZoomControls
+            scale={canvasTransform.scale}
+            translateX={canvasTransform.translateX}
+            translateY={canvasTransform.translateY}
+            canvasWidth={canvasTransform.canvasWidth}
+            imageWidth={dimensions.width}
+            onSetTransform={(tx, ty, s) => canvasRef.current?.setTransform(tx, ty, s)}
+          />
+
+          {/* Exit fullscreen button */}
+          {isFullscreen && (
+            <View className="absolute top-3 right-3">
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={toggleFullscreen}
+                className="h-8 w-8 bg-black/50 rounded-full"
+              >
+                <Ionicons name="contract-outline" size={16} color="#fff" />
+              </Button>
+            </View>
+          )}
+        </Animated.View>
+      ) : (
+        <View className="flex-1 items-center justify-center">
+          <Skeleton className="w-3/4 h-3/4 rounded-lg">
+            <View className="flex-1 items-center justify-center">
+              <Ionicons name="image-outline" size={64} color="#333" />
+              <Text className="mt-3 text-xs text-neutral-500">{t("common.loading")}</Text>
+            </View>
+          </Skeleton>
         </View>
       )}
+    </View>
+  );
 
-      {/* File Info Chips */}
-      <View className="flex-row flex-wrap gap-1 px-3 py-1 bg-background">
-        {file.object && (
-          <Chip size="sm" variant="primary">
-            <Chip.Label className="text-[9px]">{file.object}</Chip.Label>
-          </Chip>
-        )}
-        {file.filter && (
-          <Chip size="sm" variant="secondary">
-            <Chip.Label className="text-[9px]">{file.filter}</Chip.Label>
-          </Chip>
-        )}
-        {file.exptime != null && (
-          <Chip size="sm" variant="secondary">
-            <Chip.Label className="text-[9px]">{file.exptime}s</Chip.Label>
-          </Chip>
-        )}
-        {file.telescope && (
-          <Chip size="sm" variant="secondary">
-            <Chip.Label className="text-[9px]">{file.telescope}</Chip.Label>
-          </Chip>
-        )}
-        {file.instrument && (
-          <Chip size="sm" variant="secondary">
-            <Chip.Label className="text-[9px]">{file.instrument}</Chip.Label>
-          </Chip>
-        )}
-        {file.dateObs && (
-          <Chip size="sm" variant="secondary">
-            <Chip.Label className="text-[9px]">{file.dateObs}</Chip.Label>
-          </Chip>
-        )}
-      </View>
+  const sidePanel = (
+    <ScrollView
+      className="bg-background"
+      style={{
+        width: sidePanelWidth,
+        borderLeftWidth: 1,
+        borderLeftColor: "rgba(128,128,128,0.2)",
+      }}
+      nestedScrollEnabled
+      showsVerticalScrollIndicator={false}
+    >
+      <ViewerControlPanel {...controlPanelProps} />
+    </ScrollView>
+  );
+
+  return (
+    <View
+      className="flex-1 bg-background"
+      style={isLandscape ? { paddingLeft: insets.left, paddingRight: insets.right } : undefined}
+    >
+      <LoadingOverlay visible={isFitsLoading || isExporting} message={t("common.loading")} />
+
+      {/* Top Bar - hidden in fullscreen */}
+      {!isFullscreen && (
+        <ViewerToolbar
+          filename={file.filename}
+          isLandscape={isLandscape}
+          isFavorite={file.isFavorite}
+          prevId={prevId}
+          nextId={nextId}
+          showControls={showControls}
+          hasAstrometryResult={!!latestSolvedJob}
+          isAstrometryActive={!!activeAstrometryJob}
+          showAstrometryResult={showAstrometryResult}
+          onToggleFullscreen={toggleFullscreen}
+          onBack={() => router.back()}
+          onPrev={() => prevId && navigateTo(prevId)}
+          onNext={() => nextId && navigateTo(nextId)}
+          onToggleFavorite={() => file && toggleFavorite(file.id)}
+          onOpenHeader={() => router.push(`/header/${id}`)}
+          onOpenEditor={() => router.push(`/editor/${id}`)}
+          onExport={() => setShowExport(true)}
+          onAstrometry={
+            latestSolvedJob
+              ? () => setShowAstrometryResult(!showAstrometryResult)
+              : activeAstrometryJob
+                ? () => router.push("/astrometry")
+                : handleSolveThis
+          }
+          onToggleControls={() => setShowControls(!showControls)}
+        />
+      )}
+
+      {isLandscape ? (
+        <View className="flex-1 flex-row">
+          {canvasArea}
+          {showControls && !isFullscreen && sidePanel}
+        </View>
+      ) : (
+        <>
+          {canvasArea}
+          {!isFullscreen && <ViewerBottomSheet visible={showControls} {...controlPanelProps} />}
+        </>
+      )}
 
       {/* Export Dialog */}
       <ExportDialog
@@ -542,35 +778,6 @@ export default function ViewerDetailScreen() {
         onPrintToPdf={handlePrintToPdf}
         onClose={() => setShowExport(false)}
       />
-
-      {/* Viewer Controls */}
-      {showControls && (
-        <ViewerControls
-          stretch={stretch}
-          colormap={colormap}
-          blackPoint={blackPoint}
-          whitePoint={whitePoint}
-          gamma={gamma}
-          showGrid={showGrid}
-          showCrosshair={showCrosshair}
-          showPixelInfo={showPixelInfo}
-          showMinimap={showMinimap}
-          currentFrame={currentFrame}
-          totalFrames={totalFrames}
-          isDataCube={dimensions?.isDataCube ?? false}
-          onStretchChange={setStretch}
-          onColormapChange={setColormap}
-          onBlackPointChange={setBlackPoint}
-          onWhitePointChange={setWhitePoint}
-          onGammaChange={setGamma}
-          onToggleGrid={toggleGrid}
-          onToggleCrosshair={toggleCrosshair}
-          onTogglePixelInfo={togglePixelInfo}
-          onToggleMinimap={toggleMinimap}
-          onFrameChange={handleFrameChange}
-          onAutoStretch={handleAutoStretch}
-        />
-      )}
     </View>
   );
 }

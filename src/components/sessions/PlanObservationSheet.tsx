@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { View, Text, Alert } from "react-native";
 import {
   BottomSheet,
@@ -16,11 +16,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useCalendar } from "../../hooks/useCalendar";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useSessionStore } from "../../stores/useSessionStore";
+import type { ObservationPlan } from "../../lib/fits/types";
 
 interface PlanObservationSheetProps {
   visible: boolean;
   onClose: () => void;
   initialDate?: Date;
+  existingPlan?: ObservationPlan;
 }
 
 const REMINDER_OPTIONS = [
@@ -31,34 +34,99 @@ const REMINDER_OPTIONS = [
   { value: 120, labelKey: "hour2" as const },
 ];
 
-export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObservationSheetProps) {
+export function PlanObservationSheet({
+  visible,
+  onClose,
+  initialDate,
+  existingPlan,
+}: PlanObservationSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const { createObservationPlan, syncing } = useCalendar();
+  const updatePlan = useSessionStore((s) => s.updatePlan);
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
+  const isEditMode = !!existingPlan;
 
-  const defaultStart = initialDate ?? new Date();
-  defaultStart.setHours(20, 0, 0, 0);
-  const defaultEnd = new Date(defaultStart);
-  defaultEnd.setHours(23, 59, 0, 0);
+  const makeDefaultStart = useCallback((base?: Date) => {
+    const d = base ? new Date(base) : new Date();
+    d.setHours(20, 0, 0, 0);
+    return d;
+  }, []);
 
-  const [targetName, setTargetName] = useState("");
-  const [title, setTitle] = useState("");
-  const [notes, setNotes] = useState("");
-  const [reminderMinutes, setReminderMinutes] = useState(defaultReminderMinutes);
-  const [startDate] = useState(defaultStart);
-  const [endDate] = useState(defaultEnd);
+  const makeDefaultEnd = useCallback((start: Date) => {
+    const d = new Date(start);
+    d.setHours(23, 59, 0, 0);
+    return d;
+  }, []);
+
+  const [targetName, setTargetName] = useState(existingPlan?.targetName ?? "");
+  const [title, setTitle] = useState(existingPlan?.title ?? "");
+  const [notes, setNotes] = useState(existingPlan?.notes ?? "");
+  const [reminderMinutes, setReminderMinutes] = useState(
+    existingPlan?.reminderMinutes ?? defaultReminderMinutes,
+  );
+  const [startDate, setStartDate] = useState(() =>
+    existingPlan ? new Date(existingPlan.startDate) : makeDefaultStart(initialDate),
+  );
+  const [endDate, setEndDate] = useState(() =>
+    existingPlan ? new Date(existingPlan.endDate) : makeDefaultEnd(makeDefaultStart(initialDate)),
+  );
+
+  useEffect(() => {
+    if (existingPlan) {
+      setTargetName(existingPlan.targetName);
+      setTitle(existingPlan.title);
+      setNotes(existingPlan.notes ?? "");
+      setReminderMinutes(existingPlan.reminderMinutes);
+      setStartDate(new Date(existingPlan.startDate));
+      setEndDate(new Date(existingPlan.endDate));
+    } else {
+      const s = makeDefaultStart(initialDate);
+      setStartDate(s);
+      setEndDate(makeDefaultEnd(s));
+    }
+  }, [initialDate, existingPlan, makeDefaultStart, makeDefaultEnd]);
+
+  const adjustTime = useCallback(
+    (target: "start" | "end", field: "hour" | "minute", delta: number) => {
+      const setter = target === "start" ? setStartDate : setEndDate;
+      setter((prev) => {
+        const d = new Date(prev);
+        if (field === "hour") d.setHours(d.getHours() + delta);
+        else d.setMinutes(d.getMinutes() + delta);
+        return d;
+      });
+    },
+    [],
+  );
 
   const resetForm = () => {
     setTargetName("");
     setTitle("");
     setNotes("");
     setReminderMinutes(defaultReminderMinutes);
+    const s = makeDefaultStart(initialDate);
+    setStartDate(s);
+    setEndDate(makeDefaultEnd(s));
   };
 
   const handleCreate = async () => {
     if (!targetName.trim()) {
       Alert.alert(t("common.error"), t("sessions.targetName"));
+      return;
+    }
+
+    if (isEditMode && existingPlan) {
+      updatePlan(existingPlan.id, {
+        title: title.trim() || targetName.trim(),
+        targetName: targetName.trim(),
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        notes: notes.trim() || undefined,
+        reminderMinutes,
+      });
+      Alert.alert(t("common.success"), t("sessions.planUpdated"));
+      onClose();
       return;
     }
 
@@ -96,7 +164,9 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
         <BottomSheet.Content>
           {/* Header */}
           <View className="mb-4 flex-row items-center justify-between">
-            <BottomSheet.Title>{t("sessions.planObservation")}</BottomSheet.Title>
+            <BottomSheet.Title>
+              {isEditMode ? t("sessions.editPlan") : t("sessions.planObservation")}
+            </BottomSheet.Title>
             <BottomSheet.Close />
           </View>
 
@@ -136,7 +206,27 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
                   <Ionicons name="time-outline" size={14} color={mutedColor} />
                   <Text className="text-xs text-muted">{t("sessions.startTime")}</Text>
                 </View>
-                <Text className="text-xs font-medium text-foreground">{formatTime(startDate)}</Text>
+                <View className="flex-row items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("start", "hour", -1)}
+                  >
+                    <Ionicons name="remove" size={12} color={mutedColor} />
+                  </Button>
+                  <Text className="text-xs font-medium text-foreground w-12 text-center">
+                    {formatTime(startDate)}
+                  </Text>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("start", "hour", 1)}
+                  >
+                    <Ionicons name="add" size={12} color={mutedColor} />
+                  </Button>
+                </View>
               </View>
               <Separator className="my-1.5" />
               <View className="flex-row items-center justify-between">
@@ -144,7 +234,27 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
                   <Ionicons name="time-outline" size={14} color={mutedColor} />
                   <Text className="text-xs text-muted">{t("sessions.endTime")}</Text>
                 </View>
-                <Text className="text-xs font-medium text-foreground">{formatTime(endDate)}</Text>
+                <View className="flex-row items-center gap-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("end", "hour", -1)}
+                  >
+                    <Ionicons name="remove" size={12} color={mutedColor} />
+                  </Button>
+                  <Text className="text-xs font-medium text-foreground w-12 text-center">
+                    {formatTime(endDate)}
+                  </Text>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("end", "hour", 1)}
+                  >
+                    <Ionicons name="add" size={12} color={mutedColor} />
+                  </Button>
+                </View>
               </View>
             </Card.Body>
           </Card>
@@ -188,7 +298,13 @@ export function PlanObservationSheet({ visible, onClose, initialDate }: PlanObse
             className="w-full"
           >
             <Ionicons name="calendar" size={16} color="#fff" />
-            <Button.Label>{syncing ? t("common.loading") : t("sessions.createEvent")}</Button.Label>
+            <Button.Label>
+              {syncing
+                ? t("common.loading")
+                : isEditMode
+                  ? t("common.save")
+                  : t("sessions.createEvent")}
+            </Button.Label>
           </Button>
         </BottomSheet.Content>
       </BottomSheet.Portal>

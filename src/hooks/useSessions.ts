@@ -6,9 +6,18 @@ import { useCallback, useMemo } from "react";
 import { useSessionStore } from "../stores/useSessionStore";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
-import { detectSessions, getDatesWithObservations } from "../lib/sessions/sessionDetector";
+import {
+  detectSessions,
+  getDatesWithObservations,
+  isSessionDuplicate,
+} from "../lib/sessions/sessionDetector";
 import { generateLogFromFiles } from "../lib/sessions/observationLog";
-import { exportToCSV, exportToText } from "../lib/sessions/observationLog";
+import {
+  exportToCSV,
+  exportToText,
+  exportSessionToJSON,
+  exportAllSessionsToJSON,
+} from "../lib/sessions/observationLog";
 import { calculateObservationStats, getMonthlyTrend } from "../lib/sessions/statsCalculator";
 import { Logger } from "../lib/logger";
 
@@ -23,6 +32,7 @@ export function useSessions() {
   const getDatesWithSessions = useSessionStore((s) => s.getDatesWithSessions);
 
   const files = useFitsStore((s) => s.files);
+  const batchSetSessionId = useFitsStore((s) => s.batchSetSessionId);
   const sessionGapMinutes = useSettingsStore((s) => s.sessionGapMinutes);
 
   const autoDetectSessions = useCallback((): { newCount: number; totalDetected: number } => {
@@ -34,10 +44,7 @@ export function useSessions() {
 
     let newCount = 0;
     for (const session of detected) {
-      const exists = sessions.some(
-        (s) => s.date === session.date && s.startTime === session.startTime,
-      );
-      if (exists) continue;
+      if (isSessionDuplicate(session, sessions)) continue;
 
       // 从 session 内文件中提取众数位置
       const sessionFiles = files.filter((f) => session.imageIds.includes(f.id));
@@ -64,6 +71,7 @@ export function useSessions() {
       }
 
       addSession(session);
+      batchSetSessionId(session.imageIds, session.id);
 
       const entries = generateLogFromFiles(sessionFiles, session.id);
       addLogEntries(entries);
@@ -71,7 +79,7 @@ export function useSessions() {
     }
 
     return { newCount, totalDetected: detected.length };
-  }, [files, sessionGapMinutes, sessions, addSession, addLogEntries]);
+  }, [files, sessionGapMinutes, sessions, addSession, addLogEntries, batchSetSessionId]);
 
   const getSessionStats = useCallback(() => {
     return calculateObservationStats(sessions, files);
@@ -92,11 +100,24 @@ export function useSessions() {
   );
 
   const exportSessionLog = useCallback(
-    (sessionId: string, format: "csv" | "text" = "csv") => {
+    (sessionId: string, format: "csv" | "text" | "json" = "csv") => {
       const entries = logEntries.filter((e) => e.sessionId === sessionId);
+      if (format === "json") {
+        const session = sessions.find((s) => s.id === sessionId);
+        if (!session) return "";
+        return exportSessionToJSON(session, entries);
+      }
       return format === "csv" ? exportToCSV(entries) : exportToText(entries);
     },
-    [logEntries],
+    [logEntries, sessions],
+  );
+
+  const exportAllSessions = useCallback(
+    (format: "json" = "json") => {
+      if (format === "json") return exportAllSessionsToJSON(sessions);
+      return "";
+    },
+    [sessions],
   );
 
   return useMemo(
@@ -113,6 +134,7 @@ export function useSessions() {
       getObservationDates,
       getDatesWithSessions,
       exportSessionLog,
+      exportAllSessions,
     }),
     [
       sessions,
@@ -127,6 +149,7 @@ export function useSessions() {
       getObservationDates,
       getDatesWithSessions,
       exportSessionLog,
+      exportAllSessions,
     ],
   );
 }

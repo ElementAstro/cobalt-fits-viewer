@@ -2,9 +2,10 @@
  * 地图标记点详情底部弹窗 - 展示某位置的文件列表
  */
 
-import { View, Text, ScrollView } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { CloseButton, Separator, useThemeColor } from "heroui-native";
+import { BottomSheet, Separator, useThemeColor } from "heroui-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { useI18n } from "../../i18n/useI18n";
 import type { LocationCluster } from "./LocationMapView";
 import { ThumbnailGrid } from "./ThumbnailGrid";
@@ -20,56 +21,65 @@ export function LocationMarkerSheet({ cluster, onClose, onFilePress }: LocationM
   const { t } = useI18n();
   const [successColor] = useThemeColor(["success"]);
 
-  if (!cluster) return null;
-
-  const loc = cluster.location;
-  const subtitle = [loc.city, loc.region, loc.country].filter(Boolean).join(", ");
+  const loc = cluster?.location;
+  const subtitle = loc ? [loc.city, loc.region, loc.country].filter(Boolean).join(", ") : "";
 
   return (
-    <View className="absolute bottom-0 left-0 right-0 max-h-[50%] rounded-t-2xl bg-surface-secondary border-t border-separator">
-      {/* Header */}
-      <View className="flex-row items-center justify-between px-4 pt-4 pb-2">
-        <View className="flex-1">
-          <View className="flex-row items-center gap-2">
-            <Ionicons name="location" size={16} color={successColor} />
-            <Text className="text-base font-bold text-foreground" numberOfLines={1}>
-              {cluster.location.placeName ?? cluster.location.city ?? cluster.id}
-            </Text>
-          </View>
-          {subtitle ? (
-            <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
-              {subtitle}
-            </Text>
+    <BottomSheet
+      isOpen={!!cluster}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content>
+          {cluster && loc ? (
+            <>
+              {/* Header */}
+              <View className="flex-row items-center gap-2 px-4 pt-1 pb-1">
+                <Ionicons name="location" size={16} color={successColor} />
+                <View className="flex-1">
+                  <Text className="text-base font-bold text-foreground" numberOfLines={1}>
+                    {loc.placeName ?? loc.city ?? cluster.id}
+                  </Text>
+                  {subtitle ? (
+                    <Text className="mt-0.5 text-xs text-muted" numberOfLines={1}>
+                      {subtitle}
+                    </Text>
+                  ) : null}
+                  <Text className="mt-0.5 text-[10px] text-muted">
+                    {loc.latitude.toFixed(4)}°, {loc.longitude.toFixed(4)}°
+                    {loc.altitude ? ` · ${Math.round(loc.altitude)}m` : ""}
+                  </Text>
+                </View>
+              </View>
+
+              <Separator className="mx-4 my-1" />
+
+              {/* File count */}
+              <View className="px-4 py-1">
+                <Text className="text-xs text-muted">
+                  {cluster.files.length} {t("sessions.imageCount")}
+                </Text>
+              </View>
+
+              {/* Thumbnail grid */}
+              <BottomSheetScrollView style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+                <ThumbnailGrid
+                  files={cluster.files}
+                  columns={3}
+                  selectionMode={false}
+                  selectedIds={[]}
+                  onPress={onFilePress}
+                  onLongPress={() => {}}
+                  onSelect={() => {}}
+                />
+              </BottomSheetScrollView>
+            </>
           ) : null}
-          <Text className="mt-0.5 text-[10px] text-muted">
-            {loc.latitude.toFixed(4)}°, {loc.longitude.toFixed(4)}°
-            {loc.altitude ? ` · ${Math.round(loc.altitude)}m` : ""}
-          </Text>
-        </View>
-        <CloseButton onPress={onClose} />
-      </View>
-
-      <Separator className="mx-4" />
-
-      {/* File count */}
-      <View className="px-4 py-2">
-        <Text className="text-xs text-muted">
-          {cluster.files.length} {t("sessions.imageCount")}
-        </Text>
-      </View>
-
-      {/* Thumbnail grid */}
-      <ScrollView className="px-4 pb-4" showsVerticalScrollIndicator={false}>
-        <ThumbnailGrid
-          files={cluster.files}
-          columns={3}
-          selectionMode={false}
-          selectedIds={[]}
-          onPress={onFilePress}
-          onLongPress={() => {}}
-          onSelect={() => {}}
-        />
-      </ScrollView>
-    </View>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

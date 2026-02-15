@@ -1,5 +1,5 @@
 import { View, Text } from "react-native";
-import { PressableFeedback, useThemeColor } from "heroui-native";
+import { Button, PressableFeedback, useThemeColor } from "heroui-native";
 import { useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
@@ -7,8 +7,10 @@ import { useI18n } from "../../i18n/useI18n";
 interface ObservationCalendarProps {
   datesWithData: number[];
   plannedDates?: number[];
+  sessionCountByDate?: Map<number, number>;
   year: number;
   month: number;
+  selectedDate?: string | null;
   onMonthChange: (year: number, month: number) => void;
   onDatePress?: (date: number) => void;
   onDateLongPress?: (date: number) => void;
@@ -33,8 +35,10 @@ const MONTH_KEYS = [
 export function ObservationCalendar({
   datesWithData,
   plannedDates = [],
+  sessionCountByDate,
   year,
   month,
+  selectedDate,
   onMonthChange,
   onDatePress,
   onDateLongPress,
@@ -42,8 +46,12 @@ export function ObservationCalendar({
   const { t } = useI18n();
   const [_successColor, mutedColor, _accentColor] = useThemeColor(["success", "muted", "accent"]);
 
-  const weekdayLabels = WEEKDAY_KEYS.map((k) => t(`sessions.weekdays.${k}` as any));
-  const monthName = t(`sessions.months.${MONTH_KEYS[month]}` as any);
+  const weekdayLabels = WEEKDAY_KEYS.map((k: string) => t(`sessions.weekdays.${k}`));
+  const monthName = t(`sessions.months.${MONTH_KEYS[month]}`);
+
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+  const todayDate = today.getDate();
 
   const calendarDays = useMemo(() => {
     const firstDay = new Date(year, month, 1).getDay();
@@ -66,6 +74,11 @@ export function ObservationCalendar({
     else onMonthChange(year, month + 1);
   };
 
+  const goToToday = () => {
+    const now = new Date();
+    onMonthChange(now.getFullYear(), now.getMonth());
+  };
+
   return (
     <View className="rounded-xl bg-surface-secondary p-3">
       {/* Month Navigation */}
@@ -74,9 +87,16 @@ export function ObservationCalendar({
           <PressableFeedback.Highlight />
           <Ionicons name="chevron-back" size={18} color={mutedColor} />
         </PressableFeedback>
-        <Text className="text-sm font-semibold text-foreground">
-          {monthName} {year}
-        </Text>
+        <View className="flex-row items-center gap-2">
+          <Text className="text-sm font-semibold text-foreground">
+            {monthName} {year}
+          </Text>
+          {!isCurrentMonth && (
+            <Button size="sm" variant="ghost" isIconOnly onPress={goToToday}>
+              <Ionicons name="today-outline" size={14} color={mutedColor} />
+            </Button>
+          )}
+        </View>
         <PressableFeedback onPress={goToNextMonth} className="rounded-full p-1">
           <PressableFeedback.Highlight />
           <Ionicons name="chevron-forward" size={18} color={mutedColor} />
@@ -92,11 +112,36 @@ export function ObservationCalendar({
         ))}
       </View>
 
+      {/* Legend */}
+      <View className="flex-row items-center gap-3 mb-2 px-1">
+        <View className="flex-row items-center gap-1">
+          <View className="h-2 w-2 rounded-full bg-success" />
+          <Text className="text-[8px] text-muted">{t("sessions.session")}</Text>
+        </View>
+        <View className="flex-row items-center gap-1">
+          <View className="h-2 w-2 rounded-full bg-accent" />
+          <Text className="text-[8px] text-muted">{t("sessions.plans")}</Text>
+        </View>
+        {isCurrentMonth && (
+          <View className="flex-row items-center gap-1">
+            <View className="h-2 w-2 rounded-full border border-primary/50" />
+            <Text className="text-[8px] text-muted">{t("sessions.today")}</Text>
+          </View>
+        )}
+      </View>
+
       {/* Calendar Grid */}
       <View className="flex-row flex-wrap">
         {calendarDays.map((day, i) => {
           const hasData = day !== null && datesWithData.includes(day);
           const hasPlanned = day !== null && plannedDates.includes(day);
+          const isToday = isCurrentMonth && day === todayDate;
+          const isSelected =
+            day !== null &&
+            selectedDate ===
+              `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const sessionCount =
+            day !== null && sessionCountByDate ? (sessionCountByDate.get(day) ?? 0) : 0;
           return (
             <PressableFeedback
               key={i}
@@ -109,16 +154,28 @@ export function ObservationCalendar({
               {day !== null ? (
                 <View
                   className={`h-7 w-7 items-center justify-center rounded-full ${
-                    hasData ? "bg-success/20" : hasPlanned ? "bg-accent/15" : ""
+                    isSelected
+                      ? "bg-primary"
+                      : hasData
+                        ? "bg-success/20"
+                        : hasPlanned
+                          ? "bg-accent/15"
+                          : isToday
+                            ? "border border-primary/50"
+                            : ""
                   }`}
                 >
                   <Text
                     className={`text-xs ${
-                      hasData
-                        ? "font-bold text-success"
-                        : hasPlanned
-                          ? "font-medium text-accent"
-                          : "text-foreground"
+                      isSelected
+                        ? "font-bold text-primary-foreground"
+                        : hasData
+                          ? "font-bold text-success"
+                          : hasPlanned
+                            ? "font-medium text-accent"
+                            : isToday
+                              ? "font-bold text-primary"
+                              : "text-foreground"
                     }`}
                   >
                     {day}
@@ -126,6 +183,9 @@ export function ObservationCalendar({
                   <View className="absolute bottom-0.5 flex-row gap-0.5">
                     {hasData && <View className="h-1 w-1 rounded-full bg-success" />}
                     {hasPlanned && <View className="h-1 w-1 rounded-full bg-accent" />}
+                    {sessionCount > 1 && (
+                      <Text className="text-[6px] font-bold text-success">{sessionCount}</Text>
+                    )}
                   </View>
                 </View>
               ) : (

@@ -11,12 +11,22 @@ interface AlbumCardProps {
   album: Album;
   onPress?: () => void;
   onLongPress?: () => void;
+  /** Compact layout for landscape mode */
+  compact?: boolean;
 }
 
-export const AlbumCard = memo(function AlbumCard({ album, onPress, onLongPress }: AlbumCardProps) {
+export const AlbumCard = memo(function AlbumCard({
+  album,
+  onPress,
+  onLongPress,
+  compact = false,
+}: AlbumCardProps) {
   const [mutedColor] = useThemeColor(["muted"]);
   const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = Math.max(140, Math.min(180, (screenWidth - 48) / 2.5));
+  const cardWidth = compact
+    ? Math.max(110, Math.min(140, (screenWidth - 48) / 4))
+    : Math.max(140, Math.min(180, (screenWidth - 48) / 2.5));
+  const coverHeight = compact ? 72 : 112;
   const getFileById = useFitsStore((s) => s.getFileById);
 
   const coverUri = useMemo(() => {
@@ -29,7 +39,10 @@ export const AlbumCard = memo(function AlbumCard({ album, onPress, onLongPress }
     <Pressable onPress={onPress} onLongPress={onLongPress}>
       <Card variant="secondary" style={{ width: cardWidth }}>
         <Card.Body className="p-0">
-          <View className="h-28 w-full items-center justify-center rounded-t-lg bg-surface-secondary overflow-hidden">
+          <View
+            className="w-full items-center justify-center rounded-t-lg bg-surface-secondary overflow-hidden"
+            style={{ height: coverHeight }}
+          >
             {coverUri ? (
               <Image
                 source={{ uri: coverUri }}
@@ -47,8 +60,11 @@ export const AlbumCard = memo(function AlbumCard({ album, onPress, onLongPress }
               </View>
             )}
           </View>
-          <View className="p-2">
-            <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
+          <View className={compact ? "p-1.5" : "p-2"}>
+            <Text
+              className={`${compact ? "text-[10px]" : "text-xs"} font-semibold text-foreground`}
+              numberOfLines={1}
+            >
               {album.name}
             </Text>
             <Text className="text-[9px] text-muted">{album.imageIds.length} images</Text>

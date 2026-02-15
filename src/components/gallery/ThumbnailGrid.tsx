@@ -16,6 +16,10 @@ interface ThumbnailGridProps {
   onSelect?: (fileId: string) => void;
   scrollEnabled?: boolean;
   ListHeaderComponent?: React.ReactElement | null;
+  showFilename?: boolean;
+  showObject?: boolean;
+  showFilter?: boolean;
+  showExposure?: boolean;
 }
 
 const ThumbnailItem = memo(function ThumbnailItem({
@@ -28,6 +32,10 @@ const ThumbnailItem = memo(function ThumbnailItem({
   onSelect,
   successColor,
   mutedColor,
+  showFilename = true,
+  showObject = false,
+  showFilter = true,
+  showExposure = false,
 }: {
   file: FitsMetadata;
   size: number;
@@ -38,6 +46,10 @@ const ThumbnailItem = memo(function ThumbnailItem({
   onSelect?: (fileId: string) => void;
   successColor: string;
   mutedColor: string;
+  showFilename?: boolean;
+  showObject?: boolean;
+  showFilter?: boolean;
+  showExposure?: boolean;
 }) {
   return (
     <Pressable
@@ -74,11 +86,26 @@ const ThumbnailItem = memo(function ThumbnailItem({
         )}
 
         {/* Overlay info */}
-        <View className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-1">
-          <Text className="text-[8px] text-white" numberOfLines={1}>
-            {file.filename}
-          </Text>
-        </View>
+        {(showFilename || showObject || showFilter || showExposure) && (
+          <View className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-1">
+            {showFilename && (
+              <Text className="text-[8px] text-white" numberOfLines={1}>
+                {file.filename}
+              </Text>
+            )}
+            {(showObject || showFilter || showExposure) && (
+              <Text className="text-[7px] text-white/70" numberOfLines={1}>
+                {[
+                  showObject && file.object,
+                  showFilter && file.filter,
+                  showExposure && file.exptime != null && `${file.exptime}s`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            )}
+          </View>
+        )}
 
         {/* Favorite badge */}
         {file.isFavorite && (
@@ -112,10 +139,16 @@ export function ThumbnailGrid({
   onSelect,
   scrollEnabled = true,
   ListHeaderComponent,
+  showFilename = true,
+  showObject = false,
+  showFilter = true,
+  showExposure = false,
 }: ThumbnailGridProps) {
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
-  const { width: screenWidth } = useWindowDimensions();
-  const itemSize = Math.floor((screenWidth - 32) / columns);
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isLandscapeGrid = screenWidth > screenHeight;
+  const gridPadding = isLandscapeGrid ? 16 : 32;
+  const itemSize = Math.floor((screenWidth - gridPadding) / columns);
 
   const renderItem = useCallback(
     ({ item }: { item: FitsMetadata }) => (
@@ -129,6 +162,10 @@ export function ThumbnailGrid({
         onSelect={onSelect}
         successColor={successColor}
         mutedColor={mutedColor}
+        showFilename={showFilename}
+        showObject={showObject}
+        showFilter={showFilter}
+        showExposure={showExposure}
       />
     ),
     [
@@ -140,6 +177,10 @@ export function ThumbnailGrid({
       onSelect,
       successColor,
       mutedColor,
+      showFilename,
+      showObject,
+      showFilter,
+      showExposure,
     ],
   );
 

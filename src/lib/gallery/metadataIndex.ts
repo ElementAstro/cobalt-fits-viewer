@@ -77,7 +77,8 @@ export function searchFiles(files: FitsMetadata[], query: string): FitsMetadata[
       f.telescope?.toLowerCase().includes(q) ||
       f.tags.some((t) => t.toLowerCase().includes(q)) ||
       f.location?.city?.toLowerCase().includes(q) ||
-      f.location?.placeName?.toLowerCase().includes(q)
+      f.location?.placeName?.toLowerCase().includes(q) ||
+      f.notes?.toLowerCase().includes(q)
     );
   });
 }

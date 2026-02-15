@@ -5,6 +5,7 @@
 
 import { FITS, Image, BinaryTable, Table, CompressedImage } from "fitsjs-ng";
 import type { FitsMetadata, HeaderKeyword, HDUDataType } from "./types";
+import { classifyFrameType } from "../gallery/frameClassifier";
 
 // ===== FITS 文件加载 =====
 
@@ -245,6 +246,8 @@ export function extractMetadata(
     detector: getString("DETECTOR"),
     gain: getNumber("GAIN"),
     ccdTemp: getNumber("CCD-TEMP") ?? getNumber("SET-TEMP"),
+
+    frameType: classifyFrameType(getString("IMAGETYP"), getString("FRAME"), fileInfo.filename),
   };
 }
 

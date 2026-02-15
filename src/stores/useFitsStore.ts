@@ -11,7 +11,7 @@ interface FitsStoreState {
   files: FitsMetadata[];
   selectedIds: string[];
   isSelectionMode: boolean;
-  sortBy: "name" | "date" | "size";
+  sortBy: "name" | "date" | "size" | "quality";
   sortOrder: "asc" | "desc";
   searchQuery: string;
   filterTags: string[];
@@ -22,9 +22,13 @@ interface FitsStoreState {
   removeFile: (id: string) => void;
   removeFiles: (ids: string[]) => void;
   updateFile: (id: string, updates: Partial<FitsMetadata>) => void;
+  batchSetSessionId: (fileIds: string[], sessionId: string | undefined) => void;
   toggleFavorite: (id: string) => void;
   addTag: (id: string, tag: string) => void;
   removeTag: (id: string, tag: string) => void;
+  batchAddTag: (ids: string[], tag: string) => void;
+  batchRemoveTag: (ids: string[], tag: string) => void;
+  batchSetTags: (ids: string[], tags: string[]) => void;
 
   // Selection
   toggleSelection: (id: string) => void;
@@ -33,7 +37,7 @@ interface FitsStoreState {
   setSelectionMode: (mode: boolean) => void;
 
   // Sorting & Filtering
-  setSortBy: (sortBy: "name" | "date" | "size") => void;
+  setSortBy: (sortBy: "name" | "date" | "size" | "quality") => void;
   setSortOrder: (order: "asc" | "desc") => void;
   setSearchQuery: (query: string) => void;
   setFilterTags: (tags: string[]) => void;
@@ -76,6 +80,11 @@ export const useFitsStore = create<FitsStoreState>()(
           files: state.files.map((f) => (f.id === id ? { ...f, ...updates } : f)),
         })),
 
+      batchSetSessionId: (fileIds, sessionId) =>
+        set((state) => ({
+          files: state.files.map((f) => (fileIds.includes(f.id) ? { ...f, sessionId } : f)),
+        })),
+
       toggleFavorite: (id) =>
         set((state) => ({
           files: state.files.map((f) => (f.id === id ? { ...f, isFavorite: !f.isFavorite } : f)),
@@ -93,6 +102,25 @@ export const useFitsStore = create<FitsStoreState>()(
           files: state.files.map((f) =>
             f.id === id ? { ...f, tags: f.tags.filter((t) => t !== tag) } : f,
           ),
+        })),
+
+      batchAddTag: (ids, tag) =>
+        set((state) => ({
+          files: state.files.map((f) =>
+            ids.includes(f.id) && !f.tags.includes(tag) ? { ...f, tags: [...f.tags, tag] } : f,
+          ),
+        })),
+
+      batchRemoveTag: (ids, tag) =>
+        set((state) => ({
+          files: state.files.map((f) =>
+            ids.includes(f.id) ? { ...f, tags: f.tags.filter((t) => t !== tag) } : f,
+          ),
+        })),
+
+      batchSetTags: (ids, tags) =>
+        set((state) => ({
+          files: state.files.map((f) => (ids.includes(f.id) ? { ...f, tags } : f)),
         })),
 
       toggleSelection: (id) =>
@@ -162,6 +190,9 @@ export const useFitsStore = create<FitsStoreState>()(
               break;
             case "size":
               cmp = a.fileSize - b.fileSize;
+              break;
+            case "quality":
+              cmp = (a.qualityScore ?? -1) - (b.qualityScore ?? -1);
               break;
           }
           return sortOrder === "asc" ? cmp : -cmp;

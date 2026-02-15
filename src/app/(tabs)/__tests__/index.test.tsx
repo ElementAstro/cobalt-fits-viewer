@@ -2,6 +2,19 @@ import React from "react";
 import { render, screen } from "@testing-library/react-native";
 import FilesScreen from "../index";
 
+// Mock useScreenOrientation hook
+jest.mock("../../../hooks/useScreenOrientation", () => ({
+  useScreenOrientation: () => ({
+    isLandscape: false,
+    isPortrait: true,
+    orientation: 1,
+    screenWidth: 390,
+    screenHeight: 844,
+    lockOrientation: jest.fn(),
+    unlockOrientation: jest.fn(),
+  }),
+}));
+
 // Mock useFileManager hook
 jest.mock("../../../hooks/useFileManager", () => ({
   useFileManager: () => ({

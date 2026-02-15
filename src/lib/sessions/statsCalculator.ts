@@ -45,6 +45,9 @@ export function calculateObservationStats(
     if (session.equipment.camera) {
       byEquipment[session.equipment.camera] = (byEquipment[session.equipment.camera] ?? 0) + 1;
     }
+    if (session.equipment.mount) {
+      byEquipment[session.equipment.mount] = (byEquipment[session.equipment.mount] ?? 0) + 1;
+    }
   }
 
   // 按滤镜统计曝光

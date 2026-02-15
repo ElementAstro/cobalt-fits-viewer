@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { calculateStats } from "../../lib/utils/pixelMath";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { EmptyState } from "../../components/common/EmptyState";
@@ -73,11 +74,16 @@ export default function StackingScreen() {
     setSelectedIds([]);
   }, []);
 
-  const [method, setMethod] = useState<StackMethod>("average");
-  const [sigmaValue, setSigmaValue] = useState(2.5);
+  const settingsStackMethod = useSettingsStore((s) => s.defaultStackMethod) as StackMethod;
+  const settingsSigma = useSettingsStore((s) => s.defaultSigmaValue);
+  const settingsAlignment = useSettingsStore((s) => s.defaultAlignmentMode) as AlignmentMode;
+  const settingsQuality = useSettingsStore((s) => s.defaultEnableQuality);
+
+  const [method, setMethod] = useState<StackMethod>(settingsStackMethod);
+  const [sigmaValue, setSigmaValue] = useState(settingsSigma);
   const [calibration, setCalibration] = useState<CalibrationFrames>({});
-  const [alignmentMode, setAlignmentMode] = useState<AlignmentMode>("none");
-  const [enableQuality, setEnableQuality] = useState(false);
+  const [alignmentMode, setAlignmentMode] = useState<AlignmentMode>(settingsAlignment);
+  const [enableQuality, setEnableQuality] = useState(settingsQuality);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
   const [filterGroup, setFilterGroup] = useState<string | null>(null);
 
@@ -104,7 +110,7 @@ export default function StackingScreen() {
 
   const handleStack = useCallback(async () => {
     if (selectedFiles.length < 2) {
-      Alert.alert(t("common.error"), t("editor.selectAtLeast2" as any));
+      Alert.alert(t("common.error"), t("editor.selectAtLeast2"));
       return;
     }
 
@@ -141,12 +147,12 @@ export default function StackingScreen() {
         exportFormat,
       );
       if (path) {
-        Alert.alert(t("common.success"), t("viewer.exportSuccess" as any));
+        Alert.alert(t("common.success"), t("viewer.exportSuccess"));
       } else {
-        Alert.alert(t("common.error"), t("viewer.exportFailed" as any));
+        Alert.alert(t("common.error"), t("viewer.exportFailed"));
       }
     } catch {
-      Alert.alert(t("common.error"), t("viewer.exportFailed" as any));
+      Alert.alert(t("common.error"), t("viewer.exportFailed"));
     }
   }, [stacking.result, saveImage, exportFormat, t]);
 
@@ -206,7 +212,7 @@ export default function StackingScreen() {
         },
       }));
 
-      Alert.alert(t(`editor.${type}Frame` as any), undefined, [
+      Alert.alert(t(`editor.${type}Frame`), undefined, [
         ...options,
         { text: t("common.cancel"), style: "cancel" },
       ]);
@@ -247,7 +253,7 @@ export default function StackingScreen() {
 
         {/* Method Selection */}
         <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-          {t("editor.algorithm" as any)}
+          {t("editor.algorithm")}
         </Text>
         <View className="flex-row flex-wrap gap-2 mb-4">
           {METHODS.map((m) => (
@@ -265,7 +271,7 @@ export default function StackingScreen() {
                   <Text
                     className={`mt-1 text-[9px] ${method === m.key ? "text-success font-semibold" : "text-muted"}`}
                   >
-                    {t(m.labelKey as any)}
+                    {t(m.labelKey)}
                   </Text>
                 </Card.Body>
               </Card>
@@ -277,7 +283,7 @@ export default function StackingScreen() {
         {(method === "sigma" || method === "winsorized") && (
           <View className="mb-4">
             <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("editor.sigma" as any)}: {sigmaValue}
+              {t("editor.sigma")}: {sigmaValue}
             </Text>
             <View className="flex-row gap-2">
               {[1.5, 2.0, 2.5, 3.0, 3.5].map((s) => (
@@ -296,7 +302,7 @@ export default function StackingScreen() {
 
         {/* Alignment Mode */}
         <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-          {t("editor.alignment" as any)}
+          {t("editor.alignment")}
         </Text>
         <View className="flex-row gap-2 mb-4">
           {ALIGNMENT_MODES.map((am) => (
@@ -318,7 +324,7 @@ export default function StackingScreen() {
                   <Text
                     className={`mt-1 text-[9px] ${alignmentMode === am.key ? "text-success font-semibold" : "text-muted"}`}
                   >
-                    {t(am.labelKey as any)}
+                    {t(am.labelKey)}
                   </Text>
                 </Card.Body>
               </Card>
@@ -331,7 +337,7 @@ export default function StackingScreen() {
           <Accordion.Item value="advanced">
             <Accordion.Trigger>
               <Text className="text-xs font-semibold uppercase text-muted">
-                {t("editor.advancedOptions" as any)}
+                {t("editor.advancedOptions")}
               </Text>
               <Accordion.Indicator />
             </Accordion.Trigger>
@@ -340,12 +346,12 @@ export default function StackingScreen() {
                 {/* Quality Evaluation Toggle */}
                 <Checkbox isSelected={enableQuality} onSelectedChange={setEnableQuality}>
                   <Checkbox.Indicator />
-                  <Label className="text-xs">{t("editor.enableQualityEval" as any)}</Label>
+                  <Label className="text-xs">{t("editor.enableQualityEval")}</Label>
                 </Checkbox>
 
                 {/* Export Format */}
                 <View className="flex-row items-center gap-2">
-                  <Text className="text-[10px] text-muted">{t("editor.exportFormat" as any)}:</Text>
+                  <Text className="text-[10px] text-muted">{t("editor.exportFormat")}:</Text>
                   {(["png", "jpeg", "tiff"] as ExportFormat[]).map((fmt) => (
                     <Chip
                       key={fmt}
@@ -370,7 +376,7 @@ export default function StackingScreen() {
             <Accordion.Trigger>
               <View className="flex-row items-center gap-1">
                 <Text className="text-xs font-semibold uppercase text-muted">
-                  {t("editor.calibrationFrames" as any)}
+                  {t("editor.calibrationFrames")}
                 </Text>
                 {(calibration.darkFilepath ||
                   calibration.flatFilepath ||
@@ -385,7 +391,7 @@ export default function StackingScreen() {
                 {(["dark", "flat", "bias"] as const).map((type) => {
                   const key = `${type}Filepath` as "darkFilepath" | "flatFilepath" | "biasFilepath";
                   const filepath = calibration[key];
-                  const labelKey = `editor.${type}Frame` as any;
+                  const labelKey: string = `editor.${type}Frame`;
                   const filename = filepath?.split("/").pop();
                   return (
                     <View key={type} className="flex-row items-center gap-2">
@@ -411,7 +417,7 @@ export default function StackingScreen() {
                               ) : (
                                 <Text className="text-[10px] text-muted italic">
                                   {t(
-                                    `editor.select${type.charAt(0).toUpperCase() + type.slice(1)}` as any,
+                                    `editor.select${type.charAt(0).toUpperCase() + type.slice(1)}`,
                                   )}
                                 </Text>
                               )}
@@ -458,7 +464,7 @@ export default function StackingScreen() {
         {stacking.result && (
           <>
             <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("editor.resultPreview" as any)}
+              {t("editor.resultPreview")}
             </Text>
             <View className="h-48 mb-3 rounded-lg overflow-hidden bg-black">
               <FitsCanvas
@@ -477,23 +483,23 @@ export default function StackingScreen() {
               <Card variant="secondary" className="mb-2">
                 <Card.Body className="gap-1 p-3">
                   <Text className="text-[10px] font-semibold text-muted mb-1">
-                    {stacking.result.frameCount} {t("editor.frames" as any)} ·{" "}
-                    {t(`editor.${stacking.result.method}` as any)} ·{" "}
+                    {stacking.result.frameCount} {t("editor.frames")} ·{" "}
+                    {t(`editor.${stacking.result.method}`)} ·{" "}
                     {(stacking.result.duration / 1000).toFixed(1)}s
                     {stacking.result.alignmentMode !== "none" &&
-                      ` · ${t(`editor.align${stacking.result.alignmentMode.charAt(0).toUpperCase() + stacking.result.alignmentMode.slice(1)}` as any)}`}
+                      ` · ${t(`editor.align${stacking.result.alignmentMode.charAt(0).toUpperCase() + stacking.result.alignmentMode.slice(1)}`)}`}
                   </Text>
                   <Text className="text-xs text-foreground">
-                    {t("editor.statMean" as any)}: {resultStats.mean.toFixed(2)}
+                    {t("editor.statMean")}: {resultStats.mean.toFixed(2)}
                   </Text>
                   <Text className="text-xs text-foreground">
-                    {t("editor.statMedian" as any)}: {resultStats.median.toFixed(2)}
+                    {t("editor.statMedian")}: {resultStats.median.toFixed(2)}
                   </Text>
                   <Text className="text-xs text-foreground">
-                    {t("editor.statStdDev" as any)}: {resultStats.stddev.toFixed(2)}
+                    {t("editor.statStdDev")}: {resultStats.stddev.toFixed(2)}
                   </Text>
                   <Text className="text-xs text-foreground">
-                    {t("editor.statSNR" as any)}: {resultStats.snr.toFixed(2)}
+                    {t("editor.statSNR")}: {resultStats.snr.toFixed(2)}
                   </Text>
                 </Card.Body>
               </Card>
@@ -504,7 +510,7 @@ export default function StackingScreen() {
               <Card variant="secondary" className="mb-2">
                 <Card.Body className="gap-1 p-3">
                   <Text className="text-[10px] font-semibold text-muted mb-1">
-                    {t("editor.alignmentResults" as any)}
+                    {t("editor.alignmentResults")}
                   </Text>
                   {stacking.result.alignmentResults.map((ar, idx) => (
                     <View key={idx} className="flex-row items-center gap-2">
@@ -513,8 +519,8 @@ export default function StackingScreen() {
                       </Text>
                       <Text className="text-[9px] text-muted">
                         {ar.matchedStars === -1
-                          ? t("editor.referenceFrame" as any)
-                          : `${ar.matchedStars} ${t("editor.stars" as any)} · RMS ${ar.rmsError.toFixed(2)}px`}
+                          ? t("editor.referenceFrame")
+                          : `${ar.matchedStars} ${t("editor.stars")} · RMS ${ar.rmsError.toFixed(2)}px`}
                       </Text>
                     </View>
                   ))}
@@ -527,7 +533,7 @@ export default function StackingScreen() {
               <Card variant="secondary" className="mb-2">
                 <Card.Body className="gap-1 p-3">
                   <Text className="text-[10px] font-semibold text-muted mb-1">
-                    {t("editor.qualityMetrics" as any)}
+                    {t("editor.qualityMetrics")}
                   </Text>
                   {stacking.result.qualityMetrics.map((qm, idx) => (
                     <View key={idx} className="flex-row items-center gap-2">
@@ -538,8 +544,8 @@ export default function StackingScreen() {
                         {selectedFiles[idx]?.filename ?? `Frame ${idx + 1}`}
                       </Text>
                       <Text className="text-[9px] text-muted">
-                        {t("editor.qualityScore" as any)}: {qm.score} · FWHM{" "}
-                        {qm.medianFwhm.toFixed(1)} · {qm.starCount} {t("editor.stars" as any)}
+                        {t("editor.qualityScore")}: {qm.score} · FWHM {qm.medianFwhm.toFixed(1)} ·{" "}
+                        {qm.starCount} {t("editor.stars")}
                       </Text>
                     </View>
                   ))}
@@ -551,7 +557,7 @@ export default function StackingScreen() {
               <Button variant="outline" size="sm" onPress={handleExport} className="flex-1">
                 <Ionicons name="download-outline" size={14} color={successColor} />
                 <Button.Label>
-                  {t("editor.exportResult" as any)} ({exportFormat.toUpperCase()})
+                  {t("editor.exportResult")} ({exportFormat.toUpperCase()})
                 </Button.Label>
               </Button>
               <Button variant="outline" size="sm" onPress={handleShareResult}>
@@ -565,17 +571,17 @@ export default function StackingScreen() {
         {/* Frame Selection Header */}
         <View className="flex-row items-center justify-between mb-2">
           <Text className="text-xs font-semibold uppercase text-muted">
-            {t("editor.frames" as any)} ({selectedFiles.length}/{files.length})
+            {t("editor.frames")} ({selectedFiles.length}/{files.length})
           </Text>
           <View className="flex-row gap-2">
             <Button size="sm" variant="ghost" onPress={selectAll}>
               <Button.Label className="text-[10px] text-success">
-                {t("editor.selectAll" as any)}
+                {t("editor.selectAll")}
               </Button.Label>
             </Button>
             <Button size="sm" variant="ghost" onPress={clearSelection}>
               <Button.Label className="text-[10px] text-muted">
-                {t("editor.deselectAll" as any)}
+                {t("editor.deselectAll")}
               </Button.Label>
             </Button>
           </View>
@@ -589,7 +595,7 @@ export default function StackingScreen() {
               variant={filterGroup === null ? "primary" : "secondary"}
               onPress={() => setFilterGroup(null)}
             >
-              <Chip.Label className="text-[9px]">{t("editor.allFilters" as any)}</Chip.Label>
+              <Chip.Label className="text-[9px]">{t("editor.allFilters")}</Chip.Label>
             </Chip>
             {Object.entries(filterGroups).map(([filter, count]) => (
               <Chip
@@ -610,7 +616,7 @@ export default function StackingScreen() {
         )}
 
         {displayFiles.length === 0 ? (
-          <EmptyState icon="images-outline" title={t("editor.noFitsAvailable" as any)} />
+          <EmptyState icon="images-outline" title={t("editor.noFitsAvailable")} />
         ) : (
           <View className="gap-1.5">
             {displayFiles.map((file) => {
@@ -655,7 +661,7 @@ export default function StackingScreen() {
           >
             <Ionicons name="layers-outline" size={16} color="#fff" />
             <Button.Label>
-              {t("editor.stackButton" as any)} ({selectedFiles.length} {t("editor.frames" as any)})
+              {t("editor.stackButton")} ({selectedFiles.length} {t("editor.frames")})
             </Button.Label>
           </Button>
         </View>

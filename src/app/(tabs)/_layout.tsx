@@ -2,9 +2,11 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 
 export default function TabLayout() {
   const { t } = useI18n();
+  const { isLandscape } = useScreenOrientation();
   const [background, borderColor, activeColor, inactiveColor] = useThemeColor([
     "background",
     "separator",
@@ -19,7 +21,9 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: background,
           borderTopColor: borderColor,
+          ...(isLandscape && { height: 40, paddingBottom: 4 }),
         },
+        tabBarShowLabel: !isLandscape,
         tabBarActiveTintColor: activeColor,
         tabBarInactiveTintColor: inactiveColor,
       }}

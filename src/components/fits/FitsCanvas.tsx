@@ -133,6 +133,16 @@ interface FitsCanvasProps {
   cursorY: number;
   onPixelTap?: (imageX: number, imageY: number) => void;
   onTransformChange?: (transform: CanvasTransform) => void;
+  gridColor?: string;
+  gridOpacity?: number;
+  crosshairColor?: string;
+  crosshairOpacity?: number;
+  minScale?: number;
+  maxScale?: number;
+  doubleTapScale?: number;
+  onSwipeLeft?: () => void;
+  onSwipeRight?: () => void;
+  onLongPress?: () => void;
 }
 
 export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function FitsCanvas(
@@ -146,6 +156,16 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     cursorY,
     onPixelTap,
     onTransformChange,
+    gridColor: gridColorProp = "#64c8ff",
+    gridOpacity: gridOpacityProp = 0.3,
+    crosshairColor: crosshairColorProp = "#ff5050",
+    crosshairOpacity: crosshairOpacityProp = 0.7,
+    minScale: propMinScale = MIN_SCALE,
+    maxScale: propMaxScale = MAX_SCALE,
+    doubleTapScale: propDoubleTapScale = DOUBLE_TAP_SCALE,
+    onSwipeLeft,
+    onSwipeRight,
+    onLongPress,
   },
   ref,
 ) {
@@ -300,6 +320,24 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     })
     .onEnd((e) => {
       if (isPinching.value) return;
+
+      // Detect horizontal swipe for file navigation when not zoomed in
+      const SWIPE_VELOCITY_THRESHOLD = 800;
+      if (
+        scale.value <= 1.05 &&
+        Math.abs(e.velocityX) > SWIPE_VELOCITY_THRESHOLD &&
+        Math.abs(e.velocityX) > Math.abs(e.velocityY) * 2
+      ) {
+        if (e.velocityX > 0 && onSwipeRight) {
+          runOnJS(onSwipeRight)();
+          return;
+        }
+        if (e.velocityX < 0 && onSwipeLeft) {
+          runOnJS(onSwipeLeft)();
+          return;
+        }
+      }
+
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
       const { maxX, maxY } = getTranslateBounds(scale.value, imgWidth, imgHeight, cw, ch);
@@ -350,7 +388,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     .onUpdate((e) => {
       // Allow slight over-zoom with rubber band feel, hard clamp at extremes
       const rawScale = savedScale.value * e.scale;
-      const newScale = clamp(rawScale, MIN_SCALE * 0.5, MAX_SCALE * 1.5);
+      const newScale = clamp(rawScale, propMinScale * 0.5, propMaxScale * 1.5);
 
       // Track focal point delta for accurate pinch center
       const focalDeltaX = e.focalX - focalX.value;
@@ -373,7 +411,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     })
     .onEnd(() => {
       // Snap scale back to valid range with spring
-      const clampedScale = clamp(scale.value, MIN_SCALE, MAX_SCALE);
+      const clampedScale = clamp(scale.value, propMinScale, propMaxScale);
       if (Math.abs(scale.value - clampedScale) > 0.01) {
         scale.value = withSpring(clampedScale, SPRING_CONFIG);
       }
@@ -414,7 +452,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         savedTranslateY.value = 0;
       } else {
         // Zoom to DOUBLE_TAP_SCALE at tap point, clamped to bounds
-        const targetScale = DOUBLE_TAP_SCALE;
+        const targetScale = propDoubleTapScale;
         const cx = cw / 2;
         const cy = ch / 2;
         const rawTx = cx - (e.x - translateX.value) * (targetScale / scale.value);
@@ -455,17 +493,25 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       }
     });
 
+  const longPressGesture = Gesture.LongPress()
+    .minDuration(500)
+    .onEnd((_e, success) => {
+      if (success && onLongPress) {
+        runOnJS(onLongPress)();
+      }
+    });
+
   const composedGesture = Gesture.Simultaneous(
     panGesture,
     pinchGesture,
-    Gesture.Exclusive(doubleTapGesture, singleTapGesture),
+    Gesture.Exclusive(doubleTapGesture, singleTapGesture, longPressGesture),
   );
 
   // --- Skia Transform ---
   const transform = useDerivedValue(() => [
+    { scale: scale.value },
     { translateX: translateX.value },
     { translateY: translateY.value },
-    { scale: scale.value },
   ]);
 
   // Compute the fit-to-canvas offset for centering
@@ -506,17 +552,19 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
   const gridPaint = useMemo(() => {
     const p = Skia.Paint();
-    p.setColor(Skia.Color("rgba(100, 200, 255, 0.3)"));
+    p.setColor(Skia.Color(gridColorProp));
+    p.setAlphaf(gridOpacityProp);
     p.setStrokeWidth(1);
     return p;
-  }, []);
+  }, [gridColorProp, gridOpacityProp]);
 
   const crosshairPaint = useMemo(() => {
     const p = Skia.Paint();
-    p.setColor(Skia.Color("rgba(255, 80, 80, 0.7)"));
+    p.setColor(Skia.Color(crosshairColorProp));
+    p.setAlphaf(crosshairOpacityProp);
     p.setStrokeWidth(1);
     return p;
-  }, []);
+  }, [crosshairColorProp, crosshairOpacityProp]);
 
   if (!skImage) return null;
 

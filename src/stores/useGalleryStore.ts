@@ -3,7 +3,7 @@
  */
 
 import { create } from "zustand";
-import type { GalleryViewMode } from "../lib/fits/types";
+import type { GalleryViewMode, FrameType } from "../lib/fits/types";
 
 interface GalleryStoreState {
   viewMode: GalleryViewMode;
@@ -20,6 +20,7 @@ interface GalleryStoreState {
   filterTelescope: string;
   filterFavoriteOnly: boolean;
   filterTag: string;
+  filterFrameType: FrameType | "";
 
   // Actions
   setViewMode: (mode: GalleryViewMode) => void;
@@ -37,6 +38,7 @@ interface GalleryStoreState {
   setFilterTelescope: (value: string) => void;
   setFilterFavoriteOnly: (value: boolean) => void;
   setFilterTag: (value: string) => void;
+  setFilterFrameType: (value: FrameType | "") => void;
   clearFilters: () => void;
 }
 
@@ -54,6 +56,7 @@ export const useGalleryStore = create<GalleryStoreState>((set) => ({
   filterTelescope: "",
   filterFavoriteOnly: false,
   filterTag: "",
+  filterFrameType: "",
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setGridColumns: (cols) => set({ gridColumns: cols }),
@@ -77,6 +80,7 @@ export const useGalleryStore = create<GalleryStoreState>((set) => ({
   setFilterTelescope: (value) => set({ filterTelescope: value }),
   setFilterFavoriteOnly: (value) => set({ filterFavoriteOnly: value }),
   setFilterTag: (value) => set({ filterTag: value }),
+  setFilterFrameType: (value) => set({ filterFrameType: value }),
 
   clearFilters: () =>
     set({
@@ -88,5 +92,6 @@ export const useGalleryStore = create<GalleryStoreState>((set) => ({
       filterTelescope: "",
       filterFavoriteOnly: false,
       filterTag: "",
+      filterFrameType: "",
     }),
 }));

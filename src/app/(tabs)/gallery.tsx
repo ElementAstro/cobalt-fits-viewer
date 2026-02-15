@@ -6,19 +6,24 @@ import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useGallery } from "../../hooks/useGallery";
 import { useAlbums } from "../../hooks/useAlbums";
 import { useGalleryStore } from "../../stores/useGalleryStore";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { AlbumCard } from "../../components/gallery/AlbumCard";
 import { CreateAlbumModal } from "../../components/gallery/CreateAlbumModal";
 import { AlbumActionSheet } from "../../components/gallery/AlbumActionSheet";
 import { AlbumPickerSheet } from "../../components/gallery/AlbumPickerSheet";
+import { BatchTagSheet } from "../../components/gallery/BatchTagSheet";
+import { BatchRenameSheet } from "../../components/gallery/BatchRenameSheet";
+import { IntegrationReportSheet } from "../../components/gallery/IntegrationReportSheet";
 import { SmartAlbumModal } from "../../components/gallery/SmartAlbumModal";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
-import type { GalleryViewMode, FitsMetadata, Album } from "../../lib/fits/types";
+import type { GalleryViewMode, FitsMetadata, Album, FrameType } from "../../lib/fits/types";
 
 const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "grid", icon: "grid-outline" },
@@ -28,13 +33,33 @@ const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }
 
 type TimelineSection = { date: string; files: FitsMetadata[] };
 
+const FRAME_TYPE_ICONS: Record<FrameType, keyof typeof Ionicons.glyphMap> = {
+  light: "sunny-outline",
+  dark: "moon-outline",
+  flat: "square-outline",
+  bias: "pulse-outline",
+  unknown: "help-outline",
+};
+
 export default function GalleryScreen() {
   const router = useRouter();
   const { t } = useI18n();
+
+  const FRAME_TYPES = useMemo(
+    () =>
+      (["light", "dark", "flat", "bias"] as FrameType[]).map((key) => ({
+        key,
+        label: t(`gallery.frameTypes.${key}`) ?? key,
+        icon: FRAME_TYPE_ICONS[key],
+      })),
+    [t],
+  );
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
 
+  const { isLandscape } = useScreenOrientation();
   const { files, totalCount, viewMode, gridColumns, metadataIndex, groupedByDate, search } =
     useGallery();
+  const effectiveColumns = isLandscape ? Math.min(gridColumns + 2, 6) : gridColumns;
 
   const {
     albums,
@@ -48,6 +73,13 @@ export default function GalleryScreen() {
   const setViewMode = useGalleryStore((s) => s.setViewMode);
   const setFilterObject = useGalleryStore((s) => s.setFilterObject);
   const filterObject = useGalleryStore((s) => s.filterObject);
+  const setFilterFrameType = useGalleryStore((s) => s.setFilterFrameType);
+  const filterFrameType = useGalleryStore((s) => s.filterFrameType);
+
+  const thumbShowFilename = useSettingsStore((s) => s.thumbnailShowFilename);
+  const thumbShowObject = useSettingsStore((s) => s.thumbnailShowObject);
+  const thumbShowFilter = useSettingsStore((s) => s.thumbnailShowFilter);
+  const thumbShowExposure = useSettingsStore((s) => s.thumbnailShowExposure);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateAlbum, setShowCreateAlbum] = useState(false);
@@ -57,6 +89,9 @@ export default function GalleryScreen() {
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
   const [showSmartAlbum, setShowSmartAlbum] = useState(false);
   const [showRenamePrompt, setShowRenamePrompt] = useState(false);
+  const [showBatchTag, setShowBatchTag] = useState(false);
+  const [showBatchRename, setShowBatchRename] = useState(false);
+  const [showReport, setShowReport] = useState(false);
   const displayFiles = searchQuery ? search(searchQuery) : files;
 
   const timelineSections = useMemo<TimelineSection[]>(() => {
@@ -135,13 +170,21 @@ export default function GalleryScreen() {
 
   const GalleryHeader = useMemo(
     () => (
-      <View className="gap-3">
+      <View className={isLandscape ? "gap-1.5" : "gap-3"}>
         {/* Title + View Modes */}
         <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-2xl font-bold text-foreground">{t("gallery.title")}</Text>
-            <Text className="mt-1 text-sm text-muted">
-              {t("gallery.subtitle")} ({totalCount})
+          <View className={isLandscape ? "flex-row items-baseline gap-2" : ""}>
+            <Text
+              className={
+                isLandscape
+                  ? "text-lg font-bold text-foreground"
+                  : "text-2xl font-bold text-foreground"
+              }
+            >
+              {t("gallery.title")}
+            </Text>
+            <Text className={isLandscape ? "text-xs text-muted" : "mt-1 text-sm text-muted"}>
+              {isLandscape ? `(${totalCount})` : `${t("gallery.subtitle")} (${totalCount})`}
             </Text>
           </View>
           <View className="flex-row gap-1">
@@ -167,84 +210,207 @@ export default function GalleryScreen() {
           </View>
         </View>
 
-        {/* Search Bar */}
-        <TextField>
-          <View className="w-full flex-row items-center">
-            <Input
-              className="flex-1 pl-9 pr-9"
-              placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-            />
-            <Ionicons
-              name="search-outline"
-              size={16}
-              color={mutedColor}
-              style={{ position: "absolute", left: 12 }}
-            />
-            {searchQuery.length > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                isIconOnly
-                onPress={() => setSearchQuery("")}
-                style={{ position: "absolute", right: 12 }}
-              >
-                <Ionicons name="close-circle" size={16} color={mutedColor} />
-              </Button>
-            )}
-          </View>
-        </TextField>
-
-        <Separator />
-
-        {/* Object Filters */}
-        {metadataIndex.objects.length > 0 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="flex-row gap-1.5">
-              <Chip
-                size="sm"
-                variant={!filterObject ? "primary" : "secondary"}
-                onPress={() => setFilterObject("")}
-              >
-                <Chip.Label className="text-[10px]">{t("gallery.allImages")}</Chip.Label>
-              </Chip>
-              {metadataIndex.objects.map((obj) => (
+        {/* Search + Filters: side-by-side in landscape */}
+        {isLandscape ? (
+          <View className="flex-row items-center gap-2">
+            <TextField>
+              <View className="flex-row items-center" style={{ width: 200 }}>
+                <Input
+                  className="flex-1 pl-9 pr-9"
+                  placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCorrect={false}
+                />
+                <Ionicons
+                  name="search-outline"
+                  size={14}
+                  color={mutedColor}
+                  style={{ position: "absolute", left: 12 }}
+                />
+                {searchQuery.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => setSearchQuery("")}
+                    style={{ position: "absolute", right: 4 }}
+                  >
+                    <Ionicons name="close-circle" size={14} color={mutedColor} />
+                  </Button>
+                )}
+              </View>
+            </TextField>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
+              <View className="flex-row gap-1">
+                {metadataIndex.objects.length > 0 && (
+                  <>
+                    <Chip
+                      size="sm"
+                      variant={!filterObject ? "primary" : "secondary"}
+                      onPress={() => setFilterObject("")}
+                    >
+                      <Chip.Label className="text-[9px]">{t("gallery.allImages")}</Chip.Label>
+                    </Chip>
+                    {metadataIndex.objects.map((obj) => (
+                      <Chip
+                        key={obj}
+                        size="sm"
+                        variant={filterObject === obj ? "primary" : "secondary"}
+                        onPress={() => setFilterObject(obj)}
+                      >
+                        <Chip.Label className="text-[9px]">{obj}</Chip.Label>
+                      </Chip>
+                    ))}
+                    <View className="w-px bg-separator mx-1" />
+                  </>
+                )}
                 <Chip
-                  key={obj}
                   size="sm"
-                  variant={filterObject === obj ? "primary" : "secondary"}
-                  onPress={() => setFilterObject(obj)}
+                  variant={!filterFrameType ? "primary" : "secondary"}
+                  onPress={() => setFilterFrameType("")}
                 >
-                  <Chip.Label className="text-[10px]">{obj}</Chip.Label>
+                  <Chip.Label className="text-[9px]">{t("gallery.allTypes")}</Chip.Label>
                 </Chip>
-              ))}
-            </View>
-          </ScrollView>
+                {FRAME_TYPES.map((ft) => (
+                  <Chip
+                    key={ft.key}
+                    size="sm"
+                    variant={filterFrameType === ft.key ? "primary" : "secondary"}
+                    onPress={() => setFilterFrameType(ft.key)}
+                  >
+                    <Ionicons
+                      name={ft.icon}
+                      size={10}
+                      color={filterFrameType === ft.key ? successColor : mutedColor}
+                    />
+                    <Chip.Label className="text-[9px]">{ft.label}</Chip.Label>
+                  </Chip>
+                ))}
+              </View>
+            </ScrollView>
+          </View>
+        ) : (
+          <>
+            {/* Search Bar */}
+            <TextField>
+              <View className="w-full flex-row items-center">
+                <Input
+                  className="flex-1 pl-9 pr-9"
+                  placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  autoCorrect={false}
+                />
+                <Ionicons
+                  name="search-outline"
+                  size={16}
+                  color={mutedColor}
+                  style={{ position: "absolute", left: 12 }}
+                />
+                {searchQuery.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => setSearchQuery("")}
+                    style={{ position: "absolute", right: 12 }}
+                  >
+                    <Ionicons name="close-circle" size={16} color={mutedColor} />
+                  </Button>
+                )}
+              </View>
+            </TextField>
+
+            <Separator />
+
+            {/* Object Filters */}
+            {metadataIndex.objects.length > 0 && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View className="flex-row gap-1.5">
+                  <Chip
+                    size="sm"
+                    variant={!filterObject ? "primary" : "secondary"}
+                    onPress={() => setFilterObject("")}
+                  >
+                    <Chip.Label className="text-[10px]">{t("gallery.allImages")}</Chip.Label>
+                  </Chip>
+                  {metadataIndex.objects.map((obj) => (
+                    <Chip
+                      key={obj}
+                      size="sm"
+                      variant={filterObject === obj ? "primary" : "secondary"}
+                      onPress={() => setFilterObject(obj)}
+                    >
+                      <Chip.Label className="text-[10px]">{obj}</Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </ScrollView>
+            )}
+
+            {/* Frame Type Filters */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View className="flex-row gap-1.5">
+                <Chip
+                  size="sm"
+                  variant={!filterFrameType ? "primary" : "secondary"}
+                  onPress={() => setFilterFrameType("")}
+                >
+                  <Chip.Label className="text-[10px]">{t("gallery.allTypes")}</Chip.Label>
+                </Chip>
+                {FRAME_TYPES.map((ft) => (
+                  <Chip
+                    key={ft.key}
+                    size="sm"
+                    variant={filterFrameType === ft.key ? "primary" : "secondary"}
+                    onPress={() => setFilterFrameType(ft.key)}
+                  >
+                    <Ionicons
+                      name={ft.icon}
+                      size={10}
+                      color={filterFrameType === ft.key ? successColor : mutedColor}
+                    />
+                    <Chip.Label className="text-[10px]">{ft.label}</Chip.Label>
+                  </Chip>
+                ))}
+              </View>
+            </ScrollView>
+          </>
         )}
 
         {/* Albums Section */}
         <View className="flex-row items-center justify-between">
-          <Text className="text-base font-semibold text-foreground">{t("gallery.albums")}</Text>
+          <Text
+            className={
+              isLandscape
+                ? "text-sm font-semibold text-foreground"
+                : "text-base font-semibold text-foreground"
+            }
+          >
+            {t("gallery.albums")}
+          </Text>
           <View className="flex-row gap-1">
             <Button size="sm" variant="outline" onPress={() => setShowSmartAlbum(true)}>
               <Ionicons name="sparkles-outline" size={14} color={successColor} />
             </Button>
             <Button size="sm" variant="outline" onPress={() => setShowCreateAlbum(true)}>
               <Ionicons name="add-outline" size={14} color={mutedColor} />
-              <Button.Label className="text-xs">{t("gallery.createAlbum")}</Button.Label>
+              {!isLandscape && (
+                <Button.Label className="text-xs">{t("gallery.createAlbum")}</Button.Label>
+              )}
             </Button>
           </View>
         </View>
 
         {albums.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="flex-row gap-2">
+            <View className={isLandscape ? "flex-row gap-1.5" : "flex-row gap-2"}>
               {albums.map((album) => (
                 <AlbumCard
                   key={album.id}
                   album={album}
+                  compact={isLandscape}
                   onPress={() => router.push(`/album/${album.id}`)}
                   onLongPress={() => setActionAlbum(album)}
                 />
@@ -252,13 +418,15 @@ export default function GalleryScreen() {
             </View>
           </ScrollView>
         ) : (
-          <View className="rounded-xl border border-separator bg-surface-secondary p-6 items-center">
-            <Ionicons name="albums-outline" size={32} color={mutedColor} />
-            <Text className="mt-2 text-xs text-muted">{t("gallery.emptyAlbum")}</Text>
+          <View
+            className={`rounded-xl border border-separator bg-surface-secondary items-center ${isLandscape ? "p-3" : "p-6"}`}
+          >
+            <Ionicons name="albums-outline" size={isLandscape ? 24 : 32} color={mutedColor} />
+            <Text className="mt-1 text-xs text-muted">{t("gallery.emptyAlbum")}</Text>
           </View>
         )}
 
-        <Separator />
+        {!isLandscape && <Separator />}
 
         {/* Selection Toolbar */}
         {isSelectionMode && (
@@ -274,7 +442,36 @@ export default function GalleryScreen() {
                 isDisabled={selectedIds.length === 0}
               >
                 <Ionicons name="albums-outline" size={12} color={mutedColor} />
-                <Button.Label className="text-[10px]">{t("gallery.addToAlbum")}</Button.Label>
+                {!isLandscape && (
+                  <Button.Label className="text-[10px]">{t("gallery.addToAlbum")}</Button.Label>
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => setShowBatchTag(true)}
+                isDisabled={selectedIds.length === 0}
+              >
+                <Ionicons name="pricetag-outline" size={12} color={mutedColor} />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => setShowBatchRename(true)}
+                isDisabled={selectedIds.length === 0}
+              >
+                <Ionicons name="text-outline" size={12} color={mutedColor} />
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onPress={() => {
+                  router.push(`/compare?ids=${selectedIds.join(",")}`);
+                  exitSelectionMode();
+                }}
+                isDisabled={selectedIds.length < 2}
+              >
+                <Ionicons name="git-compare-outline" size={12} color={mutedColor} />
               </Button>
               <Button
                 size="sm"
@@ -291,10 +488,21 @@ export default function GalleryScreen() {
           </View>
         )}
 
-        {/* Images Title */}
-        <Text className="text-base font-semibold text-foreground">
-          {filterObject || t("gallery.allImages")} ({displayFiles.length})
-        </Text>
+        {/* Images Title + Report Button */}
+        <View className="flex-row items-center justify-between">
+          <Text
+            className={
+              isLandscape
+                ? "text-sm font-semibold text-foreground"
+                : "text-base font-semibold text-foreground"
+            }
+          >
+            {filterObject || t("gallery.allImages")} ({displayFiles.length})
+          </Text>
+          <Button size="sm" variant="outline" onPress={() => setShowReport(true)}>
+            <Ionicons name="stats-chart-outline" size={14} color={successColor} />
+          </Button>
+        </View>
       </View>
     ),
     [
@@ -313,8 +521,12 @@ export default function GalleryScreen() {
       router,
       setViewMode,
       setFilterObject,
+      filterFrameType,
+      setFilterFrameType,
       exitSelectionMode,
       handleBatchDelete,
+      isLandscape,
+      FRAME_TYPES,
     ],
   );
 
@@ -324,23 +536,31 @@ export default function GalleryScreen() {
         <Text className="mb-2 text-xs font-semibold text-muted">{item.date}</Text>
         <ThumbnailGrid
           files={item.files}
-          columns={gridColumns}
+          columns={effectiveColumns}
           selectionMode={isSelectionMode}
           selectedIds={selectedIds}
           onPress={handleFilePress}
           onLongPress={handleFileLongPress}
           onSelect={toggleSelection}
           scrollEnabled={false}
+          showFilename={thumbShowFilename}
+          showObject={thumbShowObject}
+          showFilter={thumbShowFilter}
+          showExposure={thumbShowExposure}
         />
       </View>
     ),
     [
-      gridColumns,
+      effectiveColumns,
       isSelectionMode,
       selectedIds,
       handleFilePress,
       handleFileLongPress,
       toggleSelection,
+      thumbShowFilename,
+      thumbShowObject,
+      thumbShowFilter,
+      thumbShowExposure,
     ],
   );
 
@@ -354,7 +574,7 @@ export default function GalleryScreen() {
           renderItem={null}
           ListHeaderComponent={GalleryHeader}
           ListEmptyComponent={<EmptyState icon="images-outline" title={t("gallery.noImages")} />}
-          contentContainerClassName="px-4 py-14"
+          contentContainerClassName={`px-4 ${isLandscape ? "py-2" : "py-14"}`}
           showsVerticalScrollIndicator={false}
         />
       ) : viewMode === "timeline" ? (
@@ -363,20 +583,24 @@ export default function GalleryScreen() {
           renderItem={renderTimelineSection}
           keyExtractor={timelineKeyExtractor}
           ListHeaderComponent={GalleryHeader}
-          contentContainerClassName="px-4 py-14"
+          contentContainerClassName={`px-4 ${isLandscape ? "py-2" : "py-14"}`}
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        <View className="flex-1 px-4 pt-14">
+        <View className={`flex-1 px-4 ${isLandscape ? "pt-2" : "pt-14"}`}>
           <ThumbnailGrid
             files={displayFiles}
-            columns={viewMode === "list" ? 1 : gridColumns}
+            columns={viewMode === "list" ? 1 : effectiveColumns}
             selectionMode={isSelectionMode}
             selectedIds={selectedIds}
             onPress={handleFilePress}
             onLongPress={handleFileLongPress}
             onSelect={toggleSelection}
             ListHeaderComponent={GalleryHeader}
+            showFilename={thumbShowFilename}
+            showObject={thumbShowObject}
+            showFilter={thumbShowFilter}
+            showExposure={thumbShowExposure}
           />
         </View>
       )}
@@ -409,6 +633,17 @@ export default function GalleryScreen() {
         onRename={handleAlbumRename}
         onDelete={handleAlbumDelete}
       />
+      <BatchTagSheet
+        visible={showBatchTag}
+        selectedIds={selectedIds}
+        onClose={() => setShowBatchTag(false)}
+      />
+      <BatchRenameSheet
+        visible={showBatchRename}
+        selectedIds={selectedIds}
+        onClose={() => setShowBatchRename(false)}
+      />
+      <IntegrationReportSheet visible={showReport} onClose={() => setShowReport(false)} />
       <PromptDialog
         visible={showRenamePrompt}
         title={t("album.rename")}

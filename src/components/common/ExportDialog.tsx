@@ -64,6 +64,8 @@ export function ExportDialog({
           blackPoint: 0,
           whitePoint: 1,
           gamma: 1,
+          outputBlack: 0,
+          outputWhite: 1,
           includeAnnotations: false,
           includeWatermark: false,
         })

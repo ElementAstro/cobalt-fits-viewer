@@ -7,7 +7,11 @@
 import { useState, useCallback, useRef } from "react";
 import { InteractionManager } from "react-native";
 import { fitsToRGBA, fitsToRGBAChunked, downsamplePixels } from "../lib/converter/formatConverter";
-import { calculateStats, calculateHistogram } from "../lib/utils/pixelMath";
+import {
+  calculateStats,
+  calculateHistogram,
+  calculateRegionHistogram,
+} from "../lib/utils/pixelMath";
 import type { StretchType, ColormapType } from "../lib/fits/types";
 
 const PREVIEW_MAX_DIM = 512;
@@ -19,6 +23,7 @@ interface UseImageProcessingReturn {
   displayHeight: number;
   stats: ReturnType<typeof calculateStats> | null;
   histogram: ReturnType<typeof calculateHistogram> | null;
+  regionHistogram: ReturnType<typeof calculateHistogram> | null;
   isProcessing: boolean;
   processingError: string | null;
   processImage: (
@@ -30,6 +35,8 @@ interface UseImageProcessingReturn {
     blackPoint?: number,
     whitePoint?: number,
     gamma?: number,
+    outputBlack?: number,
+    outputWhite?: number,
   ) => void;
   processImagePreview: (
     pixels: Float32Array,
@@ -40,10 +47,19 @@ interface UseImageProcessingReturn {
     blackPoint?: number,
     whitePoint?: number,
     gamma?: number,
+    outputBlack?: number,
+    outputWhite?: number,
   ) => void;
   getHistogram: (pixels: Float32Array, bins?: number) => void;
   getStats: (pixels: Float32Array) => void;
   getStatsAndHistogram: (pixels: Float32Array, bins?: number) => void;
+  getRegionHistogram: (
+    pixels: Float32Array,
+    width: number,
+    region: { x: number; y: number; w: number; h: number },
+    bins?: number,
+  ) => void;
+  clearRegionHistogram: () => void;
 }
 
 export function useImageProcessing(): UseImageProcessingReturn {
@@ -52,6 +68,9 @@ export function useImageProcessing(): UseImageProcessingReturn {
   const [displayHeight, setDisplayHeight] = useState(0);
   const [stats, setStats] = useState<ReturnType<typeof calculateStats> | null>(null);
   const [histogram, setHistogram] = useState<ReturnType<typeof calculateHistogram> | null>(null);
+  const [regionHistogram, setRegionHistogram] = useState<ReturnType<
+    typeof calculateHistogram
+  > | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingError, setProcessingError] = useState<string | null>(null);
   const pendingTask = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(
@@ -69,6 +88,8 @@ export function useImageProcessing(): UseImageProcessingReturn {
       blackPoint: number = 0,
       whitePoint: number = 1,
       gamma: number = 1,
+      outputBlack: number = 0,
+      outputWhite: number = 1,
     ) => {
       // Cancel any in-flight chunked processing
       if (abortRef.current) {
@@ -77,7 +98,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
       }
 
       const totalPixels = width * height;
-      const opts = { stretch, colormap, blackPoint, whitePoint, gamma };
+      const opts = { stretch, colormap, blackPoint, whitePoint, gamma, outputBlack, outputWhite };
 
       if (totalPixels <= LARGE_IMAGE_THRESHOLD) {
         // Small image: process synchronously (fast enough)
@@ -133,6 +154,8 @@ export function useImageProcessing(): UseImageProcessingReturn {
       blackPoint: number = 0,
       whitePoint: number = 1,
       gamma: number = 1,
+      outputBlack: number = 0,
+      outputWhite: number = 1,
     ) => {
       // Cancel any in-flight chunked processing
       if (abortRef.current) {
@@ -141,7 +164,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
       }
 
       const totalPixels = width * height;
-      const opts = { stretch, colormap, blackPoint, whitePoint, gamma };
+      const opts = { stretch, colormap, blackPoint, whitePoint, gamma, outputBlack, outputWhite };
 
       if (totalPixels <= LARGE_IMAGE_THRESHOLD) {
         // Small enough: process directly (same as processImage)
@@ -223,12 +246,41 @@ export function useImageProcessing(): UseImageProcessingReturn {
     });
   }, []);
 
+  const getRegionHistogram = useCallback(
+    (
+      pixels: Float32Array,
+      width: number,
+      region: { x: number; y: number; w: number; h: number },
+      bins: number = 256,
+    ) => {
+      const globalRange = stats ? { min: stats.min, max: stats.max } : undefined;
+      setRegionHistogram(
+        calculateRegionHistogram(
+          pixels,
+          width,
+          region.x,
+          region.y,
+          region.w,
+          region.h,
+          bins,
+          globalRange,
+        ),
+      );
+    },
+    [stats],
+  );
+
+  const clearRegionHistogram = useCallback(() => {
+    setRegionHistogram(null);
+  }, []);
+
   return {
     rgbaData,
     displayWidth,
     displayHeight,
     stats,
     histogram,
+    regionHistogram,
     isProcessing,
     processingError,
     processImage,
@@ -236,5 +288,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
     getHistogram,
     getStats,
     getStatsAndHistogram,
+    getRegionHistogram,
+    clearRegionHistogram,
   };
 }

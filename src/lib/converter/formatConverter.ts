@@ -17,6 +17,8 @@ export function applyStretch(
   blackPoint: number = 0,
   whitePoint: number = 1,
   gamma: number = 1,
+  outputBlack: number = 0,
+  outputWhite: number = 1,
 ): Float32Array {
   const [rawMin, rawMax] = getExtent(pixels);
   const range = rawMax - rawMin;
@@ -69,6 +71,11 @@ export function applyStretch(
 
     if (gamma !== 1 && gamma > 0) {
       v = Math.pow(v, 1 / gamma);
+    }
+
+    // Apply output levels mapping
+    if (outputBlack !== 0 || outputWhite !== 1) {
+      v = outputBlack + v * (outputWhite - outputBlack);
     }
 
     result[i] = Math.max(0, Math.min(1, v));
@@ -339,7 +346,10 @@ export function fitsToRGBA(
   pixels: Float32Array,
   width: number,
   height: number,
-  options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma">,
+  options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma"> & {
+    outputBlack?: number;
+    outputWhite?: number;
+  },
 ): Uint8ClampedArray {
   const stretched = applyStretch(
     pixels,
@@ -347,6 +357,8 @@ export function fitsToRGBA(
     options.blackPoint,
     options.whitePoint,
     options.gamma ?? 1,
+    options.outputBlack ?? 0,
+    options.outputWhite ?? 1,
   );
   return applyColormap(stretched, options.colormap, width, height);
 }
@@ -395,7 +407,10 @@ export async function fitsToRGBAChunked(
   pixels: Float32Array,
   width: number,
   height: number,
-  options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma">,
+  options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma"> & {
+    outputBlack?: number;
+    outputWhite?: number;
+  },
   signal?: AbortSignal,
 ): Promise<Uint8ClampedArray> {
   const n = pixels.length;
@@ -450,6 +465,9 @@ export async function fitsToRGBAChunked(
   const gamma = options.gamma ?? 1;
   const invGamma = gamma !== 1 && gamma > 0 ? 1 / gamma : 1;
   const applyGamma = gamma !== 1 && gamma > 0;
+  const outBlack = options.outputBlack ?? 0;
+  const outWhite = options.outputWhite ?? 1;
+  const hasOutputLevels = outBlack !== 0 || outWhite !== 1;
 
   // --- Phase 3: Stretch + Colormap combined (chunked) ---
   const rgba = new Uint8ClampedArray(width * height * 4);
@@ -480,6 +498,7 @@ export async function fitsToRGBAChunked(
       }
 
       if (applyGamma) v = Math.pow(v, invGamma);
+      if (hasOutputLevels) v = outBlack + v * (outWhite - outBlack);
       if (v < 0) v = 0;
       else if (v > 1) v = 1;
 

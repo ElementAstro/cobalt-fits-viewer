@@ -2,59 +2,202 @@
  * 地图视图页面 - 展示所有带位置信息的 FITS 文件在地图上的分布
  */
 
-import { useState } from "react";
-import { View, Text } from "react-native";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { View, Text, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { Button, useThemeColor } from "heroui-native";
+import { Button, Chip, useThemeColor } from "heroui-native";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useI18n } from "../../i18n/useI18n";
 import { LocationMapView } from "../../components/gallery/LocationMapView";
 import { LocationMarkerSheet } from "../../components/gallery/LocationMarkerSheet";
-import type { LocationCluster } from "../../components/gallery/LocationMapView";
+import { MapFilterBar } from "../../components/map/MapFilterBar";
+import type { LocationCluster, MapPreset } from "../../components/gallery/LocationMapView";
 import type { FitsMetadata } from "../../lib/fits/types";
+import { MAP_PRESETS, MAP_PRESET_ORDER } from "../../lib/map/styles";
+import { LocationService } from "../../hooks/useLocation";
 
 export default function MapScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const [mutedColor, bgColor] = useThemeColor(["muted", "background"]);
+  const [mutedColor, bgColor, successColor] = useThemeColor(["muted", "background", "success"]);
 
   const files = useFitsStore((s) => s.files);
-  const filesWithLocation = files.filter((f) => f.location);
+  const setAutoTagLocation = useSettingsStore((s) => s.setAutoTagLocation);
+  const mapPreset = useSettingsStore((s) => s.mapPreset);
+  const setMapPreset = useSettingsStore((s) => s.setMapPreset);
+  const mapShowOverlays = useSettingsStore((s) => s.mapShowOverlays);
+  const setMapShowOverlays = useSettingsStore((s) => s.setMapShowOverlays);
 
   const [selectedCluster, setSelectedCluster] = useState<LocationCluster | null>(null);
+  const [filterObject, setFilterObject] = useState("");
+  const [filterFilter, setFilterFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [showPresets, setShowPresets] = useState(false);
 
-  const handleClusterPress = (cluster: LocationCluster) => {
+  // 进入地图页面时确保定位权限（用于 isMyLocationEnabled）
+  useEffect(() => {
+    LocationService.ensurePermission();
+  }, []);
+
+  // Apply filters
+  const filteredFiles = useMemo(() => {
+    let result = files;
+    if (filterObject) result = result.filter((f) => f.object === filterObject);
+    if (filterFilter) result = result.filter((f) => f.filter === filterFilter);
+    return result;
+  }, [files, filterObject, filterFilter]);
+
+  const filesWithLocation = useMemo(() => filteredFiles.filter((f) => f.location), [filteredFiles]);
+
+  const handleClusterPress = useCallback((cluster: LocationCluster) => {
     setSelectedCluster(cluster);
-  };
+  }, []);
 
-  const handleFilePress = (file: FitsMetadata) => {
-    setSelectedCluster(null);
-    router.push(`/viewer/${file.id}`);
-  };
+  const handleFilePress = useCallback(
+    (file: FitsMetadata) => {
+      setSelectedCluster(null);
+      router.push(`/viewer/${file.id}`);
+    },
+    [router],
+  );
+
+  const handleEnableAutoTag = useCallback(() => {
+    setAutoTagLocation(true);
+  }, [setAutoTagLocation]);
+
+  const handlePresetChange = useCallback(
+    (p: MapPreset) => {
+      setMapPreset(p);
+      setShowPresets(false);
+    },
+    [setMapPreset],
+  );
+
+  // Empty state when no files have location data at all
+  const totalWithLocation = useMemo(() => files.filter((f) => f.location).length, [files]);
+
+  const currentPresetConfig = MAP_PRESETS[mapPreset];
 
   return (
     <View className="flex-1 bg-background">
       {/* Header */}
       <View
-        className="absolute top-0 left-0 right-0 z-10 flex-row items-center justify-between px-4 pt-14 pb-3"
+        className="absolute top-0 left-0 right-0 z-10 px-4 pt-14 pb-2"
         style={{ backgroundColor: `${bgColor}CC` }}
       >
-        <Button variant="ghost" size="sm" onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={20} color={mutedColor} />
-          <Button.Label className="text-sm text-muted">{t("common.goHome")}</Button.Label>
-        </Button>
-        <View className="flex-row items-center gap-2">
-          <Ionicons name="map" size={16} color={mutedColor} />
-          <Text className="text-base font-bold text-foreground">{t("location.mapView")}</Text>
+        <View className="flex-row items-center justify-between">
+          <Button variant="ghost" size="sm" onPress={() => router.back()}>
+            <Ionicons name="chevron-back" size={20} color={mutedColor} />
+            <Button.Label className="text-sm text-muted">{t("common.goHome")}</Button.Label>
+          </Button>
+          <View className="flex-row items-center gap-2">
+            <Ionicons name="map" size={16} color={mutedColor} />
+            <Text className="text-base font-bold text-foreground">{t("location.mapView")}</Text>
+          </View>
+          <View className="flex-row items-center gap-1">
+            {/* Preset toggle */}
+            <Button size="sm" isIconOnly variant="ghost" onPress={() => setShowPresets((v) => !v)}>
+              <Ionicons
+                name={currentPresetConfig.icon as keyof typeof Ionicons.glyphMap}
+                size={16}
+                color={mapPreset !== "standard" ? successColor : mutedColor}
+              />
+            </Button>
+            {/* Overlay toggle */}
+            <Button
+              size="sm"
+              isIconOnly
+              variant="ghost"
+              onPress={() => setMapShowOverlays(!mapShowOverlays)}
+            >
+              <Ionicons
+                name="git-network-outline"
+                size={16}
+                color={mapShowOverlays ? successColor : mutedColor}
+              />
+            </Button>
+            {/* Filter toggle */}
+            <Button size="sm" isIconOnly variant="ghost" onPress={() => setShowFilters((v) => !v)}>
+              <Ionicons
+                name="filter"
+                size={16}
+                color={filterObject || filterFilter ? successColor : mutedColor}
+              />
+            </Button>
+            <Text className="text-xs text-muted">
+              {filesWithLocation.length} {t("location.sites")}
+            </Text>
+          </View>
         </View>
-        <Text className="text-xs text-muted">
-          {filesWithLocation.length} {t("location.sites")}
-        </Text>
+
+        {/* Preset selector */}
+        {showPresets && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-1">
+            <View className="flex-row gap-1 px-1">
+              {MAP_PRESET_ORDER.map((p) => {
+                const cfg = MAP_PRESETS[p];
+                return (
+                  <Chip
+                    key={p}
+                    size="sm"
+                    variant={mapPreset === p ? "primary" : "secondary"}
+                    onPress={() => handlePresetChange(p)}
+                  >
+                    <Ionicons
+                      name={cfg.icon as keyof typeof Ionicons.glyphMap}
+                      size={10}
+                      color={mapPreset === p ? successColor : mutedColor}
+                    />
+                    <Chip.Label className="text-[9px]">{t(cfg.label)}</Chip.Label>
+                  </Chip>
+                );
+              })}
+            </View>
+          </ScrollView>
+        )}
+
+        {/* Filter bar */}
+        {showFilters && (
+          <MapFilterBar
+            files={files.filter((f) => f.location)}
+            filterObject={filterObject}
+            filterFilter={filterFilter}
+            onFilterObjectChange={setFilterObject}
+            onFilterFilterChange={setFilterFilter}
+          />
+        )}
       </View>
 
-      {/* Map */}
-      <LocationMapView files={files} onClusterPress={handleClusterPress} style={{ flex: 1 }} />
+      {/* Map or Empty State */}
+      {totalWithLocation === 0 ? (
+        <View className="flex-1 items-center justify-center px-8 gap-4">
+          <Ionicons name="map-outline" size={64} color={mutedColor} />
+          <Text className="text-base font-semibold text-foreground text-center">
+            {t("location.noLocationData")}
+          </Text>
+          <Text className="text-sm text-muted text-center">{t("location.emptyStateHint")}</Text>
+          <View className="flex-row gap-3 mt-2">
+            <Button size="sm" variant="outline" onPress={handleEnableAutoTag}>
+              <Ionicons name="location" size={14} color={successColor} />
+              <Button.Label>{t("location.enableAutoTag")}</Button.Label>
+            </Button>
+            <Button size="sm" variant="outline" onPress={() => router.push("/(tabs)")}>
+              <Ionicons name="add-circle-outline" size={14} color={mutedColor} />
+              <Button.Label>{t("location.goImport")}</Button.Label>
+            </Button>
+          </View>
+        </View>
+      ) : (
+        <LocationMapView
+          files={filteredFiles}
+          onClusterPress={handleClusterPress}
+          style={{ flex: 1 }}
+          preset={mapPreset}
+          showOverlays={mapShowOverlays}
+        />
+      )}
 
       {/* Marker Detail Sheet */}
       <LocationMarkerSheet
