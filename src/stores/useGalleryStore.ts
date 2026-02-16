@@ -21,6 +21,7 @@ interface GalleryStoreState {
   filterFavoriteOnly: boolean;
   filterTag: string;
   filterFrameType: FrameType | "";
+  filterTargetId: string;
 
   // Actions
   setViewMode: (mode: GalleryViewMode) => void;
@@ -39,6 +40,7 @@ interface GalleryStoreState {
   setFilterFavoriteOnly: (value: boolean) => void;
   setFilterTag: (value: string) => void;
   setFilterFrameType: (value: FrameType | "") => void;
+  setFilterTargetId: (value: string) => void;
   clearFilters: () => void;
 }
 
@@ -57,6 +59,7 @@ export const useGalleryStore = create<GalleryStoreState>((set) => ({
   filterFavoriteOnly: false,
   filterTag: "",
   filterFrameType: "",
+  filterTargetId: "",
 
   setViewMode: (mode) => set({ viewMode: mode }),
   setGridColumns: (cols) => set({ gridColumns: cols }),
@@ -81,6 +84,7 @@ export const useGalleryStore = create<GalleryStoreState>((set) => ({
   setFilterFavoriteOnly: (value) => set({ filterFavoriteOnly: value }),
   setFilterTag: (value) => set({ filterTag: value }),
   setFilterFrameType: (value) => set({ filterFrameType: value }),
+  setFilterTargetId: (value) => set({ filterTargetId: value }),
 
   clearFilters: () =>
     set({
@@ -93,5 +97,6 @@ export const useGalleryStore = create<GalleryStoreState>((set) => ({
       filterFavoriteOnly: false,
       filterTag: "",
       filterFrameType: "",
+      filterTargetId: "",
     }),
 }));

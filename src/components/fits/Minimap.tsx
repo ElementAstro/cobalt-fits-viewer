@@ -17,6 +17,7 @@ import {
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { FadeIn, FadeOut } from "react-native-reanimated";
 import type { SkImage } from "@shopify/react-native-skia";
+import { computeFitGeometry, screenToImagePoint } from "../../lib/viewer/transform";
 
 interface MinimapProps {
   rgbaData: Uint8ClampedArray | null;
@@ -136,27 +137,28 @@ export const Minimap = memo(function Minimap({
   const viewport = useMemo(() => {
     if (!layout || viewportScale <= 1 || canvasWidth <= 0 || canvasHeight <= 0) return null;
     const { miniW, miniH } = layout;
-
-    // Fit scale: how the image fits inside the canvas
-    const fitScale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
-    const displayW = imgWidth * fitScale;
-    const displayH = imgHeight * fitScale;
-    const offsetX = (canvasWidth - displayW) / 2;
-    const offsetY = (canvasHeight - displayH) / 2;
-
-    // Visible area corners in screen space → image space
-    const imgX0 = (-viewportTranslateX / viewportScale - offsetX) / fitScale;
-    const imgY0 = (-viewportTranslateY / viewportScale - offsetY) / fitScale;
-    const imgX1 = ((canvasWidth - viewportTranslateX) / viewportScale - offsetX) / fitScale;
-    const imgY1 = ((canvasHeight - viewportTranslateY) / viewportScale - offsetY) / fitScale;
+    const transform = {
+      scale: viewportScale,
+      translateX: viewportTranslateX,
+      translateY: viewportTranslateY,
+      canvasWidth,
+      canvasHeight,
+    };
+    const p0 = screenToImagePoint({ x: 0, y: 0 }, transform, imgWidth, imgHeight);
+    const p1 = screenToImagePoint(
+      { x: canvasWidth, y: canvasHeight },
+      transform,
+      imgWidth,
+      imgHeight,
+    );
 
     // Map to minimap coordinates
     const scaleX = miniW / imgWidth;
     const scaleY = miniH / imgHeight;
-    const vpX = Math.max(0, Math.min(imgX0 * scaleX, miniW));
-    const vpY = Math.max(0, Math.min(imgY0 * scaleY, miniH));
-    const vpX1 = Math.max(0, Math.min(imgX1 * scaleX, miniW));
-    const vpY1 = Math.max(0, Math.min(imgY1 * scaleY, miniH));
+    const vpX = Math.max(0, Math.min(p0.x * scaleX, miniW));
+    const vpY = Math.max(0, Math.min(p0.y * scaleY, miniH));
+    const vpX1 = Math.max(0, Math.min(p1.x * scaleX, miniW));
+    const vpY1 = Math.max(0, Math.min(p1.y * scaleY, miniH));
     const vpW = vpX1 - vpX;
     const vpH = vpY1 - vpY;
 
@@ -184,9 +186,12 @@ export const Minimap = memo(function Minimap({
       const imgY = (miniY / miniH) * imgHeight;
 
       // Image coord → canvas translate (center this point on screen)
-      const fitScale = Math.min(canvasWidth / imgWidth, canvasHeight / imgHeight);
-      const offsetX = (canvasWidth - imgWidth * fitScale) / 2;
-      const offsetY = (canvasHeight - imgHeight * fitScale) / 2;
+      const { fitScale, offsetX, offsetY } = computeFitGeometry(
+        imgWidth,
+        imgHeight,
+        canvasWidth,
+        canvasHeight,
+      );
 
       const screenX = imgX * fitScale + offsetX;
       const screenY = imgY * fitScale + offsetY;

@@ -62,6 +62,7 @@ export interface BackupOptions {
   includeTargets: boolean;
   includeSessions: boolean;
   includeThumbnails: boolean;
+  restoreConflictStrategy?: RestoreConflictStrategy;
 }
 
 export const DEFAULT_BACKUP_OPTIONS: BackupOptions = {
@@ -71,7 +72,10 @@ export const DEFAULT_BACKUP_OPTIONS: BackupOptions = {
   includeTargets: true,
   includeSessions: true,
   includeThumbnails: false,
+  restoreConflictStrategy: "skip-existing",
 };
+
+export type RestoreConflictStrategy = "skip-existing" | "overwrite-existing" | "merge";
 
 // ===== 备份信息 =====
 export interface BackupInfo {
@@ -107,6 +111,7 @@ export interface BackupStoreState {
   // 自动备份
   autoBackupEnabled: boolean;
   autoBackupIntervalHours: number;
+  autoBackupNetwork: "wifi" | "any";
   lastAutoBackupCheck: number;
   // 错误
   lastError: string | null;

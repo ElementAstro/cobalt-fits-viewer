@@ -17,6 +17,7 @@ import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
 import { useViewerExport } from "../../hooks/useViewerExport";
 import { useThumbnail } from "../../hooks/useThumbnail";
+import { useViewerHotkeys } from "../../hooks/useViewerHotkeys";
 import { PixelInspector } from "../../components/fits/PixelInspector";
 import { RegionSelectOverlay } from "../../components/fits/RegionSelectOverlay";
 import {
@@ -27,7 +28,7 @@ import {
 import { Minimap } from "../../components/fits/Minimap";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { ExportDialog } from "../../components/common/ExportDialog";
-import type { ExportFormat } from "../../lib/fits/types";
+import type { ExportFormat, ViewerPreset } from "../../lib/fits/types";
 import { computeAutoStretch } from "../../lib/utils/pixelMath";
 import { useAstrometry } from "../../hooks/useAstrometry";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
@@ -39,6 +40,7 @@ import { StatsOverlay } from "../../components/fits/StatsOverlay";
 import { ZoomControls } from "../../components/fits/ZoomControls";
 import { AstrometryBadge } from "../../components/fits/AstrometryBadge";
 import { shareWCS } from "../../lib/astrometry/wcsExport";
+import { toViewerPreset } from "../../lib/viewer/model";
 
 export default function ViewerDetailScreen() {
   useKeepAwake();
@@ -68,19 +70,35 @@ export default function ViewerDetailScreen() {
   }, [allFiles, id]);
 
   // Display parameters — grouped to reduce re-renders
-  const { stretch, colormap, blackPoint, whitePoint, gamma, midtone, outputBlack, outputWhite } =
-    useViewerStore(
-      useShallow((s) => ({
-        stretch: s.stretch,
-        colormap: s.colormap,
-        blackPoint: s.blackPoint,
-        whitePoint: s.whitePoint,
-        gamma: s.gamma,
-        midtone: s.midtone,
-        outputBlack: s.outputBlack,
-        outputWhite: s.outputWhite,
-      })),
-    );
+  const {
+    stretch,
+    colormap,
+    blackPoint,
+    whitePoint,
+    gamma,
+    midtone,
+    outputBlack,
+    outputWhite,
+    brightness,
+    contrast,
+    mtfMidtone,
+    curvePreset,
+  } = useViewerStore(
+    useShallow((s) => ({
+      stretch: s.stretch,
+      colormap: s.colormap,
+      blackPoint: s.blackPoint,
+      whitePoint: s.whitePoint,
+      gamma: s.gamma,
+      midtone: s.midtone,
+      outputBlack: s.outputBlack,
+      outputWhite: s.outputWhite,
+      brightness: s.brightness,
+      contrast: s.contrast,
+      mtfMidtone: s.mtfMidtone,
+      curvePreset: s.curvePreset,
+    })),
+  );
 
   // Display parameter setters (stable references)
   const setStretch = useViewerStore((s) => s.setStretch);
@@ -88,6 +106,10 @@ export default function ViewerDetailScreen() {
   const setBlackPoint = useViewerStore((s) => s.setBlackPoint);
   const setWhitePoint = useViewerStore((s) => s.setWhitePoint);
   const setGamma = useViewerStore((s) => s.setGamma);
+  const setBrightness = useViewerStore((s) => s.setBrightness);
+  const setContrast = useViewerStore((s) => s.setContrast);
+  const setMtfMidtone = useViewerStore((s) => s.setMtfMidtone);
+  const setCurvePreset = useViewerStore((s) => s.setCurvePreset);
   const setMidtone = useViewerStore((s) => s.setMidtone);
   const setOutputBlack = useViewerStore((s) => s.setOutputBlack);
   const setOutputWhite = useViewerStore((s) => s.setOutputWhite);
@@ -123,21 +145,24 @@ export default function ViewerDetailScreen() {
   const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
 
   // Cursor & frame — grouped
-  const { cursorX, cursorY, currentFrame, totalFrames } = useViewerStore(
+  const { cursorX, cursorY, currentFrame, totalFrames, currentHDU } = useViewerStore(
     useShallow((s) => ({
       cursorX: s.cursorX,
       cursorY: s.cursorY,
       currentFrame: s.currentFrame,
       totalFrames: s.totalFrames,
+      currentHDU: s.currentHDU,
     })),
   );
   const setCursorPosition = useViewerStore((s) => s.setCursorPosition);
   const setCurrentFrame = useViewerStore((s) => s.setCurrentFrame);
   const setTotalFrames = useViewerStore((s) => s.setTotalFrames);
+  const setCurrentHDU = useViewerStore((s) => s.setCurrentHDU);
 
   const {
     pixels,
     dimensions,
+    hduList,
     isLoading: isFitsLoading,
     error: fitsError,
     loadFromPath,
@@ -157,6 +182,7 @@ export default function ViewerDetailScreen() {
     getRegionHistogram,
     clearRegionHistogram,
     stats,
+    isProcessing,
     processingError,
   } = useImageProcessing();
 
@@ -257,6 +283,166 @@ export default function ViewerDetailScreen() {
     [router],
   );
 
+  const clamp01 = useCallback((value: number) => Math.max(0, Math.min(1, value)), []);
+
+  const handleBlackPointChange = useCallback(
+    (value: number) => {
+      const next = Math.min(clamp01(value), Math.max(0, whitePoint - 0.01));
+      setBlackPoint(next);
+    },
+    [clamp01, whitePoint, setBlackPoint],
+  );
+
+  const handleWhitePointChange = useCallback(
+    (value: number) => {
+      const next = Math.max(clamp01(value), Math.min(1, blackPoint + 0.01));
+      setWhitePoint(next);
+    },
+    [clamp01, blackPoint, setWhitePoint],
+  );
+
+  const handleOutputBlackChange = useCallback(
+    (value: number) => {
+      const next = Math.min(clamp01(value), Math.max(0, outputWhite - 0.01));
+      setOutputBlack(next);
+    },
+    [clamp01, outputWhite, setOutputBlack],
+  );
+
+  const handleOutputWhiteChange = useCallback(
+    (value: number) => {
+      const next = Math.max(clamp01(value), Math.min(1, outputBlack + 0.01));
+      setOutputWhite(next);
+    },
+    [clamp01, outputBlack, setOutputWhite],
+  );
+
+  const applyViewerPreset = useCallback(
+    (preset: ViewerPreset) => {
+      const a = preset.adjustments;
+      setStretch(a.stretch);
+      setColormap(a.colormap);
+      handleBlackPointChange(a.blackPoint);
+      handleWhitePointChange(a.whitePoint);
+      setGamma(a.gamma);
+      setMidtone(a.midtone);
+      handleOutputBlackChange(a.outputBlack);
+      handleOutputWhiteChange(a.outputWhite);
+      setBrightness(a.brightness);
+      setContrast(a.contrast);
+      setMtfMidtone(a.mtfMidtone);
+      setCurvePreset(a.curvePreset);
+      const o = preset.overlays;
+      if (showGrid !== o.showGrid) toggleGrid();
+      if (showCrosshair !== o.showCrosshair) toggleCrosshair();
+      if (showPixelInfo !== o.showPixelInfo) togglePixelInfo();
+      if (showMinimap !== o.showMinimap) toggleMinimap();
+    },
+    [
+      setStretch,
+      setColormap,
+      handleBlackPointChange,
+      handleWhitePointChange,
+      setGamma,
+      setMidtone,
+      handleOutputBlackChange,
+      handleOutputWhiteChange,
+      setBrightness,
+      setContrast,
+      setMtfMidtone,
+      setCurvePreset,
+      showGrid,
+      showCrosshair,
+      showPixelInfo,
+      showMinimap,
+      toggleGrid,
+      toggleCrosshair,
+      togglePixelInfo,
+      toggleMinimap,
+    ],
+  );
+
+  const handleSaveViewerPreset = useCallback(() => {
+    if (!file) return;
+    const preset = toViewerPreset(
+      {
+        stretch,
+        colormap,
+        blackPoint,
+        whitePoint,
+        gamma,
+        midtone,
+        outputBlack,
+        outputWhite,
+        brightness,
+        contrast,
+        mtfMidtone,
+        curvePreset,
+      },
+      { showGrid, showCrosshair, showPixelInfo, showMinimap },
+    );
+    updateFile(file.id, { viewerPreset: preset });
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [
+    file,
+    stretch,
+    colormap,
+    blackPoint,
+    whitePoint,
+    gamma,
+    midtone,
+    outputBlack,
+    outputWhite,
+    brightness,
+    contrast,
+    mtfMidtone,
+    curvePreset,
+    showGrid,
+    showCrosshair,
+    showPixelInfo,
+    showMinimap,
+    updateFile,
+  ]);
+
+  const handleResetToSaved = useCallback(() => {
+    if (file?.viewerPreset) {
+      applyViewerPreset(file.viewerPreset);
+      return;
+    }
+    initFromSettings();
+  }, [file?.viewerPreset, applyViewerPreset, initFromSettings]);
+
+  const handleResetView = useCallback(() => {
+    canvasRef.current?.resetView();
+  }, []);
+
+  const handleZoomIn = useCallback(() => {
+    canvasRef.current?.setTransform(
+      canvasTransform.translateX,
+      canvasTransform.translateY,
+      canvasTransform.scale * 1.2,
+    );
+  }, [canvasTransform]);
+
+  const handleZoomOut = useCallback(() => {
+    canvasRef.current?.setTransform(
+      canvasTransform.translateX,
+      canvasTransform.translateY,
+      canvasTransform.scale / 1.2,
+    );
+  }, [canvasTransform]);
+
+  useViewerHotkeys({
+    enabled: !isFullscreen,
+    onZoomIn: handleZoomIn,
+    onZoomOut: handleZoomOut,
+    onResetView: handleResetView,
+    onToggleGrid: toggleGrid,
+    onToggleCrosshair: toggleCrosshair,
+    onToggleMinimap: toggleMinimap,
+    onTogglePixelInfo: togglePixelInfo,
+  });
+
   // --- Pixel tap handler ---
   const handlePixelTap = useCallback(
     (x: number, y: number) => {
@@ -271,11 +457,11 @@ export default function ViewerDetailScreen() {
   const handleAutoStretch = useCallback(() => {
     if (!pixels) return;
     const { blackPoint: bp, whitePoint: wp } = computeAutoStretch(pixels);
-    setBlackPoint(bp);
-    setWhitePoint(wp);
+    handleBlackPointChange(bp);
+    handleWhitePointChange(wp);
     setMidtone(0.5);
     setStretch("asinh");
-  }, [pixels, setBlackPoint, setWhitePoint, setMidtone, setStretch]);
+  }, [pixels, handleBlackPointChange, handleWhitePointChange, setMidtone, setStretch]);
 
   // --- Midtone change handler (converts midtone position to gamma) ---
   const handleMidtoneChange = useCallback(
@@ -288,6 +474,70 @@ export default function ViewerDetailScreen() {
       }
     },
     [setMidtone, setGamma],
+  );
+
+  const handleApplyQuickPreset = useCallback(
+    (preset: "auto" | "linearReset" | "deepSky" | "moonPlanet") => {
+      Haptics.selectionAsync();
+      if (preset === "auto") {
+        handleAutoStretch();
+        return;
+      }
+
+      if (preset === "linearReset") {
+        setStretch("linear");
+        setColormap("grayscale");
+        handleBlackPointChange(0);
+        handleWhitePointChange(1);
+        handleOutputBlackChange(0);
+        handleOutputWhiteChange(1);
+        setMidtone(0.5);
+        setBrightness(0);
+        setContrast(1);
+        setMtfMidtone(0.25);
+        setCurvePreset("linear");
+        return;
+      }
+
+      if (preset === "deepSky") {
+        if (pixels) handleAutoStretch();
+        setStretch("asinh");
+        setColormap("grayscale");
+        handleOutputBlackChange(0.02);
+        handleOutputWhiteChange(0.98);
+        setBrightness(0.01);
+        setContrast(1.15);
+        setMtfMidtone(0.3);
+        setCurvePreset("sCurve");
+        return;
+      }
+
+      setStretch("sqrt");
+      setColormap("grayscale");
+      handleBlackPointChange(0.02);
+      handleWhitePointChange(0.9);
+      handleOutputBlackChange(0);
+      handleOutputWhiteChange(1);
+      setBrightness(0);
+      setContrast(1.25);
+      setMtfMidtone(0.45);
+      setCurvePreset("highContrast");
+    },
+    [
+      pixels,
+      handleAutoStretch,
+      setStretch,
+      setColormap,
+      handleBlackPointChange,
+      handleWhitePointChange,
+      handleOutputBlackChange,
+      handleOutputWhiteChange,
+      setMidtone,
+      setBrightness,
+      setContrast,
+      setMtfMidtone,
+      setCurvePreset,
+    ],
   );
 
   // --- Region selection handlers ---
@@ -321,15 +571,29 @@ export default function ViewerDetailScreen() {
   const handleFrameChange = useCallback(
     async (frame: number) => {
       setCurrentFrame(frame);
-      await loadFrame(frame);
+      await loadFrame(frame, currentHDU);
     },
-    [setCurrentFrame, loadFrame],
+    [setCurrentFrame, loadFrame, currentHDU],
+  );
+
+  const handleHDUChange = useCallback(
+    async (hdu: number) => {
+      setCurrentHDU(hdu);
+      setCurrentFrame(0);
+      await loadFrame(0, hdu);
+    },
+    [setCurrentHDU, setCurrentFrame, loadFrame],
   );
 
   // Load file on mount, cleanup on unmount
   useEffect(() => {
     if (file) {
       initFromSettings();
+      setCurrentHDU(0);
+      setCurrentFrame(0);
+      if (file.viewerPreset) {
+        applyViewerPreset(file.viewerPreset);
+      }
       loadFromPath(file.filepath, file.filename, file.fileSize);
       updateFile(file.id, { lastViewed: Date.now() });
     }
@@ -343,6 +607,8 @@ export default function ViewerDetailScreen() {
   useEffect(() => {
     if (dimensions?.isDataCube && dimensions.depth > 1) {
       setTotalFrames(dimensions.depth);
+    } else {
+      setTotalFrames(1);
     }
   }, [dimensions, setTotalFrames]);
 
@@ -366,6 +632,10 @@ export default function ViewerDetailScreen() {
         gamma,
         outputBlack,
         outputWhite,
+        brightness,
+        contrast,
+        mtfMidtone,
+        curvePreset,
       );
       return;
     }
@@ -383,6 +653,10 @@ export default function ViewerDetailScreen() {
         gamma,
         outputBlack,
         outputWhite,
+        brightness,
+        contrast,
+        mtfMidtone,
+        curvePreset,
       );
     }, settingsDebounce);
 
@@ -398,6 +672,10 @@ export default function ViewerDetailScreen() {
     gamma,
     outputBlack,
     outputWhite,
+    brightness,
+    contrast,
+    mtfMidtone,
+    curvePreset,
   ]);
 
   // Histogram and stats only on pixel/dimension change (deferred after interactions)
@@ -458,33 +736,46 @@ export default function ViewerDetailScreen() {
       outputWhite,
       histogramHeight: settingsHistogramHeight,
       defaultHistogramMode,
-      onBlackPointChange: setBlackPoint,
-      onWhitePointChange: setWhitePoint,
+      onBlackPointChange: handleBlackPointChange,
+      onWhitePointChange: handleWhitePointChange,
       onMidtoneChange: handleMidtoneChange,
-      onOutputBlackChange: setOutputBlack,
-      onOutputWhiteChange: setOutputWhite,
+      onOutputBlackChange: handleOutputBlackChange,
+      onOutputWhiteChange: handleOutputWhiteChange,
       onAutoStretch: handleAutoStretch,
       onResetLevels: resetLevels,
       onToggleRegionSelect: handleToggleRegionSelect,
       isRegionSelectActive,
       stretch,
       colormap,
-      gamma,
+      brightness,
+      contrast,
+      mtfMidtone,
+      curvePreset,
       showGrid,
       showCrosshair,
       showPixelInfo,
       showMinimap,
+      currentHDU,
+      hduList,
       currentFrame,
       totalFrames,
       isDataCube: dimensions?.isDataCube ?? false,
       onStretchChange: setStretch,
       onColormapChange: setColormap,
-      onGammaChange: setGamma,
+      onBrightnessChange: setBrightness,
+      onContrastChange: setContrast,
+      onMtfMidtoneChange: setMtfMidtone,
+      onCurvePresetChange: setCurvePreset,
       onToggleGrid: toggleGrid,
       onToggleCrosshair: toggleCrosshair,
       onTogglePixelInfo: togglePixelInfo,
       onToggleMinimap: toggleMinimap,
+      onHDUChange: handleHDUChange,
       onFrameChange: handleFrameChange,
+      onResetView: handleResetView,
+      onSavePreset: handleSaveViewerPreset,
+      onResetToSaved: handleResetToSaved,
+      onApplyQuickPreset: handleApplyQuickPreset,
       showAstrometryResult,
       latestSolvedJob,
       showAnnotations,
@@ -504,33 +795,46 @@ export default function ViewerDetailScreen() {
       outputWhite,
       settingsHistogramHeight,
       defaultHistogramMode,
-      setBlackPoint,
-      setWhitePoint,
+      handleBlackPointChange,
+      handleWhitePointChange,
       handleMidtoneChange,
-      setOutputBlack,
-      setOutputWhite,
+      handleOutputBlackChange,
+      handleOutputWhiteChange,
       handleAutoStretch,
       resetLevels,
       handleToggleRegionSelect,
       isRegionSelectActive,
       stretch,
       colormap,
-      gamma,
+      brightness,
+      contrast,
+      mtfMidtone,
+      curvePreset,
       showGrid,
       showCrosshair,
       showPixelInfo,
       showMinimap,
+      currentHDU,
+      hduList,
       currentFrame,
       totalFrames,
       dimensions?.isDataCube,
       setStretch,
       setColormap,
-      setGamma,
+      setBrightness,
+      setContrast,
+      setMtfMidtone,
+      setCurvePreset,
       toggleGrid,
       toggleCrosshair,
       togglePixelInfo,
       toggleMinimap,
+      handleHDUChange,
       handleFrameChange,
+      handleResetView,
+      handleSaveViewerPreset,
+      handleResetToSaved,
+      handleApplyQuickPreset,
       showAstrometryResult,
       latestSolvedJob,
       showAnnotations,
@@ -635,6 +939,7 @@ export default function ViewerDetailScreen() {
               imageHeight={displayHeight || dimensions.height}
               containerWidth={canvasTransform.canvasWidth || 300}
               containerHeight={canvasTransform.canvasHeight || 300}
+              transform={canvasTransform}
               onRegionChange={handleRegionChange}
               onClear={handleRegionClear}
             />
@@ -718,7 +1023,10 @@ export default function ViewerDetailScreen() {
       className="flex-1 bg-background"
       style={isLandscape ? { paddingLeft: insets.left, paddingRight: insets.right } : undefined}
     >
-      <LoadingOverlay visible={isFitsLoading || isExporting} message={t("common.loading")} />
+      <LoadingOverlay
+        visible={isFitsLoading || isProcessing || isExporting}
+        message={t("common.loading")}
+      />
 
       {/* Top Bar - hidden in fullscreen */}
       {!isFullscreen && (
@@ -739,6 +1047,9 @@ export default function ViewerDetailScreen() {
           onToggleFavorite={() => file && toggleFavorite(file.id)}
           onOpenHeader={() => router.push(`/header/${id}`)}
           onOpenEditor={() => router.push(`/editor/${id}`)}
+          onCompare={() =>
+            router.push(`/compare?ids=${[id, nextId ?? prevId].filter(Boolean).join(",")}`)
+          }
           onExport={() => setShowExport(true)}
           onAstrometry={
             latestSolvedJob

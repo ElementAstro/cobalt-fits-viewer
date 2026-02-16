@@ -17,6 +17,7 @@ export function useAutoBackup() {
 
   const autoBackupEnabled = useBackupStore((s) => s.autoBackupEnabled);
   const autoBackupIntervalHours = useBackupStore((s) => s.autoBackupIntervalHours);
+  const autoBackupNetwork = useBackupStore((s) => s.autoBackupNetwork);
   const lastAutoBackupCheck = useBackupStore((s) => s.lastAutoBackupCheck);
   const setLastAutoBackupCheck = useBackupStore((s) => s.setLastAutoBackupCheck);
   const connections = useBackupStore((s) => s.connections);
@@ -44,10 +45,10 @@ export function useAutoBackup() {
         return;
       }
 
-      // Check Wi-Fi connectivity
+      // Check network policy
       try {
         const networkState = await Network.getNetworkStateAsync();
-        if (networkState.type !== Network.NetworkStateType.WIFI) {
+        if (autoBackupNetwork === "wifi" && networkState.type !== Network.NetworkStateType.WIFI) {
           Logger.debug(TAG, "Skipping auto backup: not on Wi-Fi");
           return;
         }
@@ -95,6 +96,7 @@ export function useAutoBackup() {
   }, [
     autoBackupEnabled,
     autoBackupIntervalHours,
+    autoBackupNetwork,
     lastAutoBackupCheck,
     setLastAutoBackupCheck,
     connections,

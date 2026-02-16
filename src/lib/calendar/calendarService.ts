@@ -19,6 +19,13 @@ export async function requestCalendarPermission(): Promise<boolean> {
 }
 
 /**
+ * 检查当前设备是否支持日历 API（不包含权限检查）
+ */
+export async function isCalendarAvailable(): Promise<boolean> {
+  return Calendar.isAvailableAsync();
+}
+
+/**
  * 检查日历权限
  */
 export async function checkCalendarPermission(): Promise<boolean> {
@@ -66,32 +73,10 @@ export async function syncSessionToCalendar(
   reminderMinutes: number = 0,
 ): Promise<string> {
   const calendarId = await getOrCreateAppCalendar();
-
-  const startDate = new Date(session.startTime);
-  const endDate = new Date(session.endTime);
-  const title = `🔭 ${session.targets.join(", ") || "Observation Session"}`;
-
-  const notes = buildSessionNotes(session);
-  const location = session.location
-    ? (session.location.placeName ??
-      session.location.city ??
-      `${session.location.latitude.toFixed(4)}, ${session.location.longitude.toFixed(4)}`)
-    : undefined;
-
-  const alarms: Calendar.Alarm[] = [];
-  if (reminderMinutes > 0) {
-    alarms.push({ relativeOffset: -reminderMinutes });
-  }
-
-  const eventId = await Calendar.createEventAsync(calendarId, {
-    title,
-    startDate,
-    endDate,
-    notes,
-    location: location ?? "",
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    alarms,
-  });
+  const eventId = await Calendar.createEventAsync(
+    calendarId,
+    buildSessionEventDetails(session, reminderMinutes),
+  );
 
   return eventId;
 }
@@ -101,31 +86,27 @@ export async function syncSessionToCalendar(
  */
 export async function createPlanEvent(plan: ObservationPlan): Promise<string> {
   const calendarId = await getOrCreateAppCalendar();
-
-  const title = `🔭 ${plan.title || plan.targetName}`;
-  const notes = plan.notes ?? "";
-  const location = plan.location
-    ? (plan.location.placeName ??
-      plan.location.city ??
-      `${plan.location.latitude.toFixed(4)}, ${plan.location.longitude.toFixed(4)}`)
-    : undefined;
-
-  const alarms: Calendar.Alarm[] = [];
-  if (plan.reminderMinutes > 0) {
-    alarms.push({ relativeOffset: -plan.reminderMinutes });
-  }
-
-  const eventId = await Calendar.createEventAsync(calendarId, {
-    title,
-    startDate: new Date(plan.startDate),
-    endDate: new Date(plan.endDate),
-    notes,
-    location: location ?? "",
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    alarms,
-  });
+  const eventId = await Calendar.createEventAsync(calendarId, buildPlanEventDetails(plan));
 
   return eventId;
+}
+
+/**
+ * 更新观测计划事件
+ */
+export async function updatePlanEvent(eventId: string, plan: ObservationPlan): Promise<void> {
+  await Calendar.updateEventAsync(eventId, buildPlanEventDetails(plan));
+}
+
+/**
+ * 获取日历事件（不存在时返回 null）
+ */
+export async function getCalendarEvent(eventId: string): Promise<Calendar.Event | null> {
+  try {
+    return await Calendar.getEventAsync(eventId);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -147,12 +128,77 @@ export async function openEventInSystemCalendar(eventId: string): Promise<void> 
 }
 
 /**
+ * 打开系统日历编辑事件
+ */
+export async function editEventInSystemCalendar(
+  eventId: string,
+): Promise<Calendar.DialogEventResult> {
+  return Calendar.editEventInCalendarAsync({ id: eventId });
+}
+
+/**
  * 通过系统 UI 创建事件
  */
 export async function createEventViaSystemUI(
   eventData?: Omit<Partial<Calendar.Event>, "id">,
+  presentationOptions?: Calendar.PresentationOptions,
 ): Promise<Calendar.DialogEventResult> {
-  return Calendar.createEventInCalendarAsync(eventData);
+  return Calendar.createEventInCalendarAsync(eventData, presentationOptions);
+}
+
+export function buildPlanEventDetails(plan: ObservationPlan): Omit<Partial<Calendar.Event>, "id"> {
+  const title = `🔭 ${plan.title || plan.targetName}`;
+  const notes = plan.notes ?? "";
+  const location = plan.location
+    ? (plan.location.placeName ??
+      plan.location.city ??
+      `${plan.location.latitude.toFixed(4)}, ${plan.location.longitude.toFixed(4)}`)
+    : undefined;
+
+  const alarms: Calendar.Alarm[] = [];
+  if (plan.reminderMinutes > 0) {
+    alarms.push({ relativeOffset: -plan.reminderMinutes });
+  }
+
+  return {
+    title,
+    startDate: new Date(plan.startDate),
+    endDate: new Date(plan.endDate),
+    notes,
+    location: location ?? "",
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    alarms,
+  };
+}
+
+export function buildSessionEventDetails(
+  session: ObservationSession,
+  reminderMinutes: number = 0,
+): Omit<Partial<Calendar.Event>, "id"> {
+  const startDate = new Date(session.startTime);
+  const endDate = new Date(session.endTime);
+  const title = `🔭 ${session.targets.join(", ") || "Observation Session"}`;
+  const notes = buildSessionNotes(session);
+  const location = session.location
+    ? (session.location.placeName ??
+      session.location.city ??
+      `${session.location.latitude.toFixed(4)}, ${session.location.longitude.toFixed(4)}`)
+    : undefined;
+
+  const alarms: Calendar.Alarm[] = [];
+  if (reminderMinutes > 0) {
+    alarms.push({ relativeOffset: -reminderMinutes });
+  }
+
+  return {
+    title,
+    startDate,
+    endDate,
+    notes,
+    location: location ?? "",
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    alarms,
+  };
 }
 
 function buildSessionNotes(session: ObservationSession): string {

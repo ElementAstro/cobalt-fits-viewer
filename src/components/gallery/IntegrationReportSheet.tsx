@@ -152,7 +152,7 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
           <Separator className="my-1" />
           <View className="flex-row gap-2 px-4 py-2">
             <Button variant="outline" onPress={onClose} className="flex-1">
-              <Button.Label>{t("common.close") ?? "Close"}</Button.Label>
+              <Button.Label>{t("common.close")}</Button.Label>
             </Button>
             <Button
               variant="outline"
@@ -161,7 +161,7 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
               isDisabled={report.targets.length === 0}
             >
               <Ionicons name="copy-outline" size={14} color={successColor} />
-              <Button.Label className="text-xs">{t("common.copy") ?? "Copy"}</Button.Label>
+              <Button.Label className="text-xs">{t("common.copy")}</Button.Label>
             </Button>
           </View>
         </BottomSheet.Content>

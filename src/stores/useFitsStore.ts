@@ -163,13 +163,14 @@ export const useFitsStore = create<FitsStoreState>()(
       getFilteredFiles: () => {
         const { files, searchQuery, filterTags, sortBy, sortOrder } = get();
 
-        let filtered = files;
+        let filtered = [...files];
 
         if (searchQuery) {
           const q = searchQuery.toLowerCase();
           filtered = filtered.filter(
             (f) =>
               f.filename.toLowerCase().includes(q) ||
+              f.sourceFormat?.toLowerCase().includes(q) ||
               f.object?.toLowerCase().includes(q) ||
               f.filter?.toLowerCase().includes(q),
           );

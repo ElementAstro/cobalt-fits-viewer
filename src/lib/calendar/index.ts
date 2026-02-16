@@ -1,10 +1,16 @@
 export {
+  isCalendarAvailable,
   requestCalendarPermission,
   checkCalendarPermission,
   getOrCreateAppCalendar,
+  getCalendarEvent,
   syncSessionToCalendar,
   createPlanEvent,
+  updatePlanEvent,
   deleteCalendarEvent,
   openEventInSystemCalendar,
+  editEventInSystemCalendar,
+  buildPlanEventDetails,
+  buildSessionEventDetails,
   createEventViaSystemUI,
 } from "./calendarService";

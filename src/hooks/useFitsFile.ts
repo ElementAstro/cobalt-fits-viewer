@@ -16,6 +16,8 @@ import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
 import { generateFileId } from "../lib/utils/fileManager";
 import { Logger } from "../lib/logger";
+import { detectSupportedImageFormat, toImageSourceFormat } from "../lib/import/fileFormat";
+import { extractRasterMetadata, parseRasterFromBuffer } from "../lib/image/rasterParser";
 
 interface UseFitsFileReturn {
   fits: FITS | null;
@@ -45,7 +47,13 @@ export function useFitsFile(): UseFitsFileReturn {
   const [error, setError] = useState<string | null>(null);
 
   const processFits = useCallback(
-    (fitsObj: FITS, filename: string, filepath: string, fileSize: number) => {
+    (
+      fitsObj: FITS,
+      filename: string,
+      filepath: string,
+      fileSize: number,
+      sourceFormat?: FitsMetadata["sourceFormat"],
+    ) => {
       setFits(fitsObj);
 
       const meta = extractMetadata(fitsObj, { filename, filepath, fileSize });
@@ -56,6 +64,8 @@ export function useFitsFile(): UseFitsFileReturn {
         isFavorite: false,
         tags: [],
         albumIds: [],
+        sourceType: "fits",
+        sourceFormat: sourceFormat ?? "unknown",
       };
       setMetadata(fullMeta);
       setHeaders(getHeaderKeywords(fitsObj));
@@ -69,27 +79,70 @@ export function useFitsFile(): UseFitsFileReturn {
     [],
   );
 
+  const processRaster = useCallback(
+    (buffer: ArrayBuffer, filename: string, filepath: string, fileSize: number) => {
+      const decoded = parseRasterFromBuffer(buffer);
+      setFits(null);
+      setHeaders([]);
+      setHduList([]);
+      setDimensions({
+        width: decoded.width,
+        height: decoded.height,
+        depth: 1,
+        isDataCube: false,
+      });
+      setPixels(decoded.pixels);
+
+      const detectedFormat = detectSupportedImageFormat(filename);
+      const meta = extractRasterMetadata(
+        { filename, filepath, fileSize },
+        { width: decoded.width, height: decoded.height },
+      );
+      const fullMeta: FitsMetadata = {
+        ...meta,
+        id: generateFileId(),
+        importDate: Date.now(),
+        isFavorite: false,
+        tags: [],
+        albumIds: [],
+        sourceType: "raster",
+        sourceFormat: toImageSourceFormat(detectedFormat),
+      };
+      setMetadata(fullMeta);
+    },
+    [],
+  );
+
   const loadFromPath = useCallback(
     async (filepath: string, filename: string, fileSize: number) => {
       setIsLoading(true);
       setError(null);
       try {
         const buffer = await readFileAsArrayBuffer(filepath);
-        const fitsObj = loadFitsFromBuffer(buffer);
-        const { fitsObj: f } = processFits(fitsObj, filename, filepath, fileSize);
+        const detectedFormat = detectSupportedImageFormat(filename);
+        if (!detectedFormat) {
+          throw new Error("Unsupported image format");
+        }
 
-        const px = await getImagePixels(f);
-        setPixels(px);
-        Logger.info("FitsFile", `Loaded: ${filename}`, { fileSize });
+        if (detectedFormat.sourceType === "fits") {
+          const fitsObj = loadFitsFromBuffer(buffer);
+          const sourceFormat = toImageSourceFormat(detectedFormat);
+          const { fitsObj: f } = processFits(fitsObj, filename, filepath, fileSize, sourceFormat);
+          const px = await getImagePixels(f);
+          setPixels(px);
+        } else {
+          processRaster(buffer, filename, filepath, fileSize);
+        }
+        Logger.info("FitsFile", `Loaded: ${filename}`, { fileSize, format: detectedFormat.id });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to load FITS file";
+        const msg = e instanceof Error ? e.message : "Failed to load image file";
         Logger.error("FitsFile", `Load failed: ${filename}`, e);
         setError(msg);
       } finally {
         setIsLoading(false);
       }
     },
-    [processFits],
+    [processFits, processRaster],
   );
 
   const loadFromBuffer = useCallback(
@@ -97,21 +150,36 @@ export function useFitsFile(): UseFitsFileReturn {
       setIsLoading(true);
       setError(null);
       try {
-        const fitsObj = loadFitsFromBuffer(buffer);
-        const { fitsObj: f } = processFits(fitsObj, filename, `memory://${filename}`, fileSize);
+        const detectedFormat = detectSupportedImageFormat(filename);
+        if (!detectedFormat) {
+          throw new Error("Unsupported image format");
+        }
 
-        const px = await getImagePixels(f);
-        setPixels(px);
-        Logger.info("FitsFile", `Loaded from buffer: ${filename}`);
+        if (detectedFormat.sourceType === "fits") {
+          const fitsObj = loadFitsFromBuffer(buffer);
+          const sourceFormat = toImageSourceFormat(detectedFormat);
+          const { fitsObj: f } = processFits(
+            fitsObj,
+            filename,
+            `memory://${filename}`,
+            fileSize,
+            sourceFormat,
+          );
+          const px = await getImagePixels(f);
+          setPixels(px);
+        } else {
+          processRaster(buffer, filename, `memory://${filename}`, fileSize);
+        }
+        Logger.info("FitsFile", `Loaded from buffer: ${filename}`, { format: detectedFormat.id });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to parse FITS data";
+        const msg = e instanceof Error ? e.message : "Failed to parse image data";
         Logger.error("FitsFile", `Buffer load failed: ${filename}`, e);
         setError(msg);
       } finally {
         setIsLoading(false);
       }
     },
-    [processFits],
+    [processFits, processRaster],
   );
 
   const loadFrame = useCallback(
@@ -119,6 +187,8 @@ export function useFitsFile(): UseFitsFileReturn {
       if (!fits) return;
       setIsLoading(true);
       try {
+        const dims = getImageDimensions(fits, hduIndex);
+        if (dims) setDimensions(dims);
         const px = await getImagePixels(fits, hduIndex, frame);
         setPixels(px);
         Logger.debug("FitsFile", `Frame loaded: ${frame}`, { hduIndex });

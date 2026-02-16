@@ -1,8 +1,25 @@
+/**
+ * 添加目标 Sheet
+ */
+
 import { useState } from "react";
 import { View, ScrollView } from "react-native";
-import { Button, Chip, Dialog, FieldError, Input, Label, TextArea, TextField } from "heroui-native";
+import {
+  Button,
+  Chip,
+  Dialog,
+  FieldError,
+  Input,
+  Label,
+  TextArea,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { parseRA, parseDec, formatRA, formatDec } from "../../lib/targets/coordinates";
+import { CategorySelector } from "./CategorySelector";
+import { TagInput } from "./TagInput";
 import type { TargetType } from "../../lib/fits/types";
 
 const TARGET_TYPES: TargetType[] = [
@@ -18,6 +35,8 @@ const TARGET_TYPES: TargetType[] = [
 
 interface AddTargetSheetProps {
   visible: boolean;
+  allCategories?: string[];
+  allTags?: string[];
   onClose: () => void;
   onConfirm: (data: {
     name: string;
@@ -25,16 +44,29 @@ interface AddTargetSheetProps {
     ra?: string;
     dec?: string;
     notes?: string;
+    category?: string;
+    tags?: string[];
+    isFavorite?: boolean;
   }) => void;
 }
 
-export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetProps) {
+export function AddTargetSheet({
+  visible,
+  allCategories = [],
+  allTags = [],
+  onClose,
+  onConfirm,
+}: AddTargetSheetProps) {
   const { t } = useI18n();
+  const mutedColor = useThemeColor("muted");
   const [name, setName] = useState("");
   const [type, setType] = useState<TargetType>("other");
   const [ra, setRa] = useState("");
   const [dec, setDec] = useState("");
   const [notes, setNotes] = useState("");
+  const [category, setCategory] = useState<string | undefined>();
+  const [tags, setTags] = useState<string[]>([]);
+  const [isFavorite, setIsFavorite] = useState(false);
 
   const raValid = ra.trim() ? parseRA(ra.trim()) !== null : true;
   const decValid = dec.trim() ? parseDec(dec.trim()) !== null : true;
@@ -50,6 +82,9 @@ export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetPr
       ra: parsedRA !== null && parsedRA !== undefined ? String(parsedRA) : undefined,
       dec: parsedDec !== null && parsedDec !== undefined ? String(parsedDec) : undefined,
       notes: notes.trim() || undefined,
+      category,
+      tags: tags.length > 0 ? tags : undefined,
+      isFavorite,
     });
     resetForm();
   };
@@ -70,6 +105,9 @@ export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetPr
     setRa("");
     setDec("");
     setNotes("");
+    setCategory(undefined);
+    setTags([]);
+    setIsFavorite(false);
   };
 
   const handleClose = () => {
@@ -81,7 +119,7 @@ export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetPr
     <Dialog isOpen={visible} onOpenChange={(open) => !open && handleClose()}>
       <Dialog.Portal>
         <Dialog.Overlay />
-        <Dialog.Content className="mx-6 w-full max-w-sm rounded-2xl bg-background p-6">
+        <Dialog.Content className="mx-6 w-full max-w-sm rounded-2xl bg-background p-6 max-h-[85%]">
           <ScrollView showsVerticalScrollIndicator={false}>
             <View className="flex-row items-center justify-between mb-2">
               <Dialog.Title>{t("targets.addTarget")}</Dialog.Title>
@@ -125,6 +163,40 @@ export function AddTargetSheet({ visible, onClose, onConfirm }: AddTargetSheetPr
                 </Chip>
               ))}
             </View>
+
+            {/* Category selector */}
+            <Label className="mt-4 mb-2">{t("targets.category")}</Label>
+            <CategorySelector
+              selectedCategory={category}
+              allCategories={allCategories}
+              onSelect={setCategory}
+            />
+
+            {/* Tags */}
+            <Label className="mt-4 mb-2">{t("targets.tags")}</Label>
+            <TagInput
+              tags={tags}
+              suggestions={allTags}
+              onChange={setTags}
+              placeholder={t("targets.addTag")}
+            />
+
+            {/* Favorite toggle */}
+            <Button
+              variant={isFavorite ? "primary" : "outline"}
+              size="sm"
+              className="mt-4"
+              onPress={() => setIsFavorite(!isFavorite)}
+            >
+              <Ionicons
+                name={isFavorite ? "star" : "star-outline"}
+                size={14}
+                color={isFavorite ? "#fff" : mutedColor}
+              />
+              <Button.Label>
+                {isFavorite ? t("targets.favorited") : t("targets.addFavorite")}
+              </Button.Label>
+            </Button>
 
             {/* RA / Dec */}
             <View className="mt-4 flex-row gap-2">

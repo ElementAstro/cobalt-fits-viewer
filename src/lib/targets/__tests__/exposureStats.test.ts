@@ -5,6 +5,29 @@ import {
 } from "../exposureStats";
 import type { FitsMetadata, Target } from "../../fits/types";
 
+// Helper to create mock targets with all required fields
+function createMockTarget(overrides: Partial<Target> = {}): Target {
+  const now = Date.now();
+  return {
+    id: "t1",
+    name: "Test",
+    aliases: [],
+    type: "other",
+    tags: [],
+    isFavorite: false,
+    isPinned: false,
+    imageIds: [],
+    status: "planned",
+    plannedFilters: [],
+    plannedExposure: {},
+    imageRatings: {},
+    changeLog: [],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 describe("calculateExposureStats", () => {
   it("calculates total exposure and frame count", () => {
     const files: FitsMetadata[] = [
@@ -57,18 +80,15 @@ describe("calculateExposureStats", () => {
 
 describe("calculateCompletionRate", () => {
   it("calculates overall completion percentage", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "M31",
-      aliases: [],
       type: "galaxy",
       imageIds: ["f1", "f2"],
       status: "acquiring",
       plannedFilters: ["L"],
       plannedExposure: { L: 600 },
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const files: FitsMetadata[] = [
       { id: "f1", filter: "L", exptime: 300 } as FitsMetadata,
       { id: "f2", filter: "L", exptime: 300 } as FitsMetadata,
@@ -79,18 +99,15 @@ describe("calculateCompletionRate", () => {
   });
 
   it("caps at 100%", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "M31",
-      aliases: [],
       type: "galaxy",
       imageIds: ["f1", "f2"],
       status: "acquiring",
       plannedFilters: ["L"],
       plannedExposure: { L: 300 },
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const files: FitsMetadata[] = [
       { id: "f1", filter: "L", exptime: 300 } as FitsMetadata,
       { id: "f2", filter: "L", exptime: 300 } as FitsMetadata,
@@ -100,18 +117,15 @@ describe("calculateCompletionRate", () => {
   });
 
   it("handles partial completion", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "Test",
-      aliases: [],
       type: "other",
       imageIds: ["f1"],
       status: "acquiring",
       plannedFilters: ["L"],
       plannedExposure: { L: 600 },
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const files: FitsMetadata[] = [{ id: "f1", filter: "L", exptime: 300 } as FitsMetadata];
     const result = calculateCompletionRate(target, files);
     expect(result.overall).toBe(50);
@@ -119,36 +133,30 @@ describe("calculateCompletionRate", () => {
   });
 
   it("includes unplanned filters as 100%", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "Test",
-      aliases: [],
       type: "other",
       imageIds: ["f1"],
       status: "acquiring",
       plannedFilters: [],
       plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const files: FitsMetadata[] = [{ id: "f1", filter: "Ha", exptime: 300 } as FitsMetadata];
     const result = calculateCompletionRate(target, files);
     expect(result.byFilter.Ha.percent).toBe(100);
   });
 
   it("returns 0 for target with no images and no plan", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "Test",
-      aliases: [],
       type: "other",
       imageIds: [],
       status: "planned",
       plannedFilters: [],
       plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const result = calculateCompletionRate(target, []);
     expect(result.overall).toBe(0);
   });

@@ -1,5 +1,6 @@
 import { Button, Dialog, Label, Radio, RadioGroup } from "heroui-native";
 import * as Haptics from "expo-haptics";
+import { coerceOptionValue } from "./optionPickerValue";
 
 interface OptionPickerModalProps<T extends string | number> {
   visible: boolean;
@@ -29,7 +30,7 @@ export function OptionPickerModal<T extends string | number>({
             value={String(selectedValue)}
             onValueChange={(val) => {
               Haptics.selectionAsync();
-              onSelect(val as T);
+              onSelect(coerceOptionValue(options, val));
               onClose();
             }}
           >

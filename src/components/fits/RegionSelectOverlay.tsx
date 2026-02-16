@@ -4,12 +4,19 @@ import { Button, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue, runOnJS } from "react-native-reanimated";
+import type { CanvasTransform } from "./FitsCanvas";
+import {
+  clampImagePoint,
+  imageToScreenPoint,
+  screenToImagePoint,
+} from "../../lib/viewer/transform";
 
 interface RegionSelectOverlayProps {
   imageWidth: number;
   imageHeight: number;
   containerWidth: number;
   containerHeight: number;
+  transform: CanvasTransform;
   onRegionChange: (region: { x: number; y: number; w: number; h: number }) => void;
   onClear: () => void;
 }
@@ -21,20 +28,12 @@ export function RegionSelectOverlay({
   imageHeight,
   containerWidth,
   containerHeight,
+  transform,
   onRegionChange,
   onClear,
 }: RegionSelectOverlayProps) {
   const { t } = useI18n();
   const accentColor = useThemeColor("accent");
-
-  const scaleX = containerWidth / imageWidth;
-  const scaleY = containerHeight / imageHeight;
-  const scale = Math.min(scaleX, scaleY);
-
-  const displayW = imageWidth * scale;
-  const displayH = imageHeight * scale;
-  const offsetX = (containerWidth - displayW) / 2;
-  const offsetY = (containerHeight - displayH) / 2;
 
   const [region, setRegion] = useState<{
     x: number;
@@ -67,24 +66,24 @@ export function RegionSelectOverlay({
   const drawGesture = Gesture.Pan()
     .onBegin((e) => {
       "worklet";
-      const imgX = (e.x - offsetX) / scale;
-      const imgY = (e.y - offsetY) / scale;
-      startImgX.value = Math.max(0, Math.min(imgX, imageWidth));
-      startImgY.value = Math.max(0, Math.min(imgY, imageHeight));
+      const p = screenToImagePoint({ x: e.x, y: e.y }, transform, imageWidth, imageHeight);
+      const cp = clampImagePoint(p, imageWidth, imageHeight);
+      startImgX.value = cp.x;
+      startImgY.value = cp.y;
     })
     .onUpdate((e) => {
       "worklet";
-      const imgX = (e.x - offsetX) / scale;
-      const imgY = (e.y - offsetY) / scale;
-      const endX = Math.max(0, Math.min(imgX, imageWidth));
-      const endY = Math.max(0, Math.min(imgY, imageHeight));
+      const p = screenToImagePoint({ x: e.x, y: e.y }, transform, imageWidth, imageHeight);
+      const cp = clampImagePoint(p, imageWidth, imageHeight);
+      const endX = cp.x;
+      const endY = cp.y;
 
       const x = Math.min(startImgX.value, endX);
       const y = Math.min(startImgY.value, endY);
       const w = Math.abs(endX - startImgX.value);
       const h = Math.abs(endY - startImgY.value);
 
-      if (w > MIN_REGION_SIZE / scale && h > MIN_REGION_SIZE / scale) {
+      if (w > MIN_REGION_SIZE && h > MIN_REGION_SIZE) {
         runOnJS(updateRegion)(x, y, w, h);
       }
     })
@@ -96,12 +95,26 @@ export function RegionSelectOverlay({
   }, [onClear]);
 
   const regionDisplay = region
-    ? {
-        left: offsetX + region.x * scale,
-        top: offsetY + region.y * scale,
-        width: region.w * scale,
-        height: region.h * scale,
-      }
+    ? (() => {
+        const p1 = imageToScreenPoint(
+          { x: region.x, y: region.y },
+          transform,
+          imageWidth,
+          imageHeight,
+        );
+        const p2 = imageToScreenPoint(
+          { x: region.x + region.w, y: region.y + region.h },
+          transform,
+          imageWidth,
+          imageHeight,
+        );
+        return {
+          left: Math.min(p1.x, p2.x),
+          top: Math.min(p1.y, p2.y),
+          width: Math.abs(p2.x - p1.x),
+          height: Math.abs(p2.y - p1.y),
+        };
+      })()
     : null;
 
   return (

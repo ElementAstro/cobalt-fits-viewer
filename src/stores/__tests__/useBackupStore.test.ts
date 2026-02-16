@@ -15,6 +15,7 @@ beforeEach(() => {
     progress: { phase: "idle", current: 0, total: 0 },
     autoBackupEnabled: false,
     autoBackupIntervalHours: 24,
+    autoBackupNetwork: "wifi",
     lastAutoBackupCheck: 0,
     lastError: null,
   });
@@ -114,6 +115,9 @@ describe("useBackupStore", () => {
     it("should set interval and last check", () => {
       useBackupStore.getState().setAutoBackupIntervalHours(12);
       expect(useBackupStore.getState().autoBackupIntervalHours).toBe(12);
+
+      useBackupStore.getState().setAutoBackupNetwork("any");
+      expect(useBackupStore.getState().autoBackupNetwork).toBe("any");
 
       useBackupStore.getState().setLastAutoBackupCheck(99999);
       expect(useBackupStore.getState().lastAutoBackupCheck).toBe(99999);

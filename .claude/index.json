@@ -1,16 +1,17 @@
 {
-  "timestamp": "2026-02-14T08:30:37+00:00",
-  "projectRoot": "D:\\Project\\react-native-quick-starter",
-  "projectName": "react-native-quick-starter",
+  "timestamp": "2026-02-15T00:00:00+00:00",
+  "projectRoot": "D:\\Project\\cobalt-fits-viewer",
+  "projectName": "cobalt-fits-viewer",
   "version": "1.0.0",
+  "description": "A cross-platform FITS file viewer and astronomical image processor for astronomers",
   "language": "TypeScript",
-  "framework": "React Native + Expo",
+  "framework": "React Native + Expo SDK 54",
   "modules": [
     {
       "path": "src/app",
       "name": "app",
       "type": "routing",
-      "description": "File-based routing with Expo Router",
+      "description": "File-based routing with Expo Router 6",
       "entryFiles": ["_layout.tsx", "index.tsx"],
       "importantFiles": [
         "src/app/_layout.tsx",
@@ -18,15 +19,285 @@
         "src/app/[...missing].tsx",
         "src/app/(tabs)/_layout.tsx",
         "src/app/(tabs)/index.tsx",
-        "src/app/(tabs)/explore.tsx"
+        "src/app/(tabs)/gallery.tsx",
+        "src/app/(tabs)/targets.tsx",
+        "src/app/(tabs)/sessions.tsx",
+        "src/app/(tabs)/settings.tsx",
+        "src/app/viewer/[id].tsx",
+        "src/app/editor/[id].tsx",
+        "src/app/stacking/index.tsx",
+        "src/app/convert/index.tsx",
+        "src/app/astrometry/index.tsx"
+      ],
+      "hasTests": true,
+      "testCount": 1
+    },
+    {
+      "path": "src/components",
+      "name": "components",
+      "type": "ui",
+      "description": "Reusable UI components (65+ components in 10 subdirectories)",
+      "entryFiles": [],
+      "subdirectories": [
+        "common",
+        "fits",
+        "gallery",
+        "targets",
+        "sessions",
+        "converter",
+        "backup",
+        "astrometry",
+        "map",
+        "settings"
+      ],
+      "importantFiles": [
+        "src/components/common/EmptyState.tsx",
+        "src/components/common/LoadingOverlay.tsx",
+        "src/components/common/FontProvider.tsx",
+        "src/components/fits/FitsCanvas.tsx",
+        "src/components/fits/ViewerControls.tsx",
+        "src/components/gallery/ThumbnailGrid.tsx",
+        "src/components/gallery/AlbumCard.tsx",
+        "src/components/targets/TargetCard.tsx",
+        "src/components/sessions/SessionCard.tsx"
+      ],
+      "hasTests": false,
+      "componentCount": 65
+    },
+    {
+      "path": "src/hooks",
+      "name": "hooks",
+      "type": "hooks",
+      "description": "29 custom React hooks for FITS, gallery, stacking, location, etc.",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/hooks/useFitsFile.ts",
+        "src/hooks/useGallery.ts",
+        "src/hooks/useStacking.ts",
+        "src/hooks/useAstrometry.ts",
+        "src/hooks/useBackup.ts",
+        "src/hooks/useTargets.ts",
+        "src/hooks/useSessions.ts",
+        "src/hooks/useLocation.ts",
+        "src/hooks/useConverter.ts",
+        "src/hooks/useImageProcessing.ts"
+      ],
+      "hasTests": true,
+      "testCount": 1,
+      "hookCount": 29
+    },
+    {
+      "path": "src/stores",
+      "name": "stores",
+      "type": "state",
+      "description": "10 Zustand stores with MMKV persistence",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/stores/useFitsStore.ts",
+        "src/stores/useGalleryStore.ts",
+        "src/stores/useViewerStore.ts",
+        "src/stores/useTargetStore.ts",
+        "src/stores/useTargetGroupStore.ts",
+        "src/stores/useSessionStore.ts",
+        "src/stores/useSettingsStore.ts",
+        "src/stores/useBackupStore.ts",
+        "src/stores/useAstrometryStore.ts",
+        "src/stores/useOnboardingStore.ts"
+      ],
+      "hasTests": true,
+      "testCount": 7,
+      "storeCount": 10
+    },
+    {
+      "path": "src/lib/fits",
+      "name": "lib-fits",
+      "type": "logic",
+      "description": "FITS file parsing, metadata extraction, header manipulation",
+      "entryFiles": ["parser.ts", "types.ts"],
+      "importantFiles": [
+        "src/lib/fits/parser.ts",
+        "src/lib/fits/types.ts",
+        "src/lib/fits/headerWriter.ts"
+      ],
+      "hasTests": true,
+      "testCount": 1
+    },
+    {
+      "path": "src/lib/stacking",
+      "name": "lib-stacking",
+      "type": "logic",
+      "description": "Image stacking (alignment, calibration, star detection)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/stacking/alignment.ts",
+        "src/lib/stacking/calibration.ts",
+        "src/lib/stacking/starDetection.ts",
+        "src/lib/stacking/frameQuality.ts"
       ],
       "hasTests": false
+    },
+    {
+      "path": "src/lib/gallery",
+      "name": "lib-gallery",
+      "type": "logic",
+      "description": "Gallery logic (albums, thumbnails, duplicates, classification)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/gallery/albumManager.ts",
+        "src/lib/gallery/frameClassifier.ts",
+        "src/lib/gallery/thumbnailCache.ts",
+        "src/lib/gallery/duplicateDetector.ts",
+        "src/lib/gallery/metadataIndex.ts"
+      ],
+      "hasTests": true,
+      "testCount": 5
+    },
+    {
+      "path": "src/lib/targets",
+      "name": "lib-targets",
+      "type": "logic",
+      "description": "Target management (coordinates, exposure stats, matching)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/targets/targetManager.ts",
+        "src/lib/targets/targetMatcher.ts",
+        "src/lib/targets/coordinates.ts",
+        "src/lib/targets/exposureStats.ts",
+        "src/lib/targets/targetExport.ts"
+      ],
+      "hasTests": true,
+      "testCount": 4
+    },
+    {
+      "path": "src/lib/sessions",
+      "name": "lib-sessions",
+      "type": "logic",
+      "description": "Session management (detection, observation logs, stats)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/sessions/sessionDetector.ts",
+        "src/lib/sessions/observationLog.ts",
+        "src/lib/sessions/statsCalculator.ts",
+        "src/lib/sessions/format.ts"
+      ],
+      "hasTests": true,
+      "testCount": 4
+    },
+    {
+      "path": "src/lib/converter",
+      "name": "lib-converter",
+      "type": "logic",
+      "description": "Format conversion (PNG, JPEG, TIFF, WebP, BMP)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/converter/formatConverter.ts",
+        "src/lib/converter/batchProcessor.ts",
+        "src/lib/converter/convertPresets.ts"
+      ],
+      "hasTests": true,
+      "testCount": 1
+    },
+    {
+      "path": "src/lib/backup",
+      "name": "lib-backup",
+      "type": "logic",
+      "description": "Cloud backup (Google Drive, OneDrive, Dropbox, WebDAV)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/backup/backupService.ts",
+        "src/lib/backup/cloudProvider.ts",
+        "src/lib/backup/manifest.ts",
+        "src/lib/backup/providers/googleDrive.ts",
+        "src/lib/backup/providers/onedrive.ts",
+        "src/lib/backup/providers/dropbox.ts",
+        "src/lib/backup/providers/webdav.ts"
+      ],
+      "hasTests": true,
+      "testCount": 2
+    },
+    {
+      "path": "src/lib/astrometry",
+      "name": "lib-astrometry",
+      "type": "logic",
+      "description": "Astrometry.net integration (plate solving, WCS export)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/astrometry/astrometryService.ts",
+        "src/lib/astrometry/astrometryClient.ts",
+        "src/lib/astrometry/types.ts",
+        "src/lib/astrometry/wcsExport.ts",
+        "src/lib/astrometry/syncToTarget.ts"
+      ],
+      "hasTests": true,
+      "testCount": 5
+    },
+    {
+      "path": "src/lib/calendar",
+      "name": "lib-calendar",
+      "type": "logic",
+      "description": "Calendar integration for observation planning",
+      "entryFiles": [],
+      "importantFiles": ["src/lib/calendar/calendarService.ts", "src/lib/calendar/index.ts"],
+      "hasTests": false
+    },
+    {
+      "path": "src/lib/logger",
+      "name": "lib-logger",
+      "type": "logic",
+      "description": "Logging system with export capabilities",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/logger/logger.ts",
+        "src/lib/logger/types.ts",
+        "src/lib/logger/systemInfo.ts",
+        "src/lib/logger/logExport.ts"
+      ],
+      "hasTests": false
+    },
+    {
+      "path": "src/lib/map",
+      "name": "lib-map",
+      "type": "logic",
+      "description": "Map overlays, styles, and clustering",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/map/overlays.ts",
+        "src/lib/map/styles.ts",
+        "src/lib/map/clustering.ts"
+      ],
+      "hasTests": false
+    },
+    {
+      "path": "src/lib/theme",
+      "name": "lib-theme",
+      "type": "logic",
+      "description": "Theme configuration and font presets",
+      "entryFiles": [],
+      "importantFiles": ["src/lib/theme/fonts.ts", "src/lib/theme/presets.ts"],
+      "hasTests": false
+    },
+    {
+      "path": "src/lib/utils",
+      "name": "lib-utils",
+      "type": "logic",
+      "description": "Utility functions (file manager, pixel math, image export)",
+      "entryFiles": [],
+      "importantFiles": [
+        "src/lib/utils/fileManager.ts",
+        "src/lib/utils/pixelMath.ts",
+        "src/lib/utils/imageExport.ts",
+        "src/lib/utils/imageOperations.ts",
+        "src/lib/utils/rgbCompose.ts",
+        "src/lib/utils/format.ts"
+      ],
+      "hasTests": true,
+      "testCount": 2
     },
     {
       "path": "src/i18n",
       "name": "i18n",
       "type": "internationalization",
-      "description": "Internationalization with i18n-js",
+      "description": "Internationalization with i18n-js (en/zh)",
       "entryFiles": ["index.ts"],
       "importantFiles": [
         "src/i18n/index.ts",
@@ -35,16 +306,18 @@
         "src/i18n/locales/en.ts",
         "src/i18n/locales/zh.ts"
       ],
-      "hasTests": false
+      "hasTests": true,
+      "testCount": 2
     },
     {
       "path": "src/utils",
       "name": "utils",
       "type": "utilities",
-      "description": "Utility functions",
+      "description": "Utility functions including className helper",
       "entryFiles": ["cn.ts"],
       "importantFiles": ["src/utils/cn.ts"],
-      "hasTests": false
+      "hasTests": true,
+      "testCount": 1
     }
   ],
   "rootModule": {
@@ -53,25 +326,38 @@
       "package.json",
       "tsconfig.json",
       "app.json",
-      "eslint.config.mjs",
-      ".prettierrc",
-      ".editorconfig",
-      "commitlint.config.js",
-      ".lintstagedrc"
+      "jest.config.js",
+      "metro.config.js",
+      "commitlint.config.js"
     ],
     "styleFiles": ["src/global.css", "src/uniwind-types.d.ts"],
     "ciFiles": [".github/workflows/ci.yml"],
     "gitHooks": [".husky/pre-commit", ".husky/commit-msg"]
   },
   "coverage": {
-    "totalFiles": 14,
-    "scannedFiles": 14,
+    "totalFiles": 200,
+    "scannedFiles": 200,
     "coveragePercent": 100,
-    "modulesCovered": 3,
+    "modulesCovered": 19,
+    "testFiles": 61,
     "gaps": {
-      "missingTests": true,
-      "missingDataModels": true,
-      "missingApiDefinitions": true
+      "missingIntegrationTests": true,
+      "missingE2ETests": true
+    },
+    "testCoverageByModule": {
+      "stores": 7,
+      "lib/astrometry": 5,
+      "lib/targets": 4,
+      "lib/gallery": 5,
+      "lib/sessions": 4,
+      "lib/backup": 2,
+      "lib/utils": 2,
+      "lib/converter": 1,
+      "lib/fits": 1,
+      "hooks": 1,
+      "i18n": 2,
+      "app/(tabs)": 1,
+      "utils": 1
     }
   },
   "ignoredPatterns": [
@@ -80,9 +366,51 @@
     ".expo/**",
     "dist/**",
     "web-build/**",
+    "coverage/**",
     "*.lock",
-    "*.log"
+    "*.log",
+    "*.tsbuildinfo",
+    ".vscode/**",
+    ".idea/**",
+    "*.swp",
+    "*.swo",
+    ".DS_Store",
+    "Thumbs.db"
   ],
   "truncated": false,
-  "nextSteps": []
+  "nextSteps": [
+    "Consider adding integration tests for critical user flows",
+    "Consider adding E2E tests with Detox or similar",
+    "Add more tests for lib/stacking module",
+    "Add more tests for lib/calendar module",
+    "Add more tests for lib/logger module",
+    "Add more tests for lib/map module"
+  ],
+  "dataModels": {
+    "primary": "src/lib/fits/types.ts",
+    "models": [
+      "FitsMetadata",
+      "Target",
+      "TargetGroup",
+      "ObservationSession",
+      "ObservationPlan",
+      "Album",
+      "BatchTask",
+      "ViewerState",
+      "AstrometryJob",
+      "AstrometryResult",
+      "AstrometryCalibration",
+      "BackupManifest",
+      "CloudProviderConfig"
+    ]
+  },
+  "documentation": {
+    "root": "CLAUDE.md",
+    "modules": [
+      "src/app/CLAUDE.md",
+      "src/i18n/CLAUDE.md",
+      "src/lib/fits/CLAUDE.md",
+      "src/lib/astrometry/CLAUDE.md"
+    ]
+  }
 }

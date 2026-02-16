@@ -79,9 +79,22 @@ export default function RootLayout() {
   const { theme } = useUniwind();
   const { fontsLoaded, fontError } = useFontLoader();
   const orientationLock = useSettingsStore((s) => s.orientationLock);
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
 
   useEffect(() => {
     cleanOldExports();
+  }, []);
+
+  useEffect(() => {
+    const unsub = useSettingsStore.persist.onFinishHydration(() => {
+      setSettingsHydrated(true);
+    });
+
+    if (useSettingsStore.persist.hasHydrated()) {
+      setSettingsHydrated(true);
+    }
+
+    return unsub;
   }, []);
 
   useEffect(() => {
@@ -89,12 +102,12 @@ export default function RootLayout() {
   }, [orientationLock]);
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && settingsHydrated) {
       SplashScreen.hideAsync();
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, settingsHydrated]);
 
-  if (!fontsLoaded && !fontError) {
+  if ((!fontsLoaded && !fontError) || !settingsHydrated) {
     return null;
   }
 

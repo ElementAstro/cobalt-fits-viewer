@@ -23,9 +23,20 @@ const FIELDS: SmartAlbumRule["field"][] = [
   "telescope",
   "tag",
   "location",
+  "frameType",
 ];
 
-const OPERATORS: SmartAlbumRule["operator"][] = ["equals", "contains", "gt", "lt"];
+const OPERATORS: SmartAlbumRule["operator"][] = [
+  "equals",
+  "contains",
+  "gt",
+  "lt",
+  "between",
+  "in",
+  "notEquals",
+  "notContains",
+  "notIn",
+];
 
 interface SmartAlbumModalProps {
   visible: boolean;

@@ -4,41 +4,63 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
-export type CompareMode = "side-by-side" | "blink" | "overlay";
+export type CompareMode = "side-by-side" | "blink" | "split";
+type LegacyCompareMode = CompareMode | "overlay";
 
 interface UseImageComparisonOptions {
   initialIds?: string[];
-  initialMode?: CompareMode;
+  initialMode?: LegacyCompareMode;
+}
+
+function normalizeMode(mode: LegacyCompareMode | undefined): CompareMode {
+  if (!mode) return "blink";
+  return mode === "overlay" ? "split" : mode;
+}
+
+function normalizeIds(ids: string[]) {
+  const unique: string[] = [];
+  for (const id of ids) {
+    if (id && !unique.includes(id)) unique.push(id);
+    if (unique.length >= 2) break;
+  }
+  return unique;
 }
 
 export function useImageComparison(options?: UseImageComparisonOptions) {
-  const [imageIds, setImageIds] = useState<string[]>(options?.initialIds ?? []);
-  const [mode, setMode] = useState<CompareMode>(options?.initialMode ?? "blink");
+  const [imageIds, _setImageIds] = useState<string[]>(normalizeIds(options?.initialIds ?? []));
+  const [mode, setMode] = useState<CompareMode>(normalizeMode(options?.initialMode));
   const [activeIndex, setActiveIndex] = useState(0);
   const [blinkSpeed, setBlinkSpeed] = useState(1.5); // seconds
-  const [overlayOpacity, setOverlayOpacity] = useState(0.5);
+  const [splitPosition, setSplitPosition] = useState(0.5);
   const [isBlinkPlaying, setIsBlinkPlaying] = useState(false);
   const blinkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const addImage = useCallback((id: string) => {
-    setImageIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+  const setImageIds = useCallback((ids: string[]) => {
+    _setImageIds(normalizeIds(ids));
+    setActiveIndex(0);
   }, []);
 
-  const removeImage = useCallback(
-    (id: string) => {
-      setImageIds((prev) => prev.filter((i) => i !== id));
-      if (activeIndex >= imageIds.length - 1) {
-        setActiveIndex(Math.max(0, imageIds.length - 2));
-      }
-    },
-    [activeIndex, imageIds.length],
-  );
+  const addImage = useCallback((id: string) => {
+    _setImageIds((prev) => {
+      if (prev.includes(id)) return prev;
+      if (prev.length < 2) return [...prev, id];
+      return [prev[0], id];
+    });
+    setActiveIndex(0);
+  }, []);
+
+  const removeImage = useCallback((id: string) => {
+    _setImageIds((prev) => prev.filter((i) => i !== id));
+    setActiveIndex(0);
+  }, []);
 
   const nextImage = useCallback(() => {
+    if (imageIds.length <= 1) return;
     setActiveIndex((prev) => (prev + 1) % imageIds.length);
   }, [imageIds.length]);
 
   const prevImage = useCallback(() => {
+    if (imageIds.length <= 1) return;
     setActiveIndex((prev) => (prev - 1 + imageIds.length) % imageIds.length);
   }, [imageIds.length]);
 
@@ -66,14 +88,14 @@ export function useImageComparison(options?: UseImageComparisonOptions) {
     mode,
     activeIndex,
     blinkSpeed,
-    overlayOpacity,
+    splitPosition,
     isBlinkPlaying,
 
     setImageIds,
     setMode,
     setActiveIndex,
     setBlinkSpeed,
-    setOverlayOpacity,
+    setSplitPosition,
     addImage,
     removeImage,
     nextImage,

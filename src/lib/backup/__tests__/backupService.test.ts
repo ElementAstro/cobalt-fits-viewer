@@ -97,6 +97,29 @@ describe("performBackup", () => {
     expect(uploadedManifest.targets).toHaveLength(1);
   });
 
+  it("should upload files with stable id-prefixed remote names", async () => {
+    const provider = createMockProvider();
+    const dataSource: BackupDataSource = {
+      ...createMockDataSource(),
+      getFiles: () =>
+        [
+          { id: "f1", filename: "M31 light.fits", filepath: "/mock/a.fits", fileSize: 100 },
+        ] as never[],
+    };
+
+    jest.requireMock("expo-file-system").File.mockImplementation((path: string) => ({
+      uri: path,
+      exists: true,
+    }));
+
+    await performBackup(provider, dataSource, DEFAULT_BACKUP_OPTIONS);
+
+    expect(provider.uploadFile).toHaveBeenCalledWith(
+      "/mock/a.fits",
+      "cobalt-backup/fits_files/f1_M31_light.fits",
+    );
+  });
+
   it("should report progress", async () => {
     const provider = createMockProvider();
     const dataSource = createMockDataSource();
@@ -177,9 +200,9 @@ describe("performRestore", () => {
     await performRestore(provider, target, DEFAULT_BACKUP_OPTIONS);
 
     expect(provider.downloadManifest).toHaveBeenCalled();
-    expect(target.setAlbums).toHaveBeenCalledWith(testManifest.albums);
-    expect(target.setTargets).toHaveBeenCalledWith(testManifest.targets);
-    expect(target.setSessions).toHaveBeenCalledWith(testManifest.sessions);
+    expect(target.setAlbums).toHaveBeenCalledWith(testManifest.albums, "skip-existing");
+    expect(target.setTargets).toHaveBeenCalledWith(testManifest.targets, "skip-existing");
+    expect(target.setSessions).toHaveBeenCalledWith(testManifest.sessions, "skip-existing");
     expect(target.setSettings).toHaveBeenCalledWith(testManifest.settings);
   });
 
@@ -191,6 +214,35 @@ describe("performRestore", () => {
 
     expect(target.setAlbums).not.toHaveBeenCalled();
     expect(target.setTargets).toHaveBeenCalled();
+  });
+
+  it("should only restore file metadata for files downloaded successfully", async () => {
+    jest.requireMock("expo-file-system").File.mockImplementation((path: string) => ({
+      uri: path,
+      exists: false,
+    }));
+
+    const manifestWithFiles: BackupManifest = {
+      ...testManifest,
+      files: [
+        { id: "f1", filename: "a.fits", filepath: "/remote/a.fits", fileSize: 100 },
+        { id: "f2", filename: "b.fits", filepath: "/remote/b.fits", fileSize: 200 },
+      ] as never[],
+    };
+    const provider = createMockProvider(manifestWithFiles);
+    (provider.downloadFile as jest.Mock).mockImplementation((remotePath: string) => {
+      if (remotePath.includes("f1_a.fits") || remotePath.endsWith("/a.fits")) {
+        throw new Error("download failed");
+      }
+      return Promise.resolve();
+    });
+    const target = createMockRestoreTarget();
+
+    await performRestore(provider, target, DEFAULT_BACKUP_OPTIONS);
+
+    const restoredFilesArg = (target.setFiles as jest.Mock).mock.calls[0][0];
+    expect(restoredFilesArg).toHaveLength(1);
+    expect(restoredFilesArg[0].id).toBe("f2");
   });
 
   it("should throw when no manifest found", async () => {

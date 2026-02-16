@@ -12,7 +12,7 @@ import {
   calculateHistogram,
   calculateRegionHistogram,
 } from "../lib/utils/pixelMath";
-import type { StretchType, ColormapType } from "../lib/fits/types";
+import type { StretchType, ColormapType, ViewerCurvePreset } from "../lib/fits/types";
 
 const PREVIEW_MAX_DIM = 512;
 const LARGE_IMAGE_THRESHOLD = 1_000_000;
@@ -37,6 +37,10 @@ interface UseImageProcessingReturn {
     gamma?: number,
     outputBlack?: number,
     outputWhite?: number,
+    brightness?: number,
+    contrast?: number,
+    mtfMidtone?: number,
+    curvePreset?: ViewerCurvePreset,
   ) => void;
   processImagePreview: (
     pixels: Float32Array,
@@ -49,6 +53,10 @@ interface UseImageProcessingReturn {
     gamma?: number,
     outputBlack?: number,
     outputWhite?: number,
+    brightness?: number,
+    contrast?: number,
+    mtfMidtone?: number,
+    curvePreset?: ViewerCurvePreset,
   ) => void;
   getHistogram: (pixels: Float32Array, bins?: number) => void;
   getStats: (pixels: Float32Array) => void;
@@ -90,6 +98,10 @@ export function useImageProcessing(): UseImageProcessingReturn {
       gamma: number = 1,
       outputBlack: number = 0,
       outputWhite: number = 1,
+      brightness: number = 0,
+      contrast: number = 1,
+      mtfMidtone: number = 0.5,
+      curvePreset: ViewerCurvePreset = "linear",
     ) => {
       // Cancel any in-flight chunked processing
       if (abortRef.current) {
@@ -98,7 +110,19 @@ export function useImageProcessing(): UseImageProcessingReturn {
       }
 
       const totalPixels = width * height;
-      const opts = { stretch, colormap, blackPoint, whitePoint, gamma, outputBlack, outputWhite };
+      const opts = {
+        stretch,
+        colormap,
+        blackPoint,
+        whitePoint,
+        gamma,
+        outputBlack,
+        outputWhite,
+        brightness,
+        contrast,
+        mtfMidtone,
+        curvePreset,
+      };
 
       if (totalPixels <= LARGE_IMAGE_THRESHOLD) {
         // Small image: process synchronously (fast enough)
@@ -156,6 +180,10 @@ export function useImageProcessing(): UseImageProcessingReturn {
       gamma: number = 1,
       outputBlack: number = 0,
       outputWhite: number = 1,
+      brightness: number = 0,
+      contrast: number = 1,
+      mtfMidtone: number = 0.5,
+      curvePreset: ViewerCurvePreset = "linear",
     ) => {
       // Cancel any in-flight chunked processing
       if (abortRef.current) {
@@ -164,7 +192,19 @@ export function useImageProcessing(): UseImageProcessingReturn {
       }
 
       const totalPixels = width * height;
-      const opts = { stretch, colormap, blackPoint, whitePoint, gamma, outputBlack, outputWhite };
+      const opts = {
+        stretch,
+        colormap,
+        blackPoint,
+        whitePoint,
+        gamma,
+        outputBlack,
+        outputWhite,
+        brightness,
+        contrast,
+        mtfMidtone,
+        curvePreset,
+      };
 
       if (totalPixels <= LARGE_IMAGE_THRESHOLD) {
         // Small enough: process directly (same as processImage)

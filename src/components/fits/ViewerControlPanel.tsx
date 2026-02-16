@@ -5,7 +5,12 @@ import { useI18n } from "../../i18n/useI18n";
 import { HistogramLevels } from "./HistogramLevels";
 import { ViewerControls } from "./ViewerControls";
 import { AstrometryResultView } from "../astrometry/AstrometryResultView";
-import type { StretchType, ColormapType, FitsMetadata } from "../../lib/fits/types";
+import type {
+  StretchType,
+  ColormapType,
+  FitsMetadata,
+  ViewerCurvePreset,
+} from "../../lib/fits/types";
 import type { AstrometryJob } from "../../lib/astrometry/types";
 
 type HistogramMode = "linear" | "log" | "cdf";
@@ -41,22 +46,35 @@ interface ViewerControlPanelProps {
   // ViewerControls
   stretch: StretchType;
   colormap: ColormapType;
-  gamma: number;
+  brightness: number;
+  contrast: number;
+  mtfMidtone: number;
+  curvePreset: ViewerCurvePreset;
   showGrid: boolean;
   showCrosshair: boolean;
   showPixelInfo: boolean;
   showMinimap: boolean;
+  currentHDU: number;
+  hduList: Array<{ index: number; type: string | null; hasData: boolean }>;
   currentFrame: number;
   totalFrames: number;
   isDataCube: boolean;
   onStretchChange: (stretch: StretchType) => void;
   onColormapChange: (colormap: ColormapType) => void;
-  onGammaChange: (value: number) => void;
+  onBrightnessChange: (value: number) => void;
+  onContrastChange: (value: number) => void;
+  onMtfMidtoneChange: (value: number) => void;
+  onCurvePresetChange: (value: ViewerCurvePreset) => void;
   onToggleGrid: () => void;
   onToggleCrosshair: () => void;
   onTogglePixelInfo: () => void;
   onToggleMinimap: () => void;
+  onHDUChange: (hdu: number) => void;
   onFrameChange: (frame: number) => void;
+  onResetView: () => void;
+  onSavePreset: () => void;
+  onResetToSaved: () => void;
+  onApplyQuickPreset?: (preset: "auto" | "linearReset" | "deepSky" | "moonPlanet") => void;
 
   // Astrometry
   showAstrometryResult: boolean;
@@ -92,22 +110,35 @@ export function ViewerControlPanel({
   isRegionSelectActive,
   stretch,
   colormap,
-  gamma,
+  brightness,
+  contrast,
+  mtfMidtone,
+  curvePreset,
   showGrid,
   showCrosshair,
   showPixelInfo,
   showMinimap,
+  currentHDU,
+  hduList,
   currentFrame,
   totalFrames,
   isDataCube,
   onStretchChange,
   onColormapChange,
-  onGammaChange,
+  onBrightnessChange,
+  onContrastChange,
+  onMtfMidtoneChange,
+  onCurvePresetChange,
   onToggleGrid,
   onToggleCrosshair,
   onTogglePixelInfo,
   onToggleMinimap,
+  onHDUChange,
   onFrameChange,
+  onResetView,
+  onSavePreset,
+  onResetToSaved,
+  onApplyQuickPreset,
   showAstrometryResult,
   latestSolvedJob,
   showAnnotations,
@@ -187,27 +218,36 @@ export function ViewerControlPanel({
         <ViewerControls
           stretch={stretch}
           colormap={colormap}
-          blackPoint={blackPoint}
-          whitePoint={whitePoint}
-          gamma={gamma}
+          brightness={brightness}
+          contrast={contrast}
+          mtfMidtone={mtfMidtone}
+          curvePreset={curvePreset}
           showGrid={showGrid}
           showCrosshair={showCrosshair}
           showPixelInfo={showPixelInfo}
           showMinimap={showMinimap}
+          currentHDU={currentHDU}
+          hduList={hduList}
           currentFrame={currentFrame}
           totalFrames={totalFrames}
           isDataCube={isDataCube}
           onStretchChange={onStretchChange}
           onColormapChange={onColormapChange}
-          onBlackPointChange={onBlackPointChange}
-          onWhitePointChange={onWhitePointChange}
-          onGammaChange={onGammaChange}
+          onBrightnessChange={onBrightnessChange}
+          onContrastChange={onContrastChange}
+          onMtfMidtoneChange={onMtfMidtoneChange}
+          onCurvePresetChange={onCurvePresetChange}
           onToggleGrid={onToggleGrid}
           onToggleCrosshair={onToggleCrosshair}
           onTogglePixelInfo={onTogglePixelInfo}
           onToggleMinimap={onToggleMinimap}
+          onHDUChange={onHDUChange}
           onFrameChange={onFrameChange}
           onAutoStretch={onAutoStretch}
+          onResetView={onResetView}
+          onSavePreset={onSavePreset}
+          onResetToSaved={onResetToSaved}
+          onApplyQuickPreset={onApplyQuickPreset}
         />
       )}
 

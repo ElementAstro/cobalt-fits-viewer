@@ -9,6 +9,7 @@ export type {
   RemoteFile,
   BackupProgress,
   BackupOptions,
+  RestoreConflictStrategy,
   BackupInfo,
   ProviderConnectionState,
   BackupStoreState,
@@ -32,7 +33,12 @@ export { createManifest, parseManifest, serializeManifest, getManifestSummary } 
 export { performBackup, performRestore, getBackupInfo } from "./backupService";
 export type { BackupDataSource, RestoreTarget } from "./backupService";
 
-export { exportLocalBackup, importLocalBackup, previewLocalBackup } from "./localBackup";
+export {
+  exportLocalBackup,
+  importLocalBackup,
+  previewLocalBackup,
+  type LocalBackupPreview,
+} from "./localBackup";
 export { authenticateOneDrive, authenticateDropbox } from "./oauthHelper";
 
 export { GoogleDriveProvider } from "./providers/googleDrive";

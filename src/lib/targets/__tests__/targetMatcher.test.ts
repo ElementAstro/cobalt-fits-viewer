@@ -1,6 +1,29 @@
 import { normalizeName, findKnownAliases, matchTargetByName, mergeTargets } from "../targetMatcher";
 import type { Target } from "../../fits/types";
 
+// Helper to create mock targets with all required fields
+function createMockTarget(overrides: Partial<Target> = {}): Target {
+  const now = Date.now();
+  return {
+    id: "t1",
+    name: "Test",
+    aliases: [],
+    type: "other",
+    tags: [],
+    isFavorite: false,
+    isPinned: false,
+    imageIds: [],
+    status: "planned",
+    plannedFilters: [],
+    plannedExposure: {},
+    imageRatings: {},
+    changeLog: [],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 describe("normalizeName", () => {
   it("trims whitespace", () => {
     expect(normalizeName("  M31  ")).toBe("M 31");
@@ -56,30 +79,19 @@ describe("findKnownAliases", () => {
 
 describe("matchTargetByName", () => {
   const targets: Target[] = [
-    {
+    createMockTarget({
       id: "t1",
       name: "M31",
       aliases: ["Andromeda Galaxy"],
       type: "galaxy",
-      imageIds: [],
-      status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    },
-    {
+    }),
+    createMockTarget({
       id: "t2",
       name: "M42",
       aliases: [],
       type: "nebula",
-      imageIds: [],
       status: "acquiring",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    },
+    }),
   ];
 
   it("matches by direct name", () => {
@@ -105,7 +117,7 @@ describe("matchTargetByName", () => {
 
 describe("mergeTargets", () => {
   it("merges source into dest", () => {
-    const dest: Target = {
+    const dest = createMockTarget({
       id: "t1",
       name: "M31",
       aliases: ["NGC 224"],
@@ -116,8 +128,8 @@ describe("mergeTargets", () => {
       plannedExposure: { L: 3600 },
       createdAt: 100,
       updatedAt: 200,
-    };
-    const source: Target = {
+    });
+    const source = createMockTarget({
       id: "t2",
       name: "Andromeda Galaxy",
       aliases: ["Andromeda"],
@@ -128,7 +140,7 @@ describe("mergeTargets", () => {
       plannedExposure: { R: 1800, L: 1800 },
       createdAt: 150,
       updatedAt: 250,
-    };
+    });
 
     const merged = mergeTargets(dest, source);
 
@@ -141,60 +153,34 @@ describe("mergeTargets", () => {
   });
 
   it("deduplicates imageIds", () => {
-    const dest: Target = {
+    const dest = createMockTarget({
       id: "t1",
       name: "A",
-      aliases: [],
-      type: "other",
       imageIds: ["f1", "f2"],
-      status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    };
-    const source: Target = {
+    });
+    const source = createMockTarget({
       id: "t2",
       name: "B",
-      aliases: [],
-      type: "other",
       imageIds: ["f2", "f3"],
-      status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
 
     const merged = mergeTargets(dest, source);
     expect(merged.imageIds).toEqual(["f1", "f2", "f3"]);
   });
 
   it("takes max exposure per filter", () => {
-    const dest: Target = {
+    const dest = createMockTarget({
       id: "t1",
       name: "A",
-      aliases: [],
-      type: "other",
-      imageIds: [],
-      status: "planned",
       plannedFilters: ["L"],
       plannedExposure: { L: 3600 },
-      createdAt: 0,
-      updatedAt: 0,
-    };
-    const source: Target = {
+    });
+    const source = createMockTarget({
       id: "t2",
       name: "B",
-      aliases: [],
-      type: "other",
-      imageIds: [],
-      status: "planned",
       plannedFilters: ["L", "R"],
       plannedExposure: { L: 1800, R: 1200 },
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
 
     const merged = mergeTargets(dest, source);
     expect(merged.plannedExposure.L).toBe(3600);
@@ -203,19 +189,13 @@ describe("mergeTargets", () => {
 
   it("updates the updatedAt timestamp", () => {
     const before = Date.now();
-    const dest: Target = {
+    const dest = createMockTarget({
       id: "t1",
       name: "A",
-      aliases: [],
-      type: "other",
-      imageIds: [],
-      status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
       createdAt: 0,
       updatedAt: 0,
-    };
-    const source: Target = { ...dest, id: "t2", name: "B" };
+    });
+    const source = createMockTarget({ id: "t2", name: "B" });
 
     const merged = mergeTargets(dest, source);
     expect(merged.updatedAt).toBeGreaterThanOrEqual(before);

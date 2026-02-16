@@ -3,7 +3,7 @@
  */
 
 import { create } from "zustand";
-import type { StretchType, ColormapType, Annotation } from "../lib/fits/types";
+import type { StretchType, ColormapType, Annotation, ViewerCurvePreset } from "../lib/fits/types";
 import { useSettingsStore } from "./useSettingsStore";
 
 interface ViewerStoreState {
@@ -18,6 +18,10 @@ interface ViewerStoreState {
   blackPoint: number;
   whitePoint: number;
   gamma: number;
+  brightness: number;
+  contrast: number;
+  mtfMidtone: number;
+  curvePreset: ViewerCurvePreset;
 
   // HDU & Frame
   currentHDU: number;
@@ -57,6 +61,10 @@ interface ViewerStoreState {
   setBlackPoint: (value: number) => void;
   setWhitePoint: (value: number) => void;
   setGamma: (value: number) => void;
+  setBrightness: (value: number) => void;
+  setContrast: (value: number) => void;
+  setMtfMidtone: (value: number) => void;
+  setCurvePreset: (value: ViewerCurvePreset) => void;
   setMidtone: (value: number) => void;
   setOutputBlack: (value: number) => void;
   setOutputWhite: (value: number) => void;
@@ -93,6 +101,10 @@ const DEFAULT_STATE = {
   blackPoint: 0,
   whitePoint: 1,
   gamma: 1,
+  brightness: 0,
+  contrast: 1,
+  mtfMidtone: 0.5,
+  curvePreset: "linear" as ViewerCurvePreset,
   currentHDU: 0,
   currentFrame: 0,
   totalFrames: 1,
@@ -123,6 +135,10 @@ export const useViewerStore = create<ViewerStoreState>((set) => ({
   setBlackPoint: (value) => set({ blackPoint: value }),
   setWhitePoint: (value) => set({ whitePoint: value }),
   setGamma: (value) => set({ gamma: value }),
+  setBrightness: (value) => set({ brightness: value }),
+  setContrast: (value) => set({ contrast: value }),
+  setMtfMidtone: (value) => set({ mtfMidtone: value }),
+  setCurvePreset: (value) => set({ curvePreset: value }),
   setMidtone: (value) => set({ midtone: value }),
   setOutputBlack: (value) => set({ outputBlack: value }),
   setOutputWhite: (value) => set({ outputWhite: value }),
@@ -135,6 +151,10 @@ export const useViewerStore = create<ViewerStoreState>((set) => ({
       midtone: 0.5,
       outputBlack: 0,
       outputWhite: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.5,
+      curvePreset: "linear",
     }),
 
   setCurrentHDU: (index) => set({ currentHDU: index }),
@@ -177,6 +197,13 @@ export const useViewerStore = create<ViewerStoreState>((set) => ({
       showCrosshair: s.defaultShowCrosshair,
       showPixelInfo: s.defaultShowPixelInfo,
       showMiniMap: s.defaultShowMinimap,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.5,
+      curvePreset: "linear",
+      midtone: 0.5,
+      outputBlack: 0,
+      outputWhite: 1,
     });
   },
 
@@ -193,6 +220,13 @@ export const useViewerStore = create<ViewerStoreState>((set) => ({
       showCrosshair: s.defaultShowCrosshair,
       showPixelInfo: s.defaultShowPixelInfo,
       showMiniMap: s.defaultShowMinimap,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.5,
+      curvePreset: "linear",
+      midtone: 0.5,
+      outputBlack: 0,
+      outputWhite: 1,
     });
   },
 }));

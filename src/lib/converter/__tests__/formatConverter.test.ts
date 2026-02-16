@@ -2,7 +2,7 @@
  * Unit tests for formatConverter.ts — applyStretch with outputBlack/outputWhite
  */
 
-import { applyStretch, fitsToRGBA } from "../formatConverter";
+import { applyStretch, fitsToRGBA, fitsToRGBAChunked } from "../formatConverter";
 
 // ===== Helpers =====
 
@@ -222,6 +222,51 @@ describe("fitsToRGBA with output levels", () => {
     });
     for (let i = 0; i < 4; i++) {
       expect(rgba[i * 4 + 3]).toBe(255);
+    }
+  });
+});
+
+describe("viewer tone adjustments", () => {
+  it("brightness increases dark values", () => {
+    const pixels = new Float32Array([0, 0.25, 0.5, 0.75, 1]);
+    const out = applyStretch(pixels, "linear", 0, 1, 1, 0, 1, 0.2, 1, 0.5, "linear");
+    expect(out[1]).toBeGreaterThan(0.25);
+  });
+
+  it("contrast pushes midpoint away from center", () => {
+    const pixels = new Float32Array([0.4, 0.5, 0.6]);
+    const out = applyStretch(pixels, "linear", 0, 1, 1, 0, 1, 0, 1.8, 0.5, "linear");
+    expect(out[0]).toBeLessThan(0.4);
+    expect(out[2]).toBeGreaterThan(0.6);
+  });
+
+  it("curve preset alters output distribution", () => {
+    const pixels = makePixels(32, "gradient");
+    const linear = applyStretch(pixels, "linear", 0, 1, 1, 0, 1, 0, 1, 0.5, "linear");
+    const bright = applyStretch(pixels, "linear", 0, 1, 1, 0, 1, 0, 1, 0.5, "brighten");
+    expect(bright[10]).toBeGreaterThan(linear[10]);
+  });
+
+  it("chunked output matches sync output for extended options", async () => {
+    const pixels = makePixels(4096, "gradient");
+    const options = {
+      stretch: "asinh" as const,
+      colormap: "grayscale" as const,
+      blackPoint: 0.05,
+      whitePoint: 0.95,
+      gamma: 1.2,
+      outputBlack: 0.05,
+      outputWhite: 0.9,
+      brightness: 0.1,
+      contrast: 1.1,
+      mtfMidtone: 0.45,
+      curvePreset: "sCurve" as const,
+    };
+    const sync = fitsToRGBA(pixels, 64, 64, options);
+    const chunked = await fitsToRGBAChunked(pixels, 64, 64, options);
+    expect(chunked.length).toBe(sync.length);
+    for (let i = 0; i < sync.length; i += 97) {
+      expect(chunked[i]).toBe(sync[i]);
     }
   });
 });

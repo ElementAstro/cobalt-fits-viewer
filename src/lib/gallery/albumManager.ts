@@ -2,7 +2,7 @@
  * 相簿 CRUD 管理
  */
 
-import type { Album, SmartAlbumRule, FitsMetadata } from "../fits/types";
+import type { Album, SmartAlbumRule, FitsMetadata, SmartAlbumRuleOperator } from "../fits/types";
 
 /**
  * 创建新相簿
@@ -32,31 +32,35 @@ export function evaluateSmartRules(rules: SmartAlbumRule[], files: FitsMetadata[
   return files.filter((file) => rules.every((rule) => matchesRule(file, rule))).map((f) => f.id);
 }
 
+// Operator implementations
+const operators: Record<string, (fieldValue: unknown, ruleValue: unknown) => boolean> = {
+  equals: (v, r) => String(v).toLowerCase() === String(r).toLowerCase(),
+  contains: (v, r) => String(v).toLowerCase().includes(String(r).toLowerCase()),
+  gt: (v, r) => Number(v) > Number(r),
+  lt: (v, r) => Number(v) < Number(r),
+  between: (v, r) => {
+    const [min, max] = r as [number, number];
+    const num = Number(v);
+    return num >= min && num <= max;
+  },
+  in: (v, r) => (r as string[]).some((rv) => String(v).toLowerCase() === rv.toLowerCase()),
+};
+
 function matchesRule(file: FitsMetadata, rule: SmartAlbumRule): boolean {
   const fieldValue = getFieldValue(file, rule.field);
   if (fieldValue === undefined || fieldValue === null) return false;
 
-  switch (rule.operator) {
-    case "equals":
-      return String(fieldValue).toLowerCase() === String(rule.value).toLowerCase();
-    case "contains":
-      return String(fieldValue).toLowerCase().includes(String(rule.value).toLowerCase());
-    case "gt":
-      return Number(fieldValue) > Number(rule.value);
-    case "lt":
-      return Number(fieldValue) < Number(rule.value);
-    case "between": {
-      const [min, max] = rule.value as [number, number];
-      const num = Number(fieldValue);
-      return num >= min && num <= max;
-    }
-    case "in":
-      return (rule.value as string[]).some(
-        (v) => String(fieldValue).toLowerCase() === v.toLowerCase(),
-      );
-    default:
-      return false;
-  }
+  // Handle NOT operators
+  const isNegation = rule.operator.startsWith("not");
+  const baseOperator = isNegation
+    ? (rule.operator.replace("not", "").toLowerCase() as SmartAlbumRuleOperator)
+    : rule.operator;
+
+  const operatorFn = operators[baseOperator];
+  if (!operatorFn) return false;
+
+  const result = operatorFn(fieldValue, rule.value);
+  return isNegation ? !result : result;
 }
 
 function getFieldValue(

@@ -1,22 +1,47 @@
 import { View, Text } from "react-native";
-import { Card, PressableFeedback, useThemeColor } from "heroui-native";
+import { Card, Chip, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { ObservationPlan } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
+import { normalizePlanStatus } from "../../lib/sessions/planUtils";
 
 interface PlanCardProps {
   plan: ObservationPlan;
-  onOpenInCalendar?: (eventId: string) => void;
+  onSyncToCalendar?: (plan: ObservationPlan) => void;
+  onOpenInCalendar?: (plan: ObservationPlan) => void;
+  onRefreshFromCalendar?: (plan: ObservationPlan) => void;
+  onEditInCalendar?: (plan: ObservationPlan) => void;
+  onCreateViaSystemCalendar?: (plan: ObservationPlan) => void;
+  onCreateSession?: (plan: ObservationPlan) => void;
+  onStatusChange?: (plan: ObservationPlan, status: "planned" | "completed" | "cancelled") => void;
   onEdit?: (plan: ObservationPlan) => void;
   onDelete?: (plan: ObservationPlan) => void;
 }
 
-export function PlanCard({ plan, onOpenInCalendar, onEdit, onDelete }: PlanCardProps) {
-  const { t: _t } = useI18n();
+const STATUS_COLOR_CLASS: Record<"planned" | "completed" | "cancelled", string> = {
+  planned: "text-primary",
+  completed: "text-success",
+  cancelled: "text-danger",
+};
+
+export function PlanCard({
+  plan,
+  onSyncToCalendar,
+  onOpenInCalendar,
+  onRefreshFromCalendar,
+  onEditInCalendar,
+  onCreateViaSystemCalendar,
+  onCreateSession,
+  onStatusChange,
+  onEdit,
+  onDelete,
+}: PlanCardProps) {
+  const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
 
   const startDate = new Date(plan.startDate);
   const endDate = new Date(plan.endDate);
+  const status = normalizePlanStatus(plan.status);
 
   const formatDate = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -41,13 +66,40 @@ export function PlanCard({ plan, onOpenInCalendar, onEdit, onDelete }: PlanCardP
             </Text>
           </View>
           <View className="flex-row items-center gap-2">
+            {!plan.calendarEventId && onSyncToCalendar && (
+              <PressableFeedback onPress={() => onSyncToCalendar(plan)} hitSlop={8}>
+                <PressableFeedback.Highlight />
+                <Ionicons name="sync-outline" size={13} color={mutedColor} />
+              </PressableFeedback>
+            )}
+            {!plan.calendarEventId && onCreateViaSystemCalendar && (
+              <PressableFeedback onPress={() => onCreateViaSystemCalendar(plan)} hitSlop={8}>
+                <PressableFeedback.Highlight />
+                <Ionicons name="add-circle-outline" size={13} color={mutedColor} />
+              </PressableFeedback>
+            )}
             {plan.calendarEventId && onOpenInCalendar && (
-              <PressableFeedback
-                onPress={() => onOpenInCalendar(plan.calendarEventId!)}
-                hitSlop={8}
-              >
+              <PressableFeedback onPress={() => onOpenInCalendar(plan)} hitSlop={8}>
                 <PressableFeedback.Highlight />
                 <Ionicons name="open-outline" size={13} color={mutedColor} />
+              </PressableFeedback>
+            )}
+            {plan.calendarEventId && onRefreshFromCalendar && (
+              <PressableFeedback onPress={() => onRefreshFromCalendar(plan)} hitSlop={8}>
+                <PressableFeedback.Highlight />
+                <Ionicons name="refresh-outline" size={13} color={mutedColor} />
+              </PressableFeedback>
+            )}
+            {plan.calendarEventId && onEditInCalendar && (
+              <PressableFeedback onPress={() => onEditInCalendar(plan)} hitSlop={8}>
+                <PressableFeedback.Highlight />
+                <Ionicons name="build-outline" size={13} color={mutedColor} />
+              </PressableFeedback>
+            )}
+            {onCreateSession && (
+              <PressableFeedback onPress={() => onCreateSession(plan)} hitSlop={8}>
+                <PressableFeedback.Highlight />
+                <Ionicons name="play-forward-outline" size={13} color={mutedColor} />
               </PressableFeedback>
             )}
             {onEdit && (
@@ -63,6 +115,36 @@ export function PlanCard({ plan, onOpenInCalendar, onEdit, onDelete }: PlanCardP
               </PressableFeedback>
             )}
           </View>
+        </View>
+
+        <View className="flex-row items-center justify-between">
+          <Chip size="sm" variant="secondary">
+            <Chip.Label className={`text-[9px] ${STATUS_COLOR_CLASS[status]}`}>
+              {t(`sessions.status.${status}`)}
+            </Chip.Label>
+          </Chip>
+          {onStatusChange && (
+            <View className="flex-row items-center gap-2">
+              {status !== "planned" && (
+                <PressableFeedback onPress={() => onStatusChange(plan, "planned")} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="refresh-outline" size={12} color={mutedColor} />
+                </PressableFeedback>
+              )}
+              {status !== "completed" && (
+                <PressableFeedback onPress={() => onStatusChange(plan, "completed")} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="checkmark-circle-outline" size={12} color={mutedColor} />
+                </PressableFeedback>
+              )}
+              {status !== "cancelled" && (
+                <PressableFeedback onPress={() => onStatusChange(plan, "cancelled")} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="close-circle-outline" size={12} color={mutedColor} />
+                </PressableFeedback>
+              )}
+            </View>
+          )}
         </View>
 
         <View className="flex-row items-center gap-3">

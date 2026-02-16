@@ -12,6 +12,7 @@ This module provides internationalization support for the application:
 - Provides `useI18n` hook for reactive translations
 - Supports English (en) and Chinese (zh) locales
 - Allows runtime locale switching
+- Comprehensive translation keys for all features
 
 ## Entry & Startup
 
@@ -70,6 +71,47 @@ share.*                   # Sharing
 location.*                # Location & map
 splash.*                  # Splash screen (appName, tagline)
 notFound.*                # 404 page
+onboarding.*              # Onboarding screens
+astrometry.*              # Plate solving features
+backup.*                  # Cloud backup features
+compare.*                 # Image comparison
+```
+
+### Sample Translation Keys
+
+```typescript
+// From locales/en.ts
+{
+  common: {
+    cancel: "Cancel",
+    confirm: "Confirm",
+    delete: "Delete",
+    save: "Save",
+    edit: "Edit",
+    close: "Close",
+    loading: "Loading...",
+    error: "Error",
+    success: "Success",
+    // ... more common keys
+  },
+  tabs: {
+    files: "Files",
+    gallery: "Gallery",
+    targets: "Targets",
+    sessions: "Sessions",
+    settings: "Settings",
+  },
+  viewer: {
+    stretch: "Stretch",
+    colormap: "Colormap",
+    histogram: "Histogram",
+    blackPoint: "Black Point",
+    whitePoint: "White Point",
+    gamma: "Gamma",
+    // ... more viewer keys
+  },
+  // ... more namespaces
+}
 ```
 
 ## Key Dependencies
@@ -85,21 +127,51 @@ Translation files are typed as `const` objects with nested structure:
 
 ```typescript
 // locales/en.ts structure
-{
-  common: { goHome: string };
-  tabs: { home: string; explore: string };
-  home: { title: string; subtitle: string; ... };
-  explore: { title: string; features: { ... } };
-  notFound: { title: string; description: string };
-}
+export default {
+  common: {
+    /* ... */
+  },
+  tabs: {
+    /* ... */
+  },
+  files: {
+    /* ... */
+  },
+  gallery: {
+    /* ... */
+  },
+  targets: {
+    /* ... */
+  },
+  sessions: {
+    /* ... */
+  },
+  viewer: {
+    /* ... */
+  },
+  header: {
+    /* ... */
+  },
+  editor: {
+    /* ... */
+  },
+  converter: {
+    /* ... */
+  },
+  settings: {
+    /* ... */
+  },
+  // ... more namespaces
+} as const;
 ```
 
 ## Testing & Quality
 
-| Aspect      | Status                             |
-| ----------- | ---------------------------------- |
-| Unit Tests  | Not configured                     |
-| Type Safety | `as const` for translation objects |
+| Aspect      | Status                             | Files                               |
+| ----------- | ---------------------------------- | ----------------------------------- |
+| Unit Tests  | Configured                         | `__tests__/useI18n.test.ts`         |
+|             |                                    | `__tests__/orientationI18n.test.ts` |
+| Type Safety | `as const` for translation objects | -                                   |
 
 ## FAQ
 
@@ -111,13 +183,29 @@ Translation files are typed as `const` objects with nested structure:
 
 **Q: How do I add a new language?**
 
-1. Create `locales/<lang>.ts` with same structure
+1. Create `locales/<lang>.ts` with same structure as existing locales
 2. Export in `locales/index.ts`
 3. Import and add to i18n config in `index.ts`
+4. Update the `locales` object with the new translations
 
 **Q: Why use `useSyncExternalStore`?**
 
 This ensures React re-renders when locale changes, making translations reactive without external state management.
+
+**Q: How do I handle pluralization?**
+
+```typescript
+// In locale file
+{
+  files: {
+    count_one: "{{count}} file",
+    count_other: "{{count}} files",
+  }
+}
+
+// In component
+t("files.count", { count: 5 });
+```
 
 ## Related Files
 
@@ -125,14 +213,18 @@ This ensures React re-renders when locale changes, making translations reactive 
 src/i18n/
 |-- index.ts           # i18n instance configuration
 |-- useI18n.ts         # React hook for translations
-`-- locales/
-    |-- index.ts       # Locale exports
-    |-- en.ts          # English translations
-    `-- zh.ts          # Chinese translations
+|-- locales/
+|   |-- index.ts       # Locale exports
+|   |-- en.ts          # English translations (comprehensive)
+|   `-- zh.ts          # Chinese translations (comprehensive)
+`-- __tests__/
+    |-- useI18n.test.ts
+    `-- orientationI18n.test.ts
 ```
 
 ## Changelog
 
-| Date       | Changes                          |
-| ---------- | -------------------------------- |
-| 2026-02-14 | AI context documentation created |
+| Date       | Changes                                     |
+| ---------- | ------------------------------------------- |
+| 2026-02-14 | AI context documentation created            |
+| 2026-02-15 | Updated with comprehensive translation keys |

@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { View, Text, FlatList } from "react-native";
+import { View, Text, FlatList, Alert } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -12,6 +12,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useFileManager } from "../../hooks/useFileManager";
 import {
   previewRenames,
   getTemplateVariables,
@@ -30,7 +31,7 @@ export function BatchRenameSheet({ visible, selectedIds, onClose }: BatchRenameS
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
 
   const files = useFitsStore((s) => s.files);
-  const updateFile = useFitsStore((s) => s.updateFile);
+  const { handleRenameFiles } = useFileManager();
 
   const selectedFiles = useMemo(
     () => files.filter((f) => selectedIds.includes(f.id)),
@@ -49,10 +50,17 @@ export function BatchRenameSheet({ visible, selectedIds, onClose }: BatchRenameS
   };
 
   const handleApply = () => {
-    for (const preview of previews) {
-      if (preview.oldName !== preview.newName) {
-        updateFile(preview.id, { filename: preview.newName });
-      }
+    const changed = previews.filter((preview) => preview.oldName !== preview.newName);
+    const result = handleRenameFiles(
+      changed.map((item) => ({ fileId: item.id, filename: item.newName })),
+    );
+    if (result.failed > 0) {
+      Alert.alert(
+        t("common.error"),
+        t("files.renamePartial")
+          .replace("{success}", String(result.success))
+          .replace("{failed}", String(result.failed)),
+      );
     }
     onClose();
   };

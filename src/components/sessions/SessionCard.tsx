@@ -11,7 +11,10 @@ interface SessionCardProps {
   onPress?: () => void;
   onSyncToCalendar?: (session: ObservationSession) => void;
   onUnsyncFromCalendar?: (session: ObservationSession) => void;
-  onOpenInCalendar?: (eventId: string) => void;
+  onOpenInCalendar?: (session: ObservationSession) => void;
+  onRefreshFromCalendar?: (session: ObservationSession) => void;
+  onEditInCalendar?: (session: ObservationSession) => void;
+  onCreateViaSystemCalendar?: (session: ObservationSession) => void;
   onDelete?: (session: ObservationSession) => void;
 }
 
@@ -21,6 +24,9 @@ export function SessionCard({
   onSyncToCalendar,
   onUnsyncFromCalendar: _onUnsyncFromCalendar,
   onOpenInCalendar,
+  onRefreshFromCalendar,
+  onEditInCalendar,
+  onCreateViaSystemCalendar,
   onDelete,
 }: SessionCardProps) {
   const { t } = useI18n();
@@ -39,10 +45,7 @@ export function SessionCard({
               <Ionicons name="moon-outline" size={16} color={mutedColor} />
               <Text className="text-sm font-semibold text-foreground">{session.date}</Text>
               {session.calendarEventId && (
-                <PressableFeedback
-                  onPress={() => onOpenInCalendar?.(session.calendarEventId!)}
-                  hitSlop={8}
-                >
+                <PressableFeedback onPress={() => onOpenInCalendar?.(session)} hitSlop={8}>
                   <PressableFeedback.Highlight />
                   <Ionicons name="calendar" size={13} color={mutedColor} />
                 </PressableFeedback>
@@ -53,6 +56,24 @@ export function SessionCard({
                 <PressableFeedback onPress={() => onSyncToCalendar(session)} hitSlop={8}>
                   <PressableFeedback.Highlight />
                   <Ionicons name="calendar-outline" size={15} color={mutedColor} />
+                </PressableFeedback>
+              )}
+              {!session.calendarEventId && onCreateViaSystemCalendar && (
+                <PressableFeedback onPress={() => onCreateViaSystemCalendar(session)} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="add-circle-outline" size={15} color={mutedColor} />
+                </PressableFeedback>
+              )}
+              {session.calendarEventId && onRefreshFromCalendar && (
+                <PressableFeedback onPress={() => onRefreshFromCalendar(session)} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="refresh-outline" size={14} color={mutedColor} />
+                </PressableFeedback>
+              )}
+              {session.calendarEventId && onEditInCalendar && (
+                <PressableFeedback onPress={() => onEditInCalendar(session)} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="build-outline" size={14} color={mutedColor} />
                 </PressableFeedback>
               )}
               {onDelete && (

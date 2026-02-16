@@ -33,19 +33,25 @@ function makeResult(overrides: Partial<AstrometryResult> = {}): AstrometryResult
 }
 
 function makeTarget(overrides: Partial<Target> = {}): Target {
+  const now = Date.now();
   return {
     id: "t-existing",
     name: "M31",
     aliases: ["Andromeda Galaxy", "NGC 224"],
     type: "galaxy",
+    tags: [],
+    isFavorite: false,
+    isPinned: false,
     ra: 10.684,
     dec: 41.269,
     imageIds: [],
     status: "planned",
     plannedFilters: [],
     plannedExposure: {},
-    createdAt: 0,
-    updatedAt: 0,
+    imageRatings: {},
+    changeLog: [],
+    createdAt: now,
+    updatedAt: now,
     ...overrides,
   };
 }

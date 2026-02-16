@@ -14,6 +14,8 @@ interface PromptDialogProps {
   defaultValue?: string;
   onConfirm: (value: string) => void;
   onCancel: () => void;
+  multiline?: boolean;
+  allowEmpty?: boolean;
 }
 
 export function PromptDialog({
@@ -23,6 +25,8 @@ export function PromptDialog({
   defaultValue = "",
   onConfirm,
   onCancel,
+  multiline = false,
+  allowEmpty = false,
 }: PromptDialogProps) {
   const { t } = useI18n();
   const [value, setValue] = useState(defaultValue);
@@ -34,8 +38,9 @@ export function PromptDialog({
   }, [visible, defaultValue]);
 
   const handleConfirm = () => {
-    if (value.trim()) {
-      onConfirm(value.trim());
+    const normalizedValue = value.trim();
+    if (allowEmpty || normalizedValue) {
+      onConfirm(normalizedValue);
     }
   };
 
@@ -56,14 +61,22 @@ export function PromptDialog({
               onChangeText={setValue}
               placeholder={placeholder}
               autoFocus
-              onSubmitEditing={handleConfirm}
+              onSubmitEditing={multiline ? undefined : handleConfirm}
+              multiline={multiline}
+              numberOfLines={multiline ? 4 : undefined}
+              style={multiline ? { minHeight: 80 } : undefined}
             />
           </View>
           <View className="mt-4 flex-row justify-end gap-2">
             <Button variant="outline" size="sm" onPress={onCancel}>
               <Button.Label>{t("common.cancel")}</Button.Label>
             </Button>
-            <Button variant="primary" size="sm" onPress={handleConfirm} isDisabled={!value.trim()}>
+            <Button
+              variant="primary"
+              size="sm"
+              onPress={handleConfirm}
+              isDisabled={!allowEmpty && !value.trim()}
+            >
               <Button.Label>{t("common.confirm")}</Button.Label>
             </Button>
           </View>

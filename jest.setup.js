@@ -87,9 +87,16 @@ jest.mock("heroui-native", () => {
   Dialog.Title = (props) => React.createElement(Text, props, props.children);
   Dialog.Description = (props) => React.createElement(Text, props, props.children);
 
+  const BottomSheet = c("bottom-sheet");
+  BottomSheet.Portal = c("bottom-sheet-portal");
+  BottomSheet.Overlay = c("bottom-sheet-overlay");
+  BottomSheet.Content = c("bottom-sheet-content");
+  BottomSheet.Title = (props) => React.createElement(Text, props, props.children);
+
   const TextField = c("textfield");
 
   return {
+    BottomSheet,
     Button,
     Card,
     Chip,

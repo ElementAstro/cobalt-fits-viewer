@@ -23,6 +23,7 @@ interface ViewerToolbarProps {
   onToggleFavorite: () => void;
   onOpenHeader: () => void;
   onOpenEditor: () => void;
+  onCompare: () => void;
   onExport: () => void;
   onAstrometry: () => void;
   onToggleControls: () => void;
@@ -45,6 +46,7 @@ export function ViewerToolbar({
   onToggleFavorite,
   onOpenHeader,
   onOpenEditor,
+  onCompare,
   onExport,
   onAstrometry,
   onToggleControls,
@@ -75,6 +77,11 @@ export function ViewerToolbar({
       label: t("editor.title"),
       icon: "create-outline",
       onPress: onOpenEditor,
+    },
+    {
+      label: t("gallery.compare"),
+      icon: "git-compare-outline",
+      onPress: onCompare,
     },
     {
       label: t("common.share"),

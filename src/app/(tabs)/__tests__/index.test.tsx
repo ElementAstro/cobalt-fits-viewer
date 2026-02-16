@@ -1,6 +1,8 @@
 import React from "react";
 import { render, screen } from "@testing-library/react-native";
 import FilesScreen from "../index";
+import { useFitsStore } from "../../../stores/useFitsStore";
+import type { FitsMetadata } from "../../../lib/fits/types";
 
 // Mock useScreenOrientation hook
 jest.mock("../../../hooks/useScreenOrientation", () => ({
@@ -22,6 +24,7 @@ jest.mock("../../../hooks/useFileManager", () => ({
     importProgress: { phase: "picking", percent: 0, current: 0, total: 0 },
     importError: null,
     lastImportResult: null,
+    isZipImportAvailable: true,
     pickAndImportFile: jest.fn(),
     pickAndImportFolder: jest.fn(),
     pickAndImportZip: jest.fn(),
@@ -29,6 +32,38 @@ jest.mock("../../../hooks/useFileManager", () => ({
     cancelImport: jest.fn(),
     handleDeleteFiles: jest.fn(),
   }),
+}));
+
+jest.mock("../../../hooks/useAlbums", () => ({
+  useAlbums: () => ({
+    albums: [],
+    addImagesToAlbum: jest.fn(),
+  }),
+}));
+
+jest.mock("../../../stores/useSettingsStore", () => ({
+  useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      fileListStyle: "list",
+      setFileListStyle: jest.fn(),
+      defaultGridColumns: 3,
+      thumbnailShowFilename: true,
+      thumbnailShowObject: false,
+      thumbnailShowFilter: true,
+      thumbnailShowExposure: false,
+    }),
+}));
+
+jest.mock("../../../components/gallery/AlbumPickerSheet", () => ({
+  AlbumPickerSheet: () => null,
+}));
+
+jest.mock("../../../components/gallery/BatchTagSheet", () => ({
+  BatchTagSheet: () => null,
+}));
+
+jest.mock("../../../components/gallery/BatchRenameSheet", () => ({
+  BatchRenameSheet: () => null,
 }));
 
 // Mock expo-image
@@ -55,6 +90,31 @@ jest.mock("react-native-gesture-handler", () => {
 });
 
 describe("FilesScreen", () => {
+  const makeFile = (overrides: Partial<FitsMetadata> = {}): FitsMetadata => ({
+    id: "file-1",
+    filename: "M42_Light.fits",
+    filepath: "file:///document/fits_files/M42_Light.fits",
+    fileSize: 1024,
+    importDate: 1700000000000,
+    frameType: "light",
+    isFavorite: false,
+    tags: [],
+    albumIds: [],
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    useFitsStore.setState({
+      files: [],
+      selectedIds: [],
+      isSelectionMode: false,
+      sortBy: "date",
+      sortOrder: "desc",
+      searchQuery: "",
+      filterTags: [],
+    });
+  });
+
   it("should render the file manager title", () => {
     render(<FilesScreen />);
     expect(screen.getByText("File Manager")).toBeTruthy();
@@ -62,12 +122,33 @@ describe("FilesScreen", () => {
 
   it("should render the empty state when no files", () => {
     render(<FilesScreen />);
-    expect(screen.getByText("No FITS files yet")).toBeTruthy();
+    expect(screen.getByText("No files yet")).toBeTruthy();
     expect(screen.getByText("Import files to get started")).toBeTruthy();
   });
 
   it("should render the import button", () => {
     render(<FilesScreen />);
     expect(screen.getAllByText("Import Options").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should render quality sort and list style controls", () => {
+    render(<FilesScreen />);
+    expect(screen.getByText("Quality")).toBeTruthy();
+    expect(screen.getByText("Grid")).toBeTruthy();
+    expect(screen.getByText("List")).toBeTruthy();
+    expect(screen.getByText("Compact")).toBeTruthy();
+    expect(screen.getByText("Favorites Only")).toBeTruthy();
+  });
+
+  it("should show selection toolbar with selected count", () => {
+    useFitsStore.setState({
+      files: [makeFile()],
+      selectedIds: ["file-1"],
+      isSelectionMode: true,
+    });
+
+    render(<FilesScreen />);
+    expect(screen.getByText("1 selected")).toBeTruthy();
+    expect(screen.getByText("Batch Convert")).toBeTruthy();
   });
 });

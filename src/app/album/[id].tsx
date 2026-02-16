@@ -11,8 +11,10 @@ import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
+import { AlbumStatisticsSheet } from "../../components/gallery/AlbumStatisticsSheet";
+import { calculateAlbumStatistics } from "../../lib/gallery/albumStatistics";
 import { formatDate } from "../../lib/utils/format";
-import type { FitsMetadata } from "../../lib/fits/types";
+import type { FitsMetadata, AlbumStatistics } from "../../lib/fits/types";
 
 export default function AlbumDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -26,11 +28,8 @@ export default function AlbumDetailScreen() {
   const removeAlbum = useAlbumStore((s) => s.removeAlbum);
   const removeImageFromAlbum = useAlbumStore((s) => s.removeImageFromAlbum);
   const setCoverImage = useAlbumStore((s) => s.setCoverImage);
+  const updateAlbumNotes = useAlbumStore((s) => s.updateAlbumNotes);
   const files = useFitsStore((s) => s.files);
-
-  const { isSelectionMode, selectedIds, toggleSelection, enterSelectionMode, exitSelectionMode } =
-    useSelectionMode();
-  const [showRenamePrompt, setShowRenamePrompt] = useState(false);
 
   const albumFiles = useMemo(() => {
     if (!album) return [];
@@ -38,6 +37,27 @@ export default function AlbumDetailScreen() {
       .map((imgId) => files.find((f) => f.id === imgId))
       .filter(Boolean) as FitsMetadata[];
   }, [album, files]);
+
+  // Calculate statistics
+  const statistics = useMemo<AlbumStatistics | null>(() => {
+    if (!album || albumFiles.length === 0) return null;
+    return calculateAlbumStatistics(album, files);
+  }, [album, albumFiles.length, files]);
+
+  const {
+    isSelectionMode,
+    selectedIds,
+    toggleSelection,
+    enterSelectionMode,
+    exitSelectionMode,
+    selectAll,
+  } = useSelectionMode();
+  const [showRenamePrompt, setShowRenamePrompt] = useState(false);
+  const [showNotesEdit, setShowNotesEdit] = useState(false);
+  const [showStatistics, setShowStatistics] = useState(false);
+  const [notesValue, setNotesValue] = useState("");
+  const allAlbumSelected =
+    albumFiles.length > 0 && albumFiles.every((file) => selectedIds.includes(file.id));
 
   const handleFilePress = useCallback(
     (file: FitsMetadata) => {
@@ -86,6 +106,15 @@ export default function AlbumDetailScreen() {
     exitSelectionMode();
   }, [album, selectedIds, setCoverImage, exitSelectionMode]);
 
+  const handleSelectAllToggle = useCallback(() => {
+    if (albumFiles.length === 0) return;
+    if (allAlbumSelected) {
+      selectAll([]);
+      return;
+    }
+    selectAll(albumFiles.map((file) => file.id));
+  }, [albumFiles, allAlbumSelected, selectAll]);
+
   const handleDeleteAlbum = useCallback(() => {
     if (!album) return;
     Alert.alert(t("album.deleteAlbum"), t("album.deleteConfirm"), [
@@ -104,6 +133,12 @@ export default function AlbumDetailScreen() {
   const handleRename = useCallback(() => {
     if (!album) return;
     setShowRenamePrompt(true);
+  }, [album]);
+
+  const handleEditNotes = useCallback(() => {
+    if (!album) return;
+    setNotesValue(album.notes ?? "");
+    setShowNotesEdit(true);
   }, [album]);
 
   const albumColumns = isLandscape ? 5 : 3;
@@ -135,6 +170,16 @@ export default function AlbumDetailScreen() {
             )}
           </View>
           <View className="flex-row gap-1">
+            {isLandscape && statistics && (
+              <Button size="sm" variant="outline" onPress={() => setShowStatistics(true)}>
+                <Ionicons name="stats-chart-outline" size={14} color={successColor} />
+              </Button>
+            )}
+            {isLandscape && (
+              <Button size="sm" variant="outline" onPress={handleEditNotes}>
+                <Ionicons name="document-text-outline" size={14} color={mutedColor} />
+              </Button>
+            )}
             <Button size="sm" variant="outline" onPress={handleRename}>
               <Ionicons name="pencil-outline" size={14} color={mutedColor} />
             </Button>
@@ -147,13 +192,25 @@ export default function AlbumDetailScreen() {
         {/* Album Info — full in portrait, hidden in landscape (inline above) */}
         {!isLandscape && (
           <View>
-            <View className="flex-row items-center gap-2">
-              <Text className="text-2xl font-bold text-foreground">{album.name}</Text>
-              {album.isSmart && (
-                <View className="rounded bg-success/20 px-2 py-0.5">
-                  <Ionicons name="sparkles" size={12} color={successColor} />
-                </View>
-              )}
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2">
+                <Text className="text-2xl font-bold text-foreground">{album.name}</Text>
+                {album.isSmart && (
+                  <View className="rounded bg-success/20 px-2 py-0.5">
+                    <Ionicons name="sparkles" size={12} color={successColor} />
+                  </View>
+                )}
+              </View>
+              <View className="flex-row gap-1">
+                {statistics && (
+                  <Button size="sm" variant="ghost" onPress={() => setShowStatistics(true)}>
+                    <Ionicons name="stats-chart-outline" size={14} color={successColor} />
+                  </Button>
+                )}
+                <Button size="sm" variant="ghost" onPress={handleEditNotes}>
+                  <Ionicons name="document-text-outline" size={14} color={mutedColor} />
+                </Button>
+              </View>
             </View>
             {album.description && (
               <Text className="mt-1 text-sm text-muted">{album.description}</Text>
@@ -171,6 +228,14 @@ export default function AlbumDetailScreen() {
                 </Text>
               )}
             </View>
+            {/* Notes Display */}
+            {album.notes && (
+              <View className="mt-2 rounded-lg bg-surface-secondary p-2">
+                <Text className="text-xs text-muted" numberOfLines={3}>
+                  {album.notes}
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -199,6 +264,16 @@ export default function AlbumDetailScreen() {
               {selectedIds.length} {t("album.selected")}
             </Text>
             <View className="flex-row gap-1">
+              <Button size="sm" variant="outline" onPress={handleSelectAllToggle}>
+                <Ionicons
+                  name={allAlbumSelected ? "checkmark-done-outline" : "checkmark-outline"}
+                  size={12}
+                  color={mutedColor}
+                />
+                <Button.Label className="text-[10px]">
+                  {allAlbumSelected ? t("common.deselectAll") : t("common.selectAll")}
+                </Button.Label>
+              </Button>
               {selectedIds.length === 1 && (
                 <Button size="sm" variant="outline" onPress={handleSetCover}>
                   <Ionicons name="image-outline" size={12} color={mutedColor} />
@@ -227,10 +302,14 @@ export default function AlbumDetailScreen() {
     successColor,
     router,
     exitSelectionMode,
+    allAlbumSelected,
+    handleSelectAllToggle,
     handleSetCover,
     handleRemoveSelected,
     handleRename,
     handleDeleteAlbum,
+    handleEditNotes,
+    statistics,
     isLandscape,
   ]);
 
@@ -277,6 +356,30 @@ export default function AlbumDetailScreen() {
           setShowRenamePrompt(false);
         }}
         onCancel={() => setShowRenamePrompt(false)}
+      />
+
+      {/* Notes Edit Dialog */}
+      <PromptDialog
+        visible={showNotesEdit}
+        title={t("album.editNotes")}
+        placeholder={t("album.notesPlaceholder")}
+        defaultValue={notesValue}
+        onConfirm={(notes) => {
+          if (album) updateAlbumNotes(album.id, notes);
+          setShowNotesEdit(false);
+        }}
+        onCancel={() => setShowNotesEdit(false)}
+        multiline
+        allowEmpty
+      />
+
+      {/* Statistics Sheet */}
+      <AlbumStatisticsSheet
+        visible={showStatistics}
+        statistics={statistics}
+        albumName={album?.name ?? ""}
+        imageCount={albumFiles.length}
+        onClose={() => setShowStatistics(false)}
       />
     </>
   );

@@ -16,13 +16,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useCalendar } from "../../hooks/useCalendar";
 import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useSessionStore } from "../../stores/useSessionStore";
 import type { ObservationPlan } from "../../lib/fits/types";
 
 interface PlanObservationSheetProps {
   visible: boolean;
   onClose: () => void;
   initialDate?: Date;
+  initialTargetName?: string;
   existingPlan?: ObservationPlan;
 }
 
@@ -38,12 +38,12 @@ export function PlanObservationSheet({
   visible,
   onClose,
   initialDate,
+  initialTargetName,
   existingPlan,
 }: PlanObservationSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
-  const { createObservationPlan, syncing } = useCalendar();
-  const updatePlan = useSessionStore((s) => s.updatePlan);
+  const { createObservationPlan, updateObservationPlan, syncing } = useCalendar();
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
   const isEditMode = !!existingPlan;
 
@@ -59,9 +59,12 @@ export function PlanObservationSheet({
     return d;
   }, []);
 
-  const [targetName, setTargetName] = useState(existingPlan?.targetName ?? "");
+  const [targetName, setTargetName] = useState(existingPlan?.targetName ?? initialTargetName ?? "");
   const [title, setTitle] = useState(existingPlan?.title ?? "");
   const [notes, setNotes] = useState(existingPlan?.notes ?? "");
+  const [status, setStatus] = useState<"planned" | "completed" | "cancelled">(
+    existingPlan?.status ?? "planned",
+  );
   const [reminderMinutes, setReminderMinutes] = useState(
     existingPlan?.reminderMinutes ?? defaultReminderMinutes,
   );
@@ -77,15 +80,28 @@ export function PlanObservationSheet({
       setTargetName(existingPlan.targetName);
       setTitle(existingPlan.title);
       setNotes(existingPlan.notes ?? "");
+      setStatus(existingPlan.status ?? "planned");
       setReminderMinutes(existingPlan.reminderMinutes);
       setStartDate(new Date(existingPlan.startDate));
       setEndDate(new Date(existingPlan.endDate));
     } else {
       const s = makeDefaultStart(initialDate);
+      setTargetName(initialTargetName ?? "");
+      setTitle("");
+      setNotes("");
+      setStatus("planned");
+      setReminderMinutes(defaultReminderMinutes);
       setStartDate(s);
       setEndDate(makeDefaultEnd(s));
     }
-  }, [initialDate, existingPlan, makeDefaultStart, makeDefaultEnd]);
+  }, [
+    initialDate,
+    initialTargetName,
+    existingPlan,
+    makeDefaultStart,
+    makeDefaultEnd,
+    defaultReminderMinutes,
+  ]);
 
   const adjustTime = useCallback(
     (target: "start" | "end", field: "hour" | "minute", delta: number) => {
@@ -104,6 +120,7 @@ export function PlanObservationSheet({
     setTargetName("");
     setTitle("");
     setNotes("");
+    setStatus("planned");
     setReminderMinutes(defaultReminderMinutes);
     const s = makeDefaultStart(initialDate);
     setStartDate(s);
@@ -115,18 +132,25 @@ export function PlanObservationSheet({
       Alert.alert(t("common.error"), t("sessions.targetName"));
       return;
     }
+    if (endDate.getTime() <= startDate.getTime()) {
+      Alert.alert(t("common.error"), t("sessions.invalidTimeRange"));
+      return;
+    }
 
     if (isEditMode && existingPlan) {
-      updatePlan(existingPlan.id, {
+      const success = await updateObservationPlan(existingPlan.id, {
         title: title.trim() || targetName.trim(),
         targetName: targetName.trim(),
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         notes: notes.trim() || undefined,
+        status,
         reminderMinutes,
       });
-      Alert.alert(t("common.success"), t("sessions.planUpdated"));
-      onClose();
+      if (success) {
+        Alert.alert(t("common.success"), t("sessions.planUpdated"));
+        onClose();
+      }
       return;
     }
 
@@ -136,6 +160,7 @@ export function PlanObservationSheet({
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       notes: notes.trim() || undefined,
+      status,
       reminderMinutes,
     });
 
@@ -215,9 +240,25 @@ export function PlanObservationSheet({
                   >
                     <Ionicons name="remove" size={12} color={mutedColor} />
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("start", "minute", -5)}
+                  >
+                    <Ionicons name="play-back-outline" size={11} color={mutedColor} />
+                  </Button>
                   <Text className="text-xs font-medium text-foreground w-12 text-center">
                     {formatTime(startDate)}
                   </Text>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("start", "minute", 5)}
+                  >
+                    <Ionicons name="play-forward-outline" size={11} color={mutedColor} />
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -243,9 +284,25 @@ export function PlanObservationSheet({
                   >
                     <Ionicons name="remove" size={12} color={mutedColor} />
                   </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("end", "minute", -5)}
+                  >
+                    <Ionicons name="play-back-outline" size={11} color={mutedColor} />
+                  </Button>
                   <Text className="text-xs font-medium text-foreground w-12 text-center">
                     {formatTime(endDate)}
                   </Text>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={() => adjustTime("end", "minute", 5)}
+                  >
+                    <Ionicons name="play-forward-outline" size={11} color={mutedColor} />
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -275,6 +332,24 @@ export function PlanObservationSheet({
                   onPress={() => setReminderMinutes(opt.value)}
                 >
                   <Chip.Label>{t(`sessions.reminderOptions.${opt.labelKey}`)}</Chip.Label>
+                </Chip>
+              );
+            })}
+          </View>
+
+          {/* Status */}
+          <Text className="mb-1.5 text-xs font-medium text-muted">{t("sessions.planStatus")}</Text>
+          <View className="mb-3 flex-row flex-wrap gap-2">
+            {(["planned", "completed", "cancelled"] as const).map((s) => {
+              const isActive = status === s;
+              return (
+                <Chip
+                  key={s}
+                  size="sm"
+                  variant={isActive ? "primary" : "secondary"}
+                  onPress={() => setStatus(s)}
+                >
+                  <Chip.Label>{t(`sessions.status.${s}`)}</Chip.Label>
                 </Chip>
               );
             })}

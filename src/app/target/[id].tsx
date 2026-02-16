@@ -6,9 +6,11 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useTargets } from "../../hooks/useTargets";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useGalleryStore } from "../../stores/useGalleryStore";
 import { ExposureProgress } from "../../components/targets/ExposureProgress";
 import { EditTargetSheet } from "../../components/targets/EditTargetSheet";
 import { ObservationTimeline } from "../../components/targets/ObservationTimeline";
+import { PlanObservationSheet } from "../../components/sessions/PlanObservationSheet";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { EmptyState } from "../../components/common/EmptyState";
 import { formatCoordinates } from "../../lib/targets/coordinates";
@@ -31,10 +33,20 @@ export default function TargetDetailScreen() {
   const { t } = useI18n();
   const [_successColor, mutedColor] = useThemeColor(["success", "muted"]);
 
-  const { targets, getTargetStats, updateTarget, removeTarget, setStatus } = useTargets();
+  const {
+    targets,
+    getTargetStats,
+    updateTarget,
+    removeTarget,
+    setStatus,
+    toggleFavorite,
+    togglePinned,
+  } = useTargets();
   const target = targets.find((tgt) => tgt.id === id);
   const files = useFitsStore((s) => s.files);
+  const setFilterTargetId = useGalleryStore((s) => s.setFilterTargetId);
   const [showEditSheet, setShowEditSheet] = useState(false);
+  const [showPlanSheet, setShowPlanSheet] = useState(false);
 
   if (!target) {
     return (
@@ -112,6 +124,23 @@ export default function TargetDetailScreen() {
               )}
             </Chip.Label>
           </Chip>
+          <Button size="sm" variant="outline" onPress={() => setShowPlanSheet(true)}>
+            <Ionicons name="calendar-outline" size={16} color={mutedColor} />
+          </Button>
+          <Button size="sm" variant="outline" onPress={() => toggleFavorite(target.id)}>
+            <Ionicons
+              name={target.isFavorite ? "heart" : "heart-outline"}
+              size={16}
+              color={target.isFavorite ? "#ef4444" : mutedColor}
+            />
+          </Button>
+          <Button size="sm" variant="outline" onPress={() => togglePinned(target.id)}>
+            <Ionicons
+              name={target.isPinned ? "pin" : "pin-outline"}
+              size={16}
+              color={target.isPinned ? "#f59e0b" : mutedColor}
+            />
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -201,6 +230,73 @@ export default function TargetDetailScreen() {
           </View>
         )}
 
+        {/* Category & Tags */}
+        {(target.category || target.tags.length > 0) && (
+          <View className="mb-4">
+            {target.category && (
+              <View className="mb-2 flex-row items-center gap-2">
+                <Ionicons name="folder-outline" size={12} color={mutedColor} />
+                <Text className="text-xs text-muted">{t("targets.category")}</Text>
+                <Chip size="sm" variant="secondary">
+                  <Chip.Label className="text-[9px]">{target.category}</Chip.Label>
+                </Chip>
+              </View>
+            )}
+            {target.tags.length > 0 && (
+              <View className="flex-row items-center gap-2">
+                <Ionicons name="pricetag-outline" size={12} color={mutedColor} />
+                <Text className="text-xs text-muted">{t("targets.tags")}</Text>
+                <View className="flex-row flex-wrap gap-1">
+                  {target.tags.map((tag) => (
+                    <Chip key={tag} size="sm" variant="secondary">
+                      <Chip.Label className="text-[9px]">{tag}</Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Recommended Equipment */}
+        {target.recommendedEquipment && (
+          <View className="mb-4">
+            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+              {t("targets.equipment.title")}
+            </Text>
+            <View className="rounded-lg bg-surface-secondary p-3">
+              {target.recommendedEquipment.telescope && (
+                <View className="mb-1.5 flex-row items-center gap-2">
+                  <Ionicons name="telescope-outline" size={12} color={mutedColor} />
+                  <Text className="text-xs text-foreground">
+                    {target.recommendedEquipment.telescope}
+                  </Text>
+                </View>
+              )}
+              {target.recommendedEquipment.camera && (
+                <View className="mb-1.5 flex-row items-center gap-2">
+                  <Ionicons name="camera-outline" size={12} color={mutedColor} />
+                  <Text className="text-xs text-foreground">
+                    {target.recommendedEquipment.camera}
+                  </Text>
+                </View>
+              )}
+              {target.recommendedEquipment.filters &&
+                target.recommendedEquipment.filters.length > 0 && (
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="filter-outline" size={12} color={mutedColor} />
+                    <Text className="text-xs text-foreground">
+                      {target.recommendedEquipment.filters.join(", ")}
+                    </Text>
+                  </View>
+                )}
+              {target.recommendedEquipment.notes && (
+                <Text className="text-xs text-muted mt-2">{target.recommendedEquipment.notes}</Text>
+              )}
+            </View>
+          </View>
+        )}
+
         {/* Exposure Progress */}
         {filterProgressData.length > 0 && (
           <View className="mb-4">
@@ -223,14 +319,40 @@ export default function TargetDetailScreen() {
         <Separator className="my-4" />
 
         {/* Image Grid */}
-        <Text className="mb-3 text-xs font-semibold uppercase text-muted">
-          {t("gallery.allImages")} ({targetFiles.length})
-        </Text>
+        <View className="mb-3 flex-row items-center justify-between">
+          <Text className="text-xs font-semibold uppercase text-muted">
+            {t("gallery.allImages")} ({targetFiles.length})
+          </Text>
+          {targetFiles.length > 0 && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onPress={() => {
+                setFilterTargetId(target.id);
+                router.push("/(tabs)/gallery");
+              }}
+            >
+              <Ionicons name="grid-outline" size={12} color={mutedColor} />
+              <Button.Label className="text-[10px] text-muted">{t("gallery.title")}</Button.Label>
+            </Button>
+          )}
+        </View>
 
         {targetFiles.length === 0 ? (
           <EmptyState icon="images-outline" title={t("gallery.noImages")} />
         ) : (
-          <ThumbnailGrid files={targetFiles} columns={3} onPress={handleFilePress} />
+          <>
+            {target.bestImageId && (
+              <View className="mb-3 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
+                <Ionicons name="star" size={12} color="#f59e0b" />
+                <Text className="text-xs text-foreground">{t("targets.ratings.bestImage")}</Text>
+                <Text className="text-xs text-muted">
+                  ({targetFiles.find((f) => f.id === target.bestImageId)?.filename})
+                </Text>
+              </View>
+            )}
+            <ThumbnailGrid files={targetFiles} columns={3} onPress={handleFilePress} />
+          </>
         )}
 
         {/* Notes */}
@@ -243,6 +365,36 @@ export default function TargetDetailScreen() {
             <Text className="text-sm text-foreground">{target.notes}</Text>
           </>
         )}
+
+        {/* Change History */}
+        {target.changeLog.length > 0 && (
+          <>
+            <Separator className="my-4" />
+            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+              {t("targets.changeLog.title")}
+            </Text>
+            <View className="space-y-2">
+              {target.changeLog
+                .slice(-5)
+                .reverse()
+                .map((entry) => (
+                  <View key={entry.id} className="flex-row items-start gap-2">
+                    <Text className="text-[10px] text-muted">
+                      {new Date(entry.timestamp).toLocaleDateString()}
+                    </Text>
+                    <View className="flex-1">
+                      <Text className="text-xs text-foreground">
+                        {t(`targets.changeLog.${entry.action}`)}
+                        {entry.field && (
+                          <Text className="text-xs text-muted"> ({entry.field})</Text>
+                        )}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+            </View>
+          </>
+        )}
       </ScrollView>
 
       <EditTargetSheet
@@ -251,6 +403,11 @@ export default function TargetDetailScreen() {
         onClose={() => setShowEditSheet(false)}
         onSave={handleSave}
         onDelete={handleDelete}
+      />
+      <PlanObservationSheet
+        visible={showPlanSheet}
+        onClose={() => setShowPlanSheet(false)}
+        initialTargetName={target.name}
       />
     </>
   );

@@ -121,6 +121,8 @@ export interface CanvasTransform {
 
 export interface FitsCanvasHandle {
   setTransform: (tx: number, ty: number, s?: number) => void;
+  resetView: () => void;
+  getTransform: () => CanvasTransform;
 }
 
 interface FitsCanvasProps {
@@ -143,6 +145,7 @@ interface FitsCanvasProps {
   onSwipeLeft?: () => void;
   onSwipeRight?: () => void;
   onLongPress?: () => void;
+  interactionEnabled?: boolean;
 }
 
 export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function FitsCanvas(
@@ -166,6 +169,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     onSwipeLeft,
     onSwipeRight,
     onLongPress,
+    interactionEnabled = true,
   },
   ref,
 ) {
@@ -259,6 +263,21 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         savedTranslateX.value = clamped.x;
         savedTranslateY.value = clamped.y;
       },
+      resetView: () => {
+        scale.value = withTiming(1, { duration: 220 });
+        translateX.value = withTiming(0, { duration: 220 });
+        translateY.value = withTiming(0, { duration: 220 });
+        savedScale.value = 1;
+        savedTranslateX.value = 0;
+        savedTranslateY.value = 0;
+      },
+      getTransform: () => ({
+        scale: scale.value,
+        translateX: translateX.value,
+        translateY: translateY.value,
+        canvasWidth: canvasWidth.value,
+        canvasHeight: canvasHeight.value,
+      }),
     }),
     [
       translateX,
@@ -299,6 +318,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   // --- Gestures ---
 
   const panGesture = Gesture.Pan()
+    .enabled(interactionEnabled)
     .onStart(() => {
       savedTranslateX.value = translateX.value;
       savedTranslateY.value = translateY.value;
@@ -377,6 +397,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     .maxPointers(2);
 
   const pinchGesture = Gesture.Pinch()
+    .enabled(interactionEnabled)
     .onStart((e) => {
       isPinching.value = true;
       savedScale.value = scale.value;
@@ -438,6 +459,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     });
 
   const doubleTapGesture = Gesture.Tap()
+    .enabled(interactionEnabled)
     .numberOfTaps(2)
     .onEnd((e) => {
       const cw = canvasWidth.value;
@@ -468,6 +490,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     });
 
   const singleTapGesture = Gesture.Tap()
+    .enabled(interactionEnabled)
     .numberOfTaps(1)
     .onEnd((e) => {
       if (!onPixelTap || imgWidth <= 0 || imgHeight <= 0) return;
@@ -494,6 +517,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     });
 
   const longPressGesture = Gesture.LongPress()
+    .enabled(interactionEnabled)
     .minDuration(500)
     .onEnd((_e, success) => {
       if (success && onLongPress) {

@@ -11,7 +11,7 @@ import {
   useThemeColor,
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useConverter } from "../../hooks/useConverter";
 import { useExport } from "../../hooks/useExport";
@@ -51,6 +51,7 @@ const DPI_OPTIONS = [72, 150, 300, 600];
 
 export default function ConvertScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string | string[]; ids?: string | string[] }>();
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
 
@@ -59,6 +60,33 @@ export default function ConvertScreen() {
   const files = useFitsStore((s) => s.files);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const selectedFile = files.find((f) => f.id === selectedFileId);
+
+  useEffect(() => {
+    const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+    if (tabParam === "batch" || tabParam === "single") {
+      setActiveTab(tabParam);
+    }
+  }, [params.tab]);
+
+  useEffect(() => {
+    const idsParam = Array.isArray(params.ids) ? params.ids.join(",") : params.ids;
+    if (!idsParam || typeof idsParam !== "string") return;
+    const ids = idsParam
+      .split(",")
+      .map((id) => id.trim())
+      .filter(Boolean);
+    if (ids.length === 0) return;
+
+    const fileIds = new Set(files.map((file) => file.id));
+    const validIds = Array.from(new Set(ids.filter((id) => fileIds.has(id))));
+    if (validIds.length === 0) return;
+
+    useFitsStore.setState({
+      selectedIds: validIds,
+      isSelectionMode: true,
+    });
+    setActiveTab("batch");
+  }, [params.ids, files]);
 
   const {
     currentOptions,

@@ -7,8 +7,15 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandMMKVStorage } from "../lib/storage";
 import type { Album, SmartAlbumRule } from "../lib/fits/types";
 
+export type AlbumSortBy = "name" | "date" | "imageCount";
+
 interface AlbumStoreState {
   albums: Album[];
+
+  // Search & Sort State
+  albumSearchQuery: string;
+  albumSortBy: AlbumSortBy;
+  albumSortOrder: "asc" | "desc";
 
   // Actions
   addAlbum: (album: Album) => void;
@@ -27,12 +34,32 @@ interface AlbumStoreState {
   getAlbumById: (id: string) => Album | undefined;
   getAlbumsForImage: (imageId: string) => Album[];
   getSortedAlbums: () => Album[];
+
+  // NEW: Search & Sort Actions
+  setAlbumSearchQuery: (query: string) => void;
+  setAlbumSortBy: (sortBy: AlbumSortBy) => void;
+  setAlbumSortOrder: (order: "asc" | "desc") => void;
+
+  // NEW: Album Pinning
+  toggleAlbumPin: (albumId: string) => void;
+
+  // NEW: Album Merge
+  mergeAlbums: (sourceId: string, targetId: string) => boolean;
+
+  // NEW: Album Notes
+  updateAlbumNotes: (albumId: string, notes: string) => void;
+
+  // NEW: Get Filtered Albums
+  getFilteredAlbums: () => Album[];
 }
 
 export const useAlbumStore = create<AlbumStoreState>()(
   persist(
     (set, get) => ({
       albums: [],
+      albumSearchQuery: "",
+      albumSortBy: "date" as AlbumSortBy,
+      albumSortOrder: "desc" as "asc" | "desc",
 
       addAlbum: (album) => set((state) => ({ albums: [...state.albums, album] })),
 
@@ -113,11 +140,109 @@ export const useAlbumStore = create<AlbumStoreState>()(
           if (oa !== ob) return oa - ob;
           return b.updatedAt - a.updatedAt;
         }),
+
+      // NEW: Search & Sort Actions
+      setAlbumSearchQuery: (query) => set({ albumSearchQuery: query }),
+
+      setAlbumSortBy: (sortBy) => set({ albumSortBy: sortBy }),
+
+      setAlbumSortOrder: (order) => set({ albumSortOrder: order }),
+
+      // NEW: Album Pinning
+      toggleAlbumPin: (albumId) =>
+        set((state) => ({
+          albums: state.albums.map((a) =>
+            a.id === albumId ? { ...a, isPinned: !a.isPinned, updatedAt: Date.now() } : a,
+          ),
+        })),
+
+      // NEW: Album Merge
+      mergeAlbums: (sourceId, targetId) => {
+        const state = get();
+        const source = state.albums.find((a) => a.id === sourceId);
+        const target = state.albums.find((a) => a.id === targetId);
+
+        if (!source || !target || sourceId === targetId || source.isSmart || target.isSmart) {
+          return false;
+        }
+
+        const mergedImageIds = [...new Set([...target.imageIds, ...source.imageIds])];
+        const mergedCoverImageId = target.coverImageId ?? source.coverImageId;
+
+        set({
+          albums: state.albums
+            .filter((a) => a.id !== sourceId)
+            .map((a) =>
+              a.id === targetId
+                ? {
+                    ...a,
+                    imageIds: mergedImageIds,
+                    coverImageId: mergedCoverImageId,
+                    updatedAt: Date.now(),
+                  }
+                : a,
+            ),
+        });
+        return true;
+      },
+
+      // NEW: Album Notes
+      updateAlbumNotes: (albumId, notes) =>
+        set((state) => ({
+          albums: state.albums.map((a) =>
+            a.id === albumId ? { ...a, notes, updatedAt: Date.now() } : a,
+          ),
+        })),
+
+      // NEW: Get Filtered Albums
+      getFilteredAlbums: () => {
+        const { albums, albumSearchQuery, albumSortBy, albumSortOrder } = get();
+
+        let filtered = [...albums];
+
+        // Search filter
+        if (albumSearchQuery) {
+          const query = albumSearchQuery.toLowerCase();
+          filtered = filtered.filter(
+            (a) =>
+              a.name.toLowerCase().includes(query) ||
+              a.description?.toLowerCase().includes(query) ||
+              a.notes?.toLowerCase().includes(query),
+          );
+        }
+
+        // Sort
+        filtered.sort((a, b) => {
+          // Pinned first
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+
+          let comparison = 0;
+          switch (albumSortBy) {
+            case "name":
+              comparison = a.name.localeCompare(b.name);
+              break;
+            case "date":
+              comparison = a.updatedAt - b.updatedAt;
+              break;
+            case "imageCount":
+              comparison = a.imageIds.length - b.imageIds.length;
+              break;
+          }
+          return albumSortOrder === "asc" ? comparison : -comparison;
+        });
+
+        return filtered;
+      },
     }),
     {
       name: "album-store",
       storage: createJSONStorage(() => zustandMMKVStorage),
-      partialize: (state) => ({ albums: state.albums }),
+      partialize: (state) => ({
+        albums: state.albums,
+        albumSortBy: state.albumSortBy,
+        albumSortOrder: state.albumSortOrder,
+      }),
     },
   ),
 );

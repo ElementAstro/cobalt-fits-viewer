@@ -14,7 +14,12 @@ import {
   performRestore,
   getBackupInfo as getBackupInfoService,
 } from "../lib/backup/backupService";
-import { exportLocalBackup, importLocalBackup } from "../lib/backup/localBackup";
+import {
+  exportLocalBackup,
+  importLocalBackup,
+  previewLocalBackup,
+  type LocalBackupPreview,
+} from "../lib/backup/localBackup";
 import { authenticateOneDrive, authenticateDropbox } from "../lib/backup/oauthHelper";
 import type { ICloudProvider } from "../lib/backup/cloudProvider";
 import { GoogleDriveProvider } from "../lib/backup/providers/googleDrive";
@@ -27,6 +32,7 @@ import type {
   BackupProgress,
   CloudProviderConfig,
   BackupInfo,
+  RestoreConflictStrategy,
 } from "../lib/backup/types";
 import { DEFAULT_BACKUP_OPTIONS } from "../lib/backup/types";
 import type { BackupDataSource, RestoreTarget } from "../lib/backup/backupService";
@@ -101,15 +107,21 @@ export function useBackup() {
           defaultExportFormat: s.defaultExportFormat,
           // Target / session / location
           autoGroupByObject: s.autoGroupByObject,
+          autoDetectDuplicates: s.autoDetectDuplicates,
           autoTagLocation: s.autoTagLocation,
+          mapPreset: s.mapPreset,
+          mapShowOverlays: s.mapShowOverlays,
           sessionGapMinutes: s.sessionGapMinutes,
           calendarSyncEnabled: s.calendarSyncEnabled,
           defaultReminderMinutes: s.defaultReminderMinutes,
           // Display / theme
           language: s.language,
           theme: s.theme,
+          orientationLock: s.orientationLock,
+          themeColorMode: s.themeColorMode,
           accentColor: s.accentColor,
           activePreset: s.activePreset,
+          customThemeColors: s.customThemeColors,
           fontFamily: s.fontFamily,
           monoFontFamily: s.monoFontFamily,
           // Viewer overlay defaults
@@ -180,41 +192,120 @@ export function useBackup() {
    * 构建恢复目标
    */
   const buildRestoreTarget = useCallback((): RestoreTarget => {
+    const resolveStrategy = (
+      strategy: RestoreConflictStrategy | undefined,
+    ): RestoreConflictStrategy => strategy ?? "skip-existing";
+
     return {
-      setFiles: (files) => {
+      setFiles: (files, strategy) => {
+        const mode = resolveStrategy(strategy);
         const store = fitsStore.getState();
         for (const file of files) {
           const existing = store.files.find((f) => f.id === file.id);
           if (!existing) {
             store.addFile(file);
+            continue;
           }
+
+          if (mode === "skip-existing") continue;
+
+          if (mode === "overwrite-existing") {
+            store.updateFile(file.id, file);
+            continue;
+          }
+
+          const mergedTags = [...new Set([...(existing.tags ?? []), ...(file.tags ?? [])])];
+          const mergedAlbumIds = [
+            ...new Set([...(existing.albumIds ?? []), ...(file.albumIds ?? [])]),
+          ];
+
+          store.updateFile(file.id, {
+            ...file,
+            tags: mergedTags,
+            albumIds: mergedAlbumIds,
+          });
         }
       },
-      setAlbums: (albums) => {
+      setAlbums: (albums, strategy) => {
+        const mode = resolveStrategy(strategy);
         const store = albumStore.getState();
         for (const album of albums) {
           const existing = store.albums.find((a) => a.id === album.id);
           if (!existing) {
             store.addAlbum(album);
+            continue;
           }
+
+          if (mode === "skip-existing") continue;
+
+          if (mode === "overwrite-existing") {
+            store.updateAlbum(album.id, album);
+            continue;
+          }
+
+          store.updateAlbum(album.id, {
+            ...album,
+            imageIds: [...new Set([...(existing.imageIds ?? []), ...(album.imageIds ?? [])])],
+            coverImageId: existing.coverImageId ?? album.coverImageId,
+          });
         }
       },
-      setTargets: (targets) => {
+      setTargets: (targets, strategy) => {
+        const mode = resolveStrategy(strategy);
         const store = targetStore.getState();
         for (const target of targets) {
           const existing = store.targets.find((t) => t.id === target.id);
           if (!existing) {
             store.addTarget(target);
+            continue;
           }
+
+          if (mode === "skip-existing") continue;
+
+          if (mode === "overwrite-existing") {
+            store.updateTarget(target.id, target);
+            continue;
+          }
+
+          store.updateTarget(target.id, {
+            ...target,
+            aliases: [...new Set([...(existing.aliases ?? []), ...(target.aliases ?? [])])],
+            tags: [...new Set([...(existing.tags ?? []), ...(target.tags ?? [])])],
+            imageIds: [...new Set([...(existing.imageIds ?? []), ...(target.imageIds ?? [])])],
+            plannedFilters: [
+              ...new Set([...(existing.plannedFilters ?? []), ...(target.plannedFilters ?? [])]),
+            ],
+            plannedExposure: {
+              ...(existing.plannedExposure ?? {}),
+              ...(target.plannedExposure ?? {}),
+            },
+            imageRatings: { ...(existing.imageRatings ?? {}), ...(target.imageRatings ?? {}) },
+          });
         }
       },
-      setSessions: (sessions) => {
+      setSessions: (sessions, strategy) => {
+        const mode = resolveStrategy(strategy);
         const store = sessionStore.getState();
         for (const session of sessions) {
           const existing = store.sessions.find((s) => s.id === session.id);
           if (!existing) {
             store.addSession(session);
+            continue;
           }
+
+          if (mode === "skip-existing") continue;
+
+          if (mode === "overwrite-existing") {
+            store.updateSession(session.id, session);
+            continue;
+          }
+
+          store.updateSession(session.id, {
+            ...session,
+            targets: [...new Set([...(existing.targets ?? []), ...(session.targets ?? [])])],
+            imageIds: [...new Set([...(existing.imageIds ?? []), ...(session.imageIds ?? [])])],
+            notes: [existing.notes, session.notes].filter(Boolean).join("\n"),
+          });
         }
       },
       setSettings: (settings) => {
@@ -231,15 +322,21 @@ export function useBackup() {
           "defaultExportFormat",
           // Target / session / location
           "autoGroupByObject",
+          "autoDetectDuplicates",
           "autoTagLocation",
+          "mapPreset",
+          "mapShowOverlays",
           "sessionGapMinutes",
           "calendarSyncEnabled",
           "defaultReminderMinutes",
           // Display / theme
           "language",
           "theme",
+          "orientationLock",
+          "themeColorMode",
           "accentColor",
           "activePreset",
+          "customThemeColors",
           "fontFamily",
           "monoFontFamily",
           // Viewer overlay defaults
@@ -309,7 +406,8 @@ export function useBackup() {
           }
         }
         if (Object.keys(patch).length > 0) {
-          settingsStore.setState(patch);
+          const applyPatch = settingsStore.getState().applySettingsPatch;
+          applyPatch(patch as Parameters<typeof applyPatch>[0]);
         }
       },
     };
@@ -592,11 +690,51 @@ export function useBackup() {
   );
 
   /**
+   * 选择并预览本地备份文件（不执行恢复）
+   */
+  const previewLocalImport = useCallback(async (): Promise<{
+    success: boolean;
+    cancelled?: boolean;
+    error?: string;
+    preview?: LocalBackupPreview;
+  }> => {
+    try {
+      const result = await previewLocalBackup();
+      if (!result.success) {
+        return {
+          success: false,
+          cancelled: result.cancelled,
+          error: result.error,
+        };
+      }
+
+      if (!result.manifest || !result.summary) {
+        return { success: false, error: "Invalid backup file format" };
+      }
+
+      return {
+        success: true,
+        preview: {
+          fileName: result.fileName ?? "backup.json",
+          manifest: result.manifest,
+          summary: result.summary,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Preview failed",
+      };
+    }
+  }, []);
+
+  /**
    * 从本地文件导入备份
    */
   const localImport = useCallback(
     async (
       options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
+      preview?: LocalBackupPreview,
     ): Promise<{ success: boolean; error?: string }> => {
       if (backupInProgress || restoreInProgress)
         return { success: false, error: "Operation in progress" };
@@ -606,8 +744,11 @@ export function useBackup() {
         setLastError(null);
 
         const restoreTarget = buildRestoreTarget();
-        const result = await importLocalBackup(restoreTarget, options, (p: BackupProgress) =>
-          setProgress(p),
+        const result = await importLocalBackup(
+          restoreTarget,
+          options,
+          (p: BackupProgress) => setProgress(p),
+          preview,
         );
 
         resetProgress();
@@ -653,5 +794,6 @@ export function useBackup() {
     testConnection,
     localExport,
     localImport,
+    previewLocalImport,
   };
 }

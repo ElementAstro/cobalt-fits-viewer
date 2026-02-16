@@ -5,7 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { SimpleSlider } from "../common/SimpleSlider";
-import type { StretchType, ColormapType } from "../../lib/fits/types";
+import type { StretchType, ColormapType, ViewerCurvePreset } from "../../lib/fits/types";
+import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";
 
 const STRETCHES: StretchType[] = [
   "linear",
@@ -69,79 +70,154 @@ const COLORMAP_I18N_KEYS: Record<ColormapType, string> = {
 interface ViewerControlsProps {
   stretch: StretchType;
   colormap: ColormapType;
-  blackPoint: number;
-  whitePoint: number;
-  gamma: number;
+  brightness: number;
+  contrast: number;
+  mtfMidtone: number;
+  curvePreset: ViewerCurvePreset;
   showGrid: boolean;
   showCrosshair: boolean;
   showPixelInfo: boolean;
   showMinimap: boolean;
+  currentHDU: number;
+  hduList: Array<{ index: number; type: string | null; hasData: boolean }>;
   currentFrame: number;
   totalFrames: number;
   isDataCube: boolean;
   onStretchChange: (stretch: StretchType) => void;
   onColormapChange: (colormap: ColormapType) => void;
-  onBlackPointChange: (value: number) => void;
-  onWhitePointChange: (value: number) => void;
-  onGammaChange: (value: number) => void;
+  onBrightnessChange: (value: number) => void;
+  onContrastChange: (value: number) => void;
+  onMtfMidtoneChange: (value: number) => void;
+  onCurvePresetChange: (value: ViewerCurvePreset) => void;
   onToggleGrid: () => void;
   onToggleCrosshair: () => void;
   onTogglePixelInfo: () => void;
   onToggleMinimap: () => void;
+  onHDUChange: (hdu: number) => void;
   onFrameChange: (frame: number) => void;
   onAutoStretch?: () => void;
+  onResetView?: () => void;
+  onSavePreset?: () => void;
+  onResetToSaved?: () => void;
+  onApplyQuickPreset?: (preset: "auto" | "linearReset" | "deepSky" | "moonPlanet") => void;
+}
+
+function isImageHDUType(type: string | null) {
+  return type === "Image" || type === "CompressedImage";
 }
 
 export function ViewerControls({
   stretch,
   colormap,
-  blackPoint,
-  whitePoint,
-  gamma,
+  brightness,
+  contrast,
+  mtfMidtone,
+  curvePreset,
   showGrid,
   showCrosshair,
   showPixelInfo,
   showMinimap,
+  currentHDU,
+  hduList,
   currentFrame,
   totalFrames,
   isDataCube,
   onStretchChange,
   onColormapChange,
-  onBlackPointChange,
-  onWhitePointChange,
-  onGammaChange,
+  onBrightnessChange,
+  onContrastChange,
+  onMtfMidtoneChange,
+  onCurvePresetChange,
   onToggleGrid,
   onToggleCrosshair,
   onTogglePixelInfo,
   onToggleMinimap,
+  onHDUChange,
   onFrameChange,
   onAutoStretch,
+  onResetView,
+  onSavePreset,
+  onResetToSaved,
+  onApplyQuickPreset,
 }: ViewerControlsProps) {
   const { t } = useI18n();
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
 
   return (
-    <ScrollView className="border-t border-separator bg-background max-h-64">
+    <ScrollView className="border-t border-separator bg-background max-h-72">
       <View className="px-3 py-2">
-        {/* Stretch */}
         <View className="flex-row items-center justify-between mb-1">
-          <Text className="text-[9px] font-semibold uppercase text-muted">
-            {t("viewer.stretch")}
-          </Text>
-          {onAutoStretch && (
-            <Button
-              size="sm"
-              variant="ghost"
-              onPress={onAutoStretch}
-              className="flex-row items-center bg-primary/20 rounded-md px-2 py-0.5"
-            >
-              <Ionicons name="flash-outline" size={10} color={successColor} />
-              <Button.Label className="text-[9px] font-semibold text-primary ml-0.5">
-                {t("viewer.autoStretch")}
-              </Button.Label>
-            </Button>
-          )}
+          <Text className="text-[9px] font-semibold uppercase text-muted">{t("viewer.view")}</Text>
+          <View className="flex-row gap-1">
+            {onAutoStretch && (
+              <Button size="sm" variant="ghost" onPress={onAutoStretch} className="px-1.5 py-0.5">
+                <Ionicons name="flash-outline" size={10} color={successColor} />
+              </Button>
+            )}
+            {onResetView && (
+              <Button
+                size="sm"
+                variant="ghost"
+                isIconOnly
+                onPress={onResetView}
+                className="h-6 w-6"
+              >
+                <Ionicons name="scan-outline" size={11} color={mutedColor} />
+              </Button>
+            )}
+            {onResetToSaved && (
+              <Button
+                size="sm"
+                variant="ghost"
+                isIconOnly
+                onPress={onResetToSaved}
+                className="h-6 w-6"
+              >
+                <Ionicons name="refresh-outline" size={11} color={mutedColor} />
+              </Button>
+            )}
+            {onSavePreset && (
+              <Button
+                size="sm"
+                variant="ghost"
+                isIconOnly
+                onPress={onSavePreset}
+                className="h-6 w-6"
+              >
+                <Ionicons name="save-outline" size={11} color={mutedColor} />
+              </Button>
+            )}
+          </View>
         </View>
+
+        {onApplyQuickPreset && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
+            <View className="flex-row gap-1">
+              {[
+                { key: "auto" as const, label: t("viewer.presetAuto") },
+                { key: "linearReset" as const, label: t("viewer.presetLinearReset") },
+                { key: "deepSky" as const, label: t("viewer.presetDeepSky") },
+                { key: "moonPlanet" as const, label: t("viewer.presetMoonPlanet") },
+              ].map((preset) => (
+                <Chip
+                  key={preset.key}
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    onApplyQuickPreset(preset.key);
+                  }}
+                >
+                  <Chip.Label className="text-[9px]">{preset.label}</Chip.Label>
+                </Chip>
+              ))}
+            </View>
+          </ScrollView>
+        )}
+
+        <Text className="text-[9px] font-semibold uppercase text-muted mb-1">
+          {t("viewer.stretch")}
+        </Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
           <View className="flex-row gap-1">
             {STRETCHES.map((s) => (
@@ -160,7 +236,6 @@ export function ViewerControls({
           </View>
         </ScrollView>
 
-        {/* Colormap */}
         <Text className="text-[9px] font-semibold uppercase text-muted mb-1">
           {t("viewer.colormap")}
         </Text>
@@ -182,35 +257,79 @@ export function ViewerControls({
           </View>
         </ScrollView>
 
-        {/* Black/White Point & Gamma Sliders */}
         <View className="mb-2">
           <SimpleSlider
-            label={t("viewer.blackPoint")}
-            value={blackPoint}
-            min={0}
-            max={1}
+            label={t("editor.brightness")}
+            value={brightness}
+            min={-0.5}
+            max={0.5}
             step={0.01}
-            onValueChange={onBlackPointChange}
+            onValueChange={onBrightnessChange}
           />
           <SimpleSlider
-            label={t("viewer.whitePoint")}
-            value={whitePoint}
-            min={0}
-            max={1}
-            step={0.01}
-            onValueChange={onWhitePointChange}
+            label={t("editor.contrast")}
+            value={contrast}
+            min={0.2}
+            max={2.5}
+            step={0.05}
+            onValueChange={onContrastChange}
           />
           <SimpleSlider
-            label={t("viewer.gamma")}
-            value={gamma}
-            min={0.1}
-            max={5}
-            step={0.1}
-            onValueChange={onGammaChange}
+            label={t("editor.mtf")}
+            value={mtfMidtone}
+            min={0.01}
+            max={0.99}
+            step={0.01}
+            onValueChange={onMtfMidtoneChange}
           />
         </View>
 
-        {/* Frame Navigation (Data Cube) */}
+        <Text className="text-[9px] font-semibold uppercase text-muted mb-1">
+          {t("editor.curves")}
+        </Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
+          <View className="flex-row gap-1">
+            {VIEWER_CURVE_PRESETS.map((preset) => (
+              <Chip
+                key={preset.key}
+                size="sm"
+                variant={curvePreset === preset.key ? "primary" : "secondary"}
+                onPress={() => onCurvePresetChange(preset.key)}
+              >
+                <Chip.Label className="text-[9px]">{t(preset.labelKey)}</Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        </ScrollView>
+
+        {hduList.length > 0 && (
+          <>
+            <Text className="text-[9px] font-semibold uppercase text-muted mb-1">
+              {t("viewer.hdu")}
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-2">
+              <View className="flex-row gap-1">
+                {hduList.map((hdu) => {
+                  const selectable = hdu.hasData && isImageHDUType(hdu.type);
+                  return (
+                    <Chip
+                      key={hdu.index}
+                      size="sm"
+                      variant={currentHDU === hdu.index ? "primary" : "secondary"}
+                      disabled={!selectable}
+                      onPress={() => selectable && onHDUChange(hdu.index)}
+                    >
+                      <Chip.Label className="text-[9px]">
+                        #{hdu.index} {hdu.type ?? "Unknown"}
+                      </Chip.Label>
+                    </Chip>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </>
+        )}
+
         {isDataCube && totalFrames > 1 && (
           <FrameNavigation
             currentFrame={currentFrame}
@@ -221,7 +340,6 @@ export function ViewerControls({
           />
         )}
 
-        {/* Overlay Toggles */}
         <View className="flex-row gap-2 mt-1">
           <Button
             size="sm"
@@ -289,7 +407,6 @@ export function ViewerControls({
   );
 }
 
-// --- Frame Navigation with play/pause ---
 interface FrameNavigationProps {
   currentFrame: number;
   totalFrames: number;
@@ -310,7 +427,6 @@ function FrameNavigation({
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const frameRef = useRef(currentFrame);
 
-  // Keep frameRef in sync
   useEffect(() => {
     frameRef.current = currentFrame;
   }, [currentFrame]);

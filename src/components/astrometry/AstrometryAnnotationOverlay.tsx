@@ -8,6 +8,7 @@ import { StyleSheet } from "react-native";
 import { Canvas, Circle, Text as SkiaText, Group, useFont } from "@shopify/react-native-skia";
 import type { AstrometryAnnotation, AstrometryAnnotationType } from "../../lib/astrometry/types";
 import type { CanvasTransform } from "../fits/FitsCanvas";
+import { imageToScreenPoint } from "../../lib/viewer/transform";
 
 interface AstrometryAnnotationOverlayProps {
   annotations: AstrometryAnnotation[];
@@ -43,37 +44,33 @@ export function AstrometryAnnotationOverlay({
   // 计算像素坐标到画布坐标的变换
   const items = useMemo(() => {
     if (!visible || annotations.length === 0) return [];
-
-    const { scale, translateX, translateY, canvasWidth, canvasHeight } = transform;
-
-    // fit-to-canvas scale
-    const fitScale = Math.min(canvasWidth / imageWidth, canvasHeight / imageHeight);
-    const displayW = imageWidth * fitScale;
-    const displayH = imageHeight * fitScale;
-    const offsetX = (canvasWidth - displayW) / 2;
-    const offsetY = (canvasHeight - displayH) / 2;
+    const fitScale = Math.min(
+      transform.canvasWidth / imageWidth,
+      transform.canvasHeight / imageHeight,
+    );
 
     return annotations
       .map((ann) => {
-        // 像素坐标 → 画布坐标
-        const cx = offsetX + ann.pixelx * fitScale;
-        const cy = offsetY + ann.pixely * fitScale;
-
-        // 应用缩放和平移
-        const screenX = cx * scale + translateX + (canvasWidth * (1 - scale)) / 2;
-        const screenY = cy * scale + translateY + (canvasHeight * (1 - scale)) / 2;
+        const p = imageToScreenPoint(
+          { x: ann.pixelx, y: ann.pixely },
+          transform,
+          imageWidth,
+          imageHeight,
+        );
+        const screenX = p.x;
+        const screenY = p.y;
 
         // 过滤不可见的标注
         if (
           screenX < -50 ||
-          screenX > canvasWidth + 50 ||
+          screenX > transform.canvasWidth + 50 ||
           screenY < -50 ||
-          screenY > canvasHeight + 50
+          screenY > transform.canvasHeight + 50
         ) {
           return null;
         }
 
-        const radius = (ann.radius ?? 15) * fitScale * scale;
+        const radius = (ann.radius ?? 15) * fitScale * transform.scale;
         const color = TYPE_COLORS[ann.type] ?? TYPE_COLORS.other;
         const label = ann.names.length > 0 ? ann.names[0] : "";
 

@@ -8,6 +8,29 @@ import {
 } from "../targetManager";
 import type { Target, FitsMetadata } from "../../fits/types";
 
+// Helper to create mock targets with all required fields
+function createMockTarget(overrides: Partial<Target> = {}): Target {
+  const now = Date.now();
+  return {
+    id: "t1",
+    name: "Test",
+    aliases: [],
+    type: "other",
+    tags: [],
+    isFavorite: false,
+    isPinned: false,
+    imageIds: [],
+    status: "planned",
+    plannedFilters: [],
+    plannedExposure: {},
+    imageRatings: {},
+    changeLog: [],
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
 describe("extractTargetName", () => {
   it("extracts object name from metadata", () => {
     expect(extractTargetName({ object: "M31" } as FitsMetadata)).toBe("M31");
@@ -117,18 +140,12 @@ describe("guessTargetType", () => {
 
 describe("findTargetByNameOrAlias", () => {
   const targets: Target[] = [
-    {
+    createMockTarget({
       id: "t1",
       name: "M31",
       aliases: ["Andromeda Galaxy", "NGC 224"],
       type: "galaxy",
-      imageIds: [],
-      status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    },
+    }),
   ];
 
   it("finds by exact name (case-insensitive)", () => {
@@ -148,18 +165,11 @@ describe("findTargetByNameOrAlias", () => {
 
 describe("autoDetectTarget", () => {
   const existing: Target[] = [
-    {
+    createMockTarget({
       id: "t1",
       name: "M31",
-      aliases: [],
       type: "galaxy",
-      imageIds: [],
-      status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    },
+    }),
   ];
 
   it("returns null when metadata has no object", () => {
@@ -193,18 +203,13 @@ describe("autoDetectTarget", () => {
 
 describe("calculateTargetExposure", () => {
   it("calculates exposure by filter", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "M31",
-      aliases: [],
       type: "galaxy",
       imageIds: ["f1", "f2", "f3"],
       status: "acquiring",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const files: FitsMetadata[] = [
       { id: "f1", filter: "L", exptime: 300 } as FitsMetadata,
       { id: "f2", filter: "L", exptime: 300 } as FitsMetadata,
@@ -218,18 +223,13 @@ describe("calculateTargetExposure", () => {
   });
 
   it("handles files not belonging to target", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "M31",
-      aliases: [],
       type: "galaxy",
       imageIds: ["f1"],
       status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const files: FitsMetadata[] = [
       { id: "f1", filter: "L", exptime: 300 } as FitsMetadata,
       { id: "f2", filter: "R", exptime: 120 } as FitsMetadata,
@@ -240,18 +240,13 @@ describe("calculateTargetExposure", () => {
   });
 
   it("returns empty for target with no images", () => {
-    const target: Target = {
+    const target = createMockTarget({
       id: "t1",
       name: "M31",
-      aliases: [],
       type: "galaxy",
       imageIds: [],
       status: "planned",
-      plannedFilters: [],
-      plannedExposure: {},
-      createdAt: 0,
-      updatedAt: 0,
-    };
+    });
     const result = calculateTargetExposure(target, []);
     expect(Object.keys(result)).toHaveLength(0);
   });

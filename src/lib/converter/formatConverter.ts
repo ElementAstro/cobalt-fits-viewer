@@ -3,7 +3,7 @@
  * FITS → PNG/JPEG/WebP/TIFF/BMP 及反向转换
  */
 
-import type { ConvertOptions, StretchType, ColormapType } from "../fits/types";
+import type { ConvertOptions, StretchType, ColormapType, ViewerCurvePreset } from "../fits/types";
 import { computeZScale, computePercentile } from "../utils/pixelMath";
 
 // ===== 像素拉伸算法 =====
@@ -19,6 +19,10 @@ export function applyStretch(
   gamma: number = 1,
   outputBlack: number = 0,
   outputWhite: number = 1,
+  brightness: number = 0,
+  contrast: number = 1,
+  mtfMidtone: number = 0.5,
+  curvePreset: ViewerCurvePreset = "linear",
 ): Float32Array {
   const [rawMin, rawMax] = getExtent(pixels);
   const range = rawMax - rawMin;
@@ -78,10 +82,61 @@ export function applyStretch(
       v = outputBlack + v * (outputWhite - outputBlack);
     }
 
+    v = applyViewerTone(v, brightness, contrast, mtfMidtone, curvePreset);
     result[i] = Math.max(0, Math.min(1, v));
   }
 
   return result;
+}
+
+function clamp01(v: number) {
+  return Math.max(0, Math.min(1, v));
+}
+
+function mtfTransfer(m: number, x: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  if (Math.abs(x - m) < 1e-6) return 0.5;
+  return ((m - 1) * x) / ((2 * m - 1) * x - m);
+}
+
+function applyCurvePreset(v: number, preset: ViewerCurvePreset): number {
+  switch (preset) {
+    case "sCurve":
+      return clamp01(v + 0.2 * (v - v * v) * (v - 0.5 > 0 ? 1 : -1));
+    case "brighten":
+      return clamp01(Math.pow(v, 0.82));
+    case "darken":
+      return clamp01(Math.pow(v, 1.2));
+    case "highContrast":
+      return clamp01((v - 0.5) * 1.35 + 0.5);
+    case "linear":
+    default:
+      return v;
+  }
+}
+
+function applyViewerTone(
+  value: number,
+  brightness: number,
+  contrast: number,
+  mtfMidtone: number,
+  curvePreset: ViewerCurvePreset,
+): number {
+  let v = value;
+  if (brightness !== 0) {
+    v = clamp01(v + brightness);
+  }
+  if (contrast !== 1) {
+    v = clamp01((v - 0.5) * contrast + 0.5);
+  }
+  if (Math.abs(mtfMidtone - 0.5) > 1e-6) {
+    const m = clamp01(mtfMidtone);
+    if (m > 0.001 && m < 0.999) {
+      v = clamp01(mtfTransfer(m, v));
+    }
+  }
+  return applyCurvePreset(v, curvePreset);
 }
 
 // ===== 色彩映射 =====
@@ -349,6 +404,10 @@ export function fitsToRGBA(
   options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma"> & {
     outputBlack?: number;
     outputWhite?: number;
+    brightness?: number;
+    contrast?: number;
+    mtfMidtone?: number;
+    curvePreset?: ViewerCurvePreset;
   },
 ): Uint8ClampedArray {
   const stretched = applyStretch(
@@ -359,6 +418,10 @@ export function fitsToRGBA(
     options.gamma ?? 1,
     options.outputBlack ?? 0,
     options.outputWhite ?? 1,
+    options.brightness ?? 0,
+    options.contrast ?? 1,
+    options.mtfMidtone ?? 0.5,
+    options.curvePreset ?? "linear",
   );
   return applyColormap(stretched, options.colormap, width, height);
 }
@@ -410,6 +473,10 @@ export async function fitsToRGBAChunked(
   options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma"> & {
     outputBlack?: number;
     outputWhite?: number;
+    brightness?: number;
+    contrast?: number;
+    mtfMidtone?: number;
+    curvePreset?: ViewerCurvePreset;
   },
   signal?: AbortSignal,
 ): Promise<Uint8ClampedArray> {
@@ -468,6 +535,10 @@ export async function fitsToRGBAChunked(
   const outBlack = options.outputBlack ?? 0;
   const outWhite = options.outputWhite ?? 1;
   const hasOutputLevels = outBlack !== 0 || outWhite !== 1;
+  const brightness = options.brightness ?? 0;
+  const contrast = options.contrast ?? 1;
+  const mtfMidtone = options.mtfMidtone ?? 0.5;
+  const curvePreset = options.curvePreset ?? "linear";
 
   // --- Phase 3: Stretch + Colormap combined (chunked) ---
   const rgba = new Uint8ClampedArray(width * height * 4);
@@ -499,6 +570,7 @@ export async function fitsToRGBAChunked(
 
       if (applyGamma) v = Math.pow(v, invGamma);
       if (hasOutputLevels) v = outBlack + v * (outWhite - outBlack);
+      v = applyViewerTone(v, brightness, contrast, mtfMidtone, curvePreset);
       if (v < 0) v = 0;
       else if (v > 1) v = 1;
 

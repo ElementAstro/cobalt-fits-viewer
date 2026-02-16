@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pnpm typecheck)",
+      "Bash(pnpm lint)",
+      "Bash(node scripts/get_component_docs.mjs:*)",
+      "WebFetch(domain:heroui.com)",
+      "WebFetch(domain:github.com)",
+      "Bash(node:*)"
+    ]
+  }
+}

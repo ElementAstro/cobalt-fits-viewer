@@ -72,20 +72,32 @@ export function createTargetFromResult(result: AstrometryResult, fileId?: string
   const name = extractBestName(result) ?? `Field RA${result.calibration.ra.toFixed(2)}`;
   const aliases = collectAliases(result).filter((a) => a !== name);
   const type = inferTargetType(result.tags);
+  const now = Date.now();
 
   const target: Target = {
     id: Crypto.randomUUID(),
     name,
     aliases,
     type,
+    tags: [],
+    isFavorite: false,
+    isPinned: false,
     ra: result.calibration.ra,
     dec: result.calibration.dec,
     imageIds: fileId ? [fileId] : [],
     status: "acquiring",
     plannedFilters: [],
     plannedExposure: {},
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    imageRatings: {},
+    changeLog: [
+      {
+        id: `log_${now}_${Math.random().toString(36).substring(2, 9)}`,
+        timestamp: now,
+        action: "created",
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
   };
 
   Logger.info(TAG, `Created target: ${name} (${type})`, {

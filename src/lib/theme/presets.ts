@@ -6,6 +6,29 @@
 
 import { Uniwind } from "uniwind";
 
+type ThemeVariableMap = Record<string, string>;
+
+export const THEME_COLOR_MODES = ["preset", "accent", "custom"] as const;
+export type ThemeColorMode = (typeof THEME_COLOR_MODES)[number];
+
+export const THEME_EDITABLE_TOKENS = ["accent", "success", "warning", "danger"] as const;
+export type ThemeEditableToken = (typeof THEME_EDITABLE_TOKENS)[number];
+
+export interface ThemeCustomTokenSet {
+  accent: string;
+  success: string;
+  warning: string;
+  danger: string;
+}
+
+export interface ThemeCustomColors {
+  linked: boolean;
+  light: ThemeCustomTokenSet;
+  dark: ThemeCustomTokenSet;
+}
+
+const HEX_COLOR_REGEX = /^#([0-9a-fA-F]{6})$/;
+
 // ─── 强调色预设 ─────────────────────────────────────────────
 
 export const ACCENT_PRESETS = {
@@ -149,28 +172,152 @@ export const STYLE_PRESETS: Record<string, StylePresetDef> = {
 export type StylePresetKey = keyof typeof STYLE_PRESETS;
 export const STYLE_PRESET_KEYS = Object.keys(STYLE_PRESETS) as StylePresetKey[];
 
+// ─── 基线变量 ───────────────────────────────────────────────
+
+export const BASE_THEME_VARIABLES: { light: ThemeVariableMap; dark: ThemeVariableMap } = {
+  light: {
+    "--accent": "hsl(253.83, 100%, 62.04%)",
+    "--accent-foreground": "hsl(0, 0%, 100%)",
+    "--success": "hsl(150.81, 100%, 73.29%)",
+    "--success-foreground": "hsl(285.89, 5.9%, 21.03%)",
+    "--warning": "hsl(72.33, 100%, 78.19%)",
+    "--warning-foreground": "hsl(285.89, 5.9%, 21.03%)",
+    "--danger": "hsl(25.74, 100%, 65.32%)",
+    "--danger-foreground": "hsl(285.89, 5.9%, 21.03%)",
+  },
+  dark: {
+    "--accent": "hsl(264.1, 100%, 55.1%)",
+    "--accent-foreground": "hsl(0, 0%, 100%)",
+    "--success": "hsl(163.2, 100%, 76.5%)",
+    "--success-foreground": "hsl(285.89, 5.9%, 21.03%)",
+    "--warning": "hsl(86, 100%, 79.5%)",
+    "--warning-foreground": "hsl(285.89, 5.9%, 21.03%)",
+    "--danger": "hsl(25.3, 100%, 63.7%)",
+    "--danger-foreground": "hsl(285.89, 5.9%, 21.03%)",
+  },
+};
+
+export const DEFAULT_CUSTOM_THEME_COLORS: ThemeCustomColors = {
+  linked: true,
+  light: {
+    accent: "#4F6BED",
+    success: "#22C55E",
+    warning: "#F59E0B",
+    danger: "#EF4444",
+  },
+  dark: {
+    accent: "#4F6BED",
+    success: "#22C55E",
+    warning: "#F59E0B",
+    danger: "#EF4444",
+  },
+};
+
 // ─── 运行时应用函数 ─────────────────────────────────────────
+
+function mergeThemeVariables(...maps: ThemeVariableMap[]) {
+  return maps.reduce<ThemeVariableMap>((acc, map) => ({ ...acc, ...map }), {});
+}
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  const normalized = normalizeHexColor(hex);
+  if (!normalized) return null;
+  const raw = normalized.slice(1);
+  const r = Number.parseInt(raw.slice(0, 2), 16);
+  const g = Number.parseInt(raw.slice(2, 4), 16);
+  const b = Number.parseInt(raw.slice(4, 6), 16);
+  return { r, g, b };
+}
+
+function getReadableForeground(hex: string) {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return "#FFFFFF";
+
+  const srgb = [rgb.r, rgb.g, rgb.b].map((v) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  });
+  const luminance = 0.2126 * srgb[0] + 0.7152 * srgb[1] + 0.0722 * srgb[2];
+  return luminance > 0.52 ? "#111827" : "#FFFFFF";
+}
+
+export function isHexColor(value: unknown): value is string {
+  return typeof value === "string" && HEX_COLOR_REGEX.test(value.trim());
+}
+
+export function normalizeHexColor(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return HEX_COLOR_REGEX.test(normalized) ? normalized : null;
+}
+
+export function buildCustomThemeVariables(custom: ThemeCustomColors) {
+  const darkTokens = custom.linked ? custom.light : custom.dark;
+  const light: ThemeVariableMap = {};
+  const dark: ThemeVariableMap = {};
+
+  for (const token of THEME_EDITABLE_TOKENS) {
+    const lightColor = normalizeHexColor(custom.light[token]);
+    const darkColor = normalizeHexColor(darkTokens[token]);
+    if (!lightColor || !darkColor) continue;
+
+    light[`--${token}`] = lightColor;
+    light[`--${token}-foreground`] = getReadableForeground(lightColor);
+    dark[`--${token}`] = darkColor;
+    dark[`--${token}-foreground`] = getReadableForeground(darkColor);
+  }
+
+  return { light, dark };
+}
+
+export function getThemeVariables(
+  mode: ThemeColorMode,
+  accentColor: AccentColorKey | null,
+  preset: StylePresetKey,
+  custom: ThemeCustomColors,
+) {
+  let light = { ...BASE_THEME_VARIABLES.light };
+  let dark = { ...BASE_THEME_VARIABLES.dark };
+
+  if (mode === "preset") {
+    const stylePreset = STYLE_PRESETS[preset];
+    if (stylePreset) {
+      light = mergeThemeVariables(light, stylePreset.light);
+      dark = mergeThemeVariables(dark, stylePreset.dark);
+    }
+  } else if (mode === "accent" && accentColor) {
+    const accentPreset = ACCENT_PRESETS[accentColor];
+    if (accentPreset) {
+      light = mergeThemeVariables(light, accentPreset.light as ThemeVariableMap);
+      dark = mergeThemeVariables(dark, accentPreset.dark as ThemeVariableMap);
+    }
+  } else if (mode === "custom") {
+    const customVars = buildCustomThemeVariables(custom);
+    light = mergeThemeVariables(light, customVars.light);
+    dark = mergeThemeVariables(dark, customVars.dark);
+  }
+
+  return { light, dark };
+}
+
+export function applyThemeVariables(variables: {
+  light: ThemeVariableMap;
+  dark: ThemeVariableMap;
+}) {
+  Uniwind.updateCSSVariables("light", variables.light);
+  Uniwind.updateCSSVariables("dark", variables.dark);
+}
 
 /**
  * 将强调色 CSS 变量应用到 Uniwind 运行时
  */
 export function applyAccentColor(key: AccentColorKey) {
-  const preset = ACCENT_PRESETS[key];
-  if (!preset) return;
-  Uniwind.updateCSSVariables("light", preset.light as Record<string, string>);
-  Uniwind.updateCSSVariables("dark", preset.dark as Record<string, string>);
+  applyThemeVariables(getThemeVariables("accent", key, "default", DEFAULT_CUSTOM_THEME_COLORS));
 }
 
 /**
  * 将风格预设 CSS 变量应用到 Uniwind 运行时
  */
 export function applyStylePreset(key: StylePresetKey) {
-  const preset = STYLE_PRESETS[key];
-  if (!preset) return;
-  if (Object.keys(preset.light).length > 0) {
-    Uniwind.updateCSSVariables("light", preset.light);
-  }
-  if (Object.keys(preset.dark).length > 0) {
-    Uniwind.updateCSSVariables("dark", preset.dark);
-  }
+  applyThemeVariables(getThemeVariables("preset", null, key, DEFAULT_CUSTOM_THEME_COLORS));
 }

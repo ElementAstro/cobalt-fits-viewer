@@ -21,9 +21,16 @@ import { BatchTagSheet } from "../../components/gallery/BatchTagSheet";
 import { BatchRenameSheet } from "../../components/gallery/BatchRenameSheet";
 import { IntegrationReportSheet } from "../../components/gallery/IntegrationReportSheet";
 import { SmartAlbumModal } from "../../components/gallery/SmartAlbumModal";
+import { AlbumSearchBar } from "../../components/gallery/AlbumSearchBar";
+import { AlbumSortControl } from "../../components/gallery/AlbumSortControl";
+import { AlbumStatisticsSheet } from "../../components/gallery/AlbumStatisticsSheet";
+import { AlbumMergeSheet } from "../../components/gallery/AlbumMergeSheet";
+import { AlbumExportSheet } from "../../components/gallery/AlbumExportSheet";
+import { DuplicateImagesSheet } from "../../components/gallery/DuplicateImagesSheet";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
 import type { GalleryViewMode, FitsMetadata, Album, FrameType } from "../../lib/fits/types";
+import type { AlbumSortBy } from "../../stores/useAlbumStore";
 
 const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "grid", icon: "grid-outline" },
@@ -63,18 +70,35 @@ export default function GalleryScreen() {
 
   const {
     albums,
+    filteredAlbums,
     createAlbum: createNewAlbum,
     createSmartAlbum,
     removeAlbum,
     updateAlbum,
     addImagesToAlbum,
     getSuggestions,
+    albumSearchQuery,
+    albumSortBy,
+    albumSortOrder,
+    setAlbumSearchQuery,
+    setAlbumSortBy,
+    setAlbumSortOrder,
+    toggleAlbumPin,
+    mergeAlbums,
+    updateAlbumNotes,
+    getAlbumStatistics,
+    duplicateImages,
   } = useAlbums();
   const setViewMode = useGalleryStore((s) => s.setViewMode);
   const setFilterObject = useGalleryStore((s) => s.setFilterObject);
   const filterObject = useGalleryStore((s) => s.filterObject);
   const setFilterFrameType = useGalleryStore((s) => s.setFilterFrameType);
   const filterFrameType = useGalleryStore((s) => s.filterFrameType);
+  const setFilterTargetId = useGalleryStore((s) => s.setFilterTargetId);
+  const filterTargetId = useGalleryStore((s) => s.filterTargetId);
+  const setFilterFavoriteOnly = useGalleryStore((s) => s.setFilterFavoriteOnly);
+  const filterFavoriteOnly = useGalleryStore((s) => s.filterFavoriteOnly);
+  const clearFilters = useGalleryStore((s) => s.clearFilters);
 
   const thumbShowFilename = useSettingsStore((s) => s.thumbnailShowFilename);
   const thumbShowObject = useSettingsStore((s) => s.thumbnailShowObject);
@@ -84,15 +108,37 @@ export default function GalleryScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateAlbum, setShowCreateAlbum] = useState(false);
   const [actionAlbum, setActionAlbum] = useState<Album | null>(null);
-  const { isSelectionMode, selectedIds, toggleSelection, enterSelectionMode, exitSelectionMode } =
-    useSelectionMode();
+  const [selectedAlbum, setSelectedAlbum] = useState<Album | null>(null);
+  const {
+    isSelectionMode,
+    selectedIds,
+    toggleSelection,
+    enterSelectionMode,
+    exitSelectionMode,
+    selectAll,
+  } = useSelectionMode();
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
   const [showSmartAlbum, setShowSmartAlbum] = useState(false);
   const [showRenamePrompt, setShowRenamePrompt] = useState(false);
   const [showBatchTag, setShowBatchTag] = useState(false);
   const [showBatchRename, setShowBatchRename] = useState(false);
   const [showReport, setShowReport] = useState(false);
+
+  // NEW: Album sheet states
+  const [showAlbumStats, setShowAlbumStats] = useState(false);
+  const [showAlbumMerge, setShowAlbumMerge] = useState(false);
+  const [showAlbumExport, setShowAlbumExport] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showEditNotes, setShowEditNotes] = useState(false);
+
   const displayFiles = searchQuery ? search(searchQuery) : files;
+  const activeFilterCount =
+    Number(Boolean(filterObject)) +
+    Number(Boolean(filterFrameType)) +
+    Number(Boolean(filterTargetId)) +
+    Number(filterFavoriteOnly);
+  const allDisplaySelected =
+    displayFiles.length > 0 && displayFiles.every((file) => selectedIds.includes(file.id));
 
   const timelineSections = useMemo<TimelineSection[]>(() => {
     if (viewMode !== "timeline") return [];
@@ -152,7 +198,32 @@ export default function GalleryScreen() {
 
   const handleAlbumRename = () => {
     if (!actionAlbum) return;
+    setSelectedAlbum(actionAlbum);
     setShowRenamePrompt(true);
+  };
+
+  const handleAlbumEditNotes = () => {
+    if (!actionAlbum) return;
+    setSelectedAlbum(actionAlbum);
+    setShowEditNotes(true);
+  };
+
+  const handleAlbumViewStats = () => {
+    if (!actionAlbum) return;
+    setSelectedAlbum(actionAlbum);
+    setShowAlbumStats(true);
+  };
+
+  const handleAlbumExport = () => {
+    if (!actionAlbum) return;
+    setSelectedAlbum(actionAlbum);
+    setShowAlbumExport(true);
+  };
+
+  const handleAlbumMerge = () => {
+    if (!actionAlbum) return;
+    setSelectedAlbum(actionAlbum);
+    setShowAlbumMerge(true);
   };
 
   const handleAlbumDelete = () => {
@@ -167,6 +238,15 @@ export default function GalleryScreen() {
       },
     ]);
   };
+
+  const handleSelectAllToggle = useCallback(() => {
+    if (displayFiles.length === 0) return;
+    if (allDisplaySelected) {
+      selectAll([]);
+      return;
+    }
+    selectAll(displayFiles.map((file) => file.id));
+  }, [allDisplaySelected, displayFiles, selectAll]);
 
   const GalleryHeader = useMemo(
     () => (
@@ -287,6 +367,18 @@ export default function GalleryScreen() {
                     <Chip.Label className="text-[9px]">{ft.label}</Chip.Label>
                   </Chip>
                 ))}
+                <Chip
+                  size="sm"
+                  variant={filterFavoriteOnly ? "primary" : "secondary"}
+                  onPress={() => setFilterFavoriteOnly(!filterFavoriteOnly)}
+                >
+                  <Ionicons
+                    name={filterFavoriteOnly ? "star" : "star-outline"}
+                    size={10}
+                    color={filterFavoriteOnly ? successColor : mutedColor}
+                  />
+                  <Chip.Label className="text-[9px]">{t("gallery.favoritesOnly")}</Chip.Label>
+                </Chip>
               </View>
             </ScrollView>
           </View>
@@ -374,13 +466,40 @@ export default function GalleryScreen() {
                     <Chip.Label className="text-[10px]">{ft.label}</Chip.Label>
                   </Chip>
                 ))}
+                <Chip
+                  size="sm"
+                  variant={filterFavoriteOnly ? "primary" : "secondary"}
+                  onPress={() => setFilterFavoriteOnly(!filterFavoriteOnly)}
+                >
+                  <Ionicons
+                    name={filterFavoriteOnly ? "star" : "star-outline"}
+                    size={10}
+                    color={filterFavoriteOnly ? "#fff" : mutedColor}
+                  />
+                  <Chip.Label className="text-[10px]">{t("gallery.favoritesOnly")}</Chip.Label>
+                </Chip>
               </View>
             </ScrollView>
+
+            {/* Target Filter */}
+            {filterTargetId && (
+              <View className="mt-2">
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row gap-1.5">
+                    <Chip size="sm" variant="primary" onPress={() => setFilterTargetId("")}>
+                      <Ionicons name="telescope-outline" size={10} color="#fff" />
+                      <Chip.Label className="text-[10px]">{t("targets.title")}</Chip.Label>
+                      <Ionicons name="close" size={8} color="#fff" />
+                    </Chip>
+                  </View>
+                </ScrollView>
+              </View>
+            )}
           </>
         )}
 
         {/* Albums Section */}
-        <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center justify-between mb-2">
           <Text
             className={
               isLandscape
@@ -388,9 +507,12 @@ export default function GalleryScreen() {
                 : "text-base font-semibold text-foreground"
             }
           >
-            {t("gallery.albums")}
+            {t("gallery.albums")} ({filteredAlbums.length})
           </Text>
           <View className="flex-row gap-1">
+            <Button size="sm" variant="ghost" isIconOnly onPress={() => setShowDuplicates(true)}>
+              <Ionicons name="copy-outline" size={14} color={mutedColor} />
+            </Button>
             <Button size="sm" variant="outline" onPress={() => setShowSmartAlbum(true)}>
               <Ionicons name="sparkles-outline" size={14} color={successColor} />
             </Button>
@@ -403,16 +525,37 @@ export default function GalleryScreen() {
           </View>
         </View>
 
-        {albums.length > 0 ? (
+        {/* Album Search & Sort */}
+        <View className="mb-2 flex-row items-center gap-2">
+          <View className="flex-1">
+            <AlbumSearchBar
+              value={albumSearchQuery}
+              onChangeText={setAlbumSearchQuery}
+              compact={isLandscape}
+            />
+          </View>
+          <AlbumSortControl
+            sortBy={albumSortBy}
+            sortOrder={albumSortOrder}
+            onSortByChange={(v) => setAlbumSortBy(v as AlbumSortBy)}
+            onSortOrderChange={setAlbumSortOrder}
+            compact={isLandscape}
+          />
+        </View>
+
+        {filteredAlbums.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
             <View className={isLandscape ? "flex-row gap-1.5" : "flex-row gap-2"}>
-              {albums.map((album) => (
+              {filteredAlbums.map((album) => (
                 <AlbumCard
                   key={album.id}
                   album={album}
                   compact={isLandscape}
                   onPress={() => router.push(`/album/${album.id}`)}
-                  onLongPress={() => setActionAlbum(album)}
+                  onLongPress={() => {
+                    setActionAlbum(album);
+                    setSelectedAlbum(album);
+                  }}
                 />
               ))}
             </View>
@@ -422,7 +565,8 @@ export default function GalleryScreen() {
             className={`rounded-xl border border-separator bg-surface-secondary items-center ${isLandscape ? "p-3" : "p-6"}`}
           >
             <Ionicons name="albums-outline" size={isLandscape ? 24 : 32} color={mutedColor} />
-            <Text className="mt-1 text-xs text-muted">{t("gallery.emptyAlbum")}</Text>
+            <Text className="mt-1 text-xs text-muted">{t("album.noAlbums")}</Text>
+            <Text className="mt-1 text-xs text-muted">{t("album.createFirst")}</Text>
           </View>
         )}
 
@@ -435,6 +579,18 @@ export default function GalleryScreen() {
               {selectedIds.length} {t("album.selected")}
             </Text>
             <View className="flex-row gap-1">
+              <Button size="sm" variant="outline" onPress={handleSelectAllToggle}>
+                <Ionicons
+                  name={allDisplaySelected ? "checkmark-done-outline" : "checkmark-outline"}
+                  size={12}
+                  color={mutedColor}
+                />
+                {!isLandscape && (
+                  <Button.Label className="text-[10px]">
+                    {allDisplaySelected ? t("common.deselectAll") : t("common.selectAll")}
+                  </Button.Label>
+                )}
+              </Button>
               <Button
                 size="sm"
                 variant="outline"
@@ -499,9 +655,21 @@ export default function GalleryScreen() {
           >
             {filterObject || t("gallery.allImages")} ({displayFiles.length})
           </Text>
-          <Button size="sm" variant="outline" onPress={() => setShowReport(true)}>
-            <Ionicons name="stats-chart-outline" size={14} color={successColor} />
-          </Button>
+          <View className="flex-row items-center gap-1">
+            {activeFilterCount > 0 && (
+              <Button size="sm" variant="ghost" onPress={clearFilters}>
+                <Ionicons name="funnel-outline" size={14} color={mutedColor} />
+                {!isLandscape && (
+                  <Button.Label className="text-[10px]">
+                    {t("targets.clearFilters")} ({activeFilterCount})
+                  </Button.Label>
+                )}
+              </Button>
+            )}
+            <Button size="sm" variant="outline" onPress={() => setShowReport(true)}>
+              <Ionicons name="stats-chart-outline" size={14} color={successColor} />
+            </Button>
+          </View>
         </View>
       </View>
     ),
@@ -511,19 +679,33 @@ export default function GalleryScreen() {
       viewMode,
       metadataIndex,
       filterObject,
-      albums,
+      filterFrameType,
+      filterTargetId,
+      filterFavoriteOnly,
+      filteredAlbums,
+      albumSearchQuery,
+      albumSortBy,
+      albumSortOrder,
       isSelectionMode,
       selectedIds,
+      allDisplaySelected,
       displayFiles.length,
+      activeFilterCount,
       successColor,
       mutedColor,
       searchQuery,
       router,
       setViewMode,
       setFilterObject,
-      filterFrameType,
       setFilterFrameType,
+      setFilterTargetId,
+      setFilterFavoriteOnly,
+      setAlbumSearchQuery,
+      setAlbumSortBy,
+      setAlbumSortOrder,
+      clearFilters,
       exitSelectionMode,
+      handleSelectAllToggle,
       handleBatchDelete,
       isLandscape,
       FRAME_TYPES,
@@ -628,10 +810,17 @@ export default function GalleryScreen() {
       <AlbumActionSheet
         visible={!!actionAlbum}
         albumName={actionAlbum?.name ?? ""}
+        isPinned={actionAlbum?.isPinned ?? false}
+        isSmart={actionAlbum?.isSmart ?? false}
         onClose={() => setActionAlbum(null)}
         onViewDetail={() => actionAlbum && router.push(`/album/${actionAlbum.id}`)}
         onRename={handleAlbumRename}
         onDelete={handleAlbumDelete}
+        onTogglePin={() => actionAlbum && toggleAlbumPin(actionAlbum.id)}
+        onEditNotes={handleAlbumEditNotes}
+        onViewStats={handleAlbumViewStats}
+        onExport={handleAlbumExport}
+        onMerge={handleAlbumMerge}
       />
       <BatchTagSheet
         visible={showBatchTag}
@@ -644,15 +833,64 @@ export default function GalleryScreen() {
         onClose={() => setShowBatchRename(false)}
       />
       <IntegrationReportSheet visible={showReport} onClose={() => setShowReport(false)} />
+
+      {/* NEW: Album Sheets */}
+      <AlbumStatisticsSheet
+        visible={showAlbumStats}
+        statistics={selectedAlbum ? getAlbumStatistics(selectedAlbum.id) : null}
+        albumName={selectedAlbum?.name ?? ""}
+        imageCount={selectedAlbum?.imageIds.length ?? 0}
+        onClose={() => setShowAlbumStats(false)}
+      />
+      <AlbumMergeSheet
+        visible={showAlbumMerge}
+        sourceAlbum={selectedAlbum}
+        albums={albums}
+        onClose={() => setShowAlbumMerge(false)}
+        onMerge={(targetId) => {
+          if (!selectedAlbum) return;
+          const merged = mergeAlbums(selectedAlbum.id, targetId);
+          Alert.alert(
+            merged ? t("common.success") : t("common.error"),
+            merged ? t("album.mergeSuccess") : t("album.mergeFailed"),
+          );
+        }}
+      />
+      <AlbumExportSheet
+        visible={showAlbumExport}
+        album={selectedAlbum}
+        files={files}
+        onClose={() => setShowAlbumExport(false)}
+      />
+      <DuplicateImagesSheet
+        visible={showDuplicates}
+        duplicates={duplicateImages}
+        files={files}
+        onClose={() => setShowDuplicates(false)}
+        onImagePress={(imageId) => router.push(`/viewer/${imageId}`)}
+      />
       <PromptDialog
         visible={showRenamePrompt}
         title={t("album.rename")}
-        defaultValue={actionAlbum?.name ?? ""}
+        defaultValue={selectedAlbum?.name ?? ""}
         onConfirm={(newName) => {
-          if (actionAlbum) updateAlbum(actionAlbum.id, { name: newName });
+          if (selectedAlbum) updateAlbum(selectedAlbum.id, { name: newName });
           setShowRenamePrompt(false);
         }}
         onCancel={() => setShowRenamePrompt(false)}
+      />
+      <PromptDialog
+        visible={showEditNotes}
+        title={t("album.editNotes")}
+        placeholder={t("album.notesPlaceholder")}
+        defaultValue={selectedAlbum?.notes ?? ""}
+        onConfirm={(notes) => {
+          if (selectedAlbum) updateAlbumNotes(selectedAlbum.id, notes);
+          setShowEditNotes(false);
+        }}
+        onCancel={() => setShowEditNotes(false)}
+        multiline
+        allowEmpty
       />
     </View>
   );

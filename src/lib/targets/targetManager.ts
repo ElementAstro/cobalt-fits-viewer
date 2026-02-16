@@ -15,17 +15,29 @@ export function extractTargetName(metadata: FitsMetadata): string | null {
  * 创建新目标
  */
 export function createTarget(name: string, type: TargetType = "other"): Target {
+  const now = Date.now();
   return {
     id: generateId(),
     name,
     aliases: [],
     type,
+    tags: [],
+    isFavorite: false,
+    isPinned: false,
     imageIds: [],
     status: "planned",
     plannedFilters: [],
     plannedExposure: {},
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    imageRatings: {},
+    changeLog: [
+      {
+        id: `log_${now}_${Math.random().toString(36).substring(2, 9)}`,
+        timestamp: now,
+        action: "created",
+      },
+    ],
+    createdAt: now,
+    updatedAt: now,
   };
 }
 

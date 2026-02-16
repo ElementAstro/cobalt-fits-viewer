@@ -19,6 +19,7 @@ interface BackupStoreState {
   // 自动备份
   autoBackupEnabled: boolean;
   autoBackupIntervalHours: number;
+  autoBackupNetwork: "wifi" | "any";
   lastAutoBackupCheck: number;
   // 错误
   lastError: string | null;
@@ -33,6 +34,7 @@ interface BackupStoreState {
   setProgress: (progress: BackupProgress) => void;
   setAutoBackupEnabled: (enabled: boolean) => void;
   setAutoBackupIntervalHours: (hours: number) => void;
+  setAutoBackupNetwork: (network: "wifi" | "any") => void;
   setLastAutoBackupCheck: (timestamp: number) => void;
   setLastError: (error: string | null) => void;
   getConnection: (provider: CloudProvider) => ProviderConnectionState | undefined;
@@ -55,6 +57,7 @@ export const useBackupStore = create<BackupStoreState>()(
       progress: IDLE_PROGRESS,
       autoBackupEnabled: false,
       autoBackupIntervalHours: 24,
+      autoBackupNetwork: "wifi",
       lastAutoBackupCheck: 0,
       lastError: null,
 
@@ -94,6 +97,8 @@ export const useBackupStore = create<BackupStoreState>()(
 
       setAutoBackupIntervalHours: (hours) => set({ autoBackupIntervalHours: hours }),
 
+      setAutoBackupNetwork: (network) => set({ autoBackupNetwork: network }),
+
       setLastAutoBackupCheck: (timestamp) => set({ lastAutoBackupCheck: timestamp }),
 
       setLastError: (error) => set({ lastError: error }),
@@ -110,6 +115,7 @@ export const useBackupStore = create<BackupStoreState>()(
         activeProvider: state.activeProvider,
         autoBackupEnabled: state.autoBackupEnabled,
         autoBackupIntervalHours: state.autoBackupIntervalHours,
+        autoBackupNetwork: state.autoBackupNetwork,
         lastAutoBackupCheck: state.lastAutoBackupCheck,
       }),
     },

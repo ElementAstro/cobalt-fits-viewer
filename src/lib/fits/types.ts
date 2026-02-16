@@ -14,6 +14,8 @@ export type StretchType =
   | "minmax"
   | "percentile";
 
+export type ViewerCurvePreset = "linear" | "sCurve" | "brighten" | "darken" | "highContrast";
+
 // ===== 色彩映射 =====
 export type ColormapType =
   | "grayscale"
@@ -35,6 +37,22 @@ export type ColormapType =
 
 // ===== 帧类型 =====
 export type FrameType = "light" | "dark" | "flat" | "bias" | "unknown";
+
+// ===== 文件来源类型 =====
+export type ImageSourceType = "fits" | "raster";
+export type ImageSourceFormat =
+  | "fits"
+  | "fit"
+  | "fts"
+  | "fz"
+  | "fits.gz"
+  | "fit.gz"
+  | "png"
+  | "jpeg"
+  | "webp"
+  | "tiff"
+  | "bmp"
+  | "unknown";
 
 // ===== HDU 数据类型 =====
 export type HDUDataType = "Image" | "BinaryTable" | "Table" | "CompressedImage" | null;
@@ -89,6 +107,8 @@ export interface FitsMetadata {
   isFavorite: boolean;
   tags: string[];
   albumIds: string[];
+  sourceType?: ImageSourceType;
+  sourceFormat?: ImageSourceFormat;
   targetId?: string;
   sessionId?: string;
   thumbnailUri?: string;
@@ -102,6 +122,34 @@ export interface FitsMetadata {
 
   // 地理位置
   location?: GeoLocation;
+
+  // Viewer per-file preset
+  viewerPreset?: ViewerPreset;
+}
+
+export interface ViewerPreset {
+  version: number;
+  savedAt: number;
+  adjustments: {
+    stretch: StretchType;
+    colormap: ColormapType;
+    blackPoint: number;
+    whitePoint: number;
+    gamma: number;
+    midtone: number;
+    outputBlack: number;
+    outputWhite: number;
+    brightness: number;
+    contrast: number;
+    mtfMidtone: number;
+    curvePreset: ViewerCurvePreset;
+  };
+  overlays: {
+    showGrid: boolean;
+    showCrosshair: boolean;
+    showPixelInfo: boolean;
+    showMinimap: boolean;
+  };
 }
 
 // ===== Header 关键字 =====
@@ -172,30 +220,100 @@ export interface Album {
   isSmart: boolean;
   smartRules?: SmartAlbumRule[];
   sortOrder?: number;
+  isPinned?: boolean;
+  notes?: string;
+  color?: string;
 }
 
+export type SmartAlbumRuleField =
+  | "object"
+  | "filter"
+  | "dateObs"
+  | "exptime"
+  | "instrument"
+  | "telescope"
+  | "tag"
+  | "location"
+  | "frameType";
+
+export type SmartAlbumRuleOperator =
+  | "equals"
+  | "contains"
+  | "gt"
+  | "lt"
+  | "between"
+  | "in"
+  | "notEquals"
+  | "notContains"
+  | "notIn";
+
 export interface SmartAlbumRule {
-  field:
-    | "object"
-    | "filter"
-    | "dateObs"
-    | "exptime"
-    | "instrument"
-    | "telescope"
-    | "tag"
-    | "location"
-    | "frameType";
-  operator: "equals" | "contains" | "gt" | "lt" | "between" | "in";
+  field: SmartAlbumRuleField;
+  operator: SmartAlbumRuleOperator;
   value: string | number | string[] | [number, number];
 }
 
+// ===== 相簿统计 =====
+export interface AlbumStatistics {
+  albumId: string;
+  totalExposure: number;
+  frameBreakdown: {
+    light: number;
+    dark: number;
+    flat: number;
+    bias: number;
+    unknown: number;
+  };
+  dateRange: [string, string] | null;
+  filterBreakdown: Record<string, number>;
+  totalFileSize: number;
+}
+
+// ===== 相簿重复图片 =====
+export interface DuplicateImageInfo {
+  imageId: string;
+  albumIds: string[];
+  albumNames: string[];
+}
+
 // ===== 目标管理 =====
+export interface TargetChangeLogEntry {
+  id: string;
+  timestamp: number;
+  action:
+    | "created"
+    | "updated"
+    | "status_changed"
+    | "image_added"
+    | "image_removed"
+    | "favorited"
+    | "unfavorited"
+    | "pinned"
+    | "unpinned"
+    | "tagged"
+    | "untagged";
+  field?: string;
+  oldValue?: unknown;
+  newValue?: unknown;
+}
+
+export interface RecommendedEquipment {
+  telescope?: string;
+  camera?: string;
+  filters?: string[];
+  notes?: string;
+}
+
 export interface Target {
   id: string;
   name: string;
   aliases: string[];
   type: TargetType;
   category?: string;
+  tags: string[];
+  isFavorite: boolean;
+  isPinned: boolean;
+  groupId?: string;
   ra?: number;
   dec?: number;
   imageIds: string[];
@@ -203,6 +321,21 @@ export interface Target {
   plannedFilters: string[];
   plannedExposure: Record<string, number>; // filter -> seconds
   notes?: string;
+  recommendedEquipment?: RecommendedEquipment;
+  bestImageId?: string;
+  imageRatings: Record<string, number>; // imageId -> rating (1-5)
+  changeLog: TargetChangeLogEntry[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ===== 目标分组 =====
+export interface TargetGroup {
+  id: string;
+  name: string;
+  description?: string;
+  color?: string;
+  targetIds: string[];
   createdAt: number;
   updatedAt: number;
 }
