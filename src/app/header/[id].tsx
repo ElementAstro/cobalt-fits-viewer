@@ -34,7 +34,7 @@ export default function HeaderDetailScreen() {
 
   useEffect(() => {
     if (file) loadFromPath(file.filepath, file.filename, file.fileSize);
-  }, [file?.id]);
+  }, [file, loadFromPath]);
 
   const filteredHeaders = useMemo(() => {
     if (selectedGroup === "all") return headers;
@@ -85,14 +85,22 @@ export default function HeaderDetailScreen() {
                 variant={selectedGroup === group.key ? "primary" : "secondary"}
                 onPress={() => setSelectedGroup(group.key)}
               >
-                <Chip.Label className="text-[10px]">{t(group.labelKey as any)}</Chip.Label>
+                <Chip.Label className="text-[10px]">
+                  {t(group.labelKey as Parameters<typeof t>[0])}
+                </Chip.Label>
               </Chip>
             ))}
           </View>
         </ScrollView>
 
         {/* Header Table */}
-        <HeaderTable keywords={filteredHeaders} />
+        {file.sourceType === "raster" && headers.length === 0 ? (
+          <View className="rounded-lg bg-surface-secondary px-3 py-4">
+            <Text className="text-xs text-muted">{t("header.noHeaderForFormat")}</Text>
+          </View>
+        ) : (
+          <HeaderTable keywords={filteredHeaders} />
+        )}
       </ScrollView>
     </View>
   );

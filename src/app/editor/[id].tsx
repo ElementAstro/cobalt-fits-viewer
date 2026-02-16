@@ -5,6 +5,7 @@ import { useState, useCallback, useEffect } from "react";
 import { Button, Card, PressableFeedback, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import type { Href } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useFitsFile } from "../../hooks/useFitsFile";
@@ -83,7 +84,7 @@ const MASK_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphM
   { key: "pixelMath", icon: "calculator-outline" },
 ];
 
-const ADVANCED_TOOLS: { key: string; icon: keyof typeof Ionicons.glyphMap; route?: string }[] = [
+const ADVANCED_TOOLS: { key: string; icon: keyof typeof Ionicons.glyphMap; route?: Href }[] = [
   { key: "calibration", icon: "flask-outline" },
   { key: "stacking", icon: "copy-outline", route: "/stacking" },
   { key: "compose", icon: "color-palette-outline", route: "/compose" },
@@ -96,6 +97,7 @@ export default function EditorDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
+  type TranslationKey = Parameters<typeof t>[0];
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
@@ -380,7 +382,7 @@ export default function EditorDetailScreen() {
       }
       setShowExport(false);
     },
-    [editor.rgbaData, editor.current, exportImage, file?.filename, exportFormat, t],
+    [editor, exportImage, file?.filename, exportFormat, t],
   );
 
   const handleEditorShare = useCallback(
@@ -403,7 +405,7 @@ export default function EditorDetailScreen() {
       }
       setShowExport(false);
     },
-    [editor.rgbaData, editor.current, shareImage, file?.filename, exportFormat, t],
+    [editor, shareImage, file?.filename, exportFormat, t],
   );
 
   const handleEditorSave = useCallback(
@@ -427,7 +429,7 @@ export default function EditorDetailScreen() {
       }
       setShowExport(false);
     },
-    [editor.rgbaData, editor.current, saveImage, file?.filename, exportFormat, t],
+    [editor, saveImage, file?.filename, exportFormat, t],
   );
 
   if (!file) {
@@ -998,10 +1000,10 @@ export default function EditorDetailScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View className="flex-row gap-1">
             {[
-              { key: "geometry" as const, label: t("editor.geometry" as any) },
-              { key: "adjust" as const, label: t("editor.adjust" as any) },
-              { key: "process" as const, label: t("editor.process" as any) },
-              { key: "mask" as const, label: t("editor.maskTools" as any) },
+              { key: "geometry" as const, label: t("editor.geometry" as TranslationKey) },
+              { key: "adjust" as const, label: t("editor.adjust" as TranslationKey) },
+              { key: "process" as const, label: t("editor.process" as TranslationKey) },
+              { key: "mask" as const, label: t("editor.maskTools" as TranslationKey) },
             ].map((tab) => (
               <PressableFeedback key={tab.key} onPress={() => setActiveToolGroup(tab.key)}>
                 <View
@@ -1045,7 +1047,7 @@ export default function EditorDetailScreen() {
                     <Text
                       className={`mt-1 text-[9px] ${isActive ? "text-success font-semibold" : "text-muted"}`}
                     >
-                      {t(`editor.${tool.key}` as any)}
+                      {t(`editor.${tool.key}` as TranslationKey)}
                     </Text>
                   </View>
                 </PressableFeedback>
@@ -1064,7 +1066,7 @@ export default function EditorDetailScreen() {
                 key={tool.key}
                 onPress={() => {
                   if (tool.route) {
-                    router.push(tool.route as any);
+                    router.push(tool.route);
                   } else if (tool.key === "starDetect" && editor.current) {
                     const stars = detectStars(
                       editor.current.pixels,
@@ -1073,7 +1075,7 @@ export default function EditorDetailScreen() {
                     );
                     setDetectedStars(stars);
                   } else {
-                    handleToolPress(tool.key as any);
+                    handleToolPress(tool.key as Exclude<EditorTool, null>);
                   }
                 }}
               >
@@ -1092,7 +1094,7 @@ export default function EditorDetailScreen() {
                   >
                     {tool.key === "starDetect" && detectedStars.length > 0
                       ? `${detectedStars.length} stars`
-                      : t(`editor.${tool.key}` as any)}
+                      : t(`editor.${tool.key}` as TranslationKey)}
                   </Text>
                 </View>
               </PressableFeedback>

@@ -7,7 +7,7 @@ import { File } from "expo-file-system";
 import type { ICloudProvider } from "./cloudProvider";
 import { createManifest } from "./manifest";
 import { Logger } from "../logger";
-import type { BackupOptions, BackupProgress, BackupInfo } from "./types";
+import type { BackupOptions, BackupProgress, BackupInfo, RestoreConflictStrategy } from "./types";
 import { DEFAULT_BACKUP_OPTIONS, BACKUP_DIR, FITS_SUBDIR } from "./types";
 import type { FitsMetadata, Album, Target, ObservationSession } from "../fits/types";
 import { getFitsDir } from "../utils/fileManager";
@@ -23,11 +23,16 @@ export interface BackupDataSource {
 }
 
 export interface RestoreTarget {
-  setFiles(files: FitsMetadata[]): void;
-  setAlbums(albums: Album[]): void;
-  setTargets(targets: Target[]): void;
-  setSessions(sessions: ObservationSession[]): void;
+  setFiles(files: FitsMetadata[], strategy?: RestoreConflictStrategy): void;
+  setAlbums(albums: Album[], strategy?: RestoreConflictStrategy): void;
+  setTargets(targets: Target[], strategy?: RestoreConflictStrategy): void;
+  setSessions(sessions: ObservationSession[], strategy?: RestoreConflictStrategy): void;
   setSettings(settings: Record<string, unknown>): void;
+}
+
+function toSafeRemoteFilename(meta: FitsMetadata): string {
+  const safeName = meta.filename.replace(/[^\w.-]/g, "_");
+  return `${meta.id}_${safeName}`;
 }
 
 /**
@@ -87,7 +92,7 @@ export async function performBackup(
       }
 
       try {
-        const remotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${meta.filename}`;
+        const remotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${toSafeRemoteFilename(meta)}`;
         await provider.uploadFile(meta.filepath, remotePath);
         current++;
 
@@ -155,13 +160,13 @@ export async function performRestore(
 
   // Restore metadata
   if (options.includeAlbums && manifest.albums.length > 0) {
-    restoreTarget.setAlbums(manifest.albums);
+    restoreTarget.setAlbums(manifest.albums, options.restoreConflictStrategy);
   }
   if (options.includeTargets && manifest.targets.length > 0) {
-    restoreTarget.setTargets(manifest.targets);
+    restoreTarget.setTargets(manifest.targets, options.restoreConflictStrategy);
   }
   if (options.includeSessions && manifest.sessions.length > 0) {
-    restoreTarget.setSessions(manifest.sessions);
+    restoreTarget.setSessions(manifest.sessions, options.restoreConflictStrategy);
   }
   if (options.includeSettings && Object.keys(manifest.settings).length > 0) {
     restoreTarget.setSettings(manifest.settings);
@@ -172,6 +177,7 @@ export async function performRestore(
     const fitsDir = getFitsDir();
     const total = manifest.files.length;
     let current = 0;
+    const restoredFiles: FitsMetadata[] = [];
 
     onProgress?.({
       phase: "downloading",
@@ -185,12 +191,17 @@ export async function performRestore(
       }
 
       try {
-        const remotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${meta.filename}`;
+        const remotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${toSafeRemoteFilename(meta)}`;
+        const legacyRemotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${meta.filename}`;
         const localPath = new File(fitsDir, meta.filename).uri;
 
         // Skip if file already exists locally
         const localFile = new File(localPath);
         if (localFile.exists) {
+          restoredFiles.push({
+            ...meta,
+            filepath: localPath,
+          });
           current++;
           onProgress?.({
             phase: "downloading",
@@ -201,7 +212,16 @@ export async function performRestore(
           continue;
         }
 
-        await provider.downloadFile(remotePath, localPath);
+        try {
+          await provider.downloadFile(remotePath, localPath);
+        } catch {
+          // Compatibility: old backups used filename as remote key.
+          await provider.downloadFile(legacyRemotePath, localPath);
+        }
+        restoredFiles.push({
+          ...meta,
+          filepath: localPath,
+        });
         current++;
 
         onProgress?.({
@@ -216,12 +236,7 @@ export async function performRestore(
       }
     }
 
-    // Update file metadata with new local paths
-    const updatedFiles = manifest.files.map((f) => ({
-      ...f,
-      filepath: new File(fitsDir, f.filename).uri,
-    }));
-    restoreTarget.setFiles(updatedFiles);
+    restoreTarget.setFiles(restoredFiles, options.restoreConflictStrategy);
   }
 
   onProgress?.({

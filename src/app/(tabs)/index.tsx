@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
-import { View, Text, FlatList, Alert, useWindowDimensions } from "react-native";
+import { View, Text, FlatList, Alert, useWindowDimensions, ScrollView } from "react-native";
 import {
   Button,
   Chip,
@@ -16,16 +16,24 @@ import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { useI18n } from "../../i18n/useI18n";
 import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useFileManager } from "../../hooks/useFileManager";
+import { useAlbums } from "../../hooks/useAlbums";
 import type { ImportResult } from "../../hooks/useFileManager";
 import { FileListItem } from "../../components/gallery/FileListItem";
+import { AlbumPickerSheet } from "../../components/gallery/AlbumPickerSheet";
+import { BatchTagSheet } from "../../components/gallery/BatchTagSheet";
+import { BatchRenameSheet } from "../../components/gallery/BatchRenameSheet";
 import { EmptyState } from "../../components/common/EmptyState";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { QuickLookModal } from "../../components/common/QuickLookModal";
 import { formatFileSize } from "../../lib/utils/fileManager";
-import type { FitsMetadata } from "../../lib/fits/types";
+import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
+import type { FitsMetadata, FrameType } from "../../lib/fits/types";
 
 const ListItemSeparator = () => <View className="h-2" />;
+
+const FRAME_FILTERS: FrameType[] = ["light", "dark", "flat", "bias", "unknown"];
 
 export default function FilesScreen() {
   const router = useRouter();
@@ -35,7 +43,6 @@ export default function FilesScreen() {
   const { isLandscape } = useScreenOrientation();
 
   const allFiles = useFitsStore((s) => s.files);
-  const files = useFitsStore((s) => s.getFilteredFiles());
   const sortBy = useFitsStore((s) => s.sortBy);
   const sortOrder = useFitsStore((s) => s.sortOrder);
   const setSortBy = useFitsStore((s) => s.setSortBy);
@@ -47,12 +54,27 @@ export default function FilesScreen() {
   const toggleSelection = useFitsStore((s) => s.toggleSelection);
   const clearSelection = useFitsStore((s) => s.clearSelection);
   const setSelectionMode = useFitsStore((s) => s.setSelectionMode);
+  const toggleFavorite = useFitsStore((s) => s.toggleFavorite);
+  const updateFile = useFitsStore((s) => s.updateFile);
+
+  const files = useFitsStore.getState().getFilteredFiles();
+
+  const fileListStyle = useSettingsStore((s) => s.fileListStyle);
+  const setFileListStyle = useSettingsStore((s) => s.setFileListStyle);
+  const defaultGridColumns = useSettingsStore((s) => s.defaultGridColumns);
+  const thumbShowFilename = useSettingsStore((s) => s.thumbnailShowFilename);
+  const thumbShowObject = useSettingsStore((s) => s.thumbnailShowObject);
+  const thumbShowFilter = useSettingsStore((s) => s.thumbnailShowFilter);
+  const thumbShowExposure = useSettingsStore((s) => s.thumbnailShowExposure);
+
+  const { albums, addImagesToAlbum } = useAlbums();
 
   const {
     isImporting,
     importProgress,
     importError,
     lastImportResult,
+    isZipImportAvailable,
     pickAndImportFile,
     pickAndImportFolder,
     pickAndImportZip,
@@ -65,6 +87,38 @@ export default function FilesScreen() {
   const [showUrlDialog, setShowUrlDialog] = useState(false);
   const [urlInput, setUrlInput] = useState("");
   const [quickLookFile, setQuickLookFile] = useState<FitsMetadata | null>(null);
+  const [showAlbumPicker, setShowAlbumPicker] = useState(false);
+  const [showBatchTag, setShowBatchTag] = useState(false);
+  const [showBatchRename, setShowBatchRename] = useState(false);
+
+  const [filterObject, setFilterObject] = useState("");
+  const [filterFilter, setFilterFilter] = useState("");
+  const [filterSourceFormat, setFilterSourceFormat] = useState("");
+  const [filterFrameType, setFilterFrameType] = useState<FrameType | "">("");
+  const [filterTag, setFilterTag] = useState("");
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
+
+  const metadataIndex = useMemo(() => buildMetadataIndex(allFiles), [allFiles]);
+
+  const displayFiles = useMemo(() => {
+    return files.filter((file) => {
+      if (filterObject && file.object !== filterObject) return false;
+      if (filterFilter && file.filter !== filterFilter) return false;
+      if (filterSourceFormat && file.sourceFormat !== filterSourceFormat) return false;
+      if (filterFrameType && file.frameType !== filterFrameType) return false;
+      if (filterTag && !file.tags.includes(filterTag)) return false;
+      if (favoriteOnly && !file.isFavorite) return false;
+      return true;
+    });
+  }, [
+    files,
+    filterObject,
+    filterFilter,
+    filterSourceFormat,
+    filterFrameType,
+    filterTag,
+    favoriteOnly,
+  ]);
 
   const storageStats = useMemo(() => {
     let totalSize = 0;
@@ -74,22 +128,38 @@ export default function FilesScreen() {
     return { fitsCount: allFiles.length, fitsSize: totalSize };
   }, [allFiles]);
 
+  const activeFilterCount = useMemo(() => {
+    return (
+      [filterObject, filterFilter, filterSourceFormat, filterFrameType, filterTag].filter(Boolean)
+        .length + (favoriteOnly ? 1 : 0)
+    );
+  }, [filterObject, filterFilter, filterSourceFormat, filterFrameType, filterTag, favoriteOnly]);
+
+  const isGridStyle = fileListStyle === "grid";
+  const listColumns = isGridStyle
+    ? isLandscape
+      ? Math.min(defaultGridColumns + 1, 5)
+      : defaultGridColumns
+    : 1;
+
   const showImportResult = useCallback(
     (result: ImportResult) => {
-      if (result.failed === 0) {
-        Alert.alert(
-          t("files.importSuccess"),
-          t("files.importSuccessMsg").replace("{count}", String(result.success)),
-        );
-      } else {
-        Alert.alert(
-          t("files.importSuccess"),
-          t("files.importPartialMsg")
-            .replace("{success}", String(result.success))
-            .replace("{total}", String(result.total))
-            .replace("{failed}", String(result.failed)),
+      const base = t("files.importPartialMsg")
+        .replace("{success}", String(result.success))
+        .replace("{total}", String(result.total))
+        .replace("{failed}", String(result.failed));
+      const details: string[] = [base];
+      if (result.skippedDuplicate > 0) {
+        details.push(
+          t("files.importSkippedDuplicates").replace("{count}", String(result.skippedDuplicate)),
         );
       }
+      if (result.skippedUnsupported > 0) {
+        details.push(
+          t("files.importSkippedUnsupported").replace("{count}", String(result.skippedUnsupported)),
+        );
+      }
+      Alert.alert(t("files.importSuccess"), details.join("\n"));
     },
     [t],
   );
@@ -104,11 +174,13 @@ export default function FilesScreen() {
     if (importError && !isImporting) {
       const errorKey = importError as string;
       const message =
-        errorKey === "noFitsInFolder"
-          ? t("files.noFitsInFolder")
-          : errorKey === "noFitsInZip"
-            ? t("files.noFitsInZip")
-            : importError;
+        errorKey === "noFitsInFolder" || errorKey === "noSupportedInFolder"
+          ? t("files.noSupportedInFolder")
+          : errorKey === "noFitsInZip" || errorKey === "noSupportedInZip"
+            ? t("files.noSupportedInZip")
+            : errorKey === "zipImportUnavailable"
+              ? t("files.importZipUnavailable")
+              : importError;
       Alert.alert(t("files.importFailed"), message);
     }
   }, [importError, isImporting, t]);
@@ -117,37 +189,52 @@ export default function FilesScreen() {
     bottomSheetRef.current?.expand();
   }, []);
 
-  const closeImportSheet = () => {
+  const closeImportSheet = useCallback(() => {
     bottomSheetRef.current?.close();
-  };
+  }, []);
 
-  const handleImportFile = () => {
+  const handleImportFile = useCallback(() => {
     closeImportSheet();
     pickAndImportFile();
-  };
+  }, [closeImportSheet, pickAndImportFile]);
 
-  const handleImportFolder = () => {
+  const handleImportFolder = useCallback(() => {
     closeImportSheet();
     pickAndImportFolder();
-  };
+  }, [closeImportSheet, pickAndImportFolder]);
 
-  const handleImportZip = () => {
+  const handleImportZip = useCallback(() => {
     closeImportSheet();
+    if (!isZipImportAvailable) {
+      Alert.alert(t("files.importFailed"), t("files.importZipUnavailable"));
+      return;
+    }
     pickAndImportZip();
-  };
+  }, [closeImportSheet, isZipImportAvailable, pickAndImportZip, t]);
 
-  const handleImportUrl = () => {
+  const handleImportUrl = useCallback(() => {
     closeImportSheet();
     setUrlInput("");
     setShowUrlDialog(true);
-  };
+  }, [closeImportSheet]);
 
-  const confirmUrlImport = () => {
+  const confirmUrlImport = useCallback(() => {
     const url = urlInput.trim();
     if (!url) return;
     setShowUrlDialog(false);
     importFromUrl(url);
-  };
+  }, [urlInput, importFromUrl]);
+
+  const handleSortToggle = useCallback(
+    (key: "name" | "date" | "size" | "quality") => {
+      if (sortBy === key) {
+        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+      } else {
+        setSortBy(key);
+      }
+    },
+    [sortBy, sortOrder, setSortBy, setSortOrder],
+  );
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
@@ -164,16 +251,74 @@ export default function FilesScreen() {
     ]);
   }, [selectedIds, t, handleDeleteFiles, clearSelection]);
 
-  const handleSortToggle = useCallback(
-    (key: "name" | "date" | "size") => {
-      if (sortBy === key) {
-        setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-      } else {
-        setSortBy(key);
-      }
+  const handleSingleDelete = useCallback(
+    (fileId: string) => {
+      Alert.alert(t("common.delete"), t("files.deleteConfirm"), [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("common.delete"),
+          style: "destructive",
+          onPress: () => handleDeleteFiles([fileId]),
+        },
+      ]);
     },
-    [sortBy, sortOrder, setSortBy, setSortOrder],
+    [handleDeleteFiles, t],
   );
+
+  const handleSelectAllVisible = useCallback(() => {
+    if (displayFiles.length === 0) return;
+    setSelectionMode(true);
+    const selectedSet = new Set(selectedIds);
+    const allSelected = displayFiles.every((file) => selectedSet.has(file.id));
+    for (const file of displayFiles) {
+      if (allSelected && selectedSet.has(file.id)) toggleSelection(file.id);
+      if (!allSelected && !selectedSet.has(file.id)) toggleSelection(file.id);
+    }
+  }, [displayFiles, selectedIds, setSelectionMode, toggleSelection]);
+
+  const handleInvertSelection = useCallback(() => {
+    if (displayFiles.length === 0) return;
+    setSelectionMode(true);
+    for (const file of displayFiles) {
+      toggleSelection(file.id);
+    }
+  }, [displayFiles, setSelectionMode, toggleSelection]);
+
+  const handleBatchFavorite = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    const selectedFiles = allFiles.filter((file) => selectedIds.includes(file.id));
+    const shouldFavorite = selectedFiles.some((file) => !file.isFavorite);
+    for (const file of selectedFiles) {
+      updateFile(file.id, { isFavorite: shouldFavorite });
+    }
+  }, [allFiles, selectedIds, updateFile]);
+
+  const handleAddToAlbum = useCallback(
+    (albumId: string) => {
+      addImagesToAlbum(albumId, selectedIds);
+      setShowAlbumPicker(false);
+      clearSelection();
+    },
+    [addImagesToAlbum, selectedIds, clearSelection],
+  );
+
+  const goToBatchConvert = useCallback(() => {
+    const idsParam = selectedIds.join(",");
+    if (!idsParam) {
+      router.push("/convert?tab=batch");
+      return;
+    }
+    router.push(`/convert?tab=batch&ids=${encodeURIComponent(idsParam)}`);
+  }, [selectedIds, router]);
+
+  const clearLocalFilters = useCallback(() => {
+    setFilterObject("");
+    setFilterFilter("");
+    setFilterSourceFormat("");
+    setFilterFrameType("");
+    setFilterTag("");
+    setFavoriteOnly(false);
+  }, []);
 
   const getPhaseLabel = (): string => {
     switch (importProgress.phase) {
@@ -189,25 +334,52 @@ export default function FilesScreen() {
   };
 
   const renderFileItem = useCallback(
-    ({ item }: { item: FitsMetadata }) => (
-      <FileListItem
-        file={item}
-        selected={selectedIds.includes(item.id)}
-        onPress={() => {
-          if (isSelectionMode) {
-            toggleSelection(item.id);
-          } else {
-            router.push(`/viewer/${item.id}`);
-          }
-        }}
-        onLongPress={() => {
-          if (!isSelectionMode) {
-            setQuickLookFile(item);
-          }
-        }}
-      />
-    ),
-    [selectedIds, isSelectionMode, toggleSelection, router],
+    ({ item }: { item: FitsMetadata }) => {
+      const content = (
+        <FileListItem
+          file={item}
+          layout={fileListStyle}
+          selected={selectedIds.includes(item.id)}
+          showFilename={thumbShowFilename}
+          showObject={thumbShowObject}
+          showFilter={thumbShowFilter}
+          showExposure={thumbShowExposure}
+          onPress={() => {
+            if (isSelectionMode) {
+              toggleSelection(item.id);
+            } else {
+              router.push(`/viewer/${item.id}`);
+            }
+          }}
+          onLongPress={() => {
+            if (!isSelectionMode) {
+              setQuickLookFile(item);
+            } else {
+              toggleSelection(item.id);
+            }
+          }}
+          onToggleFavorite={() => toggleFavorite(item.id)}
+          onDelete={() => handleSingleDelete(item.id)}
+        />
+      );
+
+      if (!isGridStyle) return content;
+      return <View className="flex-1 px-1 pb-2">{content}</View>;
+    },
+    [
+      fileListStyle,
+      selectedIds,
+      thumbShowFilename,
+      thumbShowObject,
+      thumbShowFilter,
+      thumbShowExposure,
+      isSelectionMode,
+      toggleSelection,
+      router,
+      toggleFavorite,
+      handleSingleDelete,
+      isGridStyle,
+    ],
   );
 
   const keyExtractor = useCallback((item: FitsMetadata) => item.id, []);
@@ -215,15 +387,13 @@ export default function FilesScreen() {
   const ListHeader = useMemo(
     () => (
       <View className="gap-3">
-        {/* Title */}
         <View>
           <Text className="text-2xl font-bold text-foreground">{t("files.title")}</Text>
           <Text className="mt-1 text-sm text-muted">
-            {t("files.subtitle")} ({files.length})
+            {t("files.subtitle")} ({displayFiles.length}/{allFiles.length})
           </Text>
         </View>
 
-        {/* Storage Stats */}
         {storageStats.fitsCount > 0 && (
           <View className="flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
             <Ionicons name="server-outline" size={14} color={mutedColor} />
@@ -236,7 +406,6 @@ export default function FilesScreen() {
 
         <Separator />
 
-        {/* Search Bar */}
         <TextField>
           <View className="w-full flex-row items-center">
             <Input
@@ -266,22 +435,12 @@ export default function FilesScreen() {
           </View>
         </TextField>
 
-        {/* Import Actions */}
         <View className="flex-row gap-2">
           <Button variant="primary" className="flex-1" onPress={openImportSheet}>
             <Ionicons name="add-circle-outline" size={16} color="#fff" />
             <Button.Label>{t("files.importOptions")}</Button.Label>
           </Button>
-          {isSelectionMode ? (
-            <View className="flex-row gap-1">
-              <Button variant="outline" onPress={handleBatchDelete}>
-                <Ionicons name="trash-outline" size={16} color="#ef4444" />
-              </Button>
-              <Button variant="outline" onPress={clearSelection}>
-                <Ionicons name="close-outline" size={16} color={mutedColor} />
-              </Button>
-            </View>
-          ) : (
+          {!isSelectionMode ? (
             <>
               <Button variant="outline" onPress={() => setSelectionMode(true)}>
                 <Ionicons name="checkmark-circle-outline" size={16} color={mutedColor} />
@@ -290,50 +449,207 @@ export default function FilesScreen() {
                 <Ionicons name="swap-horizontal-outline" size={16} color={mutedColor} />
               </Button>
             </>
+          ) : (
+            <>
+              <Button variant="outline" onPress={handleSelectAllVisible}>
+                <Ionicons name="checkbox-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button variant="outline" onPress={handleInvertSelection}>
+                <Ionicons name="shuffle-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button variant="outline" onPress={handleBatchFavorite}>
+                <Ionicons name="heart-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button variant="outline" onPress={() => setShowAlbumPicker(true)}>
+                <Ionicons name="albums-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button variant="outline" onPress={() => setShowBatchTag(true)}>
+                <Ionicons name="pricetag-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button variant="outline" onPress={() => setShowBatchRename(true)}>
+                <Ionicons name="text-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button variant="outline" onPress={handleBatchDelete}>
+                <Ionicons name="trash-outline" size={16} color="#ef4444" />
+              </Button>
+              <Button variant="outline" onPress={clearSelection}>
+                <Ionicons name="close-outline" size={16} color={mutedColor} />
+              </Button>
+            </>
           )}
         </View>
 
-        {/* Sort Chips */}
-        <View className="flex-row items-center gap-2">
-          {(["name", "date", "size"] as const).map((key) => (
+        {isSelectionMode && (
+          <View className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2">
+            <Text className="text-xs text-muted">
+              {selectedIds.length} {t("common.selected")}
+            </Text>
+            <Button size="sm" variant="ghost" onPress={goToBatchConvert}>
+              <Ionicons name="swap-horizontal-outline" size={14} color={mutedColor} />
+              <Button.Label>{t("converter.batchConvert")}</Button.Label>
+            </Button>
+          </View>
+        )}
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View className="flex-row items-center gap-2">
+            {(["name", "date", "size", "quality"] as const).map((key) => (
+              <Chip
+                key={key}
+                size="sm"
+                variant={sortBy === key ? "primary" : "secondary"}
+                onPress={() => handleSortToggle(key)}
+              >
+                <Chip.Label className="text-xs">
+                  {key === "quality"
+                    ? t("gallery.quality")
+                    : t(
+                        `files.sortBy${key.charAt(0).toUpperCase() + key.slice(1)}` as
+                          | "files.sortByName"
+                          | "files.sortByDate"
+                          | "files.sortBySize",
+                      )}
+                  {sortBy === key && (sortOrder === "asc" ? " ↑" : " ↓")}
+                </Chip.Label>
+              </Chip>
+            ))}
+
+            <View className="h-4 w-px bg-separator" />
+
+            {(["grid", "list", "compact"] as const).map((style) => (
+              <Chip
+                key={style}
+                size="sm"
+                variant={fileListStyle === style ? "primary" : "secondary"}
+                onPress={() => setFileListStyle(style)}
+              >
+                <Chip.Label className="text-xs">
+                  {style === "grid"
+                    ? t("settings.fileListGrid")
+                    : style === "list"
+                      ? t("settings.fileListList")
+                      : t("settings.fileListCompact")}
+                </Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        </ScrollView>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View className="flex-row items-center gap-2">
             <Chip
-              key={key}
               size="sm"
-              variant={sortBy === key ? "primary" : "secondary"}
-              onPress={() => handleSortToggle(key)}
+              variant={favoriteOnly ? "primary" : "secondary"}
+              onPress={() => setFavoriteOnly((prev) => !prev)}
             >
-              <Chip.Label className="text-xs">
-                {t(
-                  `files.sortBy${key.charAt(0).toUpperCase() + key.slice(1)}` as
-                    | "files.sortByName"
-                    | "files.sortByDate"
-                    | "files.sortBySize",
-                )}
-                {sortBy === key && (sortOrder === "asc" ? " ↑" : " ↓")}
-              </Chip.Label>
+              <Ionicons name="heart-outline" size={12} color={favoriteOnly ? "#fff" : mutedColor} />
+              <Chip.Label className="text-xs">{t("gallery.favoritesOnly")}</Chip.Label>
             </Chip>
-          ))}
-        </View>
+            {metadataIndex.objects.map((objectValue) => (
+              <Chip
+                key={`obj-${objectValue}`}
+                size="sm"
+                variant={filterObject === objectValue ? "primary" : "secondary"}
+                onPress={() => setFilterObject((prev) => (prev === objectValue ? "" : objectValue))}
+              >
+                <Chip.Label className="text-xs">{objectValue}</Chip.Label>
+              </Chip>
+            ))}
+            {metadataIndex.sourceFormats.map((fmt) => (
+              <Chip
+                key={`fmt-${fmt}`}
+                size="sm"
+                variant={filterSourceFormat === fmt ? "primary" : "secondary"}
+                onPress={() => setFilterSourceFormat((prev) => (prev === fmt ? "" : fmt))}
+              >
+                <Chip.Label className="text-xs">{fmt.toUpperCase()}</Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        </ScrollView>
+
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View className="flex-row items-center gap-2">
+            {metadataIndex.filters.map((filterValue) => (
+              <Chip
+                key={`filter-${filterValue}`}
+                size="sm"
+                variant={filterFilter === filterValue ? "primary" : "secondary"}
+                onPress={() => setFilterFilter((prev) => (prev === filterValue ? "" : filterValue))}
+              >
+                <Chip.Label className="text-xs">{filterValue}</Chip.Label>
+              </Chip>
+            ))}
+            {FRAME_FILTERS.map((frameType) => (
+              <Chip
+                key={`frame-${frameType}`}
+                size="sm"
+                variant={filterFrameType === frameType ? "primary" : "secondary"}
+                onPress={() => setFilterFrameType((prev) => (prev === frameType ? "" : frameType))}
+              >
+                <Chip.Label className="text-xs">{t(`gallery.frameTypes.${frameType}`)}</Chip.Label>
+              </Chip>
+            ))}
+            {metadataIndex.tags.map((tagValue) => (
+              <Chip
+                key={`tag-${tagValue}`}
+                size="sm"
+                variant={filterTag === tagValue ? "primary" : "secondary"}
+                onPress={() => setFilterTag((prev) => (prev === tagValue ? "" : tagValue))}
+              >
+                <Chip.Label className="text-xs">#{tagValue}</Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        </ScrollView>
+
+        {activeFilterCount > 0 && (
+          <View className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2">
+            <Text className="text-xs text-muted">
+              {activeFilterCount} {t("common.selected")}
+            </Text>
+            <Button size="sm" variant="ghost" onPress={clearLocalFilters}>
+              <Button.Label>{t("targets.clearFilters")}</Button.Label>
+            </Button>
+          </View>
+        )}
 
         <Separator />
       </View>
     ),
     [
       t,
-      files.length,
+      displayFiles.length,
+      allFiles.length,
       storageStats,
       mutedColor,
       searchQuery,
       setSearchQuery,
+      openImportSheet,
       isSelectionMode,
-      sortBy,
-      sortOrder,
-      clearSelection,
       setSelectionMode,
       router,
-      openImportSheet,
+      handleSelectAllVisible,
+      handleInvertSelection,
+      handleBatchFavorite,
+      goToBatchConvert,
       handleBatchDelete,
+      clearSelection,
+      selectedIds.length,
+      sortBy,
+      sortOrder,
       handleSortToggle,
+      fileListStyle,
+      setFileListStyle,
+      favoriteOnly,
+      metadataIndex,
+      filterObject,
+      filterFilter,
+      filterSourceFormat,
+      filterFrameType,
+      filterTag,
+      activeFilterCount,
+      clearLocalFilters,
     ],
   );
 
@@ -349,7 +665,7 @@ export default function FilesScreen() {
         onCancel={cancelImport}
       />
 
-      {files.length === 0 && !searchQuery ? (
+      {displayFiles.length === 0 && !searchQuery && activeFilterCount === 0 ? (
         <View className={`flex-1 px-4 ${isLandscape ? "pt-2" : "pt-14"}`}>
           {ListHeader}
           <EmptyState
@@ -362,18 +678,21 @@ export default function FilesScreen() {
         </View>
       ) : (
         <FlatList
-          data={files}
+          data={displayFiles}
           renderItem={renderFileItem}
+          key={isGridStyle ? `grid-${listColumns}` : fileListStyle}
           keyExtractor={keyExtractor}
+          numColumns={listColumns}
           ListHeaderComponent={ListHeader}
-          ListEmptyComponent={<EmptyState icon="search-outline" title={t("files.noFitsFound")} />}
+          ListEmptyComponent={
+            <EmptyState icon="search-outline" title={t("files.noSupportedFound")} />
+          }
           contentContainerClassName={`px-4 ${isLandscape ? "py-2" : "py-14"}`}
-          ItemSeparatorComponent={ListItemSeparator}
+          ItemSeparatorComponent={isGridStyle ? undefined : ListItemSeparator}
           showsVerticalScrollIndicator={false}
         />
       )}
 
-      {/* Import Options BottomSheet */}
       <BottomSheet
         ref={bottomSheetRef}
         index={-1}
@@ -398,7 +717,7 @@ export default function FilesScreen() {
                 <Text className="text-sm font-semibold text-foreground">
                   {t("files.importFile")}
                 </Text>
-                <Text className="text-xs text-muted">FITS, FIT, FTS</Text>
+                <Text className="text-xs text-muted">{t("files.supportedFormatsShort")}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
             </PressableFeedback>
@@ -414,14 +733,16 @@ export default function FilesScreen() {
                 <Text className="text-sm font-semibold text-foreground">
                   {t("files.importFolder")}
                 </Text>
-                <Text className="text-xs text-muted">{t("files.scanning")}</Text>
+                <Text className="text-xs text-muted">{t("files.supportedFormatsHint")}</Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
             </PressableFeedback>
 
             <PressableFeedback
               onPress={handleImportZip}
-              className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
+              className={`flex-row items-center gap-3 rounded-xl p-4 ${
+                isZipImportAvailable ? "bg-surface-secondary" : "bg-surface-secondary/60"
+              }`}
             >
               <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
                 <Ionicons name="archive-outline" size={20} color={successColor} />
@@ -430,7 +751,9 @@ export default function FilesScreen() {
                 <Text className="text-sm font-semibold text-foreground">
                   {t("files.importZip")}
                 </Text>
-                <Text className="text-xs text-muted">ZIP</Text>
+                <Text className="text-xs text-muted">
+                  {isZipImportAvailable ? "ZIP" : t("files.importZipUnavailable")}
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
             </PressableFeedback>
@@ -446,7 +769,9 @@ export default function FilesScreen() {
                 <Text className="text-sm font-semibold text-foreground">
                   {t("files.importFromUrl")}
                 </Text>
-                <Text className="text-xs text-muted">HTTP / HTTPS</Text>
+                <Text className="text-xs text-muted">
+                  HTTP / HTTPS · {t("files.supportedFormatsShort")}
+                </Text>
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
             </PressableFeedback>
@@ -454,7 +779,6 @@ export default function FilesScreen() {
         </BottomSheetView>
       </BottomSheet>
 
-      {/* URL Input Dialog */}
       <Dialog isOpen={showUrlDialog} onOpenChange={setShowUrlDialog}>
         <Dialog.Portal>
           <Dialog.Overlay />
@@ -464,7 +788,7 @@ export default function FilesScreen() {
             <Dialog.Description>{t("files.enterUrlHint")}</Dialog.Description>
             <TextField className="mt-4">
               <Input
-                placeholder="https://example.com/file.fits"
+                placeholder="https://example.com/image.png"
                 value={urlInput}
                 onChangeText={setUrlInput}
                 autoCapitalize="none"
@@ -484,7 +808,23 @@ export default function FilesScreen() {
         </Dialog.Portal>
       </Dialog>
 
-      {/* Quick Look Preview */}
+      <AlbumPickerSheet
+        visible={showAlbumPicker}
+        albums={albums}
+        onClose={() => setShowAlbumPicker(false)}
+        onSelect={handleAddToAlbum}
+      />
+      <BatchTagSheet
+        visible={showBatchTag}
+        selectedIds={selectedIds}
+        onClose={() => setShowBatchTag(false)}
+      />
+      <BatchRenameSheet
+        visible={showBatchRename}
+        selectedIds={selectedIds}
+        onClose={() => setShowBatchRename(false)}
+      />
+
       <QuickLookModal
         visible={!!quickLookFile}
         file={quickLookFile}

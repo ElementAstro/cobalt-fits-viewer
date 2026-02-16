@@ -1,0 +1,189 @@
+/**
+ * 目标搜索 Hook
+ */
+
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useTargetStore } from "../stores/useTargetStore";
+import {
+  searchTargets,
+  quickSearch,
+  getSearchSuggestions,
+  type SearchConditions,
+} from "../lib/targets/targetSearch";
+import {
+  detectDuplicates,
+  findDuplicatesOf,
+  type DuplicateDetectionResult,
+  type DuplicateGroup,
+} from "../lib/targets/duplicateDetector";
+
+const DEBOUNCE_MS = 300;
+
+export function useTargetSearch() {
+  const targets = useTargetStore((s) => s.targets);
+
+  // 搜索状态
+  const [query, setQuery] = useState("");
+  const [conditions, setConditions] = useState<SearchConditions>({});
+  const [isAdvancedMode, setIsAdvancedMode] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  // 防抖处理
+  const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+    debounceTimer.current = setTimeout(() => {
+      setDebouncedQuery(query);
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [query]);
+
+  // 执行搜索
+  const searchResult = useMemo(() => {
+    if (!isAdvancedMode && debouncedQuery) {
+      const results = quickSearch(targets, debouncedQuery);
+      return {
+        targets: results,
+        matchCount: results.length,
+        conditions: { query: debouncedQuery },
+      };
+    }
+
+    const searchConditions = isAdvancedMode
+      ? { ...conditions, query: debouncedQuery || conditions.query }
+      : { query: debouncedQuery };
+
+    if (!searchConditions.query && Object.keys(searchConditions).length === 0) {
+      return { targets, matchCount: targets.length, conditions: {} };
+    }
+
+    return searchTargets(targets, searchConditions);
+  }, [targets, debouncedQuery, conditions, isAdvancedMode]);
+
+  // 搜索建议
+  const suggestions = useMemo(() => {
+    if (!debouncedQuery || debouncedQuery.length < 2) return [];
+    return getSearchSuggestions(targets, debouncedQuery);
+  }, [targets, debouncedQuery]);
+
+  // 更新搜索条件
+  const updateCondition = useCallback(
+    <K extends keyof SearchConditions>(key: K, value: SearchConditions[K]) => {
+      setConditions((prev) => ({
+        ...prev,
+        [key]: value,
+      }));
+    },
+    [],
+  );
+
+  // 清除条件
+  const clearCondition = useCallback((key: keyof SearchConditions) => {
+    setConditions((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }, []);
+
+  // 清除所有条件
+  const clearAllConditions = useCallback(() => {
+    setConditions({});
+    setQuery("");
+  }, []);
+
+  // 重置搜索
+  const reset = useCallback(() => {
+    setQuery("");
+    setConditions({});
+    setIsAdvancedMode(false);
+  }, []);
+
+  return {
+    // 状态
+    query,
+    conditions,
+    isAdvancedMode,
+    results: searchResult.targets,
+    matchCount: searchResult.matchCount,
+    suggestions,
+
+    // 操作
+    setQuery,
+    setConditions,
+    setIsAdvancedMode,
+    updateCondition,
+    clearCondition,
+    clearAllConditions,
+    reset,
+  };
+}
+
+export function useDuplicateDetection() {
+  const targets = useTargetStore((s) => s.targets);
+  const mergeIntoTarget = useTargetStore((s) => s.mergeIntoTarget);
+
+  const [detectionResult, setDetectionResult] = useState<DuplicateDetectionResult | null>(null);
+  const [isDetecting, setIsDetecting] = useState(false);
+
+  // 执行检测
+  const detect = useCallback(() => {
+    setIsDetecting(true);
+    // 使用 setTimeout 模拟异步处理，避免阻塞 UI
+    setTimeout(() => {
+      const result = detectDuplicates(targets);
+      setDetectionResult(result);
+      setIsDetecting(false);
+    }, 0);
+  }, [targets]);
+
+  // 查找特定目标的重复项
+  const findDuplicates = useCallback(
+    (targetId: string) => {
+      return findDuplicatesOf(targets, targetId);
+    },
+    [targets],
+  );
+
+  // 合并重复目标
+  const mergeDuplicates = useCallback(
+    (group: DuplicateGroup) => {
+      if (group.targets.length < 2) return;
+
+      // 按图片数量排序，保留图片最多的
+      const sorted = [...group.targets].sort((a, b) => b.imageIds.length - a.imageIds.length);
+      const primary = sorted[0];
+
+      // 合并其他目标到主目标
+      for (let i = 1; i < sorted.length; i++) {
+        mergeIntoTarget(primary.id, sorted[i].id);
+      }
+
+      // 重新检测
+      detect();
+    },
+    [mergeIntoTarget, detect],
+  );
+
+  // 清除检测结果
+  const clearDetection = useCallback(() => {
+    setDetectionResult(null);
+  }, []);
+
+  return {
+    detectionResult,
+    isDetecting,
+    detect,
+    findDuplicates,
+    mergeDuplicates,
+    clearDetection,
+  };
+}

@@ -6,6 +6,7 @@
 import { useMemo } from "react";
 import { Platform, Text, View } from "react-native";
 import type { StyleProp, ViewStyle } from "react-native";
+import type { AppleMaps as ExpoAppleMaps, GoogleMaps as ExpoGoogleMaps } from "expo-maps";
 import { useI18n } from "../../i18n/useI18n";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { clusterByDistance, computeBounds, type LocationCluster } from "../../lib/map/clustering";
@@ -130,14 +131,16 @@ export function LocationMapView({
         style={[{ flex: 1 }, style]}
         cameraPosition={cameraPosition}
         annotations={annotations}
-        polylines={polylines as any}
-        circles={circles as any}
+        polylines={polylines as unknown as ExpoAppleMaps.MapProps["polylines"]}
+        circles={circles as unknown as ExpoAppleMaps.MapProps["circles"]}
         properties={{
           isMyLocationEnabled: true,
-          mapType: presetConfig.appleMapType as any,
-          elevation: presetConfig.appleElevation as any,
-          emphasis: presetConfig.appleEmphasis as any,
-          pointsOfInterest: { including: [...ASTRONOMY_POI_CATEGORIES] as any },
+          mapType: presetConfig.appleMapType as ExpoAppleMaps.MapProperties["mapType"],
+          elevation: presetConfig.appleElevation as ExpoAppleMaps.MapProperties["elevation"],
+          emphasis: presetConfig.appleEmphasis as ExpoAppleMaps.MapProperties["emphasis"],
+          pointsOfInterest: {
+            including: [...ASTRONOMY_POI_CATEGORIES],
+          } as ExpoAppleMaps.MapProperties["pointsOfInterest"],
         }}
         uiSettings={{
           compassEnabled: true,
@@ -152,9 +155,9 @@ export function LocationMapView({
 
   // ===== Android: Google Maps =====
   if (Platform.OS === "android" && GoogleMaps) {
-    const googleProps: Record<string, unknown> = {
+    const googleProps: ExpoGoogleMaps.MapProperties = {
       isMyLocationEnabled: true,
-      mapType: presetConfig.googleMapType as any,
+      mapType: presetConfig.googleMapType as ExpoGoogleMaps.MapType,
     };
     if (presetConfig.googleStyleJson) {
       googleProps.mapStyleOptions = { json: presetConfig.googleStyleJson };
@@ -165,10 +168,10 @@ export function LocationMapView({
         style={[{ flex: 1 }, style]}
         cameraPosition={cameraPosition}
         markers={markers}
-        polylines={polylines as any}
-        circles={circles as any}
-        properties={googleProps as any}
-        colorScheme={presetConfig.googleColorScheme as any}
+        polylines={polylines as unknown as ExpoGoogleMaps.MapProps["polylines"]}
+        circles={circles as unknown as ExpoGoogleMaps.MapProps["circles"]}
+        properties={googleProps}
+        colorScheme={presetConfig.googleColorScheme as ExpoGoogleMaps.MapColorScheme}
         uiSettings={{
           myLocationButtonEnabled: true,
           compassEnabled: true,

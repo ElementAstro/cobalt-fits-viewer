@@ -1,3 +1,7 @@
+/**
+ * 编辑目标 Sheet
+ */
+
 import { useState, useEffect } from "react";
 import { View, ScrollView, Alert } from "react-native";
 import {
@@ -14,6 +18,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { FilterExposurePlan } from "./FilterExposurePlan";
+import { CategorySelector } from "./CategorySelector";
+import { TagInput } from "./TagInput";
 import type { Target, TargetType, TargetStatus } from "../../lib/fits/types";
 
 const TARGET_TYPES: TargetType[] = [
@@ -32,6 +38,8 @@ const TARGET_STATUSES: TargetStatus[] = ["planned", "acquiring", "completed", "p
 interface EditTargetSheetProps {
   visible: boolean;
   target: Target;
+  allCategories?: string[];
+  allTags?: string[];
   onClose: () => void;
   onSave: (updates: Partial<Target>) => void;
   onDelete: () => void;
@@ -40,12 +48,15 @@ interface EditTargetSheetProps {
 export function EditTargetSheet({
   visible,
   target,
+  allCategories = [],
+  allTags = [],
   onClose,
   onSave,
   onDelete,
 }: EditTargetSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const dangerColor = useThemeColor("danger");
 
   const [name, setName] = useState(target.name);
   const [type, setType] = useState<TargetType>(target.type);
@@ -53,6 +64,10 @@ export function EditTargetSheet({
   const [aliases, setAliases] = useState<string[]>(target.aliases);
   const [newAlias, setNewAlias] = useState("");
   const [notes, setNotes] = useState(target.notes ?? "");
+  const [category, setCategory] = useState<string | undefined>(target.category);
+  const [tags, setTags] = useState<string[]>(target.tags);
+  const [isFavorite, setIsFavorite] = useState(target.isFavorite);
+  const [isPinned, setIsPinned] = useState(target.isPinned);
   const [filterEntries, setFilterEntries] = useState(
     target.plannedFilters.map((f) => ({
       filter: f,
@@ -66,6 +81,10 @@ export function EditTargetSheet({
     setStatus(target.status);
     setAliases([...target.aliases]);
     setNotes(target.notes ?? "");
+    setCategory(target.category);
+    setTags([...target.tags]);
+    setIsFavorite(target.isFavorite);
+    setIsPinned(target.isPinned);
     setFilterEntries(
       target.plannedFilters.map((f) => ({
         filter: f,
@@ -102,6 +121,10 @@ export function EditTargetSheet({
       status,
       aliases,
       notes: notes.trim() || undefined,
+      category,
+      tags,
+      isFavorite,
+      isPinned,
       plannedFilters: filters,
       plannedExposure: exposure,
     });
@@ -190,6 +213,55 @@ export function EditTargetSheet({
               ))}
             </View>
 
+            {/* Favorite & Pinned toggles */}
+            <View className="flex-row gap-2 mt-4">
+              <Button
+                variant={isFavorite ? "primary" : "outline"}
+                size="sm"
+                className="flex-1"
+                onPress={() => setIsFavorite(!isFavorite)}
+              >
+                <Ionicons
+                  name={isFavorite ? "star" : "star-outline"}
+                  size={14}
+                  color={isFavorite ? "#fff" : mutedColor}
+                />
+                <Button.Label>
+                  {isFavorite ? t("targets.favorited") : t("targets.addFavorite")}
+                </Button.Label>
+              </Button>
+              <Button
+                variant={isPinned ? "primary" : "outline"}
+                size="sm"
+                className="flex-1"
+                onPress={() => setIsPinned(!isPinned)}
+              >
+                <Ionicons
+                  name={isPinned ? "pin" : "pin-outline"}
+                  size={14}
+                  color={isPinned ? "#fff" : mutedColor}
+                />
+                <Button.Label>{isPinned ? t("targets.pinned") : t("targets.pin")}</Button.Label>
+              </Button>
+            </View>
+
+            {/* Category selector */}
+            <Label className="mt-4 mb-2">{t("targets.category")}</Label>
+            <CategorySelector
+              selectedCategory={category}
+              allCategories={allCategories}
+              onSelect={setCategory}
+            />
+
+            {/* Tags */}
+            <Label className="mt-4 mb-2">{t("targets.tags")}</Label>
+            <TagInput
+              tags={tags}
+              suggestions={allTags}
+              onChange={setTags}
+              placeholder={t("targets.addTag")}
+            />
+
             {/* Aliases */}
             <Label className="mt-4 mb-2">{t("targets.aliases")}</Label>
             <View className="flex-row flex-wrap gap-1 mb-2">
@@ -239,7 +311,7 @@ export function EditTargetSheet({
             {/* Actions */}
             <View className="flex-row justify-between">
               <Button variant="outline" onPress={handleDelete}>
-                <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                <Ionicons name="trash-outline" size={14} color={dangerColor} />
                 <Button.Label className="text-red-500">{t("targets.deleteTarget")}</Button.Label>
               </Button>
               <View className="flex-row gap-2">
