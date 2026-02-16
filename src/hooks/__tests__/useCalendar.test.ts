@@ -45,6 +45,15 @@ jest.mock("../../lib/calendar", () => ({
   createEventViaSystemUI: jest.fn(),
 }));
 
+jest.mock("../../lib/logger", () => ({
+  Logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
+
 const calendarApi = jest.requireMock("../../lib/calendar") as {
   isCalendarAvailable: jest.Mock;
   requestCalendarPermission: jest.Mock;

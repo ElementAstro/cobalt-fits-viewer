@@ -67,8 +67,7 @@ jest.mock("heroui-native", () => {
   const { View, Text, TextInput } = require("react-native");
   const React = require("react");
 
-  const c = (testID) => (props) =>
-    React.createElement(View, { testID, ...props }, props.children);
+  const c = (testID) => (props) => React.createElement(View, { testID, ...props }, props.children);
 
   const Button = c("button");
   Button.Label = (props) => React.createElement(Text, props, props.children);

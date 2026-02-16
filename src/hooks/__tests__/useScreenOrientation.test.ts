@@ -2,7 +2,7 @@
  * Unit tests for useScreenOrientation hook
  */
 
-import { renderHook, act } from "@testing-library/react-native";
+import { renderHook, act, waitFor } from "@testing-library/react-native";
 import * as ScreenOrientation from "expo-screen-orientation";
 import { useScreenOrientation } from "../useScreenOrientation";
 
@@ -10,6 +10,14 @@ import { useScreenOrientation } from "../useScreenOrientation";
 let orientationChangeCallback:
   | ((event: { orientationInfo: { orientation: number } }) => void)
   | null = null;
+
+const waitForOrientationResolved = async (result: {
+  current: { orientation: ScreenOrientation.Orientation };
+}) => {
+  await waitFor(() => {
+    expect(result.current.orientation).not.toBe(ScreenOrientation.Orientation.UNKNOWN);
+  });
+};
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -31,29 +39,30 @@ describe("useScreenOrientation", () => {
     it("defaults to portrait mode", async () => {
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {
-        // Wait for getOrientationAsync to resolve
-      });
+      await waitForOrientationResolved(result);
 
       expect(result.current.isPortrait).toBe(true);
       expect(result.current.isLandscape).toBe(false);
     });
 
-    it("provides screen dimensions", () => {
+    it("provides screen dimensions", async () => {
       const { result } = renderHook(() => useScreenOrientation());
+      await waitForOrientationResolved(result);
 
       expect(result.current.screenWidth).toBeGreaterThan(0);
       expect(result.current.screenHeight).toBeGreaterThan(0);
     });
 
-    it("calls getOrientationAsync on mount", () => {
-      renderHook(() => useScreenOrientation());
+    it("calls getOrientationAsync on mount", async () => {
+      const { result } = renderHook(() => useScreenOrientation());
       expect(ScreenOrientation.getOrientationAsync).toHaveBeenCalledTimes(1);
+      await waitForOrientationResolved(result);
     });
 
-    it("registers an orientation change listener", () => {
-      renderHook(() => useScreenOrientation());
+    it("registers an orientation change listener", async () => {
+      const { result } = renderHook(() => useScreenOrientation());
       expect(ScreenOrientation.addOrientationChangeListener).toHaveBeenCalledTimes(1);
+      await waitForOrientationResolved(result);
     });
   });
 
@@ -66,7 +75,7 @@ describe("useScreenOrientation", () => {
       );
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       expect(result.current.isLandscape).toBe(true);
       expect(result.current.isPortrait).toBe(false);
@@ -78,7 +87,7 @@ describe("useScreenOrientation", () => {
       );
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       expect(result.current.isLandscape).toBe(true);
       expect(result.current.isPortrait).toBe(false);
@@ -87,7 +96,7 @@ describe("useScreenOrientation", () => {
     it("detects PORTRAIT_UP as portrait", async () => {
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       expect(result.current.isPortrait).toBe(true);
       expect(result.current.isLandscape).toBe(false);
@@ -99,7 +108,7 @@ describe("useScreenOrientation", () => {
       );
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       expect(result.current.isPortrait).toBe(true);
       expect(result.current.isLandscape).toBe(false);
@@ -112,7 +121,7 @@ describe("useScreenOrientation", () => {
     it("updates when orientation changes to landscape", async () => {
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       expect(result.current.isPortrait).toBe(true);
 
@@ -134,7 +143,7 @@ describe("useScreenOrientation", () => {
 
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       expect(result.current.isLandscape).toBe(true);
 
@@ -217,7 +226,7 @@ describe("useScreenOrientation", () => {
     it("exposes the raw orientation value", async () => {
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       expect(result.current.orientation).toBe(ScreenOrientation.Orientation.PORTRAIT_UP);
     });
@@ -225,7 +234,7 @@ describe("useScreenOrientation", () => {
     it("updates raw orientation on change", async () => {
       const { result } = renderHook(() => useScreenOrientation());
 
-      await act(async () => {});
+      await waitForOrientationResolved(result);
 
       act(() => {
         orientationChangeCallback?.({
