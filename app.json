@@ -4,7 +4,11 @@
     "userInterfaceStyle": "automatic",
     "orientation": "default",
     "ios": {
-      "requireFullScreen": true
+      "requireFullScreen": true,
+      "bundleIdentifier": "com.maxqian888sorganization.cobaltfitsviewer",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "web": {
       "output": "single"
@@ -54,7 +58,7 @@
       ]
     ],
     "name": "Cobalt FITS Viewer",
-    "slug": "cobalt-fits-viewer",
+    "slug": "cobaltfitsviewer",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -62,6 +66,21 @@
       "enabled": true,
       "checkAutomatically": "ON_ERROR_RECOVERY",
       "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "3a7b4b23-52bb-4c67-9a64-b5a92de6d2d8"
+      }
+    },
+    "owner": "maxqian888s-organization",
+    "android": {
+      "package": "com.maxqian888sorganization.cobaltfitsviewer",
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CALENDAR",
+        "android.permission.WRITE_CALENDAR"
+      ]
     }
   }
 }

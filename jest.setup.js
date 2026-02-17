@@ -37,8 +37,27 @@ jest.mock("expo-localization", () => ({
   getCalendars: () => [{ calendar: "gregory", timeZone: "UTC" }],
 }));
 
+// Mock expo-auth-session
+jest.mock("expo-auth-session", () => ({
+  makeRedirectUri: jest.fn(() => "cobalt://redirect"),
+  dismiss: jest.fn(),
+  startAsync: jest.fn().mockResolvedValue({ type: "dismiss" }),
+}));
+
+// Mock expo-secure-store
+jest.mock("expo-secure-store", () => ({
+  setItemAsync: jest.fn().mockResolvedValue(undefined),
+  getItemAsync: jest.fn().mockResolvedValue(null),
+  deleteItemAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
 // Mock expo-router
 jest.mock("expo-router", () => ({
+  Redirect: ({ href }) => {
+    const React = require("react");
+    const { Text } = require("react-native");
+    return React.createElement(Text, { testID: "redirect" }, String(href));
+  },
   useRouter: () => ({
     push: jest.fn(),
     replace: jest.fn(),
@@ -49,6 +68,9 @@ jest.mock("expo-router", () => ({
   useSegments: () => [],
   Stack: {
     Screen: "Stack.Screen",
+  },
+  Tabs: {
+    Screen: "Tabs.Screen",
   },
   Link: "Link",
 }));
@@ -148,6 +170,43 @@ jest.mock("expo-screen-orientation", () => ({
   unlockAsync: jest.fn().mockResolvedValue(undefined),
   addOrientationChangeListener: jest.fn().mockReturnValue({ remove: jest.fn() }),
   removeOrientationChangeListener: jest.fn(),
+}));
+
+// Mock uniwind
+jest.mock("uniwind", () => ({
+  useUniwind: () => ({ theme: "light" }),
+  Uniwind: {
+    setTheme: jest.fn(),
+    updateCSSVariables: jest.fn(),
+  },
+}));
+
+// Mock fitsjs-ng
+jest.mock("fitsjs-ng", () => ({
+  FITS: jest.fn(),
+  Image: class MockImage {},
+  BinaryTable: class MockBinaryTable {},
+  Table: class MockTable {},
+  CompressedImage: class MockCompressedImage {},
+}));
+
+// Mock @shopify/react-native-skia
+jest.mock("@shopify/react-native-skia", () => ({
+  Skia: {
+    Data: {
+      fromBytes: jest.fn(),
+    },
+    Image: {
+      MakeImage: jest.fn(),
+    },
+  },
+  AlphaType: {
+    Opaque: 0,
+    Premul: 1,
+  },
+  ColorType: {
+    RGBA_8888: 0,
+  },
 }));
 
 // Mock react-native-gesture-handler

@@ -4,6 +4,7 @@ import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useTargets } from "../../hooks/useTargets";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useGalleryStore } from "../../stores/useGalleryStore";
@@ -13,6 +14,13 @@ import { ObservationTimeline } from "../../components/targets/ObservationTimelin
 import { PlanObservationSheet } from "../../components/sessions/PlanObservationSheet";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { EmptyState } from "../../components/common/EmptyState";
+import { ImageRatingSheet } from "../../components/targets/ImageRatingSheet";
+import { BestImageSelector } from "../../components/targets/BestImageSelector";
+import {
+  EquipmentCard,
+  EquipmentRecommendations,
+} from "../../components/targets/EquipmentRecommendations";
+import { ChangeHistorySheet } from "../../components/targets/ChangeHistorySheet";
 import { formatCoordinates } from "../../lib/targets/coordinates";
 import { getTargetIcon } from "../../lib/targets/targetIcons";
 import { shareTarget } from "../../lib/targets/targetExport";
@@ -32,21 +40,33 @@ export default function TargetDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [_successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const { contentPaddingTop, horizontalPadding, isLandscapeTablet } = useResponsiveLayout();
 
   const {
     targets,
     getTargetStats,
     updateTarget,
-    removeTarget,
+    removeTargetCascade,
+    renameTargetCascade,
     setStatus,
     toggleFavorite,
     togglePinned,
+    rateImage,
+    clearImageRating,
+    setBestImage,
+    updateEquipment,
+    allCategories,
+    allTags,
   } = useTargets();
   const target = targets.find((tgt) => tgt.id === id);
   const files = useFitsStore((s) => s.files);
   const setFilterTargetId = useGalleryStore((s) => s.setFilterTargetId);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
+  const [showRatingSheet, setShowRatingSheet] = useState(false);
+  const [showBestSelector, setShowBestSelector] = useState(false);
+  const [showEquipmentSheet, setShowEquipmentSheet] = useState(false);
+  const [showHistorySheet, setShowHistorySheet] = useState(false);
 
   if (!target) {
     return (
@@ -78,110 +98,162 @@ export default function TargetDetailScreen() {
   };
 
   const handleSave = (updates: Partial<Target>) => {
-    updateTarget(target.id, updates);
+    const { name, ...rest } = updates;
+    if (typeof name === "string" && name.trim() && name.trim() !== target.name) {
+      renameTargetCascade(target.id, name.trim());
+    }
+    if (Object.keys(rest).length > 0) {
+      updateTarget(target.id, rest);
+    }
     setShowEditSheet(false);
   };
 
   const handleDelete = () => {
-    removeTarget(target.id);
+    removeTargetCascade(target.id);
     setShowEditSheet(false);
     router.back();
   };
 
   return (
     <>
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="px-4 py-14">
-        {/* Top Bar */}
-        <View className="flex-row items-center gap-3 mb-4">
-          <Button size="sm" variant="outline" onPress={() => router.back()}>
-            <Ionicons name="arrow-back" size={16} color={mutedColor} />
-          </Button>
-          <View className="flex-1">
-            <View className="flex-row items-center gap-2">
-              <Ionicons
-                name={getTargetIcon(target.type).name as keyof typeof Ionicons.glyphMap}
-                size={18}
-                color={getTargetIcon(target.type).color}
-              />
-              <Text className="text-lg font-bold text-foreground">{target.name}</Text>
-            </View>
-            {target.aliases.length > 0 && (
-              <Text className="text-[10px] text-muted ml-6">{target.aliases.join(", ")}</Text>
-            )}
-          </View>
-          <Chip size="sm" variant="secondary">
-            <Chip.Label className="text-[9px]">
-              {t(
-                `targets.types.${target.type}` as
-                  | "targets.types.galaxy"
-                  | "targets.types.nebula"
-                  | "targets.types.cluster"
-                  | "targets.types.planet"
-                  | "targets.types.moon"
-                  | "targets.types.sun"
-                  | "targets.types.comet"
-                  | "targets.types.other",
+      <ScrollView
+        className="flex-1 bg-background"
+        contentContainerStyle={{
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
+          paddingBottom: 24,
+        }}
+      >
+        <View className="mb-4 gap-3">
+          <View className="flex-row items-center gap-3">
+            <Button size="sm" isIconOnly variant="outline" onPress={() => router.back()}>
+              <Ionicons name="arrow-back" size={16} color={mutedColor} />
+            </Button>
+            <View className="min-w-0 flex-1">
+              <View className="flex-row items-center gap-2">
+                <Ionicons
+                  name={getTargetIcon(target.type).name as keyof typeof Ionicons.glyphMap}
+                  size={18}
+                  color={getTargetIcon(target.type).color}
+                />
+                <Text className="flex-1 text-lg font-bold text-foreground" numberOfLines={1}>
+                  {target.name}
+                </Text>
+              </View>
+              {target.aliases.length > 0 && (
+                <Text className="text-[10px] text-muted ml-6" numberOfLines={1}>
+                  {target.aliases.join(", ")}
+                </Text>
               )}
-            </Chip.Label>
-          </Chip>
-          <Button size="sm" variant="outline" onPress={() => setShowPlanSheet(true)}>
-            <Ionicons name="calendar-outline" size={16} color={mutedColor} />
+            </View>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View className="flex-row items-center gap-2 pr-1">
+              <Chip size="sm" variant="secondary">
+                <Chip.Label className="text-[9px]">
+                  {t(
+                    `targets.types.${target.type}` as
+                      | "targets.types.galaxy"
+                      | "targets.types.nebula"
+                      | "targets.types.cluster"
+                      | "targets.types.planet"
+                      | "targets.types.moon"
+                      | "targets.types.sun"
+                      | "targets.types.comet"
+                      | "targets.types.other",
+                  )}
+                </Chip.Label>
+              </Chip>
+              <Button size="sm" isIconOnly variant="outline" onPress={() => setShowPlanSheet(true)}>
+                <Ionicons name="calendar-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => toggleFavorite(target.id)}
+              >
+                <Ionicons
+                  name={target.isFavorite ? "heart" : "heart-outline"}
+                  size={16}
+                  color={target.isFavorite ? "#ef4444" : mutedColor}
+                />
+              </Button>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => togglePinned(target.id)}
+              >
+                <Ionicons
+                  name={target.isPinned ? "pin" : "pin-outline"}
+                  size={16}
+                  color={target.isPinned ? "#f59e0b" : mutedColor}
+                />
+              </Button>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => {
+                  const filterBreakdown = calculateTargetExposure(target, files);
+                  shareTarget(target, {
+                    frameCount: targetFiles.length,
+                    totalExposure: totalExposure,
+                    filterBreakdown,
+                  });
+                }}
+              >
+                <Ionicons name="share-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button size="sm" isIconOnly variant="outline" onPress={() => setShowEditSheet(true)}>
+                <Ionicons name="create-outline" size={16} color={mutedColor} />
+              </Button>
+            </View>
+          </ScrollView>
+        </View>
+
+        <View className="flex-row flex-wrap gap-2 mb-4">
+          <Button size="sm" variant="outline" onPress={() => setShowRatingSheet(true)}>
+            <Ionicons name="star-outline" size={14} color={mutedColor} />
+            <Button.Label className="text-[10px]">{t("targets.ratings.title")}</Button.Label>
           </Button>
-          <Button size="sm" variant="outline" onPress={() => toggleFavorite(target.id)}>
-            <Ionicons
-              name={target.isFavorite ? "heart" : "heart-outline"}
-              size={16}
-              color={target.isFavorite ? "#ef4444" : mutedColor}
-            />
+          <Button size="sm" variant="outline" onPress={() => setShowBestSelector(true)}>
+            <Ionicons name="images-outline" size={14} color={mutedColor} />
+            <Button.Label className="text-[10px]">{t("targets.ratings.selectBest")}</Button.Label>
           </Button>
-          <Button size="sm" variant="outline" onPress={() => togglePinned(target.id)}>
-            <Ionicons
-              name={target.isPinned ? "pin" : "pin-outline"}
-              size={16}
-              color={target.isPinned ? "#f59e0b" : mutedColor}
-            />
+          <Button size="sm" variant="outline" onPress={() => setShowEquipmentSheet(true)}>
+            <Ionicons name="construct-outline" size={14} color={mutedColor} />
+            <Button.Label className="text-[10px]">{t("targets.equipment.title")}</Button.Label>
           </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onPress={() => {
-              const filterBreakdown = calculateTargetExposure(target, files);
-              shareTarget(target, {
-                frameCount: targetFiles.length,
-                totalExposure: totalExposure,
-                filterBreakdown,
-              });
-            }}
-          >
-            <Ionicons name="share-outline" size={16} color={mutedColor} />
-          </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowEditSheet(true)}>
-            <Ionicons name="create-outline" size={16} color={mutedColor} />
+          <Button size="sm" variant="outline" onPress={() => setShowHistorySheet(true)}>
+            <Ionicons name="time-outline" size={14} color={mutedColor} />
+            <Button.Label className="text-[10px]">{t("targets.changeLog.title")}</Button.Label>
           </Button>
         </View>
 
-        {/* Quick Status Switch */}
         <View className="flex-row gap-1.5 mb-4">
-          {STATUS_FLOW.map((s) => (
+          {STATUS_FLOW.map((status) => (
             <Button
-              key={s}
-              variant={target.status === s ? "secondary" : "ghost"}
+              key={status}
+              variant={target.status === status ? "secondary" : "ghost"}
               className={`flex-1 items-center rounded-lg py-2 ${
-                target.status === s ? "bg-primary/15" : "bg-surface-secondary"
+                target.status === status ? "bg-primary/15" : "bg-surface-secondary"
               }`}
-              onPress={() => setStatus(target.id, s)}
+              onPress={() => setStatus(target.id, status)}
             >
               <View
                 className="h-2 w-2 rounded-full mb-1"
-                style={{ backgroundColor: STATUS_COLORS[s] }}
+                style={{ backgroundColor: STATUS_COLORS[status] }}
               />
               <Button.Label
                 className={`text-[9px] ${
-                  target.status === s ? "font-bold text-primary" : "text-muted"
+                  target.status === status ? "font-bold text-primary" : "text-muted"
                 }`}
               >
                 {t(
-                  `targets.${s}` as
+                  `targets.${status}` as
                     | "targets.planned"
                     | "targets.acquiring"
                     | "targets.completed"
@@ -194,7 +266,6 @@ export default function TargetDetailScreen() {
 
         <Separator className="mb-4" />
 
-        {/* Stats Row */}
         <View className="flex-row gap-2 mb-4">
           <Card variant="secondary" className="flex-1">
             <Card.Body className="items-center p-3">
@@ -220,7 +291,6 @@ export default function TargetDetailScreen() {
           </Card>
         </View>
 
-        {/* Coordinates */}
         {(target.ra !== undefined || target.dec !== undefined) && (
           <View className="mb-4 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
             <Ionicons name="navigate-outline" size={14} color={mutedColor} />
@@ -230,23 +300,34 @@ export default function TargetDetailScreen() {
           </View>
         )}
 
-        {/* Category & Tags */}
         {(target.category || target.tags.length > 0) && (
           <View className="mb-4">
             {target.category && (
-              <View className="mb-2 flex-row items-center gap-2">
-                <Ionicons name="folder-outline" size={12} color={mutedColor} />
-                <Text className="text-xs text-muted">{t("targets.category")}</Text>
-                <Chip size="sm" variant="secondary">
-                  <Chip.Label className="text-[9px]">{target.category}</Chip.Label>
-                </Chip>
+              <View className="mb-2 flex-row items-start gap-2">
+                <Ionicons
+                  name="folder-outline"
+                  size={12}
+                  color={mutedColor}
+                  style={{ marginTop: 2 }}
+                />
+                <Text className="w-12 text-xs text-muted">{t("targets.category")}</Text>
+                <View className="flex-1 flex-row flex-wrap gap-1">
+                  <Chip size="sm" variant="secondary">
+                    <Chip.Label className="text-[9px]">{target.category}</Chip.Label>
+                  </Chip>
+                </View>
               </View>
             )}
             {target.tags.length > 0 && (
-              <View className="flex-row items-center gap-2">
-                <Ionicons name="pricetag-outline" size={12} color={mutedColor} />
-                <Text className="text-xs text-muted">{t("targets.tags")}</Text>
-                <View className="flex-row flex-wrap gap-1">
+              <View className="flex-row items-start gap-2">
+                <Ionicons
+                  name="pricetag-outline"
+                  size={12}
+                  color={mutedColor}
+                  style={{ marginTop: 2 }}
+                />
+                <Text className="w-12 text-xs text-muted">{t("targets.tags")}</Text>
+                <View className="flex-1 flex-row flex-wrap gap-1">
                   {target.tags.map((tag) => (
                     <Chip key={tag} size="sm" variant="secondary">
                       <Chip.Label className="text-[9px]">{tag}</Chip.Label>
@@ -258,46 +339,11 @@ export default function TargetDetailScreen() {
           </View>
         )}
 
-        {/* Recommended Equipment */}
-        {target.recommendedEquipment && (
-          <View className="mb-4">
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("targets.equipment.title")}
-            </Text>
-            <View className="rounded-lg bg-surface-secondary p-3">
-              {target.recommendedEquipment.telescope && (
-                <View className="mb-1.5 flex-row items-center gap-2">
-                  <Ionicons name="telescope-outline" size={12} color={mutedColor} />
-                  <Text className="text-xs text-foreground">
-                    {target.recommendedEquipment.telescope}
-                  </Text>
-                </View>
-              )}
-              {target.recommendedEquipment.camera && (
-                <View className="mb-1.5 flex-row items-center gap-2">
-                  <Ionicons name="camera-outline" size={12} color={mutedColor} />
-                  <Text className="text-xs text-foreground">
-                    {target.recommendedEquipment.camera}
-                  </Text>
-                </View>
-              )}
-              {target.recommendedEquipment.filters &&
-                target.recommendedEquipment.filters.length > 0 && (
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons name="filter-outline" size={12} color={mutedColor} />
-                    <Text className="text-xs text-foreground">
-                      {target.recommendedEquipment.filters.join(", ")}
-                    </Text>
-                  </View>
-                )}
-              {target.recommendedEquipment.notes && (
-                <Text className="text-xs text-muted mt-2">{target.recommendedEquipment.notes}</Text>
-              )}
-            </View>
-          </View>
-        )}
+        <EquipmentCard
+          equipment={target.recommendedEquipment}
+          onEdit={() => setShowEquipmentSheet(true)}
+        />
 
-        {/* Exposure Progress */}
         {filterProgressData.length > 0 && (
           <View className="mb-4">
             <ExposureProgress
@@ -309,7 +355,6 @@ export default function TargetDetailScreen() {
 
         <Separator className="my-4" />
 
-        {/* Observation Timeline */}
         {targetFiles.length > 0 && (
           <View className="mb-4">
             <ObservationTimeline files={targetFiles} />
@@ -318,7 +363,6 @@ export default function TargetDetailScreen() {
 
         <Separator className="my-4" />
 
-        {/* Image Grid */}
         <View className="mb-3 flex-row items-center justify-between">
           <Text className="text-xs font-semibold uppercase text-muted">
             {t("gallery.allImages")} ({targetFiles.length})
@@ -347,15 +391,18 @@ export default function TargetDetailScreen() {
                 <Ionicons name="star" size={12} color="#f59e0b" />
                 <Text className="text-xs text-foreground">{t("targets.ratings.bestImage")}</Text>
                 <Text className="text-xs text-muted">
-                  ({targetFiles.find((f) => f.id === target.bestImageId)?.filename})
+                  ({targetFiles.find((file) => file.id === target.bestImageId)?.filename})
                 </Text>
               </View>
             )}
-            <ThumbnailGrid files={targetFiles} columns={3} onPress={handleFilePress} />
+            <ThumbnailGrid
+              files={targetFiles}
+              columns={isLandscapeTablet ? 4 : 3}
+              onPress={handleFilePress}
+            />
           </>
         )}
 
-        {/* Notes */}
         {target.notes && (
           <>
             <Separator className="my-4" />
@@ -365,49 +412,71 @@ export default function TargetDetailScreen() {
             <Text className="text-sm text-foreground">{target.notes}</Text>
           </>
         )}
-
-        {/* Change History */}
-        {target.changeLog.length > 0 && (
-          <>
-            <Separator className="my-4" />
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("targets.changeLog.title")}
-            </Text>
-            <View className="space-y-2">
-              {target.changeLog
-                .slice(-5)
-                .reverse()
-                .map((entry) => (
-                  <View key={entry.id} className="flex-row items-start gap-2">
-                    <Text className="text-[10px] text-muted">
-                      {new Date(entry.timestamp).toLocaleDateString()}
-                    </Text>
-                    <View className="flex-1">
-                      <Text className="text-xs text-foreground">
-                        {t(`targets.changeLog.${entry.action}`)}
-                        {entry.field && (
-                          <Text className="text-xs text-muted"> ({entry.field})</Text>
-                        )}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-            </View>
-          </>
-        )}
       </ScrollView>
 
       <EditTargetSheet
         visible={showEditSheet}
         target={target}
+        allCategories={allCategories}
+        allTags={allTags}
         onClose={() => setShowEditSheet(false)}
         onSave={handleSave}
         onDelete={handleDelete}
       />
+
       <PlanObservationSheet
         visible={showPlanSheet}
         onClose={() => setShowPlanSheet(false)}
         initialTargetName={target.name}
+      />
+
+      <ImageRatingSheet
+        visible={showRatingSheet}
+        images={targetFiles}
+        imageRatings={target.imageRatings}
+        bestImageId={target.bestImageId}
+        onClose={() => setShowRatingSheet(false)}
+        onRate={(imageId, rating) => {
+          if (rating <= 0) {
+            clearImageRating(target.id, imageId);
+          } else {
+            rateImage(target.id, imageId, rating);
+          }
+        }}
+        onSetBest={(imageId) => {
+          setBestImage(target.id, imageId);
+        }}
+      />
+
+      <BestImageSelector
+        visible={showBestSelector}
+        images={targetFiles}
+        currentBestId={target.bestImageId}
+        imageRatings={target.imageRatings}
+        onClose={() => setShowBestSelector(false)}
+        onSelect={(imageId) => {
+          setBestImage(target.id, imageId || undefined);
+        }}
+        onRateImage={(imageId, rating) => {
+          if (rating <= 0) {
+            clearImageRating(target.id, imageId);
+          } else {
+            rateImage(target.id, imageId, rating);
+          }
+        }}
+      />
+
+      <EquipmentRecommendations
+        visible={showEquipmentSheet}
+        equipment={target.recommendedEquipment}
+        onClose={() => setShowEquipmentSheet(false)}
+        onSave={(equipment) => updateEquipment(target.id, equipment)}
+      />
+
+      <ChangeHistorySheet
+        visible={showHistorySheet}
+        target={target}
+        onClose={() => setShowHistorySheet(false)}
       />
     </>
   );

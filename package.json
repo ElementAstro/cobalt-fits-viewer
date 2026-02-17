@@ -11,7 +11,7 @@
     "@gorhom/bottom-sheet": "^5.2.8",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-google-signin/google-signin": "^14.0.1",
-    "@shopify/flash-list": "^2.2.2",
+    "@shopify/flash-list": "^2.0.2",
     "@shopify/react-native-skia": "2.2.12",
     "date-fns": "^4.1.0",
     "expo": "~54.0.22",
@@ -33,6 +33,7 @@
     "expo-image-picker": "~17.0.10",
     "expo-keep-awake": "~15.0.8",
     "expo-linear-gradient": "^15.0.8",
+    "expo-linking": "~8.0.11",
     "expo-location": "~19.0.8",
     "expo-maps": "~0.12.10",
     "expo-media-library": "~18.2.1",
@@ -107,9 +108,25 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "jest",
+    "test:app": "jest --runInBand src/app",
+    "test:app:coverage": "jest --runInBand --coverage --no-cache src/app",
+    "test:app:parity": "node scripts/test-app-parity.mjs",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
+    "skill:heroui:test": "node --test --experimental-test-isolation=none .windsurf/skills/heroui-native/scripts/__tests__/*.test.mjs",
+    "skill:heroui:validate": "node .windsurf/skills/heroui-native/scripts/validate_skill.mjs",
+    "skill:heroui:smoke": "node .windsurf/skills/heroui-native/scripts/list_components.mjs --format text && node .windsurf/skills/heroui-native/scripts/get_component_docs.mjs Button --format text && node .windsurf/skills/heroui-native/scripts/get_docs.mjs /docs/native/getting-started/theming --format text && node .windsurf/skills/heroui-native/scripts/get_theme.mjs --format text",
+    "skill:heroui:check": "pnpm run skill:heroui:validate && pnpm run skill:heroui:test",
     "typecheck": "tsc --noEmit",
     "prepare": "husky"
+  },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": [
+          "react-native-zip-archive"
+        ]
+      }
+    }
   }
 }

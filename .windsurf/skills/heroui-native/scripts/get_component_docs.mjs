@@ -1,157 +1,177 @@
 #!/usr/bin/env node
-/**
- * Get complete component documentation (MDX) for HeroUI Native components.
- *
- * Usage:
- *   node get_component_docs.mjs Button
- *   node get_component_docs.mjs Button Card TextField
- *
- * Output:
- *   MDX documentation including imports, usage, variants, props, examples
- */
 
-const API_BASE = process.env.HEROUI_NATIVE_API_BASE || "https://native-mcp-api.heroui.com";
+import { pathToFileURL } from "node:url";
+import { parseCommonArgs } from "./_core/args.mjs";
+import { createHttpClient } from "./_core/client.mjs";
+import { EXIT_CODE, SkillError, failureEnvelope, successEnvelope } from "./_core/errors.mjs";
+import { resolveWithFallback } from "./_core/fallback.mjs";
+import { toKebabCase } from "./_core/normalize.mjs";
+import { createRuntime, emitEnvelope, log, writeStderr, writeStdout } from "./_core/output.mjs";
+
 const FALLBACK_BASE = "https://v3.heroui.com";
-const APP_PARAM = "app=native-skills";
+const USAGE = [
+  "Usage: node get_component_docs.mjs <Component1> [Component2] ... [options]",
+  "",
+  "Options:",
+  "  --format <text|json>   Output format (default: text)",
+  "  --json                 Alias for --format json",
+  "  --timeout <ms>         Request timeout (default: 30000)",
+  "  --api-base <url>       Override API base URL",
+  "  --fallback <policy>    auto | never | only (default: auto)",
+  "  --verbose              Print debug logs to stderr",
+].join("\n");
 
-/**
- * Convert PascalCase to kebab-case.
- */
-function toKebabCase(name) {
-  return name
-    .replace(/([a-z])([A-Z])/g, "$1-$2")
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1-$2")
-    .toLowerCase();
+function shouldOutputJson(argv) {
+  if (argv.includes("--json")) return true;
+  if (argv.includes("--format=json")) return true;
+  const idx = argv.indexOf("--format");
+  return idx >= 0 && argv[idx + 1] === "json";
 }
 
-/**
- * Fetch data from HeroUI Native API with app parameter for analytics.
- */
-async function fetchApi(endpoint, method = "GET", body = null) {
-  const separator = endpoint.includes("?") ? "&" : "?";
-  const url = `${API_BASE}${endpoint}${separator}${APP_PARAM}`;
+function normalizeResult(result) {
+  return {
+    component: result.component,
+    content: result.content,
+    contentType: result.contentType ?? "mdx",
+    source: result.source ?? "api",
+    url: result.url,
+    error: result.error,
+    status: result.status,
+    statusText: result.statusText,
+  };
+}
 
-  try {
-    const options = {
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "HeroUI-Native-Skill/1.0",
-      },
-      method,
-      signal: AbortSignal.timeout(30000),
-    };
+async function fetchPrimary(client, components) {
+  const payload = await client.getJsonFromApi("/v1/components/docs", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ components }),
+  });
+  const results = (payload?.results ?? []).map(normalizeResult);
+  return { results };
+}
 
-    if (body) {
-      options.body = JSON.stringify(body);
+async function fetchFallback(client, components) {
+  const results = [];
+  for (const component of components) {
+    const slug = toKebabCase(component);
+    const url = `${FALLBACK_BASE}/docs/native/components/${slug}.mdx`;
+    try {
+      const content = await client.getText(url);
+      results.push(
+        normalizeResult({
+          component,
+          content,
+          source: "fallback",
+          url,
+          contentType: "mdx",
+        }),
+      );
+    } catch {
+      results.push(
+        normalizeResult({
+          component,
+          error: `Failed to fetch docs for ${component}`,
+          source: "fallback",
+          status: 404,
+          statusText: "Not Found",
+          url,
+        }),
+      );
     }
-
-    const response = await fetch(url, options);
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
   }
+  return { results };
 }
 
-/**
- * Fetch MDX directly from v3.heroui.com as fallback.
- */
-async function fetchFallback(component) {
-  const kebabName = toKebabCase(component);
-  const url = `${FALLBACK_BASE}/docs/native/components/${kebabName}.mdx`;
+function validateResults(data) {
+  return Array.isArray(data.results) && data.results.length > 0;
+}
 
+function hasErrors(results) {
+  return results.some((item) => !item.content);
+}
+
+export async function run(argv = process.argv.slice(2), runtime = createRuntime()) {
+  const jsonMode = shouldOutputJson(argv);
+  const startedAt = Date.now();
   try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "HeroUI-Native-Skill/1.0" },
-      signal: AbortSignal.timeout(30000),
+    const args = parseCommonArgs(argv, { usage: USAGE, minPositionals: 1 });
+    if (args.help) {
+      writeStderr(runtime, USAGE);
+      return EXIT_CODE.OK;
+    }
+
+    const components = args.positionals;
+    const client = createHttpClient({ apiBase: args.apiBase, timeoutMs: args.timeoutMs });
+
+    log(runtime, args, "debug", `Fetching Native docs for: ${components.join(", ")}`);
+    const resolved = await resolveWithFallback({
+      policy: args.fallback,
+      fetchPrimary: () => fetchPrimary(client, components),
+      fetchFallback: () => fetchFallback(client, components),
+      isPrimaryUsable: validateResults,
     });
 
-    if (!response.ok) {
-      return { component, error: `Failed to fetch docs for ${component}` };
-    }
+    const envelope = successEnvelope(resolved.data, {
+      source: resolved.source,
+      meta: {
+        requestedComponents: components,
+        fallbackUsed: resolved.usedFallback,
+        timingMs: Date.now() - startedAt,
+      },
+    });
 
-    const content = await response.text();
-
-    return {
-      component,
-      content,
-      contentType: "mdx",
-      source: "fallback",
-      url,
-    };
-  } catch {
-    return { component, error: `Failed to fetch docs for ${component}` };
-  }
-}
-
-/**
- * Main function to get component documentation.
- */
-async function main() {
-  const args = process.argv.slice(2);
-
-  if (args.length === 0) {
-    console.error("Usage: node get_component_docs.mjs <Component1> [Component2] ...");
-    console.error("Example: node get_component_docs.mjs Button Card");
-    process.exit(1);
-  }
-
-  const components = args;
-
-  // Try API first - use POST /v1/components/docs for batch requests
-  console.error(`# Fetching Native docs for: ${components.join(", ")}...`);
-  const data = await fetchApi("/v1/components/docs", "POST", { components });
-
-  if (data && data.results) {
-    // Output results
-    if (data.results.length === 1) {
-      // Single component - output content directly for easier reading
-      const result = data.results[0];
-
-      if (result.content) {
-        console.log(result.content);
-      } else if (result.error) {
-        console.error(`# Error for ${result.component}: ${result.error}`);
-        console.log(JSON.stringify(result, null, 2));
+    if (hasErrors(resolved.data.results)) {
+      const error = new SkillError(
+        "COMPONENT_DOCS_INCOMPLETE",
+        "One or more component docs failed to fetch",
+        { requestedComponents: components, results: resolved.data.results },
+      );
+      const fail = failureEnvelope(error, {
+        source: resolved.source,
+        data: resolved.data,
+        meta: {
+          ...envelope.meta,
+          timingMs: Date.now() - startedAt,
+        },
+      });
+      if (args.format === "json") {
+        emitEnvelope(runtime, args, fail);
+      } else if (resolved.data.results.length === 1) {
+        writeStdout(runtime, JSON.stringify(resolved.data.results[0], null, 2));
       } else {
-        console.log(JSON.stringify(result, null, 2));
+        writeStdout(runtime, JSON.stringify(resolved.data, null, 2));
       }
-    } else {
-      // Multiple components - output as JSON array
-      console.log(JSON.stringify(data, null, 2));
+      return EXIT_CODE.FAILURE;
     }
 
-    return;
-  }
-
-  // Fallback to individual component fetches
-  console.error("# API failed, using fallback...");
-  const results = [];
-
-  for (const component of components) {
-    const result = await fetchFallback(component);
-
-    results.push(result);
-  }
-
-  // Output results
-  if (results.length === 1) {
-    // Single component - output content directly for easier reading
-    const result = results[0];
-
-    if (result.content) {
-      console.log(result.content);
+    if (args.format === "json") {
+      emitEnvelope(runtime, args, envelope);
+    } else if (resolved.data.results.length === 1) {
+      writeStdout(runtime, resolved.data.results[0].content);
     } else {
-      console.log(JSON.stringify(result, null, 2));
+      writeStdout(runtime, JSON.stringify(resolved.data, null, 2));
     }
-  } else {
-    // Multiple components - output as JSON array
-    console.log(JSON.stringify(results, null, 2));
+
+    return EXIT_CODE.OK;
+  } catch (error) {
+    const envelope = failureEnvelope(error, {
+      source: "api",
+      meta: { timingMs: Date.now() - startedAt },
+    });
+    if (jsonMode) {
+      emitEnvelope(runtime, { format: "json" }, envelope);
+    } else {
+      writeStderr(runtime, `${envelope.error.code}: ${envelope.error.message}`);
+      if (envelope.error.detail?.usage) {
+        writeStderr(runtime, envelope.error.detail.usage);
+      }
+    }
+    return error instanceof SkillError ? error.exitCode : EXIT_CODE.FAILURE;
   }
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const code = await run();
+  process.exit(code);
+}

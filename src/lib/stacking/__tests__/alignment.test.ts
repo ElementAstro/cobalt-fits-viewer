@@ -1,0 +1,122 @@
+const mockDetectStars = jest.fn();
+
+jest.mock("../starDetection", () => ({
+  detectStars: (...args: unknown[]) => mockDetectStars(...args),
+}));
+
+import {
+  alignFrame,
+  applyTransform,
+  computeFullAlignment,
+  computeTranslation,
+  type AlignmentTransform,
+} from "../alignment";
+import type { DetectedStar } from "../starDetection";
+
+const star = (cx: number, cy: number, flux: number = 100): DetectedStar => ({
+  cx,
+  cy,
+  flux,
+  peak: flux,
+  area: 5,
+  fwhm: 2.5,
+});
+
+describe("stacking alignment", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("computes translation and handles insufficient stars", () => {
+    const insufficient = computeTranslation([star(1, 1)], [star(2, 2)]);
+    expect(insufficient.matrix).toEqual([1, 0, 0, 0, 1, 0]);
+    expect(insufficient.matchedStars).toBe(0);
+    expect(insufficient.rmsError).toBe(Infinity);
+
+    const ref = [star(10, 10), star(20, 10), star(15, 20), star(30, 30)];
+    const target = [star(13, 8), star(23, 8), star(18, 18), star(33, 28)];
+    const t = computeTranslation(ref, target, 10);
+    expect(t.matrix[2]).toBeCloseTo(3, 1);
+    expect(t.matrix[5]).toBeCloseTo(-2, 1);
+    expect(t.matchedStars).toBeGreaterThanOrEqual(3);
+  });
+
+  it("computes full alignment for matching star patterns", () => {
+    const ref = [star(10, 10), star(20, 10), star(15, 20), star(30, 30), star(40, 12)];
+    const target = [star(13, 8), star(23, 8), star(18, 18), star(33, 28), star(43, 10)];
+
+    const result = computeFullAlignment(ref, target, 0.05);
+    expect(result.matchedStars).toBeGreaterThanOrEqual(3);
+    expect(Number.isFinite(result.rmsError)).toBe(true);
+  });
+
+  it("returns identity full alignment when stars are insufficient", () => {
+    const result = computeFullAlignment([star(1, 1)], [star(2, 2)]);
+    expect(result.matrix).toEqual([1, 0, 0, 0, 1, 0]);
+    expect(result.rmsError).toBe(Infinity);
+  });
+
+  it("applies transform and falls back for singular matrix", () => {
+    const pixels = new Float32Array([
+      1,
+      2,
+      3, //
+      4,
+      5,
+      6, //
+      7,
+      8,
+      9,
+    ]);
+    const singular: AlignmentTransform = {
+      matrix: [1, 2, 0, 2, 4, 0], // determinant 0
+      matchedStars: 0,
+      rmsError: Infinity,
+    };
+    const unchanged = applyTransform(pixels, 3, 3, singular);
+    expect(Array.from(unchanged)).toEqual(Array.from(pixels));
+
+    const translated = applyTransform(pixels, 3, 3, {
+      matrix: [1, 0, 1, 0, 1, 0],
+      matchedStars: 4,
+      rmsError: 0.5,
+    });
+    expect(translated).toHaveLength(pixels.length);
+  });
+
+  it("aligns frame by mode and handles failed matching", () => {
+    const refPixels = new Float32Array(100).fill(1);
+    const targetPixels = new Float32Array(100).fill(2);
+
+    const none = alignFrame(refPixels, targetPixels, 10, 10, "none");
+    expect(none.aligned).toBe(targetPixels);
+    expect(none.transform.rmsError).toBe(0);
+
+    // translation failure path
+    mockDetectStars.mockReturnValueOnce([star(1, 1)]).mockReturnValueOnce([star(2, 2)]);
+    const failed = alignFrame(refPixels, targetPixels, 10, 10, "translation");
+    expect(failed.aligned).toBe(targetPixels);
+    expect(failed.transform.matchedStars).toBe(0);
+    expect(failed.transform.rmsError).toBe(Infinity);
+
+    // full alignment success path
+    mockDetectStars
+      .mockReturnValueOnce([
+        star(20, 20),
+        star(60, 20),
+        star(40, 70),
+        star(100, 120),
+        star(150, 80),
+      ])
+      .mockReturnValueOnce([
+        star(23, 18),
+        star(63, 18),
+        star(43, 68),
+        star(103, 118),
+        star(153, 78),
+      ]);
+    const success = alignFrame(refPixels, targetPixels, 200, 200, "full");
+    expect(success.transform.matchedStars).toBeGreaterThanOrEqual(3);
+    expect(success.aligned).toHaveLength(200 * 200);
+  });
+});

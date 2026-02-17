@@ -4,6 +4,7 @@ import { Button, Card, Chip, PressableFeedback, Separator, useThemeColor } from 
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import {
   useSessionById,
   useLogEntriesBySession,
@@ -24,6 +25,7 @@ export default function SessionDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const { contentPaddingTop, horizontalPadding, isLandscapeTablet } = useResponsiveLayout();
 
   const session = useSessionById(id);
   const logEntries = useLogEntriesBySession(id);
@@ -144,7 +146,14 @@ export default function SessionDetailScreen() {
 
   return (
     <>
-      <ScrollView className="flex-1 bg-background" contentContainerClassName="px-4 py-14">
+      <ScrollView
+        className="flex-1 bg-background"
+        contentContainerStyle={{
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
+          paddingBottom: 24,
+        }}
+      >
         {/* Top Bar */}
         <View className="flex-row items-center gap-3 mb-4">
           <Button size="sm" variant="outline" onPress={() => router.back()}>
@@ -461,7 +470,11 @@ export default function SessionDetailScreen() {
         {sessionFiles.length === 0 ? (
           <EmptyState icon="images-outline" title={t("gallery.noImages")} />
         ) : (
-          <ThumbnailGrid files={sessionFiles} columns={3} onPress={handleFilePress} />
+          <ThumbnailGrid
+            files={sessionFiles}
+            columns={isLandscapeTablet ? 4 : 3}
+            onPress={handleFilePress}
+          />
         )}
       </ScrollView>
 

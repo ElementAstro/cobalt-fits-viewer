@@ -2,7 +2,7 @@
  * 相簿导出面板
  */
 
-import { View, Text } from "react-native";
+import { Alert, View, Text } from "react-native";
 import { useState, useEffect, useCallback } from "react";
 import { BottomSheet, Button, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +13,7 @@ import {
   cleanupExport,
   type ExportProgress,
 } from "../../lib/gallery/albumExporter";
+import { Logger } from "../../lib/logger";
 import type { Album, FitsMetadata } from "../../lib/fits/types";
 
 interface AlbumExportSheetProps {
@@ -55,8 +56,8 @@ export function AlbumExportSheet({ visible, album, files, onClose }: AlbumExport
     if (exportPath) {
       const success = await shareAlbumExport(exportPath);
       if (!success) {
-        // Sharing not available
-        console.warn("Sharing not available");
+        Logger.warn("AlbumExportSheet", "Sharing not available");
+        Alert.alert(t("common.error"), t("share.notAvailable"));
       }
     }
   };

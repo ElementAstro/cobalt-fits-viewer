@@ -14,9 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import BottomSheet, { BottomSheetView } from "@gorhom/bottom-sheet";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useTrashStore } from "../../stores/useTrashStore";
+import { useFileGroupStore } from "../../stores/useFileGroupStore";
 import { useFileManager } from "../../hooks/useFileManager";
 import { useAlbums } from "../../hooks/useAlbums";
 import type { ImportResult } from "../../hooks/useFileManager";
@@ -24,6 +26,8 @@ import { FileListItem } from "../../components/gallery/FileListItem";
 import { AlbumPickerSheet } from "../../components/gallery/AlbumPickerSheet";
 import { BatchTagSheet } from "../../components/gallery/BatchTagSheet";
 import { BatchRenameSheet } from "../../components/gallery/BatchRenameSheet";
+import { TrashSheet } from "../../components/gallery/TrashSheet";
+import { FileGroupSheet } from "../../components/gallery/FileGroupSheet";
 import { EmptyState } from "../../components/common/EmptyState";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { QuickLookModal } from "../../components/common/QuickLookModal";
@@ -39,8 +43,9 @@ export default function FilesScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
-  const { height: screenHeight } = useWindowDimensions();
-  const { isLandscape } = useScreenOrientation();
+  const { height: screenHeight, width: screenWidth } = useWindowDimensions();
+  const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
+    useResponsiveLayout();
 
   const allFiles = useFitsStore((s) => s.files);
   const sortBy = useFitsStore((s) => s.sortBy);
@@ -66,6 +71,9 @@ export default function FilesScreen() {
   const thumbShowObject = useSettingsStore((s) => s.thumbnailShowObject);
   const thumbShowFilter = useSettingsStore((s) => s.thumbnailShowFilter);
   const thumbShowExposure = useSettingsStore((s) => s.thumbnailShowExposure);
+  const trashItems = useTrashStore((s) => s.items);
+  const fileGroups = useFileGroupStore((s) => s.groups);
+  const fileGroupMap = useFileGroupStore((s) => s.fileGroupMap);
 
   const { albums, addImagesToAlbum } = useAlbums();
 
@@ -79,8 +87,14 @@ export default function FilesScreen() {
     pickAndImportFolder,
     pickAndImportZip,
     importFromUrl,
+    importFromClipboard,
     cancelImport,
     handleDeleteFiles,
+    undoLastDelete,
+    restoreFromTrash,
+    emptyTrash,
+    exportFiles,
+    groupFiles,
   } = useFileManager();
 
   const bottomSheetRef = useRef<BottomSheet>(null);
@@ -90,12 +104,17 @@ export default function FilesScreen() {
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
   const [showBatchTag, setShowBatchTag] = useState(false);
   const [showBatchRename, setShowBatchRename] = useState(false);
+  const [showTrashSheet, setShowTrashSheet] = useState(false);
+  const [showGroupSheet, setShowGroupSheet] = useState(false);
+  const [pendingDeleteToken, setPendingDeleteToken] = useState<string | null>(null);
+  const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
 
   const [filterObject, setFilterObject] = useState("");
   const [filterFilter, setFilterFilter] = useState("");
   const [filterSourceFormat, setFilterSourceFormat] = useState("");
   const [filterFrameType, setFilterFrameType] = useState<FrameType | "">("");
   const [filterTag, setFilterTag] = useState("");
+  const [filterGroupId, setFilterGroupId] = useState("");
   const [favoriteOnly, setFavoriteOnly] = useState(false);
 
   const metadataIndex = useMemo(() => buildMetadataIndex(allFiles), [allFiles]);
@@ -107,6 +126,7 @@ export default function FilesScreen() {
       if (filterSourceFormat && file.sourceFormat !== filterSourceFormat) return false;
       if (filterFrameType && file.frameType !== filterFrameType) return false;
       if (filterTag && !file.tags.includes(filterTag)) return false;
+      if (filterGroupId && !(fileGroupMap[file.id] ?? []).includes(filterGroupId)) return false;
       if (favoriteOnly && !file.isFavorite) return false;
       return true;
     });
@@ -117,6 +137,8 @@ export default function FilesScreen() {
     filterSourceFormat,
     filterFrameType,
     filterTag,
+    filterGroupId,
+    fileGroupMap,
     favoriteOnly,
   ]);
 
@@ -131,16 +153,29 @@ export default function FilesScreen() {
   const activeFilterCount = useMemo(() => {
     return (
       [filterObject, filterFilter, filterSourceFormat, filterFrameType, filterTag].filter(Boolean)
-        .length + (favoriteOnly ? 1 : 0)
+        .length +
+      (filterGroupId ? 1 : 0) +
+      (favoriteOnly ? 1 : 0)
     );
-  }, [filterObject, filterFilter, filterSourceFormat, filterFrameType, filterTag, favoriteOnly]);
+  }, [
+    filterObject,
+    filterFilter,
+    filterSourceFormat,
+    filterFrameType,
+    filterTag,
+    filterGroupId,
+    favoriteOnly,
+  ]);
 
   const isGridStyle = fileListStyle === "grid";
   const listColumns = isGridStyle
-    ? isLandscape
-      ? Math.min(defaultGridColumns + 1, 5)
-      : defaultGridColumns
+    ? isLandscapeTablet
+      ? Math.min(defaultGridColumns + 2, 6)
+      : isLandscape
+        ? Math.min(defaultGridColumns + 1, 5)
+        : defaultGridColumns
     : 1;
+  const shouldStackTopActions = isSelectionMode || screenWidth < 420;
 
   const showImportResult = useCallback(
     (result: ImportResult) => {
@@ -180,10 +215,21 @@ export default function FilesScreen() {
             ? t("files.noSupportedInZip")
             : errorKey === "zipImportUnavailable"
               ? t("files.importZipUnavailable")
-              : importError;
+              : errorKey === "clipboardNoSupportedContent"
+                ? t("files.clipboardNoSupportedContent")
+                : importError;
       Alert.alert(t("files.importFailed"), message);
     }
   }, [importError, isImporting, t]);
+
+  useEffect(() => {
+    if (!pendingDeleteToken) return;
+    const timer = setTimeout(() => {
+      setPendingDeleteToken(null);
+      setPendingDeleteCount(0);
+    }, 6200);
+    return () => clearTimeout(timer);
+  }, [pendingDeleteToken]);
 
   const openImportSheet = useCallback(() => {
     bottomSheetRef.current?.expand();
@@ -218,6 +264,11 @@ export default function FilesScreen() {
     setShowUrlDialog(true);
   }, [closeImportSheet]);
 
+  const handleImportClipboard = useCallback(() => {
+    closeImportSheet();
+    importFromClipboard();
+  }, [closeImportSheet, importFromClipboard]);
+
   const confirmUrlImport = useCallback(() => {
     const url = urlInput.trim();
     if (!url) return;
@@ -238,32 +289,56 @@ export default function FilesScreen() {
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
-    Alert.alert(t("common.delete"), `${t("files.deleteConfirm")} (${selectedIds.length})`, [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("common.delete"),
-        style: "destructive",
-        onPress: () => {
-          handleDeleteFiles(selectedIds);
-          clearSelection();
+    Alert.alert(
+      t("files.moveToTrash"),
+      `${t("files.moveToTrashConfirm")} (${selectedIds.length})`,
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("files.moveToTrash"),
+          style: "destructive",
+          onPress: () => {
+            const result = handleDeleteFiles(selectedIds);
+            if (result.token) {
+              setPendingDeleteToken(result.token);
+              setPendingDeleteCount(result.success);
+            }
+            clearSelection();
+          },
         },
-      },
-    ]);
+      ],
+    );
   }, [selectedIds, t, handleDeleteFiles, clearSelection]);
 
   const handleSingleDelete = useCallback(
     (fileId: string) => {
-      Alert.alert(t("common.delete"), t("files.deleteConfirm"), [
+      Alert.alert(t("files.moveToTrash"), t("files.moveToTrashConfirm"), [
         { text: t("common.cancel"), style: "cancel" },
         {
-          text: t("common.delete"),
+          text: t("files.moveToTrash"),
           style: "destructive",
-          onPress: () => handleDeleteFiles([fileId]),
+          onPress: () => {
+            const result = handleDeleteFiles([fileId]);
+            if (result.token) {
+              setPendingDeleteToken(result.token);
+              setPendingDeleteCount(result.success);
+            }
+          },
         },
       ]);
     },
     [handleDeleteFiles, t],
   );
+
+  const handleUndoDelete = useCallback(() => {
+    if (!pendingDeleteToken) return;
+    const result = undoLastDelete(pendingDeleteToken);
+    setPendingDeleteToken(null);
+    setPendingDeleteCount(0);
+    if (!result.success) {
+      Alert.alert(t("common.error"), t("files.undoFailed"));
+    }
+  }, [pendingDeleteToken, t, undoLastDelete]);
 
   const handleSelectAllVisible = useCallback(() => {
     if (displayFiles.length === 0) return;
@@ -293,6 +368,70 @@ export default function FilesScreen() {
     }
   }, [allFiles, selectedIds, updateFile]);
 
+  const handleBatchExport = useCallback(async () => {
+    if (selectedIds.length === 0) return;
+    const result = await exportFiles(selectedIds);
+    if (result.success) {
+      Alert.alert(
+        t("common.success"),
+        t("files.exportSuccess").replace("{count}", String(result.exported)),
+      );
+      return;
+    }
+    Alert.alert(t("common.error"), t("files.exportFailed"));
+  }, [exportFiles, selectedIds, t]);
+
+  const handleGroupApply = useCallback(
+    (groupId: string) => {
+      const result = groupFiles(selectedIds, groupId);
+      if (result.success > 0) {
+        clearSelection();
+        setShowGroupSheet(false);
+      }
+    },
+    [groupFiles, selectedIds, clearSelection],
+  );
+
+  const handleRestoreTrash = useCallback(
+    (trashIds: string[]) => {
+      const result = restoreFromTrash(trashIds);
+      if (result.success > 0) {
+        Alert.alert(
+          t("common.success"),
+          t("files.restoreSuccess").replace("{count}", String(result.success)),
+        );
+      }
+      if (result.failed > 0) {
+        Alert.alert(t("common.error"), t("files.restoreFailed"));
+      }
+    },
+    [restoreFromTrash, t],
+  );
+
+  const handleEmptyTrash = useCallback(
+    (trashIds?: string[]) => {
+      const targetCount = trashIds?.length ?? trashItems.length;
+      if (targetCount === 0) return;
+      Alert.alert(t("files.emptyTrash"), t("files.emptyTrashConfirm"), [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("files.emptyTrash"),
+          style: "destructive",
+          onPress: () => {
+            const result = emptyTrash(trashIds);
+            if (result.deleted > 0) {
+              Alert.alert(
+                t("common.success"),
+                t("files.emptyTrashSuccess").replace("{count}", String(result.deleted)),
+              );
+            }
+          },
+        },
+      ]);
+    },
+    [emptyTrash, t, trashItems.length],
+  );
+
   const handleAddToAlbum = useCallback(
     (albumId: string) => {
       addImagesToAlbum(albumId, selectedIds);
@@ -317,6 +456,7 @@ export default function FilesScreen() {
     setFilterSourceFormat("");
     setFilterFrameType("");
     setFilterTag("");
+    setFilterGroupId("");
     setFavoriteOnly(false);
   }, []);
 
@@ -328,6 +468,8 @@ export default function FilesScreen() {
         return t("files.scanning");
       case "downloading":
         return t("files.downloading");
+      case "clipboard":
+        return t("files.clipboardImporting");
       default:
         return `${t("files.importing")}...`;
     }
@@ -435,44 +577,86 @@ export default function FilesScreen() {
           </View>
         </TextField>
 
-        <View className="flex-row gap-2">
-          <Button variant="primary" className="flex-1" onPress={openImportSheet}>
+        <View className="flex-row flex-wrap items-center gap-2">
+          <Button
+            variant="primary"
+            className={shouldStackTopActions ? "w-full" : "flex-1"}
+            onPress={openImportSheet}
+          >
             <Ionicons name="add-circle-outline" size={16} color="#fff" />
             <Button.Label>{t("files.importOptions")}</Button.Label>
           </Button>
           {!isSelectionMode ? (
             <>
-              <Button variant="outline" onPress={() => setSelectionMode(true)}>
+              <Button size="sm" isIconOnly variant="outline" onPress={() => setSelectionMode(true)}>
                 <Ionicons name="checkmark-circle-outline" size={16} color={mutedColor} />
               </Button>
-              <Button variant="outline" onPress={() => router.push("/convert")}>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => router.push("/convert")}
+              >
                 <Ionicons name="swap-horizontal-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => setShowTrashSheet(true)}
+              >
+                <Ionicons
+                  name={trashItems.length > 0 ? "trash-bin" : "trash-bin-outline"}
+                  size={16}
+                  color={mutedColor}
+                />
               </Button>
             </>
           ) : (
             <>
-              <Button variant="outline" onPress={handleSelectAllVisible}>
+              <Button size="sm" isIconOnly variant="outline" onPress={handleSelectAllVisible}>
                 <Ionicons name="checkbox-outline" size={16} color={mutedColor} />
               </Button>
-              <Button variant="outline" onPress={handleInvertSelection}>
+              <Button size="sm" isIconOnly variant="outline" onPress={handleInvertSelection}>
                 <Ionicons name="shuffle-outline" size={16} color={mutedColor} />
               </Button>
-              <Button variant="outline" onPress={handleBatchFavorite}>
+              <Button size="sm" isIconOnly variant="outline" onPress={handleBatchFavorite}>
                 <Ionicons name="heart-outline" size={16} color={mutedColor} />
               </Button>
-              <Button variant="outline" onPress={() => setShowAlbumPicker(true)}>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => setShowAlbumPicker(true)}
+              >
                 <Ionicons name="albums-outline" size={16} color={mutedColor} />
               </Button>
-              <Button variant="outline" onPress={() => setShowBatchTag(true)}>
+              <Button size="sm" isIconOnly variant="outline" onPress={() => setShowBatchTag(true)}>
                 <Ionicons name="pricetag-outline" size={16} color={mutedColor} />
               </Button>
-              <Button variant="outline" onPress={() => setShowBatchRename(true)}>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => setShowBatchRename(true)}
+              >
                 <Ionicons name="text-outline" size={16} color={mutedColor} />
               </Button>
-              <Button variant="outline" onPress={handleBatchDelete}>
+              <Button
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => setShowGroupSheet(true)}
+              >
+                <Ionicons name="folder-open-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button size="sm" isIconOnly variant="outline" onPress={handleBatchExport}>
+                <Ionicons name="share-social-outline" size={16} color={mutedColor} />
+              </Button>
+              <Button size="sm" isIconOnly variant="outline" onPress={handleBatchDelete}>
                 <Ionicons name="trash-outline" size={16} color="#ef4444" />
               </Button>
-              <Button variant="outline" onPress={clearSelection}>
+              <Button size="sm" isIconOnly variant="outline" onPress={clearSelection}>
                 <Ionicons name="close-outline" size={16} color={mutedColor} />
               </Button>
             </>
@@ -484,10 +668,16 @@ export default function FilesScreen() {
             <Text className="text-xs text-muted">
               {selectedIds.length} {t("common.selected")}
             </Text>
-            <Button size="sm" variant="ghost" onPress={goToBatchConvert}>
-              <Ionicons name="swap-horizontal-outline" size={14} color={mutedColor} />
-              <Button.Label>{t("converter.batchConvert")}</Button.Label>
-            </Button>
+            <View className="flex-row items-center gap-2">
+              <Button size="sm" variant="ghost" onPress={handleBatchExport}>
+                <Ionicons name="share-social-outline" size={14} color={mutedColor} />
+                <Button.Label>{t("files.exportSelected")}</Button.Label>
+              </Button>
+              <Button size="sm" variant="ghost" onPress={goToBatchConvert}>
+                <Ionicons name="swap-horizontal-outline" size={14} color={mutedColor} />
+                <Button.Label>{t("converter.batchConvert")}</Button.Label>
+              </Button>
+            </View>
           </View>
         )}
 
@@ -565,6 +755,16 @@ export default function FilesScreen() {
                 <Chip.Label className="text-xs">{fmt.toUpperCase()}</Chip.Label>
               </Chip>
             ))}
+            {fileGroups.map((group) => (
+              <Chip
+                key={`group-${group.id}`}
+                size="sm"
+                variant={filterGroupId === group.id ? "primary" : "secondary"}
+                onPress={() => setFilterGroupId((prev) => (prev === group.id ? "" : group.id))}
+              >
+                <Chip.Label className="text-xs">{group.name}</Chip.Label>
+              </Chip>
+            ))}
           </View>
         </ScrollView>
 
@@ -626,28 +826,36 @@ export default function FilesScreen() {
       searchQuery,
       setSearchQuery,
       openImportSheet,
+      shouldStackTopActions,
       isSelectionMode,
       setSelectionMode,
       router,
+      setShowTrashSheet,
       handleSelectAllVisible,
       handleInvertSelection,
       handleBatchFavorite,
+      setShowGroupSheet,
+      handleBatchExport,
       goToBatchConvert,
       handleBatchDelete,
       clearSelection,
       selectedIds.length,
+      trashItems.length,
       sortBy,
       sortOrder,
       handleSortToggle,
       fileListStyle,
       setFileListStyle,
       favoriteOnly,
+      fileGroups,
       metadataIndex,
       filterObject,
       filterFilter,
       filterSourceFormat,
       filterFrameType,
       filterTag,
+      filterGroupId,
+      setFilterGroupId,
       activeFilterCount,
       clearLocalFilters,
     ],
@@ -666,7 +874,10 @@ export default function FilesScreen() {
       />
 
       {displayFiles.length === 0 && !searchQuery && activeFilterCount === 0 ? (
-        <View className={`flex-1 px-4 ${isLandscape ? "pt-2" : "pt-14"}`}>
+        <View
+          className="flex-1"
+          style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
+        >
           {ListHeader}
           <EmptyState
             icon="telescope-outline"
@@ -687,10 +898,27 @@ export default function FilesScreen() {
           ListEmptyComponent={
             <EmptyState icon="search-outline" title={t("files.noSupportedFound")} />
           }
-          contentContainerClassName={`px-4 ${isLandscape ? "py-2" : "py-14"}`}
+          contentContainerStyle={{
+            paddingHorizontal: horizontalPadding,
+            paddingTop: isLandscape ? 8 : contentPaddingTop,
+            paddingBottom: 24,
+          }}
           ItemSeparatorComponent={isGridStyle ? undefined : ListItemSeparator}
           showsVerticalScrollIndicator={false}
         />
+      )}
+
+      {pendingDeleteToken && (
+        <View className="absolute bottom-6 left-4 right-4 rounded-xl bg-surface-secondary px-3 py-2 border border-separator">
+          <View className="flex-row items-center justify-between gap-2">
+            <Text className="text-xs text-muted flex-1">
+              {t("files.undoDeleteHint").replace("{count}", String(pendingDeleteCount))}
+            </Text>
+            <Button size="sm" variant="ghost" onPress={handleUndoDelete}>
+              <Button.Label>{t("common.undo")}</Button.Label>
+            </Button>
+          </View>
+        </View>
       )}
 
       <BottomSheet
@@ -775,6 +1003,22 @@ export default function FilesScreen() {
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
             </PressableFeedback>
+
+            <PressableFeedback
+              onPress={handleImportClipboard}
+              className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
+                <Ionicons name="clipboard-outline" size={20} color={successColor} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-foreground">
+                  {t("files.importFromClipboard")}
+                </Text>
+                <Text className="text-xs text-muted">{t("files.supportedFormatsShort")}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={mutedColor} />
+            </PressableFeedback>
           </View>
         </BottomSheetView>
       </BottomSheet>
@@ -823,6 +1067,19 @@ export default function FilesScreen() {
         visible={showBatchRename}
         selectedIds={selectedIds}
         onClose={() => setShowBatchRename(false)}
+      />
+      <TrashSheet
+        visible={showTrashSheet}
+        items={trashItems}
+        onClose={() => setShowTrashSheet(false)}
+        onRestore={handleRestoreTrash}
+        onDeleteForever={handleEmptyTrash}
+      />
+      <FileGroupSheet
+        visible={showGroupSheet}
+        selectedCount={selectedIds.length}
+        onClose={() => setShowGroupSheet(false)}
+        onApplyGroup={handleGroupApply}
       />
 
       <QuickLookModal

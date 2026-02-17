@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { calculateStats } from "../../lib/utils/pixelMath";
@@ -56,6 +57,7 @@ export default function StackingScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -231,7 +233,14 @@ export default function StackingScreen() {
         onCancel={stacking.cancel}
       />
 
-      <ScrollView className="flex-1" contentContainerClassName="px-4 py-14">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
+          paddingBottom: 24,
+        }}
+      >
         <View className="flex-row items-center gap-3 mb-4">
           <Button size="sm" variant="outline" onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={16} color={mutedColor} />

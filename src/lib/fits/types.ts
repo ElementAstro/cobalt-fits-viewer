@@ -52,6 +52,9 @@ export type ImageSourceFormat =
   | "webp"
   | "tiff"
   | "bmp"
+  | "gif"
+  | "heic"
+  | "avif"
   | "unknown";
 
 // ===== HDU 数据类型 =====
@@ -125,6 +128,25 @@ export interface FitsMetadata {
 
   // Viewer per-file preset
   viewerPreset?: ViewerPreset;
+}
+
+export interface TrashedFitsRecord {
+  trashId: string;
+  file: FitsMetadata;
+  originalFilepath: string;
+  trashedFilepath: string;
+  deletedAt: number;
+  expireAt: number;
+  groupIds: string[];
+  deleteReason?: "single" | "batch" | "cleanup";
+}
+
+export interface FileGroup {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: number;
+  updatedAt: number;
 }
 
 export interface ViewerPreset {

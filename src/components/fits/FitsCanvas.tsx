@@ -12,7 +12,7 @@ import {
   forwardRef,
   useState,
 } from "react";
-import { LayoutChangeEvent, View, Text } from "react-native";
+import { LayoutChangeEvent, Platform, View, Text } from "react-native";
 import {
   Canvas,
   Fill,
@@ -33,51 +33,40 @@ import Animated, {
   withSpring,
   withDecay,
   runOnJS,
-  clamp,
   FadeIn,
   FadeOut,
 } from "react-native-reanimated";
+import {
+  clampScale,
+  clampTranslation,
+  computeFitGeometry,
+  computeTranslateBounds,
+  remapPointBetweenSpaces,
+} from "../../lib/viewer/transform";
 
 // --- Constants ---
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 10;
 const DOUBLE_TAP_SCALE = 3;
 const RUBBER_BAND_FACTOR = 0.55;
+const WHEEL_ZOOM_SENSITIVITY = 0.0015;
 const SPRING_CONFIG = { damping: 20, stiffness: 250, mass: 0.5, overshootClamping: false };
 
 // --- Worklet helpers ---
-function getTranslateBounds(
+function zoomAroundFocalPoint(
+  focalPointX: number,
+  focalPointY: number,
   currentScale: number,
-  imgW: number,
-  imgH: number,
-  cw: number,
-  ch: number,
-): { maxX: number; maxY: number } {
-  "worklet";
-  const fs = Math.min(cw / imgW, ch / imgH);
-  const displayW = imgW * fs;
-  const displayH = imgH * fs;
-  const scaledW = displayW * currentScale;
-  const scaledH = displayH * currentScale;
-  const excessW = Math.max(0, scaledW - cw);
-  const excessH = Math.max(0, scaledH - ch);
-  return { maxX: excessW / 2, maxY: excessH / 2 };
-}
-
-function clampTranslation(
-  tx: number,
-  ty: number,
-  currentScale: number,
-  imgW: number,
-  imgH: number,
-  cw: number,
-  ch: number,
+  targetScale: number,
+  currentTranslateX: number,
+  currentTranslateY: number,
 ): { x: number; y: number } {
   "worklet";
-  const { maxX, maxY } = getTranslateBounds(currentScale, imgW, imgH, cw, ch);
+  const safeCurrentScale = currentScale <= 0 ? 1 : currentScale;
+  const scaleFactor = targetScale / safeCurrentScale;
   return {
-    x: clamp(tx, -maxX, maxX),
-    y: clamp(ty, -maxY, maxY),
+    x: focalPointX - (focalPointX - currentTranslateX) * scaleFactor,
+    y: focalPointY - (focalPointY - currentTranslateY) * scaleFactor,
   };
 }
 
@@ -104,7 +93,7 @@ function applyRubberBandTranslation(
   ch: number,
 ): { x: number; y: number } {
   "worklet";
-  const { maxX, maxY } = getTranslateBounds(currentScale, imgW, imgH, cw, ch);
+  const { maxX, maxY } = computeTranslateBounds(currentScale, imgW, imgH, cw, ch);
   return {
     x: rubberBand(tx, -maxX, maxX, cw),
     y: rubberBand(ty, -maxY, maxY, ch),
@@ -129,6 +118,8 @@ interface FitsCanvasProps {
   rgbaData: Uint8ClampedArray | null;
   width: number;
   height: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   showGrid: boolean;
   showCrosshair: boolean;
   cursorX: number;
@@ -146,6 +137,7 @@ interface FitsCanvasProps {
   onSwipeRight?: () => void;
   onLongPress?: () => void;
   interactionEnabled?: boolean;
+  wheelZoomEnabled?: boolean;
 }
 
 export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function FitsCanvas(
@@ -153,6 +145,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     rgbaData,
     width: imgWidth,
     height: imgHeight,
+    sourceWidth,
+    sourceHeight,
     showGrid,
     showCrosshair,
     cursorX,
@@ -170,6 +164,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     onSwipeRight,
     onLongPress,
     interactionEnabled = true,
+    wheelZoomEnabled = false,
   },
   ref,
 ) {
@@ -230,9 +225,18 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       s: Math.round(scale.value * 100) / 100,
       tx: Math.round(translateX.value),
       ty: Math.round(translateY.value),
+      cw: Math.round(canvasWidth.value),
+      ch: Math.round(canvasHeight.value),
     }),
     (curr, prev) => {
-      if (prev !== null && (curr.s !== prev.s || curr.tx !== prev.tx || curr.ty !== prev.ty)) {
+      if (
+        prev === null ||
+        curr.s !== prev.s ||
+        curr.tx !== prev.tx ||
+        curr.ty !== prev.ty ||
+        curr.cw !== prev.cw ||
+        curr.ch !== prev.ch
+      ) {
         runOnJS(notifyTransform)();
       }
     },
@@ -244,7 +248,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     ref,
     () => ({
       setTransform: (tx: number, ty: number, s?: number) => {
-        const targetScale = s ?? scale.value;
+        const targetScale = clampScale(s ?? scale.value, propMinScale, propMaxScale);
         const clamped = clampTranslation(
           tx,
           ty,
@@ -257,9 +261,9 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         translateX.value = withTiming(clamped.x, { duration: 200 });
         translateY.value = withTiming(clamped.y, { duration: 200 });
         if (s != null) {
-          scale.value = withTiming(s, { duration: 200 });
-          savedScale.value = s;
+          scale.value = withTiming(targetScale, { duration: 200 });
         }
+        savedScale.value = targetScale;
         savedTranslateX.value = clamped.x;
         savedTranslateY.value = clamped.y;
       },
@@ -290,6 +294,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       canvasHeight,
       imgWidth,
       imgHeight,
+      propMinScale,
+      propMaxScale,
     ],
   );
 
@@ -311,8 +317,91 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     (e: LayoutChangeEvent) => {
       canvasWidth.value = e.nativeEvent.layout.width;
       canvasHeight.value = e.nativeEvent.layout.height;
+      onTransformChange?.({
+        scale: scale.value,
+        translateX: translateX.value,
+        translateY: translateY.value,
+        canvasWidth: canvasWidth.value,
+        canvasHeight: canvasHeight.value,
+      });
     },
-    [canvasWidth, canvasHeight],
+    [canvasWidth, canvasHeight, onTransformChange, scale, translateX, translateY],
+  );
+
+  const handleWheel = useCallback(
+    (event: unknown) => {
+      if (!wheelZoomEnabled || !interactionEnabled || Platform.OS !== "web") return;
+      const evt = event as {
+        preventDefault?: () => void;
+        nativeEvent?: {
+          deltaY?: number;
+          offsetX?: number;
+          offsetY?: number;
+          locationX?: number;
+          locationY?: number;
+          x?: number;
+          y?: number;
+        };
+      };
+      evt.preventDefault?.();
+
+      const nativeEvent = evt.nativeEvent ?? {};
+      const deltaY = nativeEvent.deltaY ?? 0;
+      if (Math.abs(deltaY) < 0.01) return;
+
+      const currentScale = scale.value;
+      const rawScale = currentScale * Math.exp(-deltaY * WHEEL_ZOOM_SENSITIVITY);
+      const targetScale = clampScale(rawScale, propMinScale, propMaxScale);
+      if (Math.abs(targetScale - currentScale) < 0.0001) return;
+
+      const cw = canvasWidth.value;
+      const ch = canvasHeight.value;
+      const focalXOnCanvas =
+        nativeEvent.offsetX ?? nativeEvent.locationX ?? nativeEvent.x ?? cw / 2;
+      const focalYOnCanvas =
+        nativeEvent.offsetY ?? nativeEvent.locationY ?? nativeEvent.y ?? ch / 2;
+
+      const rawTranslate = zoomAroundFocalPoint(
+        focalXOnCanvas,
+        focalYOnCanvas,
+        currentScale,
+        targetScale,
+        translateX.value,
+        translateY.value,
+      );
+      const clamped = clampTranslation(
+        rawTranslate.x,
+        rawTranslate.y,
+        targetScale,
+        imgWidth,
+        imgHeight,
+        cw,
+        ch,
+      );
+
+      scale.value = withTiming(targetScale, { duration: 90 });
+      translateX.value = withTiming(clamped.x, { duration: 90 });
+      translateY.value = withTiming(clamped.y, { duration: 90 });
+      savedScale.value = targetScale;
+      savedTranslateX.value = clamped.x;
+      savedTranslateY.value = clamped.y;
+    },
+    [
+      wheelZoomEnabled,
+      interactionEnabled,
+      scale,
+      translateX,
+      translateY,
+      savedScale,
+      savedTranslateX,
+      savedTranslateY,
+      canvasWidth,
+      canvasHeight,
+      propMinScale,
+      propMaxScale,
+      imgWidth,
+      imgHeight,
+    ],
   );
 
   // --- Gestures ---
@@ -360,7 +449,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
-      const { maxX, maxY } = getTranslateBounds(scale.value, imgWidth, imgHeight, cw, ch);
+      const { maxX, maxY } = computeTranslateBounds(scale.value, imgWidth, imgHeight, cw, ch);
 
       // Apply momentum with decay, clamped to bounds
       translateX.value = withDecay({ velocity: e.velocityX, clamp: [-maxX, maxX] }, () => {
@@ -409,7 +498,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     .onUpdate((e) => {
       // Allow slight over-zoom with rubber band feel, hard clamp at extremes
       const rawScale = savedScale.value * e.scale;
-      const newScale = clamp(rawScale, propMinScale * 0.5, propMaxScale * 1.5);
+      const newScale = clampScale(rawScale, propMinScale * 0.5, propMaxScale * 1.5);
 
       // Track focal point delta for accurate pinch center
       const focalDeltaX = e.focalX - focalX.value;
@@ -432,7 +521,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     })
     .onEnd(() => {
       // Snap scale back to valid range with spring
-      const clampedScale = clamp(scale.value, propMinScale, propMaxScale);
+      const clampedScale = clampScale(scale.value, propMinScale, propMaxScale);
       if (Math.abs(scale.value - clampedScale) > 0.01) {
         scale.value = withSpring(clampedScale, SPRING_CONFIG);
       }
@@ -474,12 +563,24 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         savedTranslateY.value = 0;
       } else {
         // Zoom to DOUBLE_TAP_SCALE at tap point, clamped to bounds
-        const targetScale = propDoubleTapScale;
-        const cx = cw / 2;
-        const cy = ch / 2;
-        const rawTx = cx - (e.x - translateX.value) * (targetScale / scale.value);
-        const rawTy = cy - (e.y - translateY.value) * (targetScale / scale.value);
-        const clamped = clampTranslation(rawTx, rawTy, targetScale, imgWidth, imgHeight, cw, ch);
+        const targetScale = clampScale(propDoubleTapScale, propMinScale, propMaxScale);
+        const rawTranslate = zoomAroundFocalPoint(
+          e.x,
+          e.y,
+          scale.value,
+          targetScale,
+          translateX.value,
+          translateY.value,
+        );
+        const clamped = clampTranslation(
+          rawTranslate.x,
+          rawTranslate.y,
+          targetScale,
+          imgWidth,
+          imgHeight,
+          cw,
+          ch,
+        );
         scale.value = withTiming(targetScale, { duration: 250 });
         translateX.value = withTiming(clamped.x, { duration: 250 });
         translateY.value = withTiming(clamped.y, { duration: 250 });
@@ -497,22 +598,30 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       // Convert screen coords to image pixel coords
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
-      const fs = Math.min(cw / imgWidth, ch / imgHeight);
-      const displayW = imgWidth * fs;
-      const displayH = imgHeight * fs;
-      const offsetX = (cw - displayW) / 2;
-      const offsetY = (ch - displayH) / 2;
+      const { fitScale, offsetX, offsetY } = computeFitGeometry(imgWidth, imgHeight, cw, ch);
+      if (fitScale <= 0) return;
 
       // Remove canvas transform
       const localX = (e.x - translateX.value) / scale.value;
       const localY = (e.y - translateY.value) / scale.value;
 
       // Remove fit offset and scale
-      const pixelX = Math.floor((localX - offsetX) / fs);
-      const pixelY = Math.floor((localY - offsetY) / fs);
+      const pixelX = Math.floor((localX - offsetX) / fitScale);
+      const pixelY = Math.floor((localY - offsetY) / fitScale);
 
       if (pixelX >= 0 && pixelX < imgWidth && pixelY >= 0 && pixelY < imgHeight) {
-        runOnJS(onPixelTap)(pixelX, pixelY);
+        const sourceW = sourceWidth ?? imgWidth;
+        const sourceH = sourceHeight ?? imgHeight;
+        const sourcePoint = remapPointBetweenSpaces(
+          { x: pixelX + 0.5, y: pixelY + 0.5 },
+          imgWidth,
+          imgHeight,
+          sourceW,
+          sourceH,
+        );
+        const sourceX = Math.max(0, Math.min(sourceW - 1, Math.floor(sourcePoint.x)));
+        const sourceY = Math.max(0, Math.min(sourceH - 1, Math.floor(sourcePoint.y)));
+        runOnJS(onPixelTap)(sourceX, sourceY);
       }
     });
 
@@ -543,10 +652,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     if (imgWidth <= 0 || imgHeight <= 0) return [];
     const cw = canvasWidth.value;
     const ch = canvasHeight.value;
-    const fs = Math.min(cw / imgWidth, ch / imgHeight);
-    const offsetX = (cw - imgWidth * fs) / 2;
-    const offsetY = (ch - imgHeight * fs) / 2;
-    return [{ translateX: offsetX }, { translateY: offsetY }, { scale: fs }];
+    const { fitScale, offsetX, offsetY } = computeFitGeometry(imgWidth, imgHeight, cw, ch);
+    return [{ translateX: offsetX }, { translateY: offsetY }, { scale: fitScale }];
   });
 
   // --- Grid lines ---
@@ -592,8 +699,11 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
   if (!skImage) return null;
 
+  const webWheelProps: Record<string, unknown> =
+    wheelZoomEnabled && interactionEnabled && Platform.OS === "web" ? { onWheel: handleWheel } : {};
+
   return (
-    <View style={{ flex: 1 }} onLayout={onLayout}>
+    <View style={{ flex: 1 }} onLayout={onLayout} {...webWheelProps}>
       <GestureDetector gesture={composedGesture}>
         <View style={{ flex: 1 }}>
           <Canvas style={{ flex: 1 }}>

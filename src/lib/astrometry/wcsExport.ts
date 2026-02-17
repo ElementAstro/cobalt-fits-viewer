@@ -6,7 +6,7 @@
 
 import { Paths, File as FSFile } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { Logger } from "../logger/logger";
+import { Logger } from "../logger";
 import { writeHeaderKeywords } from "../fits/headerWriter";
 import type { AstrometryCalibration, AstrometryResult } from "./types";
 

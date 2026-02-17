@@ -9,7 +9,7 @@
  */
 
 import { File as FSFile, Paths } from "expo-file-system";
-import { Logger } from "../logger/logger";
+import { Logger } from "../logger";
 
 const TAG = "FitsHeaderWriter";
 const RECORD_LEN = 80;

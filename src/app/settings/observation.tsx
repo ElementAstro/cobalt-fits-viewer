@@ -2,10 +2,10 @@ import { View, Text, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { Separator, Switch } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
@@ -15,13 +15,14 @@ import { useSettingsPicker } from "../../hooks/useSettingsPicker";
 const SESSION_GAP_VALUES = [30, 60, 120, 240, 480] as const;
 const REMINDER_VALUES = [0, 15, 30, 60, 120] as const;
 const TIMELINE_GROUPING_VALUES = ["day", "week", "month"] as const;
-const TARGET_SORT_BY_VALUES = ["name", "date", "priority"] as const;
+const TARGET_SORT_BY_VALUES = ["name", "date", "frames", "exposure", "favorite"] as const;
 const TARGET_SORT_ORDER_VALUES = ["asc", "desc"] as const;
 const MAP_PRESET_VALUES = ["standard", "dark", "satellite", "terrain3d"] as const;
 
 export default function ObservationSettingsScreen() {
   const { t } = useI18n();
-  const { isLandscape } = useScreenOrientation();
+  const haptics = useHapticFeedback();
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
@@ -104,7 +105,11 @@ export default function ObservationSettingsScreen() {
         ? t("settings.targetSortName")
         : value === "date"
           ? t("settings.targetSortDate")
-          : t("settings.targetSortPriority"),
+          : value === "frames"
+            ? t("settings.targetSortFrames")
+            : value === "exposure"
+              ? t("settings.targetSortExposure")
+              : t("settings.targetSortFavorite"),
     value,
   }));
   const targetSortOrderOptions = TARGET_SORT_ORDER_VALUES.map((value) => ({
@@ -120,8 +125,8 @@ export default function ObservationSettingsScreen() {
     <View className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: isLandscape ? 8 : insets.top + 8,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
           paddingBottom: insets.bottom + 24,
         }}
         showsVerticalScrollIndicator={false}
@@ -143,7 +148,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={autoGroupByObject}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setAutoGroupByObject(v);
                 }}
               />
@@ -158,7 +163,11 @@ export default function ObservationSettingsScreen() {
                 ? t("settings.targetSortName")
                 : targetSortBy === "date"
                   ? t("settings.targetSortDate")
-                  : t("settings.targetSortPriority")
+                  : targetSortBy === "frames"
+                    ? t("settings.targetSortFrames")
+                    : targetSortBy === "exposure"
+                      ? t("settings.targetSortExposure")
+                      : t("settings.targetSortFavorite")
             }
             onPress={() => openPicker("targetSortBy")}
           />
@@ -180,7 +189,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={autoDetectDuplicates}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setAutoDetectDuplicates(v);
                 }}
               />
@@ -194,7 +203,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={autoTagLocation}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setAutoTagLocation(v);
                 }}
               />
@@ -215,7 +224,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={mapShowOverlays}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setMapShowOverlays(v);
                 }}
               />
@@ -239,7 +248,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={calendarSyncEnabled}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setCalendarSyncEnabled(v);
                 }}
               />
@@ -287,7 +296,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={sessionShowExposureCount}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setSessionShowExposureCount(v);
                 }}
               />
@@ -301,7 +310,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={sessionShowTotalExposure}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setSessionShowTotalExposure(v);
                 }}
               />
@@ -315,7 +324,7 @@ export default function ObservationSettingsScreen() {
               <Switch
                 isSelected={sessionShowFilters}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setSessionShowFilters(v);
                 }}
               />

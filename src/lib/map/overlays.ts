@@ -53,7 +53,7 @@ export function buildClusterCircles(
 ) {
   return clusters.map((c) => {
     // 半径基于文件数量：1 文件 = 5km，每增加 1 文件增加 2km，上限 50km
-    const radius = Math.min(5000 + c.files.length * 2000, 50000);
+    const radius = Math.min(5000 + Math.max(0, c.files.length - 1) * 2000, 50000);
     return {
       id: `circle-${c.id}`,
       center: {
@@ -73,8 +73,12 @@ function getEarliestDate(cluster: LocationCluster): number {
   for (const f of cluster.files) {
     if (f.dateObs) {
       const ts = new Date(f.dateObs).getTime();
-      if (ts < earliest) earliest = ts;
-    } else if (f.importDate < earliest) {
+      if (Number.isFinite(ts) && ts < earliest) {
+        earliest = ts;
+        continue;
+      }
+    }
+    if (f.importDate < earliest) {
       earliest = f.importDate;
     }
   }

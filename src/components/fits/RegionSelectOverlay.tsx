@@ -8,12 +8,15 @@ import type { CanvasTransform } from "./FitsCanvas";
 import {
   clampImagePoint,
   imageToScreenPoint,
+  remapPointBetweenSpaces,
   screenToImagePoint,
 } from "../../lib/viewer/transform";
 
 interface RegionSelectOverlayProps {
-  imageWidth: number;
-  imageHeight: number;
+  renderWidth: number;
+  renderHeight: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   containerWidth: number;
   containerHeight: number;
   transform: CanvasTransform;
@@ -24,8 +27,10 @@ interface RegionSelectOverlayProps {
 const MIN_REGION_SIZE = 10;
 
 export function RegionSelectOverlay({
-  imageWidth,
-  imageHeight,
+  renderWidth,
+  renderHeight,
+  sourceWidth,
+  sourceHeight,
   containerWidth,
   containerHeight,
   transform,
@@ -34,6 +39,8 @@ export function RegionSelectOverlay({
 }: RegionSelectOverlayProps) {
   const { t } = useI18n();
   const accentColor = useThemeColor("accent");
+  const regionSourceWidth = sourceWidth ?? renderWidth;
+  const regionSourceHeight = sourceHeight ?? renderHeight;
 
   const [region, setRegion] = useState<{
     x: number;
@@ -47,10 +54,10 @@ export function RegionSelectOverlay({
 
   const updateRegion = useCallback(
     (x: number, y: number, w: number, h: number) => {
-      const clampedX = Math.max(0, Math.min(x, imageWidth - MIN_REGION_SIZE));
-      const clampedY = Math.max(0, Math.min(y, imageHeight - MIN_REGION_SIZE));
-      const clampedW = Math.max(MIN_REGION_SIZE, Math.min(w, imageWidth - clampedX));
-      const clampedH = Math.max(MIN_REGION_SIZE, Math.min(h, imageHeight - clampedY));
+      const clampedX = Math.max(0, Math.min(x, regionSourceWidth - MIN_REGION_SIZE));
+      const clampedY = Math.max(0, Math.min(y, regionSourceHeight - MIN_REGION_SIZE));
+      const clampedW = Math.max(MIN_REGION_SIZE, Math.min(w, regionSourceWidth - clampedX));
+      const clampedH = Math.max(MIN_REGION_SIZE, Math.min(h, regionSourceHeight - clampedY));
       const r = {
         x: Math.round(clampedX),
         y: Math.round(clampedY),
@@ -60,21 +67,45 @@ export function RegionSelectOverlay({
       setRegion(r);
       onRegionChange(r);
     },
-    [imageWidth, imageHeight, onRegionChange],
+    [regionSourceWidth, regionSourceHeight, onRegionChange],
   );
 
   const drawGesture = Gesture.Pan()
     .onBegin((e) => {
       "worklet";
-      const p = screenToImagePoint({ x: e.x, y: e.y }, transform, imageWidth, imageHeight);
-      const cp = clampImagePoint(p, imageWidth, imageHeight);
+      const renderPoint = screenToImagePoint(
+        { x: e.x, y: e.y },
+        transform,
+        renderWidth,
+        renderHeight,
+      );
+      const sourcePoint = remapPointBetweenSpaces(
+        renderPoint,
+        renderWidth,
+        renderHeight,
+        regionSourceWidth,
+        regionSourceHeight,
+      );
+      const cp = clampImagePoint(sourcePoint, regionSourceWidth, regionSourceHeight);
       startImgX.value = cp.x;
       startImgY.value = cp.y;
     })
     .onUpdate((e) => {
       "worklet";
-      const p = screenToImagePoint({ x: e.x, y: e.y }, transform, imageWidth, imageHeight);
-      const cp = clampImagePoint(p, imageWidth, imageHeight);
+      const renderPoint = screenToImagePoint(
+        { x: e.x, y: e.y },
+        transform,
+        renderWidth,
+        renderHeight,
+      );
+      const sourcePoint = remapPointBetweenSpaces(
+        renderPoint,
+        renderWidth,
+        renderHeight,
+        regionSourceWidth,
+        regionSourceHeight,
+      );
+      const cp = clampImagePoint(sourcePoint, regionSourceWidth, regionSourceHeight);
       const endX = cp.x;
       const endY = cp.y;
 
@@ -94,19 +125,37 @@ export function RegionSelectOverlay({
     onClear();
   }, [onClear]);
 
+  if (renderWidth <= 0 || renderHeight <= 0 || regionSourceWidth <= 0 || regionSourceHeight <= 0) {
+    return null;
+  }
+
   const regionDisplay = region
     ? (() => {
-        const p1 = imageToScreenPoint(
+        const renderP1 = remapPointBetweenSpaces(
           { x: region.x, y: region.y },
+          regionSourceWidth,
+          regionSourceHeight,
+          renderWidth,
+          renderHeight,
+        );
+        const renderP2 = remapPointBetweenSpaces(
+          { x: region.x + region.w, y: region.y + region.h },
+          regionSourceWidth,
+          regionSourceHeight,
+          renderWidth,
+          renderHeight,
+        );
+        const p1 = imageToScreenPoint(
+          { x: renderP1.x, y: renderP1.y },
           transform,
-          imageWidth,
-          imageHeight,
+          renderWidth,
+          renderHeight,
         );
         const p2 = imageToScreenPoint(
-          { x: region.x + region.w, y: region.y + region.h },
+          { x: renderP2.x, y: renderP2.y },
           transform,
-          imageWidth,
-          imageHeight,
+          renderWidth,
+          renderHeight,
         );
         return {
           left: Math.min(p1.x, p2.x),

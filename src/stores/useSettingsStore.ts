@@ -63,6 +63,11 @@ interface SettingsStoreState {
   // 屏幕方向
   orientationLock: "default" | "portrait" | "landscape";
 
+  // 通用交互设置
+  hapticsEnabled: boolean;
+  confirmDestructiveActions: boolean;
+  autoCheckUpdates: boolean;
+
   // 自定义风格
   themeColorMode: ThemeColorMode;
   accentColor: AccentColorKey | null;
@@ -141,7 +146,7 @@ interface SettingsStoreState {
   sessionShowFilters: boolean;
 
   // 目标排序
-  targetSortBy: "name" | "date" | "priority";
+  targetSortBy: "name" | "date" | "frames" | "exposure" | "favorite";
   targetSortOrder: "asc" | "desc";
 
   // 合成默认设置
@@ -172,6 +177,9 @@ interface SettingsStoreState {
   setLanguage: (lang: "en" | "zh") => void;
   setTheme: (theme: "light" | "dark" | "system") => void;
   setOrientationLock: (lock: "default" | "portrait" | "landscape") => void;
+  setHapticsEnabled: (value: boolean) => void;
+  setConfirmDestructiveActions: (value: boolean) => void;
+  setAutoCheckUpdates: (value: boolean) => void;
   setThemeColorMode: (mode: ThemeColorMode) => void;
   setAccentColor: (color: AccentColorKey | null) => void;
   setActivePreset: (preset: StylePresetKey) => void;
@@ -224,7 +232,7 @@ interface SettingsStoreState {
   setSessionShowExposureCount: (v: boolean) => void;
   setSessionShowTotalExposure: (v: boolean) => void;
   setSessionShowFilters: (v: boolean) => void;
-  setTargetSortBy: (v: "name" | "date" | "priority") => void;
+  setTargetSortBy: (v: "name" | "date" | "frames" | "exposure" | "favorite") => void;
   setTargetSortOrder: (v: "asc" | "desc") => void;
   setDefaultComposePreset: (v: "rgb" | "sho" | "hoo" | "lrgb" | "custom") => void;
   setComposeRedWeight: (v: number) => void;
@@ -283,6 +291,9 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   language: "zh",
   theme: "dark",
   orientationLock: "default",
+  hapticsEnabled: true,
+  confirmDestructiveActions: true,
+  autoCheckUpdates: true,
   themeColorMode: "preset",
   accentColor: null,
   activePreset: "default",
@@ -473,10 +484,15 @@ function sanitizeSettingsPatch(
     defaultConverterFormat: ["png", "jpeg", "tiff", "webp"],
     batchNamingRule: ["original", "prefix", "suffix", "sequence"],
     timelineGrouping: ["day", "week", "month"],
-    targetSortBy: ["name", "date", "priority"],
+    targetSortBy: ["name", "date", "frames", "exposure", "favorite"],
     targetSortOrder: ["asc", "desc"],
     defaultComposePreset: ["rgb", "sho", "hoo", "lrgb", "custom"],
   };
+
+  const rawTargetSortBy = (sanitized as Record<string, unknown>).targetSortBy;
+  if (rawTargetSortBy === "priority") {
+    (sanitized as Record<string, unknown>).targetSortBy = "favorite";
+  }
 
   for (const [key, allowedValues] of Object.entries(enumRules) as Array<
     [keyof SettingsDataState, readonly (string | number)[]]
@@ -643,6 +659,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
         get().applySettingsPatch({ defaultReminderMinutes: minutes }),
       setLanguage: (lang) => set({ language: lang }),
       setOrientationLock: (lock) => set({ orientationLock: lock }),
+      setHapticsEnabled: (value) => set({ hapticsEnabled: value }),
+      setConfirmDestructiveActions: (value) => set({ confirmDestructiveActions: value }),
+      setAutoCheckUpdates: (value) => set({ autoCheckUpdates: value }),
 
       setTheme: (theme) => {
         const { themeColorMode, accentColor, activePreset, customThemeColors } = get();

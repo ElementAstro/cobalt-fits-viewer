@@ -5,9 +5,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useThumbnail } from "../../hooks/useThumbnail";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
@@ -15,14 +17,17 @@ import { formatBytes } from "../../lib/utils/format";
 
 export default function StorageSettingsScreen() {
   const { t } = useI18n();
-  const { isLandscape } = useScreenOrientation();
+  const haptics = useHapticFeedback();
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
   // Storage info
   const allFiles = useFitsStore((s) => s.files);
+  const updateFile = useFitsStore((s) => s.updateFile);
   const filesCount = allFiles.length;
-  const { clearCache, getCacheSize } = useThumbnail();
+  const confirmDestructiveActions = useSettingsStore((s) => s.confirmDestructiveActions);
+  const { clearCache, getCacheSize, regenerateThumbnails, isGenerating } = useThumbnail();
 
   // Astrometry status
   const astrometryConfig = useAstrometryStore((s) => s.config);
@@ -50,62 +55,99 @@ export default function StorageSettingsScreen() {
     return formatBytes(getCacheSize());
   };
 
-  const handleClearCache = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(t("settings.clearCache"), t("settings.clearCacheConfirm"), [
+  const runDestructiveAction = (
+    title: string,
+    message: string,
+    onConfirm: () => void | Promise<void>,
+  ) => {
+    haptics.notify(Haptics.NotificationFeedbackType.Warning);
+
+    if (!confirmDestructiveActions) {
+      void onConfirm();
+      return;
+    }
+
+    Alert.alert(title, message, [
       { text: t("common.cancel"), style: "cancel" },
       {
         text: t("common.confirm"),
         style: "destructive",
-        onPress: () => {
-          clearCache();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          Alert.alert(t("common.success"), t("settings.cacheCleared"));
-        },
+        onPress: () => void onConfirm(),
       },
     ]);
   };
 
+  const handleClearCache = () => {
+    runDestructiveAction(t("settings.clearCache"), t("settings.clearCacheConfirm"), () => {
+      clearCache();
+      for (const file of allFiles) {
+        updateFile(file.id, { thumbnailUri: undefined });
+      }
+      haptics.notify(Haptics.NotificationFeedbackType.Success);
+      Alert.alert(t("common.success"), t("settings.cacheCleared"));
+    });
+  };
+
   const handleClearAstrometryCompleted = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(
+    runDestructiveAction(
       t("settings.clearCompletedAstrometry"),
       t("settings.clearCompletedAstrometryConfirm"),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("common.confirm"),
-          style: "destructive",
-          onPress: () => {
-            clearCompletedAstrometryJobs();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ],
+      () => {
+        clearCompletedAstrometryJobs();
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
+      },
     );
   };
 
   const handleClearAstrometryAll = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-    Alert.alert(t("settings.clearAllAstrometry"), t("settings.clearAllAstrometryConfirm"), [
-      { text: t("common.cancel"), style: "cancel" },
-      {
-        text: t("common.confirm"),
-        style: "destructive",
-        onPress: () => {
-          clearAllAstrometryJobs();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        },
+    runDestructiveAction(
+      t("settings.clearAllAstrometry"),
+      t("settings.clearAllAstrometryConfirm"),
+      () => {
+        clearAllAstrometryJobs();
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
       },
-    ]);
+    );
+  };
+
+  const handleRegenerateThumbnails = () => {
+    if (filesCount === 0 || isGenerating) return;
+
+    runDestructiveAction(
+      t("settings.regenerateThumbnails"),
+      t("settings.regenerateConfirm"),
+      async () => {
+        clearCache();
+        for (const file of allFiles) {
+          updateFile(file.id, { thumbnailUri: undefined });
+        }
+
+        const result = await regenerateThumbnails(allFiles);
+
+        for (const item of result.results) {
+          if (item.uri) {
+            updateFile(item.fileId, { thumbnailUri: item.uri });
+          }
+        }
+
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
+        Alert.alert(
+          t("settings.regenerateDone"),
+          t("settings.regenerateResult", {
+            success: result.success,
+            skipped: result.skipped,
+          }),
+        );
+      },
+    );
   };
 
   return (
     <View className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: isLandscape ? 8 : insets.top + 8,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
           paddingBottom: insets.bottom + 24,
         }}
         showsVerticalScrollIndicator={false}
@@ -136,6 +178,15 @@ export default function StorageSettingsScreen() {
             icon="trash-outline"
             label={t("settings.clearCache")}
             onPress={handleClearCache}
+            disabled={isGenerating}
+          />
+          <Separator />
+          <SettingsRow
+            icon="refresh-outline"
+            label={t("settings.regenerateThumbnails")}
+            value={isGenerating ? t("settings.regenerating") : undefined}
+            onPress={handleRegenerateThumbnails}
+            disabled={filesCount === 0 || isGenerating}
           />
         </SettingsSection>
 

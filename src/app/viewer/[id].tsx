@@ -1,4 +1,4 @@
-import { View, Text, Alert, ScrollView, StatusBar, useWindowDimensions } from "react-native";
+import { View, Text, Alert, ScrollView, StatusBar } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import * as Haptics from "expo-haptics";
@@ -9,7 +9,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
 import Animated, { FadeIn } from "react-native-reanimated";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useViewerStore } from "../../stores/useViewerStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
@@ -48,13 +48,8 @@ export default function ViewerDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
-  const { isLandscape } = useScreenOrientation();
+  const { isLandscape, sidePanelWidth } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
-  const { width: screenWidth } = useWindowDimensions();
-  const sidePanelWidth = useMemo(
-    () => Math.min(Math.max(Math.round(screenWidth * 0.32), 240), 360),
-    [screenWidth],
-  );
 
   const file = useFitsStore((s) => s.files.find((f) => f.id === (id ?? "")));
   const updateFile = useFitsStore((s) => s.updateFile);
@@ -876,6 +871,8 @@ export default function ViewerDetailScreen() {
             rgbaData={rgbaData}
             width={displayWidth || dimensions.width}
             height={displayHeight || dimensions.height}
+            sourceWidth={dimensions.width}
+            sourceHeight={dimensions.height}
             showGrid={showGrid}
             showCrosshair={showCrosshair}
             cursorX={cursorX}
@@ -892,6 +889,7 @@ export default function ViewerDetailScreen() {
             onSwipeLeft={() => nextId && navigateTo(nextId)}
             onSwipeRight={() => prevId && navigateTo(prevId)}
             onLongPress={toggleFullscreen}
+            wheelZoomEnabled
           />
 
           {/* Pixel Inspector */}
@@ -924,8 +922,10 @@ export default function ViewerDetailScreen() {
             <View className="absolute inset-0" pointerEvents="none">
               <AstrometryAnnotationOverlay
                 annotations={latestSolvedJob.result.annotations}
-                imageWidth={displayWidth || dimensions.width}
-                imageHeight={displayHeight || dimensions.height}
+                renderWidth={displayWidth || dimensions.width}
+                renderHeight={displayHeight || dimensions.height}
+                sourceWidth={dimensions.width}
+                sourceHeight={dimensions.height}
                 transform={canvasTransform}
                 visible={showAnnotations}
               />
@@ -935,8 +935,10 @@ export default function ViewerDetailScreen() {
           {/* Region selection overlay */}
           {isRegionSelectActive && dimensions && (
             <RegionSelectOverlay
-              imageWidth={displayWidth || dimensions.width}
-              imageHeight={displayHeight || dimensions.height}
+              renderWidth={displayWidth || dimensions.width}
+              renderHeight={displayHeight || dimensions.height}
+              sourceWidth={dimensions.width}
+              sourceHeight={dimensions.height}
               containerWidth={canvasTransform.canvasWidth || 300}
               containerHeight={canvasTransform.canvasHeight || 300}
               transform={canvasTransform}
@@ -972,7 +974,9 @@ export default function ViewerDetailScreen() {
             translateX={canvasTransform.translateX}
             translateY={canvasTransform.translateY}
             canvasWidth={canvasTransform.canvasWidth}
-            imageWidth={dimensions.width}
+            canvasHeight={canvasTransform.canvasHeight}
+            imageWidth={displayWidth || dimensions.width}
+            imageHeight={displayHeight || dimensions.height}
             onSetTransform={(tx, ty, s) => canvasRef.current?.setTransform(tx, ty, s)}
           />
 

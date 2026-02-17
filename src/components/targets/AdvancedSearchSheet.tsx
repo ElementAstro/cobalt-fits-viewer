@@ -3,11 +3,12 @@
  */
 
 import { useState } from "react";
-import { View, ScrollView } from "react-native";
+import { View } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import {
+  BottomSheet,
   Button,
   Chip,
-  Dialog,
   Input,
   Label,
   Separator,
@@ -15,6 +16,7 @@ import {
   useThemeColor,
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
@@ -51,6 +53,7 @@ export function AdvancedSearchSheet({
 }: AdvancedSearchSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const insets = useSafeAreaInsets();
 
   // 搜索条件状态
   const [query, setQuery] = useState(initialConditions?.query ?? "");
@@ -152,14 +155,28 @@ export function AdvancedSearchSheet({
     notesQuery;
 
   return (
-    <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay />
-        <Dialog.Content className="mx-4 w-full max-w-md rounded-2xl bg-background p-6 max-h-[85%]">
-          <ScrollView showsVerticalScrollIndicator={false}>
+    <BottomSheet isOpen={visible} onOpenChange={(open) => !open && onClose()}>
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content
+          detached
+          bottomInset={insets.bottom + 8}
+          snapPoints={["92%"]}
+          className="mx-4"
+          backgroundClassName="rounded-[28px] bg-background"
+        >
+          <BottomSheetScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: insets.bottom + 20,
+            }}
+          >
             <View className="flex-row items-center justify-between mb-4">
-              <Dialog.Title>{t("targets.search.title")}</Dialog.Title>
-              <Dialog.Close />
+              <BottomSheet.Title>{t("targets.search.title")}</BottomSheet.Title>
+              <BottomSheet.Close />
             </View>
 
             {/* 文本搜索 */}
@@ -382,9 +399,9 @@ export function AdvancedSearchSheet({
                 </Button>
               </View>
             </View>
-          </ScrollView>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog>
+          </BottomSheetScrollView>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

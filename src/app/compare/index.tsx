@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Chip, Dialog, Input, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useImageComparison, type CompareMode } from "../../hooks/useImageComparison";
 import { useFitsFile } from "../../hooks/useFitsFile";
@@ -71,6 +72,7 @@ export default function CompareScreen() {
   const params = useLocalSearchParams<{ ids?: string }>();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const { width: viewportWidth } = useWindowDimensions();
+  const { horizontalPadding } = useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
   const updateFile = useFitsStore((s) => s.updateFile);
@@ -428,6 +430,8 @@ export default function CompareScreen() {
               rgbaData={proc.rgbaData}
               width={proc.displayWidth || fits.dimensions.width}
               height={proc.displayHeight || fits.dimensions.height}
+              sourceWidth={fits.dimensions.width}
+              sourceHeight={fits.dimensions.height}
               showGrid={showGrid && interactive}
               showCrosshair={showCrosshair && interactive}
               cursorX={interactive ? cursor.x : -1}
@@ -438,6 +442,7 @@ export default function CompareScreen() {
               }}
               onTransformChange={setTransform}
               interactionEnabled={interactive}
+              wheelZoomEnabled
             />
           </Pressable>
           <Minimap
@@ -475,7 +480,10 @@ export default function CompareScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
-      <View className="flex-row items-center gap-2 px-4 py-2">
+      <View
+        className="flex-row items-center gap-2 py-2"
+        style={{ paddingHorizontal: horizontalPadding }}
+      >
         <Button size="sm" variant="outline" onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={16} color={mutedColor} />
         </Button>
@@ -490,7 +498,7 @@ export default function CompareScreen() {
         </Button>
       </View>
 
-      <View className="px-4 pb-2">
+      <View className="pb-2" style={{ paddingHorizontal: horizontalPadding }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View className="flex-row gap-1.5">
             {MODES.map((m) => (
@@ -513,7 +521,8 @@ export default function CompareScreen() {
       </View>
 
       <View
-        className="flex-1 px-4"
+        className="flex-1"
+        style={{ paddingHorizontal: horizontalPadding }}
         onLayout={(e) => {
           setSplitLayoutWidth(e.nativeEvent.layout.width);
         }}
@@ -574,7 +583,10 @@ export default function CompareScreen() {
         />
       </View>
 
-      <View className="px-4 py-2 border-t border-separator bg-background">
+      <View
+        className="py-2 border-t border-separator bg-background"
+        style={{ paddingHorizontal: horizontalPadding }}
+      >
         <View className="flex-row items-center justify-between mb-2">
           <View className="flex-row gap-1">
             <Button

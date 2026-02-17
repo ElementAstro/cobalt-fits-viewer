@@ -3,9 +3,11 @@
  */
 
 import { useState } from "react";
-import { View, ScrollView, Text } from "react-native";
-import { Button, Card, Dialog, Input, Label, Separator, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheet, Button, Card, Input, Label, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { TargetGroup } from "../../lib/fits/types";
 
@@ -44,6 +46,7 @@ export function GroupManagerSheet({
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const dangerColor = useThemeColor("danger");
+  const insets = useSafeAreaInsets();
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState("");
@@ -73,14 +76,28 @@ export function GroupManagerSheet({
   };
 
   return (
-    <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay />
-        <Dialog.Content className="mx-4 w-full max-w-md rounded-2xl bg-background p-6 max-h-[80%]">
-          <ScrollView showsVerticalScrollIndicator={false}>
+    <BottomSheet isOpen={visible} onOpenChange={(open) => !open && onClose()}>
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content
+          detached
+          bottomInset={insets.bottom + 8}
+          snapPoints={["85%"]}
+          className="mx-4"
+          backgroundClassName="rounded-[28px] bg-background"
+        >
+          <BottomSheetScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: insets.bottom + 20,
+            }}
+          >
             <View className="flex-row items-center justify-between mb-4">
-              <Dialog.Title>{t("targets.groups.title")}</Dialog.Title>
-              <Dialog.Close />
+              <BottomSheet.Title>{t("targets.groups.title")}</BottomSheet.Title>
+              <BottomSheet.Close />
             </View>
 
             {/* Current Selection */}
@@ -213,9 +230,9 @@ export function GroupManagerSheet({
                 ))}
               </View>
             )}
-          </ScrollView>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog>
+          </BottomSheetScrollView>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

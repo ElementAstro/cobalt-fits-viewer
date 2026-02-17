@@ -5,7 +5,7 @@
 
 import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
-import { Logger } from "../logger/logger";
+import { Logger } from "../logger";
 import type {
   AstrometryLoginResponse,
   AstrometrySubmitResponse,

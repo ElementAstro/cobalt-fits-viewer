@@ -30,6 +30,13 @@ describe("useSettingsStore — orientationLock", () => {
     it("has orientationLock = 'default'", () => {
       expect(useSettingsStore.getState().orientationLock).toBe("default");
     });
+
+    it("has general interaction defaults enabled", () => {
+      const s = useSettingsStore.getState();
+      expect(s.hapticsEnabled).toBe(true);
+      expect(s.confirmDestructiveActions).toBe(true);
+      expect(s.autoCheckUpdates).toBe(true);
+    });
   });
 
   // ===== Setter =====
@@ -57,6 +64,23 @@ describe("useSettingsStore — orientationLock", () => {
       useSettingsStore.getState().setOrientationLock("landscape");
       expect(useSettingsStore.getState().theme).toBe(prevTheme);
       expect(useSettingsStore.getState().language).toBe(prevLanguage);
+    });
+  });
+
+  describe("general interaction settings", () => {
+    it("updates hapticsEnabled", () => {
+      useSettingsStore.getState().setHapticsEnabled(false);
+      expect(useSettingsStore.getState().hapticsEnabled).toBe(false);
+    });
+
+    it("updates confirmDestructiveActions", () => {
+      useSettingsStore.getState().setConfirmDestructiveActions(false);
+      expect(useSettingsStore.getState().confirmDestructiveActions).toBe(false);
+    });
+
+    it("updates autoCheckUpdates", () => {
+      useSettingsStore.getState().setAutoCheckUpdates(false);
+      expect(useSettingsStore.getState().autoCheckUpdates).toBe(false);
     });
   });
 
@@ -172,6 +196,21 @@ describe("useSettingsStore — orientationLock", () => {
       expect(partial?.orientationLock).toBe(useSettingsStore.getState().orientationLock);
     });
 
+    it("partialize includes interaction settings", () => {
+      const partialize = useSettingsStore.persist.getOptions().partialize;
+      expect(partialize).toBeDefined();
+      const partial = partialize?.(useSettingsStore.getState()) as {
+        hapticsEnabled?: boolean;
+        confirmDestructiveActions?: boolean;
+        autoCheckUpdates?: boolean;
+      };
+      expect(partial?.hapticsEnabled).toBe(useSettingsStore.getState().hapticsEnabled);
+      expect(partial?.confirmDestructiveActions).toBe(
+        useSettingsStore.getState().confirmDestructiveActions,
+      );
+      expect(partial?.autoCheckUpdates).toBe(useSettingsStore.getState().autoCheckUpdates);
+    });
+
     it("applySettingsPatch sanitizes out-of-range values", () => {
       useSettingsStore.getState().applySettingsPatch({
         thumbnailQuality: 1000,
@@ -210,6 +249,19 @@ describe("useSettingsStore — orientationLock", () => {
       expect(
         (useSettingsStore.getState() as unknown as { unknownSetting?: string }).unknownSetting,
       ).toBe(undefined);
+    });
+
+    it("applySettingsPatch drops invalid boolean payloads", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        hapticsEnabled: "yes",
+        confirmDestructiveActions: 1,
+        autoCheckUpdates: "no",
+      } as unknown as Record<string, unknown>);
+
+      const s = useSettingsStore.getState();
+      expect(s.hapticsEnabled).toBe(true);
+      expect(s.confirmDestructiveActions).toBe(true);
+      expect(s.autoCheckUpdates).toBe(true);
     });
 
     it("applySettingsPatch keeps black/white points valid for one-sided updates", () => {
@@ -318,6 +370,205 @@ describe("useSettingsStore — orientationLock", () => {
       useSettingsStore.getState().setAccentColor("cyan");
       expect(Uniwind.updateCSSVariables).toHaveBeenCalled();
       expect(Uniwind.setTheme).toHaveBeenCalled();
+    });
+  });
+
+  describe("additional action coverage", () => {
+    it("covers remaining direct setters", () => {
+      const store = useSettingsStore.getState();
+      store.setDefaultStretch("linear");
+      store.setDefaultColormap("heat");
+      store.setDefaultGridColumns(4);
+      store.setDefaultExportFormat("jpeg");
+      store.setAutoGroupByObject(false);
+      store.setAutoDetectDuplicates(false);
+      store.setAutoTagLocation(true);
+      store.setSessionGapMinutes(90);
+      store.setCalendarSyncEnabled(true);
+      store.setDefaultReminderMinutes(10);
+      store.setFontFamily("space-grotesk");
+      store.setMonoFontFamily("jetbrains-mono");
+      store.setDefaultShowGrid(true);
+      store.setDefaultShowCrosshair(true);
+      store.setDefaultShowPixelInfo(false);
+      store.setDefaultShowMinimap(true);
+      store.setDefaultHistogramMode("log");
+      store.setDefaultGallerySortBy("name");
+      store.setDefaultGallerySortOrder("asc");
+      store.setDefaultStackMethod("median");
+      store.setDefaultAlignmentMode("full");
+      store.setDefaultEnableQuality(true);
+      store.setUseHighQualityPreview(false);
+      store.setGridColor("#abcdef");
+      store.setCrosshairColor("#fedcba");
+      store.setThumbnailShowFilename(false);
+      store.setThumbnailShowObject(true);
+      store.setThumbnailShowFilter(false);
+      store.setThumbnailShowExposure(true);
+      store.setFileListStyle("compact");
+      store.setDefaultConverterFormat("tiff");
+      store.setBatchNamingRule("sequence");
+      store.setTimelineGrouping("week");
+      store.setSessionShowExposureCount(false);
+      store.setSessionShowTotalExposure(false);
+      store.setSessionShowFilters(false);
+      store.setTargetSortBy("frames");
+      store.setTargetSortOrder("desc");
+      store.setDefaultComposePreset("sho");
+
+      const s = useSettingsStore.getState();
+      expect(s.defaultStretch).toBe("linear");
+      expect(s.defaultColormap).toBe("heat");
+      expect(s.defaultGridColumns).toBe(4);
+      expect(s.defaultExportFormat).toBe("jpeg");
+      expect(s.autoGroupByObject).toBe(false);
+      expect(s.autoDetectDuplicates).toBe(false);
+      expect(s.autoTagLocation).toBe(true);
+      expect(s.sessionGapMinutes).toBe(90);
+      expect(s.calendarSyncEnabled).toBe(true);
+      expect(s.defaultReminderMinutes).toBe(10);
+      expect(s.fontFamily).toBe("space-grotesk");
+      expect(s.monoFontFamily).toBe("jetbrains-mono");
+      expect(s.defaultShowGrid).toBe(true);
+      expect(s.defaultShowCrosshair).toBe(true);
+      expect(s.defaultShowPixelInfo).toBe(false);
+      expect(s.defaultShowMinimap).toBe(true);
+      expect(s.defaultHistogramMode).toBe("log");
+      expect(s.defaultGallerySortBy).toBe("name");
+      expect(s.defaultGallerySortOrder).toBe("asc");
+      expect(s.defaultStackMethod).toBe("median");
+      expect(s.defaultAlignmentMode).toBe("full");
+      expect(s.defaultEnableQuality).toBe(true);
+      expect(s.useHighQualityPreview).toBe(false);
+      expect(s.gridColor).toBe("#abcdef");
+      expect(s.crosshairColor).toBe("#fedcba");
+      expect(s.thumbnailShowFilename).toBe(false);
+      expect(s.thumbnailShowObject).toBe(true);
+      expect(s.thumbnailShowFilter).toBe(false);
+      expect(s.thumbnailShowExposure).toBe(true);
+      expect(s.fileListStyle).toBe("compact");
+      expect(s.defaultConverterFormat).toBe("tiff");
+      expect(s.batchNamingRule).toBe("sequence");
+      expect(s.timelineGrouping).toBe("week");
+      expect(s.sessionShowExposureCount).toBe(false);
+      expect(s.sessionShowTotalExposure).toBe(false);
+      expect(s.sessionShowFilters).toBe(false);
+      expect(s.targetSortBy).toBe("frames");
+      expect(s.targetSortOrder).toBe("desc");
+      expect(s.defaultComposePreset).toBe("sho");
+    });
+
+    it("covers remaining patch-backed numeric setters", () => {
+      const store = useSettingsStore.getState();
+      store.setThumbnailQuality(91);
+      store.setThumbnailSize(320);
+      store.setDefaultBlackPoint(0.2);
+      store.setDefaultWhitePoint(0.8);
+      store.setDefaultGamma(1.3);
+      store.setHistogramHeight(160);
+      store.setPixelInfoDecimalPlaces(4);
+      store.setDefaultSigmaValue(3.2);
+      store.setImageProcessingDebounce(240);
+      store.setGridOpacity(0.4);
+      store.setCrosshairOpacity(0.6);
+      store.setCanvasMinScale(0.8);
+      store.setCanvasMaxScale(12);
+      store.setCanvasDoubleTapScale(4);
+      store.setDefaultConverterQuality(88);
+      store.setDefaultBlurSigma(2.4);
+      store.setDefaultSharpenAmount(2.2);
+      store.setDefaultDenoiseRadius(3);
+      store.setEditorMaxUndo(25);
+      store.setComposeRedWeight(1.7);
+      store.setComposeGreenWeight(1.1);
+      store.setComposeBlueWeight(0.9);
+
+      const s = useSettingsStore.getState();
+      expect(s.thumbnailQuality).toBe(91);
+      expect(s.thumbnailSize).toBe(320);
+      expect(s.defaultBlackPoint).toBe(0.2);
+      expect(s.defaultWhitePoint).toBe(0.8);
+      expect(s.defaultGamma).toBe(1.3);
+      expect(s.histogramHeight).toBe(160);
+      expect(s.pixelInfoDecimalPlaces).toBe(4);
+      expect(s.defaultSigmaValue).toBe(3.2);
+      expect(s.imageProcessingDebounce).toBe(240);
+      expect(s.gridOpacity).toBe(0.4);
+      expect(s.crosshairOpacity).toBe(0.6);
+      expect(s.canvasMinScale).toBe(0.8);
+      expect(s.canvasMaxScale).toBe(12);
+      expect(s.canvasDoubleTapScale).toBe(4);
+      expect(s.defaultConverterQuality).toBe(88);
+      expect(s.defaultBlurSigma).toBe(2.4);
+      expect(s.defaultSharpenAmount).toBe(2.2);
+      expect(s.defaultDenoiseRadius).toBe(3);
+      expect(s.editorMaxUndo).toBe(25);
+      expect(s.composeRedWeight).toBe(1.7);
+      expect(s.composeGreenWeight).toBe(1.1);
+      expect(s.composeBlueWeight).toBe(0.9);
+    });
+
+    it("normalizes legacy targetSortBy value in applySettingsPatch", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        targetSortBy: "priority",
+      } as unknown as Record<string, unknown>);
+      expect(useSettingsStore.getState().targetSortBy).toBe("favorite");
+    });
+
+    it("enforces theme mode exclusivity in applySettingsPatch", () => {
+      const store = useSettingsStore.getState();
+      store.applySettingsPatch({
+        themeColorMode: "accent",
+        accentColor: null,
+      });
+      let s = useSettingsStore.getState();
+      expect(s.themeColorMode).toBe("accent");
+      expect(s.accentColor).toBe("blue");
+      expect(s.activePreset).toBe("default");
+
+      store.applySettingsPatch({
+        themeColorMode: "preset",
+        activePreset: "ocean",
+        accentColor: "cyan",
+      });
+      s = useSettingsStore.getState();
+      expect(s.themeColorMode).toBe("preset");
+      expect(s.activePreset).toBe("ocean");
+      expect(s.accentColor).toBeNull();
+
+      store.applySettingsPatch({
+        themeColorMode: "custom",
+        customThemeColors: {
+          linked: false,
+          light: {
+            accent: "#112233",
+            success: "#22C55E",
+            warning: "#F59E0B",
+            danger: "#EF4444",
+          },
+          dark: {
+            accent: "#445566",
+            success: "#22C55E",
+            warning: "#F59E0B",
+            danger: "#EF4444",
+          },
+        },
+      });
+      s = useSettingsStore.getState();
+      expect(s.themeColorMode).toBe("custom");
+      expect(s.customThemeColors.light.accent).toBe("#112233");
+      expect(s.customThemeColors.dark.accent).toBe("#445566");
+    });
+
+    it("onRehydrateStorage syncs runtime theme from hydrated state", () => {
+      const onRehydrate = useSettingsStore.persist.getOptions().onRehydrateStorage;
+      const callback = onRehydrate?.();
+      callback?.({
+        ...useSettingsStore.getState(),
+        theme: "light",
+      });
+      expect(Uniwind.setTheme).toHaveBeenCalledWith("light");
+      expect(Uniwind.updateCSSVariables).toHaveBeenCalled();
     });
   });
 });

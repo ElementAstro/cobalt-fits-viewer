@@ -6,6 +6,7 @@ import { View, Text, useWindowDimensions } from "react-native";
 import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Card, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { formatExposureHours } from "../../lib/targets/targetStatistics";
 import type { TargetStatistics, MonthlyStats } from "../../lib/targets/targetStatistics";
@@ -18,6 +19,7 @@ interface StatisticsDashboardProps {
 export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDashboardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
 
   // Calculate max height for scrollable content (80% of screen minus header space)
@@ -27,7 +29,7 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
     <BottomSheetScrollView
       showsVerticalScrollIndicator={false}
       style={{ maxHeight: scrollMaxHeight }}
-      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
+      contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
     >
       {/* 总览卡片 */}
       <View className="flex-row gap-2 mb-4">

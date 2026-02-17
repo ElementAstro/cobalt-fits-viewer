@@ -2,9 +2,11 @@
  * 重复目标合并 Sheet
  */
 
-import { View, ScrollView, Text } from "react-native";
-import { Button, Card, Chip, Dialog, Separator, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheet, Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons as Icons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { Target } from "../../lib/fits/types";
 import type { DuplicateGroup, DuplicateDetectionResult } from "../../lib/targets/duplicateDetector";
@@ -30,6 +32,7 @@ export function DuplicateMergeSheet({
 }: DuplicateMergeSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const insets = useSafeAreaInsets();
 
   const getConfidenceColor = (confidence: "high" | "medium" | "low") => {
     switch (confidence) {
@@ -99,14 +102,28 @@ export function DuplicateMergeSheet({
   };
 
   return (
-    <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay />
-        <Dialog.Content className="mx-4 w-full max-w-md rounded-2xl bg-background p-6 max-h-[85%]">
-          <ScrollView showsVerticalScrollIndicator={false}>
+    <BottomSheet isOpen={visible} onOpenChange={(open) => !open && onClose()}>
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content
+          detached
+          bottomInset={insets.bottom + 8}
+          snapPoints={["88%"]}
+          className="mx-4"
+          backgroundClassName="rounded-[28px] bg-background"
+        >
+          <BottomSheetScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: insets.bottom + 20,
+            }}
+          >
             <View className="flex-row items-center justify-between mb-4">
-              <Dialog.Title>{t("targets.search.duplicates")}</Dialog.Title>
-              <Dialog.Close />
+              <BottomSheet.Title>{t("targets.search.duplicates")}</BottomSheet.Title>
+              <BottomSheet.Close />
             </View>
 
             {/* 还未检测 */}
@@ -210,9 +227,9 @@ export function DuplicateMergeSheet({
                 </Button>
               </>
             )}
-          </ScrollView>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog>
+          </BottomSheetScrollView>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

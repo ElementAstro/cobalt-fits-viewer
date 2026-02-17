@@ -5,24 +5,11 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandMMKVStorage } from "../lib/storage";
-import type { Target, TargetType, TargetStatus, TargetChangeLogEntry } from "../lib/fits/types";
+import type { Target, TargetType, TargetStatus } from "../lib/fits/types";
 import { mergeTargets } from "../lib/targets/targetMatcher";
+import { createLogEntry } from "../lib/targets/changeLogger";
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
-const createChangeLogEntry = (
-  action: TargetChangeLogEntry["action"],
-  field?: string,
-  oldValue?: unknown,
-  newValue?: unknown,
-): TargetChangeLogEntry => ({
-  id: generateId(),
-  timestamp: Date.now(),
-  action,
-  field,
-  oldValue,
-  newValue,
-});
 
 interface TargetStoreState {
   targets: Target[];
@@ -109,8 +96,13 @@ export const useTargetStore = create<TargetStoreState>()(
 
       addTarget: (target) =>
         set((state) => {
+          if (state.targets.some((existing) => existing.id === target.id)) {
+            return state;
+          }
           const newTarget = createDefaultTarget(target);
-          newTarget.changeLog = [createChangeLogEntry("created")];
+          if (!newTarget.changeLog || newTarget.changeLog.length === 0) {
+            newTarget.changeLog = [createLogEntry("created")];
+          }
           return { targets: [...state.targets, newTarget] };
         }),
 
@@ -123,7 +115,8 @@ export const useTargetStore = create<TargetStoreState>()(
             const updatedFields = Object.keys(updates).filter(
               (key) => updates[key as keyof Target] !== t[key as keyof Target],
             );
-            const changeLogEntry = createChangeLogEntry("updated", updatedFields.join(", "));
+            if (updatedFields.length === 0) return t;
+            const changeLogEntry = createLogEntry("updated", updatedFields.join(", "));
             return {
               ...t,
               ...updates,
@@ -142,7 +135,7 @@ export const useTargetStore = create<TargetStoreState>()(
               imageIds: [...t.imageIds, imageId],
               changeLog: [
                 ...t.changeLog,
-                createChangeLogEntry("image_added", "imageIds", undefined, imageId),
+                createLogEntry("image_added", "imageIds", undefined, imageId),
               ],
               updatedAt: Date.now(),
             };
@@ -153,12 +146,13 @@ export const useTargetStore = create<TargetStoreState>()(
         set((state) => ({
           targets: state.targets.map((t) => {
             if (t.id !== targetId) return t;
+            if (!t.imageIds.includes(imageId)) return t;
             return {
               ...t,
               imageIds: t.imageIds.filter((id) => id !== imageId),
               changeLog: [
                 ...t.changeLog,
-                createChangeLogEntry("image_removed", "imageIds", imageId, undefined),
+                createLogEntry("image_removed", "imageIds", imageId, undefined),
               ],
               updatedAt: Date.now(),
             };
@@ -193,12 +187,13 @@ export const useTargetStore = create<TargetStoreState>()(
         set((state) => ({
           targets: state.targets.map((t) => {
             if (t.id !== targetId) return t;
+            if (t.status === status) return t;
             return {
               ...t,
               status,
               changeLog: [
                 ...t.changeLog,
-                createChangeLogEntry("status_changed", "status", t.status, status),
+                createLogEntry("status_changed", "status", t.status, status),
               ],
               updatedAt: Date.now(),
             };
@@ -240,7 +235,7 @@ export const useTargetStore = create<TargetStoreState>()(
               isFavorite: newValue,
               changeLog: [
                 ...t.changeLog,
-                createChangeLogEntry(
+                createLogEntry(
                   newValue ? "favorited" : "unfavorited",
                   "isFavorite",
                   t.isFavorite,
@@ -262,12 +257,7 @@ export const useTargetStore = create<TargetStoreState>()(
               isPinned: newValue,
               changeLog: [
                 ...t.changeLog,
-                createChangeLogEntry(
-                  newValue ? "pinned" : "unpinned",
-                  "isPinned",
-                  t.isPinned,
-                  newValue,
-                ),
+                createLogEntry(newValue ? "pinned" : "unpinned", "isPinned", t.isPinned, newValue),
               ],
               updatedAt: Date.now(),
             };
@@ -281,7 +271,7 @@ export const useTargetStore = create<TargetStoreState>()(
             return {
               ...t,
               tags: [...t.tags, tag],
-              changeLog: [...t.changeLog, createChangeLogEntry("tagged", "tags", undefined, tag)],
+              changeLog: [...t.changeLog, createLogEntry("tagged", "tags", undefined, tag)],
               updatedAt: Date.now(),
             };
           }),
@@ -294,7 +284,7 @@ export const useTargetStore = create<TargetStoreState>()(
             return {
               ...t,
               tags: t.tags.filter((tg) => tg !== tag),
-              changeLog: [...t.changeLog, createChangeLogEntry("untagged", "tags", tag, undefined)],
+              changeLog: [...t.changeLog, createLogEntry("untagged", "tags", tag, undefined)],
               updatedAt: Date.now(),
             };
           }),

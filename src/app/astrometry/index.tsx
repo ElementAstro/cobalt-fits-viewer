@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { FlashList } from "@shopify/flash-list";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useAstrometry } from "../../hooks/useAstrometry";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { AstrometryJobCard } from "../../components/astrometry/AstrometryJobCard";
@@ -34,6 +35,7 @@ export default function AstrometryScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [borderColor, mutedColor] = useThemeColor(["separator", "muted"]);
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const {
     config,
@@ -138,8 +140,13 @@ export default function AstrometryScreen() {
     return (
       <View className="flex-1 bg-background">
         <View
-          className="flex-row items-center px-4 pt-14 pb-3"
-          style={{ borderBottomWidth: 0.5, borderBottomColor: borderColor }}
+          className="flex-row items-center pb-3"
+          style={{
+            borderBottomWidth: 0.5,
+            borderBottomColor: borderColor,
+            paddingHorizontal: horizontalPadding,
+            paddingTop: contentPaddingTop,
+          }}
         >
           <PressableFeedback onPress={() => setShowSettings(false)} className="mr-3">
             <Ionicons name="arrow-back" size={22} color={mutedColor} />
@@ -147,7 +154,10 @@ export default function AstrometryScreen() {
           <Text className="text-lg font-bold text-foreground">{t("astrometry.settings")}</Text>
         </View>
 
-        <ScrollView className="flex-1 px-4 py-4">
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingVertical: 16 }}
+        >
           <AstrometrySettings />
         </ScrollView>
       </View>
@@ -158,8 +168,13 @@ export default function AstrometryScreen() {
     <View className="flex-1 bg-background">
       {/* Header */}
       <View
-        className="px-4 pt-14 pb-3"
-        style={{ borderBottomWidth: 0.5, borderBottomColor: borderColor }}
+        className="pb-3"
+        style={{
+          borderBottomWidth: 0.5,
+          borderBottomColor: borderColor,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
+        }}
       >
         <View className="flex-row items-center justify-between">
           <View className="flex-row items-center gap-3">
@@ -226,7 +241,7 @@ export default function AstrometryScreen() {
       </View>
 
       {/* 任务列表 */}
-      <View className="flex-1 px-4 py-2">
+      <View className="flex-1 py-2" style={{ paddingHorizontal: horizontalPadding }}>
         {filteredJobs.length === 0 ? (
           <EmptyState
             icon="planet-outline"
@@ -258,8 +273,12 @@ export default function AstrometryScreen() {
       {/* 底部清理按钮 */}
       {(completedJobs.length > 0 || failedJobs.length > 0 || isProcessing) && (
         <View
-          className="flex-row items-center justify-between px-4 py-3"
-          style={{ borderTopWidth: 0.5, borderTopColor: borderColor }}
+          className="flex-row items-center justify-between py-3"
+          style={{
+            paddingHorizontal: horizontalPadding,
+            borderTopWidth: 0.5,
+            borderTopColor: borderColor,
+          }}
         >
           {isProcessing && (
             <Button variant="ghost" size="sm" onPress={cancelAllJobs}>

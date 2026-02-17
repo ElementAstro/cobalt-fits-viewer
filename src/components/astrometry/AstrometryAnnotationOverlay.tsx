@@ -8,12 +8,14 @@ import { StyleSheet } from "react-native";
 import { Canvas, Circle, Text as SkiaText, Group, useFont } from "@shopify/react-native-skia";
 import type { AstrometryAnnotation, AstrometryAnnotationType } from "../../lib/astrometry/types";
 import type { CanvasTransform } from "../fits/FitsCanvas";
-import { imageToScreenPoint } from "../../lib/viewer/transform";
+import { imageToScreenPoint, remapPointBetweenSpaces } from "../../lib/viewer/transform";
 
 interface AstrometryAnnotationOverlayProps {
   annotations: AstrometryAnnotation[];
-  imageWidth: number;
-  imageHeight: number;
+  renderWidth: number;
+  renderHeight: number;
+  sourceWidth: number;
+  sourceHeight: number;
   transform: CanvasTransform;
   visible: boolean;
 }
@@ -34,8 +36,10 @@ const MIN_VISIBLE_SCALE = 0.3;
 
 export function AstrometryAnnotationOverlay({
   annotations,
-  imageWidth,
-  imageHeight,
+  renderWidth,
+  renderHeight,
+  sourceWidth,
+  sourceHeight,
   transform,
   visible,
 }: AstrometryAnnotationOverlayProps) {
@@ -43,19 +47,30 @@ export function AstrometryAnnotationOverlay({
 
   // 计算像素坐标到画布坐标的变换
   const items = useMemo(() => {
-    if (!visible || annotations.length === 0) return [];
+    if (!visible || annotations.length === 0 || renderWidth <= 0 || renderHeight <= 0) return [];
     const fitScale = Math.min(
-      transform.canvasWidth / imageWidth,
-      transform.canvasHeight / imageHeight,
+      transform.canvasWidth / renderWidth,
+      transform.canvasHeight / renderHeight,
     );
+    const sourceToRenderScale =
+      sourceWidth > 0 && sourceHeight > 0
+        ? (renderWidth / sourceWidth + renderHeight / sourceHeight) / 2
+        : 1;
 
     return annotations
       .map((ann) => {
-        const p = imageToScreenPoint(
+        const renderPoint = remapPointBetweenSpaces(
           { x: ann.pixelx, y: ann.pixely },
+          sourceWidth,
+          sourceHeight,
+          renderWidth,
+          renderHeight,
+        );
+        const p = imageToScreenPoint(
+          { x: renderPoint.x, y: renderPoint.y },
           transform,
-          imageWidth,
-          imageHeight,
+          renderWidth,
+          renderHeight,
         );
         const screenX = p.x;
         const screenY = p.y;
@@ -70,7 +85,7 @@ export function AstrometryAnnotationOverlay({
           return null;
         }
 
-        const radius = (ann.radius ?? 15) * fitScale * transform.scale;
+        const radius = (ann.radius ?? 15) * sourceToRenderScale * fitScale * transform.scale;
         const color = TYPE_COLORS[ann.type] ?? TYPE_COLORS.other;
         const label = ann.names.length > 0 ? ann.names[0] : "";
 
@@ -89,7 +104,7 @@ export function AstrometryAnnotationOverlay({
       color: string;
       label: string;
     }>;
-  }, [annotations, imageWidth, imageHeight, transform, visible]);
+  }, [annotations, renderWidth, renderHeight, sourceWidth, sourceHeight, transform, visible]);
 
   if (!visible || items.length === 0 || transform.scale < MIN_VISIBLE_SCALE) {
     return null;

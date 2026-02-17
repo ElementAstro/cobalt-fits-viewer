@@ -1,0 +1,7 @@
+interface:
+  display_name: "HeroUI Native"
+  short_description: "Fetch Native component docs and theme tokens"
+  default_prompt: "Use $heroui-native to fetch HeroUI Native component docs, validate anatomy/props, and provide implementation guidance for React Native + Uniwind."
+
+policy:
+  allow_implicit_invocation: true

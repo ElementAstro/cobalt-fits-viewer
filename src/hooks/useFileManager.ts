@@ -1,30 +1,36 @@
 /**
  * 文件管理 Hook
  * 完整流水线: DocumentPicker → copy → parse → metadata → store → auto-detect target
- * 支持: 文件导入、文件夹导入、ZIP 导入、URL 下载
+ * 支持: 文件导入、文件夹导入、ZIP 导入、URL 下载、剪贴板导入
  */
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { InteractionManager } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
+import * as Clipboard from "expo-clipboard";
 import { File, Directory, Paths } from "expo-file-system";
+import * as Sharing from "expo-sharing";
 import { Logger } from "../lib/logger";
 import { useFitsStore } from "../stores/useFitsStore";
-import { useTargetStore } from "../stores/useTargetStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useAlbumStore } from "../stores/useAlbumStore";
 import { useSessionStore } from "../stores/useSessionStore";
+import { useTrashStore } from "../stores/useTrashStore";
+import { useFileGroupStore } from "../stores/useFileGroupStore";
+import { useTargets } from "./useTargets";
 import {
   importFile,
-  deleteFile,
-  deleteFiles,
+  deleteFilesPermanently,
+  moveFileToTrash,
   renameFitsFile,
+  restoreFileFromTrash,
   generateFileId,
   scanDirectoryForSupportedImages,
   getTempExtractDir,
   cleanTempExtractDir,
 } from "../lib/utils/fileManager";
 import { computeQuickHash, findDuplicateOnImport } from "../lib/gallery/duplicateDetector";
+import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
 import {
   loadFitsFromBuffer,
   extractMetadata,
@@ -32,20 +38,22 @@ import {
   getImageDimensions,
 } from "../lib/fits/parser";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
-import {
-  generateAndSaveThumbnail,
-  deleteThumbnail,
-  deleteThumbnails,
-} from "../lib/gallery/thumbnailCache";
-import { autoDetectTarget } from "../lib/targets/targetManager";
-import { findKnownAliases } from "../lib/targets/targetMatcher";
+import { generateAndSaveThumbnail, deleteThumbnails } from "../lib/gallery/thumbnailCache";
 import { LocationService } from "./useLocation";
-import type { FitsMetadata } from "../lib/fits/types";
-import { detectSupportedImageFormat, toImageSourceFormat } from "../lib/import/fileFormat";
+import type { FitsMetadata, TrashedFitsRecord } from "../lib/fits/types";
+import {
+  detectPreferredSupportedImageFormat,
+  detectSupportedImageFormat,
+  detectSupportedImageFormatByMimeType,
+  getPrimaryExtensionForFormat,
+  replaceFilenameExtension,
+  splitFilenameExtension,
+  toImageSourceFormat,
+} from "../lib/import/fileFormat";
 import { extractRasterMetadata, parseRasterFromBuffer } from "../lib/image/rasterParser";
 
 export interface ImportProgress {
-  phase: "picking" | "extracting" | "scanning" | "importing" | "downloading";
+  phase: "picking" | "extracting" | "scanning" | "importing" | "downloading" | "clipboard";
   percent: number;
   currentFile?: string;
   current: number;
@@ -71,11 +79,161 @@ interface RenameResult {
   failed: number;
 }
 
+export interface DeleteActionResult {
+  success: number;
+  failed: number;
+  token?: string;
+}
+
+export interface UndoResult {
+  success: boolean;
+  restored: number;
+  failed: number;
+  error?: string;
+}
+
+export interface RestoreResult {
+  success: number;
+  failed: number;
+}
+
+export interface EmptyTrashResult {
+  deleted: number;
+  failed: number;
+}
+
+export interface ExportFilesResult {
+  success: boolean;
+  exported: number;
+  failed: number;
+  shared: boolean;
+  error?: string;
+}
+
+export interface GroupResult {
+  success: number;
+  failed: number;
+}
+
 type ImportFileStatus = "imported" | "duplicate" | "unsupported" | "failed";
 
 interface ImportFileOutcome {
   status: ImportFileStatus;
   reason?: string;
+}
+
+interface UndoOperation {
+  token: string;
+  trashIds: string[];
+  expireAt: number;
+}
+
+const TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DELETE_UNDO_WINDOW_MS = 6000;
+
+function isHttpUrl(value: string): boolean {
+  return /^https?:\/\/.+/i.test(value.trim());
+}
+
+function isLocalUri(value: string): boolean {
+  return /^(file|content):\/\/.+/i.test(value.trim());
+}
+
+function sanitizeImportFilename(name: string): string {
+  const normalized = name
+    .replace(/[<>:"/\\|?*]/g, "_")
+    .split("")
+    .map((char) => (char.charCodeAt(0) <= 31 ? "_" : char))
+    .join("")
+    .trim();
+  return normalized || `import_${Date.now()}`;
+}
+
+function decodeUriComponentSafe(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function withDetectedExtension(filename: string, extension: string): string {
+  const safe = sanitizeImportFilename(filename);
+  if (!extension) return safe;
+  const normalizedExt = extension.startsWith(".") ? extension : `.${extension}`;
+  if (safe.toLowerCase().endsWith(normalizedExt.toLowerCase())) {
+    return safe;
+  }
+
+  const current = detectSupportedImageFormat(safe);
+  if (current) return safe;
+
+  return replaceFilenameExtension(safe, normalizedExt);
+}
+
+function buildSingleImportResult(name: string, outcome: ImportFileOutcome): ImportResult {
+  return {
+    success: outcome.status === "imported" ? 1 : 0,
+    failed: outcome.status === "failed" ? 1 : 0,
+    total: 1,
+    skippedDuplicate: outcome.status === "duplicate" ? 1 : 0,
+    skippedUnsupported: outcome.status === "unsupported" ? 1 : 0,
+    failedEntries:
+      outcome.status === "failed"
+        ? [{ name, reason: outcome.reason ?? "unknown_error" }]
+        : undefined,
+  };
+}
+
+function parseClipboardDataUrl(payload: string): { base64: string; extension: string } | null {
+  const trimmed = payload.trim();
+  if (!trimmed) return null;
+  const match = trimmed.match(/^data:([^;,]+);base64,(.+)$/i);
+  if (!match) return null;
+
+  const format = detectSupportedImageFormatByMimeType(match[1]);
+  if (!format) return null;
+
+  const extension = getPrimaryExtensionForFormat(format);
+  if (!extension) return null;
+
+  return {
+    base64: match[2].trim(),
+    extension,
+  };
+}
+
+function parseClipboardImageData(payload: string): { base64: string; extension: string } | null {
+  const trimmed = payload.trim();
+  if (!trimmed) return null;
+
+  const parsedDataUrl = parseClipboardDataUrl(trimmed);
+  if (parsedDataUrl) return parsedDataUrl;
+
+  return {
+    base64: trimmed,
+    extension: ".png",
+  };
+}
+
+function resolveUniqueExportName(rawName: string, usedNames: Set<string>): string {
+  const safeName = sanitizeImportFilename(rawName || `export_${Date.now()}`);
+  if (!usedNames.has(safeName)) {
+    usedNames.add(safeName);
+    return safeName;
+  }
+
+  const { baseName, extension } = splitFilenameExtension(safeName);
+  const base = baseName || "export";
+  const ext = extension || "";
+  let index = 1;
+  let candidate = `${base}_${index}${ext}`;
+  while (usedNames.has(candidate)) {
+    index++;
+    candidate = `${base}_${index}${ext}`;
+  }
+  usedNames.add(candidate);
+  return candidate;
 }
 
 export function useFileManager() {
@@ -91,14 +249,15 @@ export function useFileManager() {
   const cancelRef = useRef(false);
 
   const addFile = useFitsStore((s) => s.addFile);
+  const addFiles = useFitsStore((s) => s.addFiles);
   const updateFile = useFitsStore((s) => s.updateFile);
-  const removeFile = useFitsStore((s) => s.removeFile);
   const removeFiles = useFitsStore((s) => s.removeFiles);
-  const files = useFitsStore((s) => s.files);
-
-  const addTarget = useTargetStore((s) => s.addTarget);
-  const addImageToTarget = useTargetStore((s) => s.addImageToTarget);
-  const addAlias = useTargetStore((s) => s.addAlias);
+  const addTrashItems = useTrashStore((s) => s.addItems);
+  const removeTrashItems = useTrashStore((s) => s.removeByTrashIds);
+  const getTrashItemsById = useTrashStore((s) => s.getByTrashIds);
+  const { upsertAndLinkFileTarget, reconcileTargetGraph } = useTargets();
+  const undoMapRef = useRef<Map<string, UndoOperation>>(new Map());
+  const undoTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const autoGroupByObject = useSettingsStore((s) => s.autoGroupByObject);
   const autoTagLocation = useSettingsStore((s) => s.autoTagLocation);
@@ -115,6 +274,23 @@ export function useFileManager() {
     }
   }, []);
 
+  useEffect(() => {
+    const expired = useTrashStore.getState().clearExpired(Date.now());
+    if (expired.length === 0) return;
+    deleteFilesPermanently(expired.map((item) => item.trashedFilepath));
+    deleteThumbnails(expired.map((item) => item.file.id));
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      for (const timer of undoTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      undoTimersRef.current.clear();
+      undoMapRef.current.clear();
+    };
+  }, []);
+
   const cancelImport = useCallback(() => {
     cancelRef.current = true;
   }, []);
@@ -124,18 +300,143 @@ export function useFileManager() {
     return loc ?? undefined;
   }, []);
 
-  const processAndImportFile = useCallback(
-    async (uri: string, name: string, size?: number): Promise<ImportFileOutcome> => {
-      const detectedFormat = detectSupportedImageFormat(name);
-      if (!detectedFormat) {
-        Logger.info("FileManager", `Skipping unsupported file: ${name}`);
-        return { status: "unsupported", reason: "unsupported_format" };
+  const clearUndoToken = useCallback((token: string) => {
+    const timer = undoTimersRef.current.get(token);
+    if (timer) {
+      clearTimeout(timer);
+      undoTimersRef.current.delete(token);
+    }
+    undoMapRef.current.delete(token);
+  }, []);
+
+  const registerUndoOperation = useCallback(
+    (trashIds: string[]): string => {
+      const token = `undo_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      const expireAt = Date.now() + DELETE_UNDO_WINDOW_MS;
+      undoMapRef.current.set(token, { token, trashIds, expireAt });
+      const timer = setTimeout(() => {
+        clearUndoToken(token);
+      }, DELETE_UNDO_WINDOW_MS + 200);
+      undoTimersRef.current.set(token, timer);
+      return token;
+    },
+    [clearUndoToken],
+  );
+
+  const restoreReferences = useCallback(
+    (restoredFiles: FitsMetadata[]) => {
+      if (restoredFiles.length === 0) return;
+
+      useAlbumStore.setState((state) => ({
+        albums: state.albums.map((album) => {
+          const toAdd = restoredFiles
+            .filter((file) => file.albumIds.includes(album.id))
+            .map((file) => file.id);
+          if (toAdd.length === 0) return album;
+          const nextIds = [...album.imageIds];
+          let changed = false;
+          for (const imageId of toAdd) {
+            if (!nextIds.includes(imageId)) {
+              nextIds.push(imageId);
+              changed = true;
+            }
+          }
+          if (!changed) return album;
+          return {
+            ...album,
+            imageIds: nextIds,
+            updatedAt: Date.now(),
+          };
+        }),
+      }));
+
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => {
+          const toAdd = restoredFiles
+            .filter((file) => file.sessionId && file.sessionId === session.id)
+            .map((file) => file.id);
+          if (toAdd.length === 0) return session;
+          const nextIds = [...session.imageIds];
+          let changed = false;
+          for (const imageId of toAdd) {
+            if (!nextIds.includes(imageId)) {
+              nextIds.push(imageId);
+              changed = true;
+            }
+          }
+          if (!changed) return session;
+          return {
+            ...session,
+            imageIds: nextIds,
+          };
+        }),
+      }));
+
+      for (const file of restoredFiles) {
+        try {
+          upsertAndLinkFileTarget(
+            file.id,
+            {
+              object: file.object,
+              ra: file.ra,
+              dec: file.dec,
+            },
+            "import",
+          );
+        } catch (error) {
+          Logger.warn(
+            "FileManager",
+            `Target relink failed for restored file ${file.filename}`,
+            error,
+          );
+        }
       }
 
+      useAlbumStore.getState().reconcileWithFiles(useFitsStore.getState().files.map((f) => f.id));
+      const syncedAlbums = useAlbumStore.getState().albums;
+      const syncedFiles = useFitsStore.getState().files;
+      const fileAlbumPatches = computeAlbumFileConsistencyPatches(syncedFiles, syncedAlbums);
+      for (const patch of fileAlbumPatches) {
+        updateFile(patch.fileId, { albumIds: patch.albumIds });
+      }
+      reconcileTargetGraph();
+    },
+    [reconcileTargetGraph, updateFile, upsertAndLinkFileTarget],
+  );
+
+  const processAndImportFile = useCallback(
+    async (uri: string, name: string, size?: number): Promise<ImportFileOutcome> => {
       let importedFile: File | null = null;
       try {
         importedFile = importFile(uri, name);
         const buffer = await importedFile.arrayBuffer();
+        let finalName = name;
+
+        const formatByName = detectSupportedImageFormat(finalName);
+        const detectedFormat = detectPreferredSupportedImageFormat({
+          filename: finalName,
+          payload: buffer,
+        });
+        if (!detectedFormat) {
+          Logger.info("FileManager", `Skipping unsupported file: ${name}`);
+          if (importedFile.exists) {
+            importedFile.delete();
+          }
+          return { status: "unsupported", reason: "unsupported_format" };
+        }
+
+        const shouldNormalizeName = !formatByName || formatByName.id !== detectedFormat.id;
+        if (shouldNormalizeName) {
+          const extension = getPrimaryExtensionForFormat(detectedFormat);
+          const resolvedName = withDetectedExtension(finalName, extension);
+          if (resolvedName !== finalName) {
+            const renamed = renameFitsFile(importedFile.uri, resolvedName);
+            if (renamed.success) {
+              importedFile = new File(renamed.filepath);
+              finalName = renamed.filename;
+            }
+          }
+        }
 
         // Duplicate detection
         const hash = computeQuickHash(buffer, size ?? buffer.byteLength);
@@ -145,7 +446,7 @@ export function useFileManager() {
           if (duplicate) {
             Logger.info(
               "FileManager",
-              `Skipping duplicate: ${name} (matches ${duplicate.filename})`,
+              `Skipping duplicate: ${finalName} (matches ${duplicate.filename})`,
             );
             if (importedFile.exists) {
               importedFile.delete();
@@ -165,7 +466,7 @@ export function useFileManager() {
         if (detectedFormat.sourceType === "fits") {
           const fitsObj = loadFitsFromBuffer(buffer);
           const partialMeta = extractMetadata(fitsObj, {
-            filename: name,
+            filename: finalName,
             filepath: importedFile.uri,
             fileSize: size ?? buffer.byteLength,
           });
@@ -233,7 +534,7 @@ export function useFileManager() {
           const decoded = parseRasterFromBuffer(buffer);
           const partialMeta = extractRasterMetadata(
             {
-              filename: name,
+              filename: finalName,
               filepath: importedFile.uri,
               fileSize: size ?? buffer.byteLength,
             },
@@ -293,22 +594,17 @@ export function useFileManager() {
 
         if (autoGroupByObject) {
           try {
-            const currentTargets = useTargetStore.getState().targets;
-            const detection = autoDetectTarget(fullMeta, currentTargets);
-            if (detection) {
-              if (detection.isNew) {
-                addTarget(detection.target);
-                addImageToTarget(detection.target.id, fileId);
-                const aliases = findKnownAliases(detection.target.name);
-                for (const alias of aliases) {
-                  addAlias(detection.target.id, alias);
-                }
-              } else {
-                addImageToTarget(detection.target.id, fileId);
-              }
-            }
+            upsertAndLinkFileTarget(
+              fileId,
+              {
+                object: fullMeta.object,
+                ra: fullMeta.ra,
+                dec: fullMeta.dec,
+              },
+              "import",
+            );
           } catch (e) {
-            Logger.warn("FileManager", `Auto target detection failed for ${name}`, e);
+            Logger.warn("FileManager", `Auto target detection failed for ${finalName}`, e);
           }
         }
 
@@ -332,9 +628,7 @@ export function useFileManager() {
       thumbnailSize,
       thumbnailQuality,
       fetchLocationForImport,
-      addTarget,
-      addImageToTarget,
-      addAlias,
+      upsertAndLinkFileTarget,
     ],
   );
 
@@ -553,7 +847,7 @@ export function useFileManager() {
   const importFromUrl = useCallback(
     async (url: string) => {
       const trimmed = url.trim();
-      if (!/^https?:\/\/.+/i.test(trimmed)) {
+      if (!isHttpUrl(trimmed)) {
         setImportError("Invalid URL. Only HTTP and HTTPS URLs are supported.");
         return;
       }
@@ -565,13 +859,9 @@ export function useFileManager() {
 
       try {
         const parsed = new URL(trimmed);
-        const rawName = decodeURIComponent(parsed.pathname.split("/").pop() ?? "").trim();
+        const rawName = decodeUriComponentSafe(parsed.pathname.split("/").pop() ?? "").trim();
         const safeNameBase = rawName || `download_${Date.now()}`;
-        const safeName = safeNameBase
-          .replace(/[<>:"/\\|?*]/g, "_")
-          .split("")
-          .map((char) => (char.charCodeAt(0) <= 31 ? "_" : char))
-          .join("");
+        const safeName = sanitizeImportFilename(safeNameBase);
 
         setImportProgress({
           phase: "downloading",
@@ -598,19 +888,7 @@ export function useFileManager() {
           safeName,
           destFile.size ?? undefined,
         );
-        const success = outcome.status === "imported" ? 1 : 0;
-        const failed = outcome.status === "failed" ? 1 : 0;
-        setLastImportResult({
-          success,
-          failed,
-          total: 1,
-          skippedDuplicate: outcome.status === "duplicate" ? 1 : 0,
-          skippedUnsupported: outcome.status === "unsupported" ? 1 : 0,
-          failedEntries:
-            outcome.status === "failed"
-              ? [{ name: safeName, reason: outcome.reason ?? "unknown_error" }]
-              : undefined,
-        });
+        setLastImportResult(buildSingleImportResult(safeName, outcome));
 
         if (destFile.exists) {
           destFile.delete();
@@ -624,91 +902,244 @@ export function useFileManager() {
     [processAndImportFile],
   );
 
-  const cleanupReferences = useCallback((fileIds: string[]) => {
-    if (fileIds.length === 0) return;
-    const idSet = new Set(fileIds);
+  const importFromClipboard = useCallback(async () => {
+    setIsImporting(true);
+    setImportError(null);
+    setLastImportResult(null);
+    cancelRef.current = false;
 
-    useAlbumStore.setState((state) => ({
-      albums: state.albums.map((album) => {
-        const nextImageIds = album.imageIds.filter((id) => !idSet.has(id));
-        const coverRemoved = album.coverImageId ? idSet.has(album.coverImageId) : false;
-        if (nextImageIds.length === album.imageIds.length && !coverRemoved) return album;
-        return {
-          ...album,
-          imageIds: nextImageIds,
-          coverImageId: coverRemoved ? undefined : album.coverImageId,
-          updatedAt:
-            nextImageIds.length !== album.imageIds.length || coverRemoved
-              ? Date.now()
-              : album.updatedAt,
-        };
-      }),
-    }));
+    let clipboardTempFile: File | null = null;
 
-    useTargetStore.setState((state) => ({
-      targets: state.targets.map((target) => {
-        const nextImageIds = target.imageIds.filter((id) => !idSet.has(id));
-        const nextRatings = { ...target.imageRatings };
-        let ratingsChanged = false;
-        for (const removedId of fileIds) {
-          if (removedId in nextRatings) {
-            delete nextRatings[removedId];
-            ratingsChanged = true;
+    try {
+      setImportProgress({
+        phase: "clipboard",
+        percent: 0,
+        current: 0,
+        total: 1,
+      });
+
+      let hasImage = false;
+      try {
+        hasImage = await Clipboard.hasImageAsync();
+      } catch (error) {
+        Logger.warn("FileManager", "Clipboard image availability check failed", error);
+      }
+
+      if (hasImage) {
+        try {
+          const image = await Clipboard.getImageAsync({ format: "png" });
+          const parsed = image?.data ? parseClipboardImageData(image.data) : null;
+          if (parsed) {
+            const suffix = parsed.extension.startsWith(".")
+              ? parsed.extension
+              : `.${parsed.extension}`;
+            const filename = `clipboard_${Date.now()}${suffix}`;
+            clipboardTempFile = new File(Paths.cache, filename);
+            clipboardTempFile.write(parsed.base64, {
+              encoding: "base64",
+            });
+
+            setImportProgress({
+              phase: "importing",
+              percent: 50,
+              currentFile: filename,
+              current: 1,
+              total: 1,
+            });
+
+            const outcome = await processAndImportFile(
+              clipboardTempFile.uri,
+              filename,
+              clipboardTempFile.size ?? undefined,
+            );
+            setLastImportResult(buildSingleImportResult(filename, outcome));
+            return;
           }
+        } catch (error) {
+          Logger.warn("FileManager", "Clipboard image import failed, fallback to text", error);
         }
-        const bestImageRemoved = !!target.bestImageId && idSet.has(target.bestImageId);
-        if (
-          nextImageIds.length === target.imageIds.length &&
-          !ratingsChanged &&
-          !bestImageRemoved
-        ) {
-          return target;
-        }
-        return {
-          ...target,
-          imageIds: nextImageIds,
-          imageRatings: nextRatings,
-          bestImageId: bestImageRemoved ? undefined : target.bestImageId,
-          updatedAt: Date.now(),
-        };
-      }),
-    }));
+      }
 
-    useSessionStore.setState((state) => ({
-      sessions: state.sessions.map((session) => {
-        const nextImageIds = session.imageIds.filter((id) => !idSet.has(id));
-        if (nextImageIds.length === session.imageIds.length) return session;
-        return {
-          ...session,
-          imageIds: nextImageIds,
-        };
-      }),
-      logEntries: state.logEntries.filter((entry) => !idSet.has(entry.imageId)),
-    }));
-  }, []);
+      const clipboardText = (await Clipboard.getStringAsync()).trim();
+      if (isHttpUrl(clipboardText)) {
+        setIsImporting(false);
+        await importFromUrl(clipboardText);
+        return;
+      }
+
+      const clipboardDataUrl = parseClipboardDataUrl(clipboardText);
+      if (clipboardDataUrl) {
+        const suffix = clipboardDataUrl.extension.startsWith(".")
+          ? clipboardDataUrl.extension
+          : `.${clipboardDataUrl.extension}`;
+        const filename = `clipboard_${Date.now()}${suffix}`;
+        clipboardTempFile = new File(Paths.cache, filename);
+        clipboardTempFile.write(clipboardDataUrl.base64, {
+          encoding: "base64",
+        });
+
+        setImportProgress({
+          phase: "importing",
+          percent: 50,
+          currentFile: filename,
+          current: 1,
+          total: 1,
+        });
+
+        const outcome = await processAndImportFile(
+          clipboardTempFile.uri,
+          filename,
+          clipboardTempFile.size ?? undefined,
+        );
+        setLastImportResult(buildSingleImportResult(filename, outcome));
+        return;
+      }
+
+      if (isLocalUri(clipboardText)) {
+        const sanitizedUri = clipboardText.split("?")[0].split("#")[0].trim();
+        const decodedName = decodeUriComponentSafe(sanitizedUri.split("/").pop() ?? "").trim();
+        const fallbackName = decodedName || `clipboard_${Date.now()}`;
+        const filename = sanitizeImportFilename(fallbackName);
+
+        setImportProgress({
+          phase: "importing",
+          percent: 50,
+          currentFile: filename,
+          current: 1,
+          total: 1,
+        });
+
+        const outcome = await processAndImportFile(sanitizedUri, filename);
+        setLastImportResult(buildSingleImportResult(filename, outcome));
+        return;
+      }
+
+      setImportError("clipboardNoSupportedContent");
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Clipboard import failed");
+    } finally {
+      if (clipboardTempFile?.exists) {
+        clipboardTempFile.delete();
+      }
+      setIsImporting(false);
+    }
+  }, [importFromUrl, processAndImportFile]);
+
+  const cleanupReferences = useCallback(
+    (fileIds: string[]) => {
+      if (fileIds.length === 0) return;
+      const idSet = new Set(fileIds);
+
+      useAlbumStore.setState((state) => ({
+        albums: state.albums.map((album) => {
+          const nextImageIds = album.imageIds.filter((id) => !idSet.has(id));
+          const coverRemoved = album.coverImageId ? idSet.has(album.coverImageId) : false;
+          if (nextImageIds.length === album.imageIds.length && !coverRemoved) return album;
+          return {
+            ...album,
+            imageIds: nextImageIds,
+            coverImageId: coverRemoved ? undefined : album.coverImageId,
+            updatedAt:
+              nextImageIds.length !== album.imageIds.length || coverRemoved
+                ? Date.now()
+                : album.updatedAt,
+          };
+        }),
+      }));
+
+      useSessionStore.setState((state) => ({
+        sessions: state.sessions.map((session) => {
+          const nextImageIds = session.imageIds.filter((id) => !idSet.has(id));
+          if (nextImageIds.length === session.imageIds.length) return session;
+          return {
+            ...session,
+            imageIds: nextImageIds,
+          };
+        }),
+        logEntries: state.logEntries.filter((entry) => !idSet.has(entry.imageId)),
+      }));
+
+      useAlbumStore.getState().reconcileWithFiles(useFitsStore.getState().files.map((f) => f.id));
+      const syncedAlbums = useAlbumStore.getState().albums;
+      const syncedFiles = useFitsStore.getState().files;
+      const fileAlbumPatches = computeAlbumFileConsistencyPatches(syncedFiles, syncedAlbums);
+      for (const patch of fileAlbumPatches) {
+        updateFile(patch.fileId, { albumIds: patch.albumIds });
+      }
+      reconcileTargetGraph();
+    },
+    [reconcileTargetGraph, updateFile],
+  );
+
+  const handleSoftDeleteFiles = useCallback(
+    (fileIds: string[]): DeleteActionResult => {
+      if (fileIds.length === 0) return { success: 0, failed: 0 };
+
+      const currentFiles = useFitsStore.getState().files;
+      const trashRecords: TrashedFitsRecord[] = [];
+      const removedIds: string[] = [];
+      let failed = 0;
+      const now = Date.now();
+      const reason: TrashedFitsRecord["deleteReason"] = fileIds.length > 1 ? "batch" : "single";
+
+      for (const fileId of fileIds) {
+        const file = currentFiles.find((item) => item.id === fileId);
+        if (!file) {
+          failed++;
+          continue;
+        }
+
+        const moved = moveFileToTrash(file.filepath, file.filename);
+        if (!moved.success) {
+          failed++;
+          continue;
+        }
+
+        trashRecords.push({
+          trashId: `trash_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+          file,
+          originalFilepath: file.filepath,
+          trashedFilepath: moved.filepath,
+          deletedAt: now,
+          expireAt: now + TRASH_RETENTION_MS,
+          groupIds: useFileGroupStore.getState().getFileGroupIds(file.id),
+          deleteReason: reason,
+        });
+        removedIds.push(file.id);
+      }
+
+      if (removedIds.length > 0) {
+        removeFiles(removedIds);
+        cleanupReferences(removedIds);
+        useFileGroupStore.getState().removeFileMappings(removedIds);
+        addTrashItems(trashRecords);
+      }
+
+      const token =
+        trashRecords.length > 0
+          ? registerUndoOperation(trashRecords.map((r) => r.trashId))
+          : undefined;
+      return {
+        success: removedIds.length,
+        failed,
+        token,
+      };
+    },
+    [addTrashItems, cleanupReferences, registerUndoOperation, removeFiles],
+  );
 
   const handleDeleteFile = useCallback(
-    (fileId: string) => {
-      const file = files.find((f) => f.id === fileId);
-      if (file) {
-        deleteFile(file.filepath);
-        deleteThumbnail(fileId);
-        cleanupReferences([fileId]);
-        removeFile(fileId);
-      }
+    (fileId: string): DeleteActionResult => {
+      return handleSoftDeleteFiles([fileId]);
     },
-    [files, cleanupReferences, removeFile],
+    [handleSoftDeleteFiles],
   );
 
   const handleDeleteFiles = useCallback(
-    (fileIds: string[]) => {
-      const paths = files.filter((f) => fileIds.includes(f.id)).map((f) => f.filepath);
-      deleteFiles(paths);
-      deleteThumbnails(fileIds);
-      cleanupReferences(fileIds);
-      removeFiles(fileIds);
+    (fileIds: string[]): DeleteActionResult => {
+      return handleSoftDeleteFiles(fileIds);
     },
-    [files, cleanupReferences, removeFiles],
+    [handleSoftDeleteFiles],
   );
 
   const handleRenameFiles = useCallback(
@@ -741,6 +1172,256 @@ export function useFileManager() {
     [updateFile],
   );
 
+  const restoreFromTrash = useCallback(
+    (trashIds: string[]): RestoreResult => {
+      if (trashIds.length === 0) return { success: 0, failed: 0 };
+      const records = getTrashItemsById(trashIds);
+      if (records.length === 0) return { success: 0, failed: trashIds.length };
+
+      const restoredFiles: FitsMetadata[] = [];
+      const restoredTrashIds: string[] = [];
+      let failed = 0;
+
+      for (const record of records) {
+        const restored = restoreFileFromTrash(record.trashedFilepath, record.file.filename);
+        if (!restored.success) {
+          failed++;
+          continue;
+        }
+
+        restoredFiles.push({
+          ...record.file,
+          filename: restored.filename,
+          filepath: restored.filepath,
+        });
+        restoredTrashIds.push(record.trashId);
+      }
+
+      if (restoredFiles.length > 0) {
+        addFiles(restoredFiles);
+        for (const restoredFile of restoredFiles) {
+          const restoredRecord = records.find((item) => item.file.id === restoredFile.id);
+          if (!restoredRecord || restoredRecord.groupIds.length === 0) continue;
+          for (const groupId of restoredRecord.groupIds) {
+            useFileGroupStore.getState().assignFilesToGroup([restoredFile.id], groupId);
+          }
+        }
+        restoreReferences(restoredFiles);
+        removeTrashItems(restoredTrashIds);
+      }
+
+      return {
+        success: restoredFiles.length,
+        failed: failed + Math.max(0, trashIds.length - records.length),
+      };
+    },
+    [addFiles, getTrashItemsById, removeTrashItems, restoreReferences],
+  );
+
+  const undoLastDelete = useCallback(
+    (token: string): UndoResult => {
+      const operation = undoMapRef.current.get(token);
+      if (!operation) {
+        return {
+          success: false,
+          restored: 0,
+          failed: 0,
+          error: "undoTokenMissing",
+        };
+      }
+
+      if (Date.now() > operation.expireAt) {
+        clearUndoToken(token);
+        return {
+          success: false,
+          restored: 0,
+          failed: operation.trashIds.length,
+          error: "undoExpired",
+        };
+      }
+
+      clearUndoToken(token);
+      const restored = restoreFromTrash(operation.trashIds);
+      return {
+        success: restored.success > 0 && restored.failed === 0,
+        restored: restored.success,
+        failed: restored.failed,
+      };
+    },
+    [clearUndoToken, restoreFromTrash],
+  );
+
+  const emptyTrash = useCallback(
+    (trashIds?: string[]): EmptyTrashResult => {
+      const targets =
+        trashIds && trashIds.length > 0
+          ? getTrashItemsById(trashIds)
+          : useTrashStore.getState().items;
+      if (targets.length === 0) return { deleted: 0, failed: 0 };
+
+      const deletedTrashIds: string[] = [];
+      const deletedFileIds: string[] = [];
+
+      for (const item of targets) {
+        const trashedFile = new File(item.trashedFilepath);
+        if (!trashedFile.exists) {
+          deletedTrashIds.push(item.trashId);
+          deletedFileIds.push(item.file.id);
+          continue;
+        }
+
+        try {
+          trashedFile.delete();
+          deletedTrashIds.push(item.trashId);
+          deletedFileIds.push(item.file.id);
+        } catch {
+          // Keep failed entries in trash so user can retry or restore later.
+        }
+      }
+
+      const deletedCount = deletedTrashIds.length;
+      const failed = targets.length - deletedCount;
+
+      if (deletedFileIds.length > 0) {
+        deleteThumbnails(deletedFileIds);
+        removeTrashItems(deletedTrashIds);
+      }
+
+      return { deleted: deletedCount, failed };
+    },
+    [getTrashItemsById, removeTrashItems],
+  );
+
+  const exportFiles = useCallback(async (fileIds: string[]): Promise<ExportFilesResult> => {
+    if (fileIds.length === 0) {
+      return { success: false, exported: 0, failed: 0, shared: false, error: "emptySelection" };
+    }
+
+    const selectedFiles = useFitsStore.getState().files.filter((file) => fileIds.includes(file.id));
+    if (selectedFiles.length === 0) {
+      return {
+        success: false,
+        exported: 0,
+        failed: fileIds.length,
+        shared: false,
+        error: "missingFiles",
+      };
+    }
+
+    const canShare = await Sharing.isAvailableAsync();
+    if (!canShare) {
+      return {
+        success: false,
+        exported: 0,
+        failed: selectedFiles.length,
+        shared: false,
+        error: "shareUnavailable",
+      };
+    }
+
+    if (selectedFiles.length === 1) {
+      try {
+        await Sharing.shareAsync(selectedFiles[0].filepath);
+        return { success: true, exported: 1, failed: 0, shared: true };
+      } catch (error) {
+        return {
+          success: false,
+          exported: 0,
+          failed: 1,
+          shared: false,
+          error: error instanceof Error ? error.message : "shareFailed",
+        };
+      }
+    }
+
+    let zipFn: ((source: string, target: string) => Promise<string>) | null = null;
+    try {
+      const zipArchive = require("react-native-zip-archive");
+      zipFn = zipArchive.zip;
+    } catch {
+      return {
+        success: false,
+        exported: 0,
+        failed: selectedFiles.length,
+        shared: false,
+        error: "zipExportUnavailable",
+      };
+    }
+    if (!zipFn) {
+      return {
+        success: false,
+        exported: 0,
+        failed: selectedFiles.length,
+        shared: false,
+        error: "zipExportUnavailable",
+      };
+    }
+
+    const exportDir = new Directory(Paths.cache, `file_export_${Date.now()}`);
+    if (!exportDir.exists) {
+      exportDir.create();
+    }
+
+    const usedNames = new Set<string>();
+    let copied = 0;
+    let failed = 0;
+
+    for (const file of selectedFiles) {
+      try {
+        const source = new File(file.filepath);
+        if (!source.exists) {
+          failed++;
+          continue;
+        }
+        const exportName = resolveUniqueExportName(file.filename, usedNames);
+        const target = new File(exportDir, exportName);
+        source.copy(target);
+        copied++;
+      } catch {
+        failed++;
+      }
+    }
+
+    if (copied === 0) {
+      if (exportDir.exists) exportDir.delete();
+      return { success: false, exported: 0, failed, shared: false, error: "noExportedFiles" };
+    }
+
+    const zipFile = new File(Paths.cache, `files_export_${Date.now()}.zip`);
+    try {
+      await zipFn(exportDir.uri, zipFile.uri);
+      await Sharing.shareAsync(zipFile.uri, {
+        mimeType: "application/zip",
+        UTI: "public.zip-archive",
+      });
+      return { success: true, exported: copied, failed, shared: true };
+    } catch (error) {
+      return {
+        success: false,
+        exported: copied,
+        failed,
+        shared: false,
+        error: error instanceof Error ? error.message : "zipShareFailed",
+      };
+    } finally {
+      if (exportDir.exists) exportDir.delete();
+      if (zipFile.exists) zipFile.delete();
+    }
+  }, []);
+
+  const groupFiles = useCallback((fileIds: string[], groupId: string): GroupResult => {
+    if (fileIds.length === 0 || !groupId) return { success: 0, failed: fileIds.length };
+    const group = useFileGroupStore.getState().getGroupById(groupId);
+    if (!group) return { success: 0, failed: fileIds.length };
+    const existingIds = new Set(useFitsStore.getState().files.map((file) => file.id));
+    const validIds = fileIds.filter((id) => existingIds.has(id));
+    useFileGroupStore.getState().assignFilesToGroup(validIds, groupId);
+    return {
+      success: validIds.length,
+      failed: fileIds.length - validIds.length,
+    };
+  }, []);
+
   return {
     isImporting,
     importProgress,
@@ -751,9 +1432,15 @@ export function useFileManager() {
     pickAndImportFolder,
     pickAndImportZip,
     importFromUrl,
+    importFromClipboard,
     cancelImport,
     handleDeleteFile,
     handleDeleteFiles,
+    undoLastDelete,
+    restoreFromTrash,
+    emptyTrash,
+    exportFiles,
+    groupFiles,
     handleRenameFiles,
   };
 }

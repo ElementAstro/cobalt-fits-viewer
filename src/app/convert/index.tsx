@@ -13,6 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useConverter } from "../../hooks/useConverter";
 import { useExport } from "../../hooks/useExport";
 import { useFitsFile } from "../../hooks/useFitsFile";
@@ -54,6 +55,7 @@ export default function ConvertScreen() {
   const params = useLocalSearchParams<{ tab?: string | string[]; ids?: string | string[] }>();
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const [activeTab, setActiveTab] = useState("single");
 
@@ -176,7 +178,14 @@ export default function ConvertScreen() {
     <View className="flex-1 bg-background">
       <LoadingOverlay visible={isFitsLoading || isExporting} message={t("common.loading")} />
 
-      <ScrollView className="flex-1" contentContainerClassName="px-4 py-14">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
+          paddingBottom: 24,
+        }}
+      >
         {/* Header */}
         <View className="flex-row items-center gap-3 mb-4">
           <Button size="sm" variant="outline" onPress={() => router.back()}>

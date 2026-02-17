@@ -1,4 +1,7 @@
 import {
+  moveFileToTrash,
+  restoreFileFromTrash,
+  deleteFilesPermanently,
   renameFitsFile,
   isSupportedImageFile,
   listImportedImageFiles,
@@ -209,8 +212,75 @@ describe("fileManager.renameFitsFile", () => {
 
     const result = renameFitsFile(source, "bad:name?.fits");
     expect(result.success).toBe(true);
-    expect(result.filename).toBe("bad_name_.fits");
-    expect(result.filepath).toBe("file:///document/fits_files/bad_name_.fits");
+    expect(result.filename).toBe("bad_name.fits");
+    expect(result.filepath).toBe("file:///document/fits_files/bad_name.fits");
+  });
+
+  it("keeps multi-part extension when renaming compressed FITS files", () => {
+    const source = "file:///document/fits_files/source.fits.gz";
+    fsMock.__mock.seedFile(source, 10);
+
+    const result = renameFitsFile(source, "target");
+    expect(result.success).toBe(true);
+    expect(result.filename).toBe("target.fits.gz");
+    expect(result.filepath).toBe("file:///document/fits_files/target.fits.gz");
+  });
+});
+
+describe("fileManager trash operations", () => {
+  const fsMock = require("expo-file-system") as {
+    __mock: {
+      reset: () => void;
+      seedFile: (uri: string, size?: number) => void;
+      hasFile: (uri: string) => boolean;
+    };
+  };
+
+  beforeEach(() => {
+    fsMock.__mock.reset();
+  });
+
+  it("moves file to trash", () => {
+    const source = "file:///document/fits_files/light_001.fits";
+    fsMock.__mock.seedFile(source, 10);
+
+    const result = moveFileToTrash(source, "light_001.fits");
+    expect(result.success).toBe(true);
+    expect(result.filepath).toBe("file:///document/fits_trash/light_001.fits");
+    expect(fsMock.__mock.hasFile(source)).toBe(false);
+    expect(fsMock.__mock.hasFile("file:///document/fits_trash/light_001.fits")).toBe(true);
+  });
+
+  it("restores trashed file and auto renames when collision exists", () => {
+    const trashed = "file:///document/fits_trash/light_001.fits";
+    const conflict = "file:///document/fits_files/light_001.fits";
+    fsMock.__mock.seedFile(trashed, 10);
+    fsMock.__mock.seedFile(conflict, 10);
+
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1700000000000);
+    const result = restoreFileFromTrash(trashed, "light_001.fits");
+    nowSpy.mockRestore();
+
+    expect(result.success).toBe(true);
+    expect(result.filepath).toBe("file:///document/fits_files/light_001_1700000000000.fits");
+    expect(fsMock.__mock.hasFile(conflict)).toBe(true);
+    expect(fsMock.__mock.hasFile(trashed)).toBe(false);
+  });
+
+  it("deleteFilesPermanently returns deleted count", () => {
+    const first = "file:///document/fits_trash/a.fits";
+    const second = "file:///document/fits_trash/b.fits";
+    fsMock.__mock.seedFile(first, 10);
+    fsMock.__mock.seedFile(second, 20);
+
+    const deleted = deleteFilesPermanently([
+      first,
+      second,
+      "file:///document/fits_trash/missing.fits",
+    ]);
+    expect(deleted).toBe(2);
+    expect(fsMock.__mock.hasFile(first)).toBe(false);
+    expect(fsMock.__mock.hasFile(second)).toBe(false);
   });
 });
 
@@ -233,6 +303,9 @@ describe("fileManager image format support", () => {
     expect(isSupportedImageFile("image.fit.gz")).toBe(true);
     expect(isSupportedImageFile("image.jpg")).toBe(true);
     expect(isSupportedImageFile("image.tiff")).toBe(true);
+    expect(isSupportedImageFile("image.gif")).toBe(true);
+    expect(isSupportedImageFile("image.heif")).toBe(true);
+    expect(isSupportedImageFile("image.avif")).toBe(true);
     expect(isSupportedImageFile("image.txt")).toBe(false);
   });
 
@@ -258,11 +331,12 @@ describe("fileManager image format support", () => {
     fsMock.__mock.seedFile("file:///cache/import_batch/readme.md", 10);
     fsMock.__mock.seedFile("file:///cache/import_batch/sub/M31.jpg", 10);
     fsMock.__mock.seedFile("file:///cache/import_batch/sub/archive.fit.gz", 10);
+    fsMock.__mock.seedFile("file:///cache/import_batch/sub/preview.avif", 10);
 
     const rootDir = new fsMock.Directory("file:///cache/import_batch");
     const names = scanDirectoryForSupportedImages(rootDir)
       .map((f) => f.name)
       .sort();
-    expect(names).toEqual(["M31.jpg", "M42.fits", "archive.fit.gz"]);
+    expect(names).toEqual(["M31.jpg", "M42.fits", "archive.fit.gz", "preview.avif"]);
   });
 });

@@ -5,7 +5,7 @@
 
 import { Paths, File, Directory } from "expo-file-system";
 import { Skia, AlphaType, ColorType, ImageFormat } from "@shopify/react-native-skia";
-import { Logger } from "../logger/logger";
+import { Logger } from "../logger";
 
 const THUMBNAIL_SUBDIR = "thumbnails";
 

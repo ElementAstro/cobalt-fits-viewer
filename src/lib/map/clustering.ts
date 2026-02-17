@@ -36,31 +36,42 @@ export function clusterByDistance(files: FitsMetadata[], radiusKm: number = 50):
   const geoFiles = files.filter((f) => f.location);
   if (geoFiles.length === 0) return [];
 
-  const assigned = new Set<number>();
+  const visited = new Set<number>();
   const clusters: LocationCluster[] = [];
 
   for (let i = 0; i < geoFiles.length; i++) {
-    if (assigned.has(i)) continue;
+    if (visited.has(i)) continue;
 
-    const anchor = geoFiles[i].location!;
-    const clusterFiles: FitsMetadata[] = [geoFiles[i]];
-    assigned.add(i);
+    // Transitive clustering: if A is close to B, and B is close to C, all merge into one cluster.
+    const queue: number[] = [i];
+    const clusterIndexes: number[] = [];
+    visited.add(i);
 
-    // Find all files within radius of anchor
-    for (let j = i + 1; j < geoFiles.length; j++) {
-      if (assigned.has(j)) continue;
-      const loc = geoFiles[j].location!;
-      const dist = haversineDistance(
-        anchor.latitude,
-        anchor.longitude,
-        loc.latitude,
-        loc.longitude,
-      );
-      if (dist <= radiusKm) {
-        clusterFiles.push(geoFiles[j]);
-        assigned.add(j);
+    while (queue.length > 0) {
+      const currentIndex = queue.shift();
+      if (currentIndex === undefined) break;
+
+      clusterIndexes.push(currentIndex);
+      const currentLoc = geoFiles[currentIndex].location!;
+
+      for (let j = 0; j < geoFiles.length; j++) {
+        if (visited.has(j)) continue;
+        const candidateLoc = geoFiles[j].location!;
+        const dist = haversineDistance(
+          currentLoc.latitude,
+          currentLoc.longitude,
+          candidateLoc.latitude,
+          candidateLoc.longitude,
+        );
+        if (dist <= radiusKm) {
+          visited.add(j);
+          queue.push(j);
+        }
       }
     }
+
+    const clusterFiles = clusterIndexes.map((idx) => geoFiles[idx]);
+    const anchor = clusterFiles[0].location!;
 
     // Use the best available name for the cluster
     const bestLoc =

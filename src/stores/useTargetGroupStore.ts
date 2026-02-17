@@ -19,6 +19,8 @@ interface TargetGroupStoreState {
 
   addTargetToGroup: (groupId: string, targetId: string) => void;
   removeTargetFromGroup: (groupId: string, targetId: string) => void;
+  removeTargetFromAllGroups: (targetId: string) => void;
+  replaceTargetInGroups: (sourceId: string, destId: string) => void;
 
   // Getters
   getGroupById: (id: string) => TargetGroup | undefined;
@@ -73,6 +75,33 @@ export const useTargetGroupStore = create<TargetGroupStoreState>()(
             return {
               ...g,
               targetIds: g.targetIds.filter((id) => id !== targetId),
+              updatedAt: Date.now(),
+            };
+          }),
+        })),
+
+      removeTargetFromAllGroups: (targetId) =>
+        set((state) => ({
+          groups: state.groups.map((group) => {
+            if (!group.targetIds.includes(targetId)) return group;
+            return {
+              ...group,
+              targetIds: group.targetIds.filter((id) => id !== targetId),
+              updatedAt: Date.now(),
+            };
+          }),
+        })),
+
+      replaceTargetInGroups: (sourceId, destId) =>
+        set((state) => ({
+          groups: state.groups.map((group) => {
+            if (!group.targetIds.includes(sourceId)) return group;
+            const nextTargetIds = [
+              ...new Set(group.targetIds.map((id) => (id === sourceId ? destId : id))),
+            ];
+            return {
+              ...group,
+              targetIds: nextTargetIds,
               updatedAt: Date.now(),
             };
           }),

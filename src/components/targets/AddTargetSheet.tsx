@@ -2,12 +2,17 @@
  * 添加目标 Sheet
  */
 
-import { useState } from "react";
-import { View, ScrollView } from "react-native";
+import { useCallback, useState } from "react";
+import { View } from "react-native";
 import {
+  BottomSheetFooter,
+  BottomSheetScrollView,
+  type BottomSheetFooterProps,
+} from "@gorhom/bottom-sheet";
+import {
+  BottomSheet,
   Button,
   Chip,
-  Dialog,
   FieldError,
   Input,
   Label,
@@ -16,6 +21,7 @@ import {
   useThemeColor,
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { parseRA, parseDec, formatRA, formatDec } from "../../lib/targets/coordinates";
 import { CategorySelector } from "./CategorySelector";
@@ -59,6 +65,7 @@ export function AddTargetSheet({
 }: AddTargetSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [type, setType] = useState<TargetType>("other");
   const [ra, setRa] = useState("");
@@ -115,15 +122,56 @@ export function AddTargetSheet({
     onClose();
   };
 
+  const renderFooter = useCallback(
+    (props: BottomSheetFooterProps) => (
+      <BottomSheetFooter {...props}>
+        <View
+          className="border-t border-separator bg-background px-4 pt-3"
+          style={{ paddingBottom: insets.bottom + 12 }}
+        >
+          <View className="flex-row justify-end gap-2">
+            <Button variant="outline" onPress={handleClose}>
+              <Button.Label>{t("common.cancel")}</Button.Label>
+            </Button>
+            <Button variant="primary" onPress={handleConfirm} isDisabled={!name.trim()}>
+              <Button.Label>{t("common.confirm")}</Button.Label>
+            </Button>
+          </View>
+        </View>
+      </BottomSheetFooter>
+    ),
+    [handleClose, handleConfirm, insets.bottom, name, t],
+  );
+
   return (
-    <Dialog isOpen={visible} onOpenChange={(open) => !open && handleClose()}>
-      <Dialog.Portal>
-        <Dialog.Overlay />
-        <Dialog.Content className="mx-6 w-full max-w-sm rounded-2xl bg-background p-6 max-h-[85%]">
-          <ScrollView showsVerticalScrollIndicator={false}>
+    <BottomSheet isOpen={visible} onOpenChange={(open) => !open && handleClose()}>
+      <BottomSheet.Portal>
+        <BottomSheet.Overlay />
+        <BottomSheet.Content
+          snapPoints={["72%", "96%"]}
+          index={1}
+          enableDynamicSizing={false}
+          enableOverDrag={false}
+          enableContentPanningGesture={false}
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
+          android_keyboardInputMode="adjustResize"
+          backgroundClassName="rounded-t-[28px] bg-background"
+          contentContainerClassName="h-full px-0 pb-0"
+          footerComponent={renderFooter}
+        >
+          <BottomSheetScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingTop: 12,
+              paddingBottom: insets.bottom + 110,
+            }}
+          >
             <View className="flex-row items-center justify-between mb-2">
-              <Dialog.Title>{t("targets.addTarget")}</Dialog.Title>
-              <Dialog.Close />
+              <BottomSheet.Title>{t("targets.addTarget")}</BottomSheet.Title>
+              <BottomSheet.Close />
             </View>
 
             <TextField isRequired>
@@ -132,7 +180,6 @@ export function AddTargetSheet({
                 placeholder={t("targets.targetName")}
                 value={name}
                 onChangeText={setName}
-                autoFocus
                 autoCorrect={false}
               />
             </TextField>
@@ -239,18 +286,9 @@ export function AddTargetSheet({
                 autoCorrect={false}
               />
             </TextField>
-
-            <View className="mt-4 flex-row justify-end gap-2">
-              <Button variant="outline" onPress={handleClose}>
-                <Button.Label>{t("common.cancel")}</Button.Label>
-              </Button>
-              <Button variant="primary" onPress={handleConfirm} isDisabled={!name.trim()}>
-                <Button.Label>{t("common.confirm")}</Button.Label>
-              </Button>
-            </View>
-          </ScrollView>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog>
+          </BottomSheetScrollView>
+        </BottomSheet.Content>
+      </BottomSheet.Portal>
+    </BottomSheet>
   );
 }

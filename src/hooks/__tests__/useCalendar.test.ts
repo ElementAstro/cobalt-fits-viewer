@@ -373,4 +373,14 @@ describe("useCalendar", () => {
     expect(state.sessions.find((s) => s.id === "s-refresh-2")?.calendarEventId).toBeUndefined();
     expect(state.plans.find((p) => p.id === "p-refresh-2")?.calendarEventId).toBeUndefined();
   });
+
+  it("syncObservationPlan returns false when plan does not exist", async () => {
+    const { result } = renderHook(() => useCalendar());
+
+    await act(async () => {
+      const ok = await result.current.syncObservationPlan("missing-plan-id");
+      expect(ok).toBe(false);
+    });
+    expect(calendarApi.createPlanEvent).not.toHaveBeenCalled();
+  });
 });

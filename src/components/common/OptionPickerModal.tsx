@@ -1,6 +1,6 @@
 import { Button, Dialog, Label, Radio, RadioGroup } from "heroui-native";
-import * as Haptics from "expo-haptics";
 import { coerceOptionValue } from "./optionPickerValue";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 
 interface OptionPickerModalProps<T extends string | number> {
   visible: boolean;
@@ -19,6 +19,8 @@ export function OptionPickerModal<T extends string | number>({
   onSelect,
   onClose,
 }: OptionPickerModalProps<T>) {
+  const haptics = useHapticFeedback();
+
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
@@ -29,7 +31,7 @@ export function OptionPickerModal<T extends string | number>({
           <RadioGroup
             value={String(selectedValue)}
             onValueChange={(val) => {
-              Haptics.selectionAsync();
+              haptics.selection();
               onSelect(coerceOptionValue(options, val));
               onClose();
             }}

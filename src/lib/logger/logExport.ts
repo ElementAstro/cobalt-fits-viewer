@@ -6,7 +6,8 @@
 import { Paths, Directory, File as FSFile } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import { gzip } from "pako";
-import { Logger } from "./logger";
+import { getAppVersionInfo } from "../version";
+import { Logger, sanitizeLogEntry, serializeLogData } from "./logger";
 import { collectSystemInfo, formatSystemInfo } from "./systemInfo";
 import type { LogEntry, SystemInfo } from "./types";
 
@@ -27,6 +28,10 @@ interface LogExportPackage {
   totalEntries: number;
   systemInfo?: SystemInfo;
   entries: LogEntry[];
+}
+
+function getRedactedEntries(): LogEntry[] {
+  return Logger.getEntries().map((entry) => sanitizeLogEntry(entry, { redact: true }));
 }
 
 /**
@@ -73,7 +78,7 @@ function buildTextContent(entries: LogEntry[], systemInfo?: SystemInfo): string 
     const line = `[${time}][${entry.level.toUpperCase()}][${entry.tag}] ${entry.message}`;
     lines.push(line);
     if (entry.data !== undefined) {
-      lines.push(`  data: ${JSON.stringify(entry.data)}`);
+      lines.push(`  data: ${serializeLogData(entry.data, { redact: true })}`);
     }
     if (entry.stackTrace) {
       lines.push(`  stack: ${entry.stackTrace}`);
@@ -87,9 +92,10 @@ function buildTextContent(entries: LogEntry[], systemInfo?: SystemInfo): string 
  * 构建 JSON 格式的导出内容
  */
 function buildJsonContent(entries: LogEntry[], systemInfo?: SystemInfo): string {
+  const versionInfo = getAppVersionInfo();
   const pkg: LogExportPackage = {
     exportedAt: new Date().toISOString(),
-    appVersion: "1.0.0",
+    appVersion: versionInfo.nativeVersion,
     totalEntries: entries.length,
     entries,
   };
@@ -111,7 +117,7 @@ export async function exportLogsToFile(
   const { format, compress = false, includeSystemInfo = false } = options;
 
   try {
-    const entries = Logger.getEntries();
+    const entries = getRedactedEntries();
 
     let systemInfo: SystemInfo | undefined;
     if (includeSystemInfo) {

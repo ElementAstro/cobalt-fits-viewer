@@ -3,7 +3,7 @@
  * 管理并行任务队列、轮询、重试
  */
 
-import { Logger } from "../logger/logger";
+import { Logger } from "../logger";
 import * as client from "./astrometryClient";
 import type {
   AstrometryJob,

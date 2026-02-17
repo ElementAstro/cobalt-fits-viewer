@@ -1,13 +1,16 @@
 import { memo, useCallback } from "react";
 import { View, Text } from "react-native";
 import { Button } from "heroui-native";
+import { computeOneToOneScale } from "../../lib/viewer/transform";
 
 interface ZoomControlsProps {
   scale: number;
   translateX: number;
   translateY: number;
   canvasWidth: number;
+  canvasHeight: number;
   imageWidth?: number;
+  imageHeight?: number;
   onSetTransform: (tx: number, ty: number, scale: number) => void;
 }
 
@@ -18,7 +21,9 @@ export const ZoomControls = memo(function ZoomControls({
   translateX,
   translateY,
   canvasWidth,
+  canvasHeight,
   imageWidth,
+  imageHeight,
   onSetTransform,
 }: ZoomControlsProps) {
   const handleFit = useCallback(() => {
@@ -26,10 +31,14 @@ export const ZoomControls = memo(function ZoomControls({
   }, [onSetTransform]);
 
   const handleOneToOne = useCallback(() => {
-    if (imageWidth && canvasWidth > 0) {
-      onSetTransform(translateX, translateY, imageWidth / canvasWidth);
+    if (imageWidth && imageHeight && canvasWidth > 0 && canvasHeight > 0) {
+      onSetTransform(
+        translateX,
+        translateY,
+        computeOneToOneScale(imageWidth, imageHeight, canvasWidth, canvasHeight),
+      );
     }
-  }, [imageWidth, canvasWidth, translateX, translateY, onSetTransform]);
+  }, [imageWidth, imageHeight, canvasWidth, canvasHeight, translateX, translateY, onSetTransform]);
 
   const handleZoomIn = useCallback(() => {
     onSetTransform(translateX, translateY, scale * ZOOM_STEP);

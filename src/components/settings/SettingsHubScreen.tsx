@@ -5,7 +5,7 @@ import { Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { SettingsCategoryCard } from "./SettingsCategoryCard";
 
 type SettingsRoute =
@@ -147,19 +147,23 @@ const CATEGORIES: CategoryInfo[] = [
     route: "/settings/about",
     searchKeyHints: [
       "settings.version",
+      "settings.general",
+      "settings.hapticsEnabled",
+      "settings.confirmDestructiveActions",
+      "settings.autoCheckUpdates",
       "systemInfo.title",
       "logs.title",
       "settings.resetAll",
       "settings.checkForUpdate",
       "settings.changelog",
     ],
-    searchTerms: ["version", "system", "logs", "update", "reset"],
+    searchTerms: ["version", "system", "logs", "update", "reset", "haptic", "confirm"],
   },
 ];
 
 export default function SettingsHubScreen() {
   const { t } = useI18n();
-  const { isLandscape } = useScreenOrientation();
+  const { contentPaddingTop, horizontalPadding, isLandscapeTablet } = useResponsiveLayout();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [searchQuery, setSearchQuery] = useState("");
@@ -184,8 +188,8 @@ export default function SettingsHubScreen() {
     <View className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: isLandscape ? 8 : insets.top + 8,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
           paddingBottom: insets.bottom + 24,
         }}
         showsVerticalScrollIndicator={false}
@@ -215,15 +219,19 @@ export default function SettingsHubScreen() {
 
         <Separator className="my-4" />
 
-        <View className="gap-3">
+        <View className={isLandscapeTablet ? "flex-row flex-wrap justify-between" : "gap-3"}>
           {filteredCategories.map((category) => (
-            <SettingsCategoryCard
+            <View
               key={category.key}
-              icon={category.icon}
-              title={t(category.titleKey)}
-              description={t(category.descKey)}
-              onPress={() => router.push(category.route)}
-            />
+              style={isLandscapeTablet ? { width: "48.5%", marginBottom: 12 } : undefined}
+            >
+              <SettingsCategoryCard
+                icon={category.icon}
+                title={t(category.titleKey)}
+                description={t(category.descKey)}
+                onPress={() => router.push(category.route)}
+              />
+            </View>
           ))}
         </View>
       </ScrollView>

@@ -62,14 +62,15 @@ export function useSystemInfo() {
  * 提供日志查看与过滤能力
  */
 export function useLogViewer() {
+  const entries = useLogStore((s) => s.getFilteredEntries());
+  const totalCount = useLogStore((s) => s.totalCount);
   const filterLevel = useLogStore((s) => s.filterLevel);
   const filterTag = useLogStore((s) => s.filterTag);
+  const filterQuery = useLogStore((s) => s.filterQuery);
   const setFilterLevel = useLogStore((s) => s.setFilterLevel);
   const setFilterTag = useLogStore((s) => s.setFilterTag);
+  const setFilterQuery = useLogStore((s) => s.setFilterQuery);
   const clearLogs = useLogStore((s) => s.clearLogs);
-  const getFilteredEntries = useLogStore((s) => s.getFilteredEntries);
-
-  const entries = getFilteredEntries();
 
   const [isExporting, setIsExporting] = useState(false);
 
@@ -107,14 +108,16 @@ export function useLogViewer() {
     entries,
     filterLevel,
     filterTag,
+    filterQuery,
     setFilter,
     setFilterLevel,
     setFilterTag,
+    setFilterQuery,
     clearLogs,
     exportLogs,
     exportToFile,
     shareLogs,
     isExporting,
-    totalCount: Logger.getCount(),
+    totalCount,
   };
 }

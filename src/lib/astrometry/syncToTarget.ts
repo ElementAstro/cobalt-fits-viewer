@@ -4,7 +4,7 @@
  */
 
 import * as Crypto from "expo-crypto";
-import { Logger } from "../logger/logger";
+import { Logger } from "../logger";
 import type { AstrometryResult } from "./types";
 import type { Target, TargetType } from "../fits/types";
 

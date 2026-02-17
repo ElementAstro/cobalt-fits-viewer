@@ -8,6 +8,7 @@ import { useFitsStore } from "../stores/useFitsStore";
 import { createAlbum, evaluateSmartRules, suggestSmartAlbums } from "../lib/gallery/albumManager";
 import { calculateAlbumStatistics } from "../lib/gallery/albumStatistics";
 import { findDuplicateImages } from "../lib/gallery/albumDuplicateDetector";
+import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
 import type { SmartAlbumRule, AlbumStatistics } from "../lib/fits/types";
 
 const hasSameIds = (prev: string[], next: string[]) =>
@@ -32,6 +33,7 @@ export function useAlbums() {
   const setAlbumSortBy = useAlbumStore((s) => s.setAlbumSortBy);
   const setAlbumSortOrder = useAlbumStore((s) => s.setAlbumSortOrder);
   const getFilteredAlbums = useAlbumStore((s) => s.getFilteredAlbums);
+  const reconcileWithFiles = useAlbumStore((s) => s.reconcileWithFiles);
 
   // NEW: Pinning
   const toggleAlbumPin = useAlbumStore((s) => s.toggleAlbumPin);
@@ -79,6 +81,20 @@ export function useAlbums() {
     refreshSmartAlbums();
   }, [refreshSmartAlbums]);
 
+  useEffect(() => {
+    reconcileWithFiles(files.map((file) => file.id));
+  }, [files, reconcileWithFiles]);
+
+  useEffect(() => {
+    const patches = computeAlbumFileConsistencyPatches(files, albums);
+    if (patches.length === 0) return;
+
+    const { updateFile } = useFitsStore.getState();
+    for (const patch of patches) {
+      updateFile(patch.fileId, { albumIds: patch.albumIds });
+    }
+  }, [albums, files]);
+
   const getSuggestions = useCallback(() => {
     return suggestSmartAlbums(files);
   }, [files]);
@@ -94,9 +110,7 @@ export function useAlbums() {
   );
 
   // NEW: Get filtered albums (with search and sort applied)
-  const filteredAlbums = useMemo(() => {
-    return getFilteredAlbums();
-  }, [getFilteredAlbums]);
+  const filteredAlbums = getFilteredAlbums();
 
   // NEW: Find duplicate images across albums
   const duplicateImages = useMemo(() => {

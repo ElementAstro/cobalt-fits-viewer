@@ -177,6 +177,138 @@ describe("useViewerStore — levels", () => {
     });
   });
 
+  describe("basic state actions", () => {
+    it("setCurrentFile updates id and clears error", () => {
+      useViewerStore.setState({ error: "old error", currentFileId: null });
+      useViewerStore.getState().setCurrentFile("file-1");
+      expect(useViewerStore.getState().currentFileId).toBe("file-1");
+      expect(useViewerStore.getState().error).toBeNull();
+    });
+
+    it("setLoading and setError update flags", () => {
+      useViewerStore.getState().setLoading(true);
+      useViewerStore.getState().setError("boom");
+      expect(useViewerStore.getState().isLoading).toBe(true);
+      expect(useViewerStore.getState().error).toBe("boom");
+    });
+  });
+
+  describe("display and frame setters", () => {
+    it("updates display parameters", () => {
+      const store = useViewerStore.getState();
+      store.setStretch("sqrt");
+      store.setColormap("heat" as unknown as ColormapType);
+      store.setBrightness(0.25);
+      store.setContrast(1.6);
+      store.setMtfMidtone(0.42);
+      store.setCurvePreset("s-curve");
+
+      const s = useViewerStore.getState();
+      expect(s.stretch).toBe("sqrt");
+      expect(s.colormap).toBe("heat");
+      expect(s.brightness).toBe(0.25);
+      expect(s.contrast).toBe(1.6);
+      expect(s.mtfMidtone).toBe(0.42);
+      expect(s.curvePreset).toBe("s-curve");
+    });
+
+    it("updates HDU/frame metadata", () => {
+      const store = useViewerStore.getState();
+      store.setCurrentHDU(2);
+      store.setCurrentFrame(8);
+      store.setTotalFrames(12);
+
+      const s = useViewerStore.getState();
+      expect(s.currentHDU).toBe(2);
+      expect(s.currentFrame).toBe(8);
+      expect(s.totalFrames).toBe(12);
+    });
+  });
+
+  describe("overlay toggles", () => {
+    it("toggles grid/crosshair/pixelInfo/miniMap", () => {
+      const store = useViewerStore.getState();
+      const before = {
+        showGrid: useViewerStore.getState().showGrid,
+        showCrosshair: useViewerStore.getState().showCrosshair,
+        showPixelInfo: useViewerStore.getState().showPixelInfo,
+        showMiniMap: useViewerStore.getState().showMiniMap,
+      };
+
+      store.toggleGrid();
+      store.toggleCrosshair();
+      store.togglePixelInfo();
+      store.toggleMiniMap();
+
+      const s = useViewerStore.getState();
+      expect(s.showGrid).toBe(!before.showGrid);
+      expect(s.showCrosshair).toBe(!before.showCrosshair);
+      expect(s.showPixelInfo).toBe(!before.showPixelInfo);
+      expect(s.showMiniMap).toBe(!before.showMiniMap);
+    });
+  });
+
+  describe("annotation actions", () => {
+    beforeEach(() => {
+      useViewerStore.setState({ annotations: [], activeAnnotationId: null });
+    });
+
+    it("adds, updates and removes annotations", () => {
+      const store = useViewerStore.getState();
+      store.addAnnotation({
+        id: "a1",
+        type: "circle",
+        x: 10,
+        y: 20,
+        radius: 8,
+        color: "#ff0000",
+        strokeWidth: 2,
+        visible: true,
+      });
+
+      expect(useViewerStore.getState().annotations).toHaveLength(1);
+
+      store.updateAnnotation("a1", { color: "#00ff00", x: 11 });
+      expect(useViewerStore.getState().annotations[0].color).toBe("#00ff00");
+      expect(useViewerStore.getState().annotations[0].x).toBe(11);
+
+      store.setActiveAnnotation("a1");
+      expect(useViewerStore.getState().activeAnnotationId).toBe("a1");
+
+      store.removeAnnotation("a1");
+      expect(useViewerStore.getState().annotations).toEqual([]);
+      expect(useViewerStore.getState().activeAnnotationId).toBeNull();
+    });
+
+    it("clearAnnotations removes all and resets active annotation", () => {
+      const store = useViewerStore.getState();
+      store.addAnnotation({
+        id: "a1",
+        type: "text",
+        x: 1,
+        y: 2,
+        text: "note",
+        color: "#ffffff",
+        strokeWidth: 1,
+        visible: true,
+      });
+      store.setActiveAnnotation("a1");
+      store.clearAnnotations();
+
+      expect(useViewerStore.getState().annotations).toEqual([]);
+      expect(useViewerStore.getState().activeAnnotationId).toBeNull();
+    });
+  });
+
+  describe("cursor updates", () => {
+    it("setCursorPosition updates x/y/value", () => {
+      useViewerStore.getState().setCursorPosition(123, 456, 789);
+      expect(useViewerStore.getState().cursorX).toBe(123);
+      expect(useViewerStore.getState().cursorY).toBe(456);
+      expect(useViewerStore.getState().cursorValue).toBe(789);
+    });
+  });
+
   // ===== initFromSettings / resetViewerState =====
 
   describe("initFromSettings", () => {

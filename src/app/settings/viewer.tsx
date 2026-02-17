@@ -2,10 +2,10 @@ import { View, Text, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { Separator, Switch } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
@@ -43,7 +43,8 @@ const COLOR_OPTIONS = [
 
 export default function ViewerSettingsScreen() {
   const { t } = useI18n();
-  const { isLandscape } = useScreenOrientation();
+  const haptics = useHapticFeedback();
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
@@ -146,8 +147,8 @@ export default function ViewerSettingsScreen() {
     <View className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: isLandscape ? 8 : insets.top + 8,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
           paddingBottom: insets.bottom + 24,
         }}
         showsVerticalScrollIndicator={false}
@@ -186,7 +187,7 @@ export default function ViewerSettingsScreen() {
               <Switch
                 isSelected={defaultShowGrid}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setDefaultShowGrid(v);
                 }}
               />
@@ -200,7 +201,7 @@ export default function ViewerSettingsScreen() {
               <Switch
                 isSelected={defaultShowCrosshair}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setDefaultShowCrosshair(v);
                 }}
               />
@@ -214,7 +215,7 @@ export default function ViewerSettingsScreen() {
               <Switch
                 isSelected={defaultShowPixelInfo}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setDefaultShowPixelInfo(v);
                 }}
               />
@@ -228,7 +229,7 @@ export default function ViewerSettingsScreen() {
               <Switch
                 isSelected={defaultShowMinimap}
                 onSelectedChange={(v: boolean) => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setDefaultShowMinimap(v);
                 }}
               />

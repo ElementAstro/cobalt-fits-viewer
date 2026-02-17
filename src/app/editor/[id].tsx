@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import type { Href } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageEditor } from "../../hooks/useImageEditor";
@@ -99,6 +100,7 @@ export default function EditorDetailScreen() {
   const { t } = useI18n();
   type TranslationKey = Parameters<typeof t>[0];
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
   const { pixels, dimensions, isLoading: fitsLoading, loadFromPath } = useFitsFile();
@@ -449,7 +451,10 @@ export default function EditorDetailScreen() {
   return (
     <View className="flex-1 bg-background">
       {/* Top Bar */}
-      <View className="flex-row items-center justify-between px-4 pt-14 pb-2">
+      <View
+        className="flex-row items-center justify-between pb-2"
+        style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
+      >
         <Button size="sm" variant="outline" onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={16} color={mutedColor} />
         </Button>
@@ -516,6 +521,8 @@ export default function EditorDetailScreen() {
               showCrosshair={false}
               cursorX={-1}
               cursorY={-1}
+              interactionEnabled={!showCrop}
+              wheelZoomEnabled
             />
             {showCrop && canvasLayout.width > 0 && (
               <CropOverlay

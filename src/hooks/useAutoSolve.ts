@@ -7,7 +7,7 @@ import { useEffect, useRef } from "react";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useAstrometryStore } from "../stores/useAstrometryStore";
 import { useAstrometry } from "./useAstrometry";
-import { Logger } from "../lib/logger/logger";
+import { Logger } from "../lib/logger";
 
 const TAG = "useAutoSolve";
 

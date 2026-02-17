@@ -6,18 +6,107 @@ import { useCallback, useMemo } from "react";
 import { useTargetStore } from "../stores/useTargetStore";
 import { useTargetGroupStore } from "../stores/useTargetGroupStore";
 import { useFitsStore } from "../stores/useFitsStore";
-import {
-  autoDetectTarget,
-  calculateTargetExposure,
-  createTarget,
-} from "../lib/targets/targetManager";
+import { useSessionStore } from "../stores/useSessionStore";
+import { calculateTargetExposure, createTarget } from "../lib/targets/targetManager";
 import { findKnownAliases } from "../lib/targets/targetMatcher";
 import {
   calculateExposureStats,
   calculateCompletionRate,
   formatExposureTime,
 } from "../lib/targets/exposureStats";
-import type { TargetType, RecommendedEquipment } from "../lib/fits/types";
+import {
+  computeMergeRelinkPatch,
+  computeTargetFileReconciliation,
+  normalizeTargetMatch,
+} from "../lib/targets/targetRelations";
+import type {
+  FitsMetadata,
+  RecommendedEquipment,
+  Target,
+  TargetStatus,
+  TargetType,
+} from "../lib/fits/types";
+
+export type TargetLinkSource = "import" | "scan" | "astrometry" | "manual" | "backup" | "unknown";
+
+export interface UpsertTargetMetadata {
+  object?: string;
+  aliases?: string[];
+  ra?: number;
+  dec?: number;
+  type?: TargetType;
+  status?: TargetStatus;
+  category?: string;
+  tags?: string[];
+  notes?: string;
+}
+
+export interface UpsertAndLinkResult {
+  target: Target;
+  targetId: string;
+  isNew: boolean;
+  source: TargetLinkSource;
+}
+
+const COORDINATE_MATCH_RADIUS_DEG = 0.5;
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values)];
+}
+
+function isCoordinateMatch(ra1: number, dec1: number, ra2: number, dec2: number): boolean {
+  const dRa = (ra1 - ra2) * Math.cos((dec1 * Math.PI) / 180);
+  const dDec = dec1 - dec2;
+  return Math.sqrt(dRa * dRa + dDec * dDec) <= COORDINATE_MATCH_RADIUS_DEG;
+}
+
+function syncSessionTargetName(
+  sessions: ReturnType<typeof useSessionStore.getState>["sessions"],
+  sourceName: string,
+  destName?: string,
+) {
+  return sessions.map((session) => {
+    const replaced = session.targets
+      .map((targetName) => (targetName === sourceName ? destName : targetName))
+      .filter((targetName): targetName is string => Boolean(targetName));
+    const deduped = uniqueStrings(replaced);
+    if (
+      deduped.length === session.targets.length &&
+      deduped.every((value, idx) => value === session.targets[idx])
+    ) {
+      return session;
+    }
+    return {
+      ...session,
+      targets: deduped,
+    };
+  });
+}
+
+function applyTargetGraphPatch(patch: {
+  targets: Target[];
+  files: FitsMetadata[];
+  groups: ReturnType<typeof useTargetGroupStore.getState>["groups"];
+  sessions: ReturnType<typeof useSessionStore.getState>["sessions"];
+}) {
+  useTargetStore.setState({ targets: patch.targets });
+  useFitsStore.setState({ files: patch.files });
+  useTargetGroupStore.setState({ groups: patch.groups });
+  useSessionStore.setState({ sessions: patch.sessions });
+}
+
+export function reconcileTargetGraphStores(): boolean {
+  const patch = computeTargetFileReconciliation({
+    targets: useTargetStore.getState().targets,
+    files: useFitsStore.getState().files,
+    groups: useTargetGroupStore.getState().groups,
+    sessions: useSessionStore.getState().sessions,
+  });
+
+  if (!patch.changed) return false;
+  applyTargetGraphPatch(patch);
+  return true;
+}
 
 export function useTargets() {
   const targets = useTargetStore((s) => s.targets);
@@ -28,7 +117,6 @@ export function useTargets() {
   const removeImageFromTarget = useTargetStore((s) => s.removeImageFromTarget);
   const addAlias = useTargetStore((s) => s.addAlias);
   const setStatus = useTargetStore((s) => s.setStatus);
-  const mergeIntoTarget = useTargetStore((s) => s.mergeIntoTarget);
   const toggleFavorite = useTargetStore((s) => s.toggleFavorite);
   const togglePinned = useTargetStore((s) => s.togglePinned);
   const addTag = useTargetStore((s) => s.addTag);
@@ -52,45 +140,228 @@ export function useTargets() {
   const addTargetToGroup = useTargetGroupStore((s) => s.addTargetToGroup);
   const removeTargetFromGroup = useTargetGroupStore((s) => s.removeTargetFromGroup);
   const getGroupById = useTargetGroupStore((s) => s.getGroupById);
+  const removeTargetFromAllGroups = useTargetGroupStore((s) => s.removeTargetFromAllGroups);
+  const replaceTargetInGroups = useTargetGroupStore((s) => s.replaceTargetInGroups);
 
   const files = useFitsStore((s) => s.files);
   const updateFile = useFitsStore((s) => s.updateFile);
 
+  const upsertAndLinkFileTarget = useCallback(
+    (
+      fileId: string,
+      metadata: UpsertTargetMetadata = {},
+      source: TargetLinkSource = "unknown",
+    ): UpsertAndLinkResult | null => {
+      const fileStore = useFitsStore.getState();
+      const targetStore = useTargetStore.getState();
+      const file = fileStore.getFileById(fileId);
+      if (!file) return null;
+
+      const targetName = metadata.object?.trim() || file.object?.trim();
+      const aliasInputs = uniqueStrings(
+        (metadata.aliases ?? []).map((alias) => alias.trim()).filter((alias) => alias.length > 0),
+      );
+      const match = normalizeTargetMatch({
+        name: targetName,
+        aliases: aliasInputs,
+        targets: targetStore.targets,
+      });
+
+      let target = match;
+      if (!target && metadata.ra !== undefined && metadata.dec !== undefined) {
+        target =
+          targetStore.targets.find(
+            (candidate) =>
+              candidate.ra !== undefined &&
+              candidate.dec !== undefined &&
+              isCoordinateMatch(metadata.ra!, metadata.dec!, candidate.ra, candidate.dec),
+          ) ?? null;
+      }
+
+      let isNew = false;
+      if (!target) {
+        if (!targetName) return null;
+        const nextTarget = createTarget(targetName, metadata.type ?? "other");
+        nextTarget.ra = metadata.ra ?? nextTarget.ra;
+        nextTarget.dec = metadata.dec ?? nextTarget.dec;
+        nextTarget.status = metadata.status ?? nextTarget.status;
+        nextTarget.category = metadata.category ?? nextTarget.category;
+        nextTarget.tags = metadata.tags ? uniqueStrings(metadata.tags) : nextTarget.tags;
+        nextTarget.notes = metadata.notes ?? nextTarget.notes;
+        const knownAliases = findKnownAliases(targetName);
+        nextTarget.aliases = uniqueStrings(
+          [...nextTarget.aliases, ...aliasInputs, ...knownAliases].filter(
+            (alias) => alias.toLowerCase() !== targetName.toLowerCase(),
+          ),
+        );
+        addTarget(nextTarget);
+        target = nextTarget;
+        isNew = true;
+      } else {
+        const existingTarget = target;
+        const updates: Partial<Target> = {};
+        if (metadata.ra !== undefined && existingTarget.ra !== metadata.ra) {
+          updates.ra = metadata.ra;
+        }
+        if (metadata.dec !== undefined && existingTarget.dec !== metadata.dec) {
+          updates.dec = metadata.dec;
+        }
+        if (metadata.status && existingTarget.status !== metadata.status) {
+          updates.status = metadata.status;
+        }
+        if (metadata.category && existingTarget.category !== metadata.category) {
+          updates.category = metadata.category;
+        }
+        if (metadata.notes && !existingTarget.notes) {
+          updates.notes = metadata.notes;
+        }
+        if (metadata.type && existingTarget.type === "other") {
+          updates.type = metadata.type;
+        }
+        if (metadata.tags && metadata.tags.length > 0) {
+          updates.tags = uniqueStrings([...(existingTarget.tags ?? []), ...metadata.tags]);
+        }
+        if (targetName) {
+          const knownAliases = findKnownAliases(targetName);
+          const mergedAliases = uniqueStrings([
+            ...existingTarget.aliases,
+            ...aliasInputs,
+            ...knownAliases,
+            ...(targetName.toLowerCase() === existingTarget.name.toLowerCase() ? [] : [targetName]),
+          ]);
+          if (
+            mergedAliases.length !== existingTarget.aliases.length ||
+            mergedAliases.some((alias, idx) => alias !== existingTarget.aliases[idx])
+          ) {
+            updates.aliases = mergedAliases;
+          }
+        }
+        if (Object.keys(updates).length > 0) {
+          updateTarget(existingTarget.id, updates);
+        }
+      }
+
+      if (!target) return null;
+
+      addImageToTarget(target.id, fileId);
+      if (file.targetId !== target.id) {
+        fileStore.updateFile(fileId, { targetId: target.id });
+      }
+
+      const latest =
+        useTargetStore.getState().targets.find((item) => item.id === target.id) ?? target;
+      return {
+        target: latest,
+        targetId: latest.id,
+        isNew,
+        source,
+      };
+    },
+    [addTarget, addImageToTarget, updateTarget],
+  );
+
+  const removeTargetCascade = useCallback(
+    (targetId: string) => {
+      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
+      if (!target) return false;
+
+      removeTarget(targetId);
+      useFitsStore.setState((state) => ({
+        files: state.files.map((file) =>
+          file.targetId === targetId ? { ...file, targetId: undefined } : file,
+        ),
+      }));
+      removeTargetFromAllGroups(targetId);
+      useSessionStore.setState((state) => ({
+        sessions: syncSessionTargetName(state.sessions, target.name),
+      }));
+      reconcileTargetGraphStores();
+      return true;
+    },
+    [removeTarget, removeTargetFromAllGroups],
+  );
+
+  const mergeTargetsCascade = useCallback(
+    (destId: string, sourceId: string) => {
+      if (destId === sourceId) return null;
+      const stateSnapshot = {
+        targets: useTargetStore.getState().targets,
+        files: useFitsStore.getState().files,
+        groups: useTargetGroupStore.getState().groups,
+        sessions: useSessionStore.getState().sessions,
+      };
+      const source = stateSnapshot.targets.find((target) => target.id === sourceId);
+      if (!source) return null;
+
+      replaceTargetInGroups(sourceId, destId);
+      const patch = computeMergeRelinkPatch({
+        ...stateSnapshot,
+        groups: useTargetGroupStore.getState().groups,
+        destId,
+        sourceId,
+      });
+      if (!patch.changed) return null;
+
+      applyTargetGraphPatch(patch);
+      const mergedTarget = patch.targets.find((target) => target.id === destId) ?? null;
+      if (mergedTarget) {
+        useSessionStore.setState((state) => ({
+          sessions: syncSessionTargetName(state.sessions, source.name, mergedTarget.name),
+        }));
+      }
+      return mergedTarget;
+    },
+    [replaceTargetInGroups],
+  );
+
+  const renameTargetCascade = useCallback(
+    (targetId: string, newName: string) => {
+      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
+      const trimmed = newName.trim();
+      if (!target || !trimmed || target.name === trimmed) return false;
+
+      const nextAliases = target.aliases.includes(target.name)
+        ? target.aliases
+        : [...target.aliases, target.name];
+      updateTarget(targetId, { name: trimmed, aliases: uniqueStrings(nextAliases) });
+      useSessionStore.setState((state) => ({
+        sessions: syncSessionTargetName(state.sessions, target.name, trimmed),
+      }));
+      return true;
+    },
+    [updateTarget],
+  );
+
+  const reconcileTargetGraph = useCallback(() => reconcileTargetGraphStores(), []);
+
   const scanAndAutoDetect = useCallback((): { newCount: number; updatedCount: number } => {
-    const localTargets = [...targets];
     let newCount = 0;
     let updatedCount = 0;
+    const fileList = useFitsStore.getState().files;
 
-    for (const file of files) {
+    for (const file of fileList) {
       if (file.targetId) continue;
+      if (!file.object && file.ra === undefined && file.dec === undefined) continue;
 
-      const result = autoDetectTarget(file, localTargets);
+      const result = upsertAndLinkFileTarget(
+        file.id,
+        {
+          object: file.object,
+          ra: file.ra,
+          dec: file.dec,
+        },
+        "scan",
+      );
       if (!result) continue;
-
       if (result.isNew) {
-        localTargets.push(result.target);
-        addTarget(result.target);
-        addImageToTarget(result.target.id, file.id);
-        updateFile(file.id, { targetId: result.target.id });
-
-        const aliases = findKnownAliases(result.target.name);
-        for (const alias of aliases) {
-          addAlias(result.target.id, alias);
-        }
         newCount++;
       } else {
-        addImageToTarget(result.target.id, file.id);
-        updateFile(file.id, { targetId: result.target.id });
-
-        if (result.coordinateUpdates) {
-          updateTarget(result.target.id, result.coordinateUpdates);
-        }
         updatedCount++;
       }
     }
 
     return { newCount, updatedCount };
-  }, [files, targets, addTarget, addImageToTarget, addAlias, updateFile, updateTarget]);
+  }, [upsertAndLinkFileTarget]);
 
   const createNewTarget = useCallback(
     (
@@ -106,14 +377,44 @@ export function useTargets() {
         groupId?: string;
       },
     ) => {
+      const existing = normalizeTargetMatch({
+        name,
+        targets: useTargetStore.getState().targets,
+      });
+      if (existing) {
+        const mergedTags = options?.tags
+          ? uniqueStrings([...(existing.tags ?? []), ...(options.tags ?? [])])
+          : existing.tags;
+        const updates: Partial<Target> = {
+          ra: existing.ra ?? options?.ra,
+          dec: existing.dec ?? options?.dec,
+          notes: existing.notes ?? options?.notes,
+          category: existing.category ?? options?.category,
+          tags: mergedTags,
+          isFavorite: options?.isFavorite ?? existing.isFavorite,
+          groupId: options?.groupId ?? existing.groupId,
+        };
+        updateTarget(existing.id, updates);
+        if (options?.groupId) {
+          addTargetToGroup(options.groupId, existing.id);
+        }
+        return (
+          useTargetStore.getState().targets.find((target) => target.id === existing.id) ?? existing
+        );
+      }
+
       const target = createTarget(name, type);
       if (options?.ra !== undefined) target.ra = options.ra;
       if (options?.dec !== undefined) target.dec = options.dec;
       if (options?.notes) target.notes = options.notes;
       if (options?.category) target.category = options.category;
-      if (options?.tags) target.tags = options.tags;
+      if (options?.tags) target.tags = uniqueStrings(options.tags);
       if (options?.isFavorite !== undefined) target.isFavorite = options.isFavorite;
       if (options?.groupId) target.groupId = options.groupId;
+      const aliases = findKnownAliases(target.name);
+      if (aliases.length > 0) {
+        target.aliases = uniqueStrings([...target.aliases, ...aliases]);
+      }
       addTarget(target);
 
       if (options?.groupId) {
@@ -122,7 +423,20 @@ export function useTargets() {
 
       return target;
     },
-    [addTarget, addTargetToGroup],
+    [addTarget, addTargetToGroup, updateTarget],
+  );
+
+  const updateTargetWithCascade = useCallback(
+    (targetId: string, updates: Partial<Target>) => {
+      const { name, ...rest } = updates;
+      if (typeof name === "string") {
+        renameTargetCascade(targetId, name);
+      }
+      if (Object.keys(rest).length > 0) {
+        updateTarget(targetId, rest);
+      }
+    },
+    [renameTargetCascade, updateTarget],
   );
 
   const getTargetStats = useCallback(
@@ -227,21 +541,26 @@ export function useTargets() {
 
     // Basic CRUD
     addTarget: createNewTarget,
-    removeTarget,
-    updateTarget,
+    removeTarget: removeTargetCascade,
+    removeTargetCascade,
+    updateTarget: updateTargetWithCascade,
+    renameTargetCascade,
 
     // Image management
     addImageToTarget,
     removeImageFromTarget,
     associateImages,
     disassociateImages,
+    upsertAndLinkFileTarget,
 
     // Alias management
     addAlias,
 
     // Status management
     setStatus,
-    mergeIntoTarget,
+    mergeIntoTarget: mergeTargetsCascade,
+    mergeTargetsCascade,
+    reconcileTargetGraph,
 
     // Favorite & Pin
     toggleFavorite,

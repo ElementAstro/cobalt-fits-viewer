@@ -4,7 +4,7 @@ import { Button, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useAlbumStore } from "../../stores/useAlbumStore";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
@@ -21,7 +21,8 @@ export default function AlbumDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
-  const { isLandscape } = useScreenOrientation();
+  const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
+    useResponsiveLayout();
 
   const album = useAlbumStore((s) => s.getAlbumById(id ?? ""));
   const updateAlbum = useAlbumStore((s) => s.updateAlbum);
@@ -141,7 +142,7 @@ export default function AlbumDetailScreen() {
     setShowNotesEdit(true);
   }, [album]);
 
-  const albumColumns = isLandscape ? 5 : 3;
+  const albumColumns = isLandscapeTablet ? 6 : isLandscape ? 5 : 3;
 
   const AlbumHeader = useMemo(() => {
     if (!album) return null;
@@ -327,7 +328,10 @@ export default function AlbumDetailScreen() {
 
   return (
     <>
-      <View className={`flex-1 bg-background px-4 ${isLandscape ? "pt-2" : "pt-14"}`}>
+      <View
+        className="flex-1 bg-background"
+        style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
+      >
         {albumFiles.length === 0 ? (
           <View className="flex-1">
             {AlbumHeader}

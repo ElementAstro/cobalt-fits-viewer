@@ -10,18 +10,48 @@ import { Button, Chip, useThemeColor } from "heroui-native";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useI18n } from "../../i18n/useI18n";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { LocationMapView } from "../../components/gallery/LocationMapView";
 import { LocationMarkerSheet } from "../../components/gallery/LocationMarkerSheet";
 import { MapFilterBar } from "../../components/map/MapFilterBar";
+import type { MapDateFilterPreset } from "../../components/map/MapFilterBar";
 import type { LocationCluster, MapPreset } from "../../components/gallery/LocationMapView";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { MAP_PRESETS, MAP_PRESET_ORDER } from "../../lib/map/styles";
 import { LocationService } from "../../hooks/useLocation";
 
+const DATE_FILTER_DAYS: Record<Exclude<MapDateFilterPreset, "all">, number> = {
+  "7d": 7,
+  "30d": 30,
+  "90d": 90,
+  "365d": 365,
+};
+
+function getFileTimestamp(file: FitsMetadata): number {
+  if (file.dateObs) {
+    const parsed = new Date(file.dateObs).getTime();
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return file.importDate;
+}
+
+function getDateFilterStartTimestamp(preset: MapDateFilterPreset): number | null {
+  if (preset === "all") return null;
+  const days = DATE_FILTER_DAYS[preset];
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - (days - 1));
+  return start.getTime();
+}
+
 export default function MapScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [mutedColor, bgColor, successColor] = useThemeColor(["muted", "background", "success"]);
+  const { contentPaddingTop, horizontalPadding, isLandscapeTablet, sidePanelWidth } =
+    useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
   const setAutoTagLocation = useSettingsStore((s) => s.setAutoTagLocation);
@@ -33,6 +63,7 @@ export default function MapScreen() {
   const [selectedCluster, setSelectedCluster] = useState<LocationCluster | null>(null);
   const [filterObject, setFilterObject] = useState("");
   const [filterFilter, setFilterFilter] = useState("");
+  const [dateFilterPreset, setDateFilterPreset] = useState<MapDateFilterPreset>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
 
@@ -46,8 +77,12 @@ export default function MapScreen() {
     let result = files;
     if (filterObject) result = result.filter((f) => f.object === filterObject);
     if (filterFilter) result = result.filter((f) => f.filter === filterFilter);
+    const startTimestamp = getDateFilterStartTimestamp(dateFilterPreset);
+    if (startTimestamp !== null) {
+      result = result.filter((f) => getFileTimestamp(f) >= startTimestamp);
+    }
     return result;
-  }, [files, filterObject, filterFilter]);
+  }, [files, filterObject, filterFilter, dateFilterPreset]);
 
   const filesWithLocation = useMemo(() => filteredFiles.filter((f) => f.location), [filteredFiles]);
 
@@ -84,8 +119,15 @@ export default function MapScreen() {
     <View className="flex-1 bg-background">
       {/* Header */}
       <View
-        className="absolute top-0 left-0 right-0 z-10 px-4 pt-14 pb-2"
-        style={{ backgroundColor: `${bgColor}CC` }}
+        className="absolute top-0 z-10 pb-2"
+        style={{
+          backgroundColor: `${bgColor}CC`,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
+          left: 0,
+          right: isLandscapeTablet ? undefined : 0,
+          width: isLandscapeTablet ? sidePanelWidth : undefined,
+        }}
       >
         <View className="flex-row items-center justify-between">
           <Button variant="ghost" size="sm" onPress={() => router.back()}>
@@ -123,7 +165,11 @@ export default function MapScreen() {
               <Ionicons
                 name="filter"
                 size={16}
-                color={filterObject || filterFilter ? successColor : mutedColor}
+                color={
+                  filterObject || filterFilter || dateFilterPreset !== "all"
+                    ? successColor
+                    : mutedColor
+                }
               />
             </Button>
             <Text className="text-xs text-muted">
@@ -164,8 +210,10 @@ export default function MapScreen() {
             files={files.filter((f) => f.location)}
             filterObject={filterObject}
             filterFilter={filterFilter}
+            dateFilterPreset={dateFilterPreset}
             onFilterObjectChange={setFilterObject}
             onFilterFilterChange={setFilterFilter}
+            onDateFilterChange={setDateFilterPreset}
           />
         )}
       </View>

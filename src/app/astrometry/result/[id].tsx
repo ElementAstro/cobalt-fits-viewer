@@ -10,6 +10,7 @@ import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import { useState, useCallback, useMemo } from "react";
 import { useI18n } from "../../../i18n/useI18n";
+import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
 import { useAstrometryStore } from "../../../stores/useAstrometryStore";
 import { useFitsStore } from "../../../stores/useFitsStore";
 import { AstrometryResultView } from "../../../components/astrometry/AstrometryResultView";
@@ -20,17 +21,19 @@ import {
   formatWCSAsText,
 } from "../../../lib/astrometry/wcsExport";
 import { formatDuration } from "../../../lib/astrometry/formatUtils";
-import { findMatchingTarget, createTargetFromResult } from "../../../lib/astrometry/syncToTarget";
-import { useTargetStore } from "../../../stores/useTargetStore";
+import { createTargetFromResult } from "../../../lib/astrometry/syncToTarget";
+import { useTargets } from "../../../hooks/useTargets";
 
 export default function AstrometryResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
   const [borderColor, mutedColor] = useThemeColor(["separator", "muted"]);
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const job = useAstrometryStore((s) => s.getJobById(id ?? ""));
   const getFileById = useFitsStore((s) => s.getFileById);
+  const { upsertAndLinkFileTarget } = useTargets();
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [showWCSTable, setShowWCSTable] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -80,34 +83,35 @@ export default function AstrometryResultScreen() {
 
   const handleSyncToTarget = useCallback(() => {
     const currentJob = useAstrometryStore.getState().getJobById(id ?? "");
-    if (!currentJob?.result) return;
+    if (!currentJob?.result || !currentJob.fileId) return;
 
-    const targets = useTargetStore.getState().targets;
-    const existing = findMatchingTarget(targets, currentJob.result);
-
-    if (existing) {
-      // Update existing target with new coordinates and link file
-      const updates: Partial<{ ra: number; dec: number }> = {
+    const candidate = createTargetFromResult(currentJob.result, currentJob.fileId);
+    const syncResult = upsertAndLinkFileTarget(
+      currentJob.fileId,
+      {
+        object: candidate.name,
+        aliases: candidate.aliases,
         ra: currentJob.result.calibration.ra,
         dec: currentJob.result.calibration.dec,
-      };
-      useTargetStore.getState().updateTarget(existing.id, updates);
-      if (currentJob.fileId) {
-        useTargetStore.getState().addImageToTarget(existing.id, currentJob.fileId);
-      }
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(
-        t("common.success"),
-        `Updated target "${existing.name}" with plate solve coordinates.`,
-      );
-    } else {
-      // Create new target
-      const newTarget = createTargetFromResult(currentJob.result, currentJob.fileId);
-      useTargetStore.getState().addTarget(newTarget);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert(t("common.success"), `Created new target "${newTarget.name}".`);
+        type: candidate.type,
+        status: "acquiring",
+      },
+      "astrometry",
+    );
+
+    if (!syncResult) {
+      Alert.alert(t("common.error"), "Failed to sync target data.");
+      return;
     }
-  }, [id, t]);
+
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert(
+      t("common.success"),
+      syncResult.isNew
+        ? `Created new target "${syncResult.target.name}".`
+        : `Updated target "${syncResult.target.name}" with plate solve coordinates.`,
+    );
+  }, [id, t, upsertAndLinkFileTarget]);
 
   const wcsKeywords = useMemo(
     () => (job?.result ? generateWCSKeywords(job.result.calibration) : []),
@@ -142,8 +146,13 @@ export default function AstrometryResultScreen() {
     <View className="flex-1 bg-background">
       {/* Header */}
       <View
-        className="flex-row items-center px-4 pt-14 pb-3"
-        style={{ borderBottomWidth: 0.5, borderBottomColor: borderColor }}
+        className="flex-row items-center pb-3"
+        style={{
+          borderBottomWidth: 0.5,
+          borderBottomColor: borderColor,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
+        }}
       >
         <PressableFeedback onPress={() => router.back()} className="mr-3">
           <Ionicons name="arrow-back" size={22} color={mutedColor} />
@@ -171,7 +180,10 @@ export default function AstrometryResultScreen() {
       </View>
 
       {/* Result content */}
-      <ScrollView className="flex-1 px-4 py-4">
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingVertical: 16 }}
+      >
         <AstrometryResultView
           result={result}
           showAnnotations={showAnnotations}

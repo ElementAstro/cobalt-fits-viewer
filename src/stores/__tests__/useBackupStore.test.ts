@@ -101,6 +101,18 @@ describe("useBackupStore", () => {
       expect(useBackupStore.getState().progress.phase).toBe("idle");
       expect(useBackupStore.getState().progress.current).toBe(0);
     });
+
+    it("toggles backup and restore in-progress flags", () => {
+      useBackupStore.getState().setBackupInProgress(true);
+      useBackupStore.getState().setRestoreInProgress(true);
+      expect(useBackupStore.getState().backupInProgress).toBe(true);
+      expect(useBackupStore.getState().restoreInProgress).toBe(true);
+
+      useBackupStore.getState().setBackupInProgress(false);
+      useBackupStore.getState().setRestoreInProgress(false);
+      expect(useBackupStore.getState().backupInProgress).toBe(false);
+      expect(useBackupStore.getState().restoreInProgress).toBe(false);
+    });
   });
 
   describe("auto backup", () => {

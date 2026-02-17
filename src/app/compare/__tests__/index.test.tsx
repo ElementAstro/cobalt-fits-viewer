@@ -79,6 +79,18 @@ jest.mock("../../../hooks/useImageProcessing", () => ({
   useImageProcessing: () => mockUseImageProcessing(),
 }));
 
+jest.mock("../../../hooks/useScreenOrientation", () => ({
+  useScreenOrientation: () => ({
+    isLandscape: false,
+    isPortrait: true,
+    orientation: 1,
+    screenWidth: 390,
+    screenHeight: 844,
+    lockOrientation: jest.fn(),
+    unlockOrientation: jest.fn(),
+  }),
+}));
+
 jest.mock("../../../components/fits/FitsCanvas", () => {
   const ReactLocal = require("react");
   const { View } = require("react-native");

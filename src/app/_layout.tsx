@@ -15,8 +15,13 @@ import { useFontLoader } from "../hooks/useFontLoader";
 import { cleanOldExports } from "../lib/utils/imageExport";
 import { useAutoSolve } from "../hooks/useAutoSolve";
 import { useAutoBackup } from "../hooks/useAutoBackup";
+import { useTargets } from "../hooks/useTargets";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useOnboardingStore } from "../stores/useOnboardingStore";
+import { useTargetStore } from "../stores/useTargetStore";
+import { useFitsStore } from "../stores/useFitsStore";
+import { useTargetGroupStore } from "../stores/useTargetGroupStore";
+import { useSessionStore } from "../stores/useSessionStore";
 import { OnboardingScreen } from "../components/common/OnboardingScreen";
 
 SplashScreen.preventAutoHideAsync();
@@ -28,6 +33,40 @@ function AutoSolveProvider({ children }: { children: React.ReactNode }) {
 
 function AutoBackupProvider({ children }: { children: React.ReactNode }) {
   useAutoBackup();
+  return <>{children}</>;
+}
+
+function TargetIntegrityProvider({ children }: { children: React.ReactNode }) {
+  const { reconcileTargetGraph } = useTargets();
+
+  useEffect(() => {
+    let hasReconciled = false;
+    const storeHydrated = () =>
+      useTargetStore.persist.hasHydrated() &&
+      useFitsStore.persist.hasHydrated() &&
+      useTargetGroupStore.persist.hasHydrated() &&
+      useSessionStore.persist.hasHydrated();
+
+    const tryReconcile = () => {
+      if (hasReconciled || !storeHydrated()) return;
+      hasReconciled = true;
+      reconcileTargetGraph();
+    };
+
+    const unsubTarget = useTargetStore.persist.onFinishHydration(tryReconcile);
+    const unsubFits = useFitsStore.persist.onFinishHydration(tryReconcile);
+    const unsubGroup = useTargetGroupStore.persist.onFinishHydration(tryReconcile);
+    const unsubSession = useSessionStore.persist.onFinishHydration(tryReconcile);
+    tryReconcile();
+
+    return () => {
+      unsubTarget?.();
+      unsubFits?.();
+      unsubGroup?.();
+      unsubSession?.();
+    };
+  }, [reconcileTargetGraph]);
+
   return <>{children}</>;
 }
 
@@ -117,13 +156,15 @@ export default function RootLayout() {
         <FontProvider>
           <AutoSolveProvider>
             <AutoBackupProvider>
-              <AnimatedSplashScreen>
-                <OnboardingGate>
-                  <StatusBar style={theme === "dark" ? "light" : "dark"} />
-                  <Stack screenOptions={{ headerShown: false }} />
-                  <UpdateBanner />
-                </OnboardingGate>
-              </AnimatedSplashScreen>
+              <TargetIntegrityProvider>
+                <AnimatedSplashScreen>
+                  <OnboardingGate>
+                    <StatusBar style={theme === "dark" ? "light" : "dark"} />
+                    <Stack screenOptions={{ headerShown: false }} />
+                    <UpdateBanner />
+                  </OnboardingGate>
+                </AnimatedSplashScreen>
+              </TargetIntegrityProvider>
             </AutoBackupProvider>
           </AutoSolveProvider>
         </FontProvider>

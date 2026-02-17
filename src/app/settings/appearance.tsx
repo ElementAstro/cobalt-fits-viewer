@@ -6,7 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useFontFamily } from "../../components/common/FontProvider";
 import { SettingsSection } from "../../components/settings";
@@ -59,7 +60,8 @@ function cloneDraft(colors: ThemeCustomColors) {
 
 export default function AppearanceSettingsScreen() {
   const { t } = useI18n();
-  const { isLandscape } = useScreenOrientation();
+  const haptics = useHapticFeedback();
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
@@ -155,10 +157,10 @@ export default function AppearanceSettingsScreen() {
     const raw = customDraft[mode][token];
     const normalized = normalizeHexColor(raw);
     if (!normalized) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      haptics.notify(Haptics.NotificationFeedbackType.Warning);
       return;
     }
-    Haptics.selectionAsync();
+    haptics.selection();
     setCustomThemeToken(token, normalized, mode);
   };
 
@@ -166,7 +168,7 @@ export default function AppearanceSettingsScreen() {
     const normalized = normalizeHexColor(color);
     if (!normalized) return;
     updateCustomDraft(mode, token, normalized);
-    Haptics.selectionAsync();
+    haptics.selection();
     setCustomThemeToken(token, normalized, mode);
   };
 
@@ -174,8 +176,8 @@ export default function AppearanceSettingsScreen() {
     <View className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: isLandscape ? 8 : insets.top + 8,
+          paddingHorizontal: horizontalPadding,
+          paddingTop: contentPaddingTop,
           paddingBottom: insets.bottom + 24,
         }}
         showsVerticalScrollIndicator={false}
@@ -260,7 +262,7 @@ export default function AppearanceSettingsScreen() {
               variant="secondary"
               className="w-full"
               onPress={() => {
-                Haptics.selectionAsync();
+                haptics.selection();
                 resetStyle();
               }}
             >
@@ -282,7 +284,7 @@ export default function AppearanceSettingsScreen() {
                       <TouchableOpacity
                         key={key}
                         onPress={() => {
-                          Haptics.selectionAsync();
+                          haptics.selection();
                           setAccentColor(isActive ? null : key);
                         }}
                         accessibilityRole="radio"
@@ -330,7 +332,7 @@ export default function AppearanceSettingsScreen() {
                       <TouchableOpacity
                         key={key}
                         onPress={() => {
-                          Haptics.selectionAsync();
+                          haptics.selection();
                           setActivePreset(key);
                         }}
                         accessibilityRole="radio"
@@ -377,7 +379,7 @@ export default function AppearanceSettingsScreen() {
                     <Switch
                       isSelected={customThemeColors.linked}
                       onSelectedChange={(value: boolean) => {
-                        Haptics.selectionAsync();
+                        haptics.selection();
                         setCustomThemeLinked(value);
                       }}
                     />

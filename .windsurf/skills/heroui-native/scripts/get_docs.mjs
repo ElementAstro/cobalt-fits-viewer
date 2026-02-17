@@ -1,154 +1,140 @@
 #!/usr/bin/env node
-/**
- * Get non-component HeroUI Native documentation (guides, theming, releases).
- *
- * Usage:
- *   node get_docs.mjs /docs/native/getting-started/theming
- *   node get_docs.mjs /docs/native/releases/beta-12
- *
- * Output:
- *   MDX documentation content
- *
- * Note: For component docs, use get_component_docs.mjs instead.
- */
 
-const API_BASE = process.env.HEROUI_NATIVE_API_BASE || "https://native-mcp-api.heroui.com";
+import { pathToFileURL } from "node:url";
+import { parseCommonArgs } from "./_core/args.mjs";
+import { createHttpClient } from "./_core/client.mjs";
+import { EXIT_CODE, SkillError, failureEnvelope, successEnvelope } from "./_core/errors.mjs";
+import { resolveWithFallback } from "./_core/fallback.mjs";
+import { normalizeApiDocPath, normalizeDocPath } from "./_core/normalize.mjs";
+import { createRuntime, emitEnvelope, log, writeStderr, writeStdout } from "./_core/output.mjs";
+
 const FALLBACK_BASE = "https://v3.heroui.com";
-const APP_PARAM = "app=native-skills";
+const USAGE = [
+  "Usage: node get_docs.mjs <path> [options]",
+  "Example: node get_docs.mjs /docs/native/getting-started/theming",
+  "",
+  "Options:",
+  "  --format <text|json>   Output format (default: text)",
+  "  --json                 Alias for --format json",
+  "  --timeout <ms>         Request timeout (default: 30000)",
+  "  --api-base <url>       Override API base URL",
+  "  --fallback <policy>    auto | never | only (default: auto)",
+  "  --verbose              Print debug logs to stderr",
+].join("\n");
 
-/**
- * Fetch documentation from HeroUI Native API.
- * Uses v1 endpoint pattern: /v1/docs/:path
- */
-async function fetchApi(path) {
-  // The v1 API expects path without /docs/ prefix
-  // Input: /docs/native/getting-started/theming
-  // API expects: native/getting-started/theming (route is /v1/docs/:path(*))
-  let apiPath = path.startsWith("/docs/")
-    ? path.slice(6) // Remove /docs/ prefix
-    : path.startsWith("/")
-      ? path.slice(1) // Remove leading /
-      : path;
-
-  const separator = "?";
-  const url = `${API_BASE}/v1/docs/${apiPath}${separator}${APP_PARAM}`;
-
-  try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "HeroUI-Native-Skill/1.0" },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!response.ok) {
-      console.error(`# API Error: HTTP ${response.status}`);
-
-      return null;
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`# API Error: ${error.message}`);
-
-    return null;
-  }
+function shouldOutputJson(argv) {
+  if (argv.includes("--json")) return true;
+  if (argv.includes("--format=json")) return true;
+  const idx = argv.indexOf("--format");
+  return idx >= 0 && argv[idx + 1] === "json";
 }
 
-/**
- * Fetch MDX directly from v3.heroui.com as fallback.
- */
-async function fetchFallback(path) {
-  // Ensure path starts with /docs and ends with .mdx
-  let cleanPath = path.replace(/^\//, "");
+function toTitleCaseFromPath(path) {
+  const raw = path.split("/").pop() ?? "component";
+  const name = raw.replace(".mdx", "").replace(/-/g, " ");
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .map((segment) => segment[0].toUpperCase() + segment.slice(1))
+    .join("");
+}
 
-  if (!cleanPath.endsWith(".mdx")) {
-    cleanPath = `${cleanPath}.mdx`;
-  }
+async function fetchPrimary(client, path) {
+  const apiPath = normalizeApiDocPath(path);
+  const data = await client.getJsonFromApi(`/v1/docs/${apiPath}`);
+  return {
+    path,
+    content: data?.content,
+    contentType: data?.contentType ?? "mdx",
+    source: "api",
+    url: path,
+  };
+}
 
+async function fetchFallback(client, path) {
+  const cleanPath = normalizeDocPath(path);
   const url = `${FALLBACK_BASE}/${cleanPath}`;
+  const content = await client.getText(url);
+  return {
+    path,
+    content,
+    contentType: "mdx",
+    source: "fallback",
+    url,
+  };
+}
 
+export async function run(argv = process.argv.slice(2), runtime = createRuntime()) {
+  const jsonMode = shouldOutputJson(argv);
+  const startedAt = Date.now();
+  let requestedPath = "";
   try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "HeroUI-Native-Skill/1.0" },
-      signal: AbortSignal.timeout(30000),
-    });
-
-    if (!response.ok) {
-      return { error: `HTTP ${response.status}: ${response.statusText}`, path };
+    const args = parseCommonArgs(argv, { usage: USAGE, minPositionals: 1 });
+    if (args.help) {
+      writeStderr(runtime, USAGE);
+      return EXIT_CODE.OK;
     }
 
-    const content = await response.text();
+    const path = args.positionals[0];
+    requestedPath = path;
 
-    return {
-      content,
-      contentType: "mdx",
-      path,
-      source: "fallback",
-      url,
-    };
+    if (path.includes("/components/")) {
+      writeStderr(runtime, "# Warning: Use get_component_docs.mjs for component documentation.");
+      writeStderr(runtime, `# Example: node get_component_docs.mjs ${toTitleCaseFromPath(path)}`);
+    }
+    if (!path.startsWith("/docs/native/")) {
+      writeStderr(runtime, "# Warning: Native documentation paths should start with /docs/native/");
+      writeStderr(runtime, `# Provided path: ${path}`);
+    }
+
+    const client = createHttpClient({ apiBase: args.apiBase, timeoutMs: args.timeoutMs });
+    log(runtime, args, "debug", `Fetching Native documentation for ${path}`);
+
+    const resolved = await resolveWithFallback({
+      policy: args.fallback,
+      fetchPrimary: () => fetchPrimary(client, path),
+      fetchFallback: () => fetchFallback(client, path),
+      isPrimaryUsable: (data) => typeof data.content === "string" && data.content.length > 0,
+    });
+
+    if (!resolved.data.content) {
+      throw new SkillError("DOCS_NOT_FOUND", `Documentation not found: ${path}`, { path });
+    }
+
+    const envelope = successEnvelope(resolved.data, {
+      source: resolved.source,
+      meta: { fallbackUsed: resolved.usedFallback, path, timingMs: Date.now() - startedAt },
+    });
+
+    if (args.format === "json") {
+      emitEnvelope(runtime, args, envelope);
+    } else {
+      writeStdout(runtime, resolved.data.content);
+    }
+
+    return EXIT_CODE.OK;
   } catch (error) {
-    return { error: `Fetch Error: ${error.message}`, path };
+    const envelope = failureEnvelope(error, {
+      source: "api",
+      meta: { timingMs: Date.now() - startedAt },
+    });
+    if (jsonMode) {
+      emitEnvelope(runtime, { format: "json" }, envelope);
+    } else {
+      if (requestedPath) {
+        writeStdout(runtime, JSON.stringify({ error: envelope.error.message, path: requestedPath }, null, 2));
+      } else {
+        writeStderr(runtime, `${envelope.error.code}: ${envelope.error.message}`);
+        if (envelope.error.detail?.usage) {
+          writeStderr(runtime, envelope.error.detail.usage);
+        }
+      }
+    }
+    return error instanceof SkillError ? error.exitCode : EXIT_CODE.FAILURE;
   }
 }
 
-/**
- * Main function to get documentation for specified path.
- */
-async function main() {
-  const args = process.argv.slice(2);
-
-  if (args.length === 0) {
-    console.error("Usage: node get_docs.mjs <path>");
-    console.error("Example: node get_docs.mjs /docs/native/getting-started/theming");
-    console.error();
-    console.error("Available paths include:");
-    console.error("  /docs/native/getting-started/theming");
-    console.error("  /docs/native/getting-started/colors");
-    console.error("  /docs/native/getting-started/styling");
-    console.error("  /docs/native/releases/beta-12");
-    console.error();
-    console.error("Note: For component docs, use get_component_docs.mjs instead.");
-    process.exit(1);
-  }
-
-  const path = args[0];
-
-  // Check if user is trying to get component docs
-  if (path.includes("/components/")) {
-    console.error("# Warning: Use get_component_docs.mjs for component documentation.");
-    const componentName = path.split("/").pop().replace(".mdx", "");
-    const titleCase = componentName.charAt(0).toUpperCase() + componentName.slice(1);
-
-    console.error(`# Example: node get_component_docs.mjs ${titleCase}`);
-  }
-
-  // Validate Native path
-  if (!path.startsWith("/docs/native/")) {
-    console.error("# Warning: Native documentation paths should start with /docs/native/");
-    console.error(`# Provided path: ${path}`);
-  }
-
-  console.error(`# Fetching Native documentation for ${path}...`);
-
-  // Try API first
-  const data = await fetchApi(path);
-
-  if (data && data.content) {
-    data.source = "api";
-    console.log(data.content);
-
-    return;
-  }
-
-  // Fallback to direct fetch
-  console.error("# API failed, using fallback...");
-  const fallbackData = await fetchFallback(path);
-
-  if (fallbackData.content) {
-    console.log(fallbackData.content);
-  } else {
-    console.log(JSON.stringify(fallbackData, null, 2));
-    process.exit(1);
-  }
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const code = await run();
+  process.exit(code);
 }
-
-main();

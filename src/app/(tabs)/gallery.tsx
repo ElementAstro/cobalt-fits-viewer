@@ -6,11 +6,11 @@ import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useGallery } from "../../hooks/useGallery";
 import { useAlbums } from "../../hooks/useAlbums";
+import { useFileManager } from "../../hooks/useFileManager";
 import { useGalleryStore } from "../../stores/useGalleryStore";
-import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { AlbumCard } from "../../components/gallery/AlbumCard";
@@ -63,10 +63,15 @@ export default function GalleryScreen() {
   );
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
 
-  const { isLandscape } = useScreenOrientation();
+  const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
+    useResponsiveLayout();
   const { files, totalCount, viewMode, gridColumns, metadataIndex, groupedByDate, search } =
     useGallery();
-  const effectiveColumns = isLandscape ? Math.min(gridColumns + 2, 6) : gridColumns;
+  const effectiveColumns = isLandscapeTablet
+    ? Math.min(gridColumns + 3, 7)
+    : isLandscape
+      ? Math.min(gridColumns + 2, 6)
+      : gridColumns;
 
   const {
     albums,
@@ -89,6 +94,7 @@ export default function GalleryScreen() {
     getAlbumStatistics,
     duplicateImages,
   } = useAlbums();
+  const { handleDeleteFiles } = useFileManager();
   const setViewMode = useGalleryStore((s) => s.setViewMode);
   const setFilterObject = useGalleryStore((s) => s.setFilterObject);
   const filterObject = useGalleryStore((s) => s.filterObject);
@@ -173,8 +179,6 @@ export default function GalleryScreen() {
     [isSelectionMode, enterSelectionMode],
   );
 
-  const removeFiles = useFitsStore((s) => s.removeFiles);
-
   const handleAddToAlbum = (albumId: string) => {
     addImagesToAlbum(albumId, selectedIds);
     exitSelectionMode();
@@ -189,12 +193,12 @@ export default function GalleryScreen() {
         style: "destructive",
         onPress: () => {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          removeFiles(selectedIds);
+          handleDeleteFiles(selectedIds);
           exitSelectionMode();
         },
       },
     ]);
-  }, [selectedIds, t, removeFiles, exitSelectionMode]);
+  }, [selectedIds, t, handleDeleteFiles, exitSelectionMode]);
 
   const handleAlbumRename = () => {
     if (!actionAlbum) return;
@@ -756,7 +760,11 @@ export default function GalleryScreen() {
           renderItem={null}
           ListHeaderComponent={GalleryHeader}
           ListEmptyComponent={<EmptyState icon="images-outline" title={t("gallery.noImages")} />}
-          contentContainerClassName={`px-4 ${isLandscape ? "py-2" : "py-14"}`}
+          contentContainerStyle={{
+            paddingHorizontal: horizontalPadding,
+            paddingTop: isLandscape ? 8 : contentPaddingTop,
+            paddingBottom: 24,
+          }}
           showsVerticalScrollIndicator={false}
         />
       ) : viewMode === "timeline" ? (
@@ -765,11 +773,18 @@ export default function GalleryScreen() {
           renderItem={renderTimelineSection}
           keyExtractor={timelineKeyExtractor}
           ListHeaderComponent={GalleryHeader}
-          contentContainerClassName={`px-4 ${isLandscape ? "py-2" : "py-14"}`}
+          contentContainerStyle={{
+            paddingHorizontal: horizontalPadding,
+            paddingTop: isLandscape ? 8 : contentPaddingTop,
+            paddingBottom: 24,
+          }}
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        <View className={`flex-1 px-4 ${isLandscape ? "pt-2" : "pt-14"}`}>
+        <View
+          className="flex-1"
+          style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
+        >
           <ThumbnailGrid
             files={displayFiles}
             columns={viewMode === "list" ? 1 : effectiveColumns}

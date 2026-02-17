@@ -16,7 +16,11 @@ import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
 import { generateFileId } from "../lib/utils/fileManager";
 import { Logger } from "../lib/logger";
-import { detectSupportedImageFormat, toImageSourceFormat } from "../lib/import/fileFormat";
+import {
+  detectPreferredSupportedImageFormat,
+  detectSupportedImageFormat,
+  toImageSourceFormat,
+} from "../lib/import/fileFormat";
 import { extractRasterMetadata, parseRasterFromBuffer } from "../lib/image/rasterParser";
 
 interface UseFitsFileReturn {
@@ -80,7 +84,13 @@ export function useFitsFile(): UseFitsFileReturn {
   );
 
   const processRaster = useCallback(
-    (buffer: ArrayBuffer, filename: string, filepath: string, fileSize: number) => {
+    (
+      buffer: ArrayBuffer,
+      filename: string,
+      filepath: string,
+      fileSize: number,
+      sourceFormat?: FitsMetadata["sourceFormat"],
+    ) => {
       const decoded = parseRasterFromBuffer(buffer);
       setFits(null);
       setHeaders([]);
@@ -106,7 +116,7 @@ export function useFitsFile(): UseFitsFileReturn {
         tags: [],
         albumIds: [],
         sourceType: "raster",
-        sourceFormat: toImageSourceFormat(detectedFormat),
+        sourceFormat: sourceFormat ?? toImageSourceFormat(detectedFormat),
       };
       setMetadata(fullMeta);
     },
@@ -119,7 +129,7 @@ export function useFitsFile(): UseFitsFileReturn {
       setError(null);
       try {
         const buffer = await readFileAsArrayBuffer(filepath);
-        const detectedFormat = detectSupportedImageFormat(filename);
+        const detectedFormat = detectPreferredSupportedImageFormat({ filename, payload: buffer });
         if (!detectedFormat) {
           throw new Error("Unsupported image format");
         }
@@ -131,7 +141,7 @@ export function useFitsFile(): UseFitsFileReturn {
           const px = await getImagePixels(f);
           setPixels(px);
         } else {
-          processRaster(buffer, filename, filepath, fileSize);
+          processRaster(buffer, filename, filepath, fileSize, toImageSourceFormat(detectedFormat));
         }
         Logger.info("FitsFile", `Loaded: ${filename}`, { fileSize, format: detectedFormat.id });
       } catch (e) {
@@ -150,7 +160,7 @@ export function useFitsFile(): UseFitsFileReturn {
       setIsLoading(true);
       setError(null);
       try {
-        const detectedFormat = detectSupportedImageFormat(filename);
+        const detectedFormat = detectPreferredSupportedImageFormat({ filename, payload: buffer });
         if (!detectedFormat) {
           throw new Error("Unsupported image format");
         }
@@ -168,7 +178,13 @@ export function useFitsFile(): UseFitsFileReturn {
           const px = await getImagePixels(f);
           setPixels(px);
         } else {
-          processRaster(buffer, filename, `memory://${filename}`, fileSize);
+          processRaster(
+            buffer,
+            filename,
+            `memory://${filename}`,
+            fileSize,
+            toImageSourceFormat(detectedFormat),
+          );
         }
         Logger.info("FitsFile", `Loaded from buffer: ${filename}`, { format: detectedFormat.id });
       } catch (e) {

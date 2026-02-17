@@ -4,7 +4,16 @@
 
 import { useState } from "react";
 import { View, Text, Pressable, ScrollView, Alert } from "react-native";
-import { Button, Card, Chip, Separator, Spinner, Switch, useThemeColor } from "heroui-native";
+import {
+  Button,
+  Card,
+  Chip,
+  Input,
+  Separator,
+  Spinner,
+  Switch,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -88,7 +97,11 @@ export function LogViewer() {
   const {
     entries,
     filterLevel,
+    filterTag,
+    filterQuery,
     setFilterLevel,
+    setFilterTag,
+    setFilterQuery,
     clearLogs,
     exportLogs,
     exportToFile,
@@ -163,7 +176,9 @@ export function LogViewer() {
           <View className="flex-row items-center gap-2">
             <Ionicons name="terminal-outline" size={16} color={accentColor} />
             <Text className="text-xs font-semibold text-foreground">{t("logs.title")}</Text>
-            <Text className="text-[10px] text-muted">({totalCount})</Text>
+            <Text className="text-[10px] text-muted">
+              ({entries.length}/{totalCount})
+            </Text>
           </View>
           <View className="flex-row gap-1">
             <Button
@@ -290,6 +305,24 @@ export function LogViewer() {
               onPress={() => setFilterLevel(level === "all" ? null : level)}
             />
           ))}
+        </View>
+
+        {/* Text Filters */}
+        <View className="mb-2 gap-2">
+          <Input
+            value={filterQuery}
+            onChangeText={setFilterQuery}
+            placeholder={t("logs.searchPlaceholder")}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Input
+            value={filterTag}
+            onChangeText={setFilterTag}
+            placeholder={t("logs.tagPlaceholder")}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
         </View>
 
         {/* Log Entries */}

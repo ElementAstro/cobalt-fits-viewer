@@ -29,8 +29,14 @@ jest.mock("../../../hooks/useFileManager", () => ({
     pickAndImportFolder: jest.fn(),
     pickAndImportZip: jest.fn(),
     importFromUrl: jest.fn(),
+    importFromClipboard: jest.fn(),
     cancelImport: jest.fn(),
     handleDeleteFiles: jest.fn(),
+    undoLastDelete: jest.fn(),
+    restoreFromTrash: jest.fn(),
+    emptyTrash: jest.fn(),
+    exportFiles: jest.fn(),
+    groupFiles: jest.fn(),
   }),
 }));
 
@@ -54,6 +60,21 @@ jest.mock("../../../stores/useSettingsStore", () => ({
     }),
 }));
 
+jest.mock("../../../stores/useTrashStore", () => ({
+  useTrashStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      items: [],
+    }),
+}));
+
+jest.mock("../../../stores/useFileGroupStore", () => ({
+  useFileGroupStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      groups: [],
+      fileGroupMap: {},
+    }),
+}));
+
 jest.mock("../../../components/gallery/AlbumPickerSheet", () => ({
   AlbumPickerSheet: () => null,
 }));
@@ -64,6 +85,14 @@ jest.mock("../../../components/gallery/BatchTagSheet", () => ({
 
 jest.mock("../../../components/gallery/BatchRenameSheet", () => ({
   BatchRenameSheet: () => null,
+}));
+
+jest.mock("../../../components/gallery/TrashSheet", () => ({
+  TrashSheet: () => null,
+}));
+
+jest.mock("../../../components/gallery/FileGroupSheet", () => ({
+  FileGroupSheet: () => null,
 }));
 
 // Mock expo-image

@@ -30,4 +30,19 @@ describe("useImageComparison", () => {
     expect(result.current.activeIndex).toBe(1);
     jest.useRealTimers();
   });
+
+  it("removeImage resets active index and nextImage guards single item", () => {
+    const { result } = renderHook(() => useImageComparison({ initialIds: ["a", "b"] }));
+    act(() => {
+      result.current.setActiveIndex(1);
+      result.current.removeImage("b");
+    });
+    expect(result.current.imageIds).toEqual(["a"]);
+    expect(result.current.activeIndex).toBe(0);
+
+    act(() => {
+      result.current.nextImage();
+    });
+    expect(result.current.activeIndex).toBe(0);
+  });
 });

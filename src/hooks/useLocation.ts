@@ -87,9 +87,24 @@ export const LocationService = {
       const permitted = await LocationService.ensurePermission();
       if (!permitted) return null;
 
-      const position = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
+      let position: {
+        coords: Pick<Location.LocationObjectCoords, "latitude" | "longitude" | "altitude">;
+      } | null = null;
+      try {
+        position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+      } catch (err) {
+        Logger.warn("Location", "Failed to get current position, fallback to last known", err);
+        try {
+          position = await Location.getLastKnownPositionAsync();
+        } catch (fallbackErr) {
+          Logger.warn("Location", "Failed to get last known position", fallbackErr);
+          position = null;
+        }
+      }
+
+      if (!position) return null;
 
       const { latitude, longitude, altitude } = position.coords;
       const placeInfo = await LocationService.reverseGeocode(latitude, longitude);

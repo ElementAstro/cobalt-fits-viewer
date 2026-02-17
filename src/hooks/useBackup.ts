@@ -37,6 +37,9 @@ import type {
 import { DEFAULT_BACKUP_OPTIONS } from "../lib/backup/types";
 import type { BackupDataSource, RestoreTarget } from "../lib/backup/backupService";
 import * as Network from "expo-network";
+import { normalizeTargetMatch } from "../lib/targets/targetRelations";
+import { reconcileTargetGraphStores } from "./useTargets";
+import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
 
 // Provider singletons
 const providers: Partial<Record<CloudProvider, ICloudProvider>> = {};
@@ -118,6 +121,9 @@ export function useBackup() {
           language: s.language,
           theme: s.theme,
           orientationLock: s.orientationLock,
+          hapticsEnabled: s.hapticsEnabled,
+          confirmDestructiveActions: s.confirmDestructiveActions,
+          autoCheckUpdates: s.autoCheckUpdates,
           themeColorMode: s.themeColorMode,
           accentColor: s.accentColor,
           activePreset: s.activePreset,
@@ -254,7 +260,17 @@ export function useBackup() {
         const mode = resolveStrategy(strategy);
         const store = targetStore.getState();
         for (const target of targets) {
-          const existing = store.targets.find((t) => t.id === target.id);
+          const currentTargets = targetStore.getState().targets;
+          const existingById = currentTargets.find((t) => t.id === target.id);
+          const existingByName =
+            existingById ??
+            normalizeTargetMatch({
+              name: target.name,
+              aliases: target.aliases,
+              targets: currentTargets,
+            });
+          const existing = existingById ?? existingByName;
+
           if (!existing) {
             store.addTarget(target);
             continue;
@@ -263,12 +279,16 @@ export function useBackup() {
           if (mode === "skip-existing") continue;
 
           if (mode === "overwrite-existing") {
-            store.updateTarget(target.id, target);
+            store.updateTarget(existing.id, {
+              ...target,
+              id: existing.id,
+            });
             continue;
           }
 
-          store.updateTarget(target.id, {
+          store.updateTarget(existing.id, {
             ...target,
+            id: existing.id,
             aliases: [...new Set([...(existing.aliases ?? []), ...(target.aliases ?? [])])],
             tags: [...new Set([...(existing.tags ?? []), ...(target.tags ?? [])])],
             imageIds: [...new Set([...(existing.imageIds ?? []), ...(target.imageIds ?? [])])],
@@ -333,6 +353,9 @@ export function useBackup() {
           "language",
           "theme",
           "orientationLock",
+          "hapticsEnabled",
+          "confirmDestructiveActions",
+          "autoCheckUpdates",
           "themeColorMode",
           "accentColor",
           "activePreset",
@@ -412,6 +435,22 @@ export function useBackup() {
       },
     };
   }, [fitsStore, albumStore, targetStore, sessionStore, settingsStore]);
+
+  const reconcileAlbumFileConsistency = useCallback(() => {
+    const currentFiles = fitsStore.getState().files;
+    const currentFileIds = currentFiles.map((file) => file.id);
+    albumStore.getState().reconcileWithFiles(currentFileIds);
+
+    const syncedAlbums = albumStore.getState().albums;
+    const syncedFiles = fitsStore.getState().files;
+    const patches = computeAlbumFileConsistencyPatches(syncedFiles, syncedAlbums);
+    if (patches.length === 0) return;
+
+    const { updateFile } = fitsStore.getState();
+    for (const patch of patches) {
+      updateFile(patch.fileId, { albumIds: patch.albumIds });
+    }
+  }, [albumStore, fitsStore]);
 
   /**
    * 连接到云服务
@@ -595,6 +634,8 @@ export function useBackup() {
           abortController.signal,
         );
 
+        reconcileAlbumFileConsistency();
+        reconcileTargetGraphStores();
         resetProgress();
         return { success: true };
       } catch (error) {
@@ -611,6 +652,7 @@ export function useBackup() {
       backupInProgress,
       restoreInProgress,
       buildRestoreTarget,
+      reconcileAlbumFileConsistency,
       setRestoreInProgress,
       setProgress,
       setLastError,
@@ -751,6 +793,10 @@ export function useBackup() {
           preview,
         );
 
+        if (result.success) {
+          reconcileAlbumFileConsistency();
+          reconcileTargetGraphStores();
+        }
         resetProgress();
         if (!result.success) {
           setLastError(result.error ?? "Import failed");
@@ -769,6 +815,7 @@ export function useBackup() {
       backupInProgress,
       restoreInProgress,
       buildRestoreTarget,
+      reconcileAlbumFileConsistency,
       setRestoreInProgress,
       setLastError,
       setProgress,

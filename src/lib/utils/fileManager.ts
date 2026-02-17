@@ -8,15 +8,28 @@ import {
   detectSupportedImageFormat,
   isFitsFamilyFilename,
   isSupportedImageFilename,
+  splitFilenameExtension,
 } from "../import/fileFormat";
 
 const FITS_SUBDIR = "fits_files";
+const TRASH_SUBDIR = "fits_trash";
 
 /**
  * 获取 FITS 文件存储目录
  */
 export function getFitsDir(): Directory {
   const dir = new Directory(Paths.document, FITS_SUBDIR);
+  if (!dir.exists) {
+    dir.create();
+  }
+  return dir;
+}
+
+/**
+ * 获取回收站目录
+ */
+export function getTrashDir(): Directory {
+  const dir = new Directory(Paths.document, TRASH_SUBDIR);
   if (!dir.exists) {
     dir.create();
   }
@@ -31,9 +44,10 @@ export function importFile(sourceUri: string, filename: string): File {
   const srcFile = new File(sourceUri);
 
   if (destFile.exists) {
-    const baseName = filename.replace(/\.[^.]+$/, "");
-    const ext = filename.match(/\.[^.]+$/)?.[0] ?? "";
-    const newName = `${baseName}_${Date.now()}${ext}`;
+    const { baseName, extension } = splitFilenameExtension(filename);
+    const ext = extension || "";
+    const safeBaseName = baseName || filename;
+    const newName = `${safeBaseName}_${Date.now()}${ext}`;
     const newDest = new File(getFitsDir(), newName);
     srcFile.copy(newDest);
     return newDest;
@@ -210,6 +224,114 @@ export interface RenameFitsFileResult {
   error?: string;
 }
 
+export interface MoveFileResult {
+  success: boolean;
+  filepath: string;
+  filename: string;
+  error?: string;
+}
+
+/**
+ * 移动文件到回收站（copy + delete）
+ */
+export function moveFileToTrash(filepath: string, preferredName?: string): MoveFileResult {
+  const source = new File(filepath);
+  if (!source.exists) {
+    return {
+      success: false,
+      filepath,
+      filename: preferredName ?? source.name,
+      error: "Source file does not exist.",
+    };
+  }
+
+  const fallbackName = source.name || `trashed_${Date.now()}`;
+  const requestedName = sanitizeFilename(preferredName?.trim() || fallbackName);
+  const { file: target, filename } = resolveUniquePath(getTrashDir(), requestedName, source.uri);
+
+  try {
+    source.copy(target);
+    source.delete();
+    return {
+      success: true,
+      filepath: target.uri,
+      filename,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      filepath,
+      filename,
+      error: error instanceof Error ? error.message : "Move to trash failed",
+    };
+  }
+}
+
+/**
+ * 从回收站恢复文件（copy + delete）
+ */
+export function restoreFileFromTrash(
+  trashedFilepath: string,
+  targetFilename: string,
+): MoveFileResult {
+  const source = new File(trashedFilepath);
+  if (!source.exists) {
+    return {
+      success: false,
+      filepath: trashedFilepath,
+      filename: targetFilename,
+      error: "Trashed file does not exist.",
+    };
+  }
+
+  const sourceName = source.name || "";
+  const { extension: sourceExt } = splitFilenameExtension(sourceName);
+  const { baseName: requestedBaseName, extension: requestedExtension } =
+    splitFilenameExtension(targetFilename);
+
+  const safeBase = sanitizeFilename(requestedBaseName || targetFilename || "restored");
+  const finalExt = requestedExtension || sourceExt || "";
+  const safeExt = !finalExt ? "" : finalExt.startsWith(".") ? finalExt : `.${finalExt}`;
+  const normalizedName = `${safeBase}${safeExt}`;
+
+  const { file: target, filename } = resolveUniquePath(getFitsDir(), normalizedName, source.uri);
+
+  try {
+    source.copy(target);
+    source.delete();
+    return {
+      success: true,
+      filepath: target.uri,
+      filename,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      filepath: trashedFilepath,
+      filename: normalizedName,
+      error: error instanceof Error ? error.message : "Restore failed",
+    };
+  }
+}
+
+/**
+ * 批量永久删除文件
+ */
+export function deleteFilesPermanently(filepaths: string[]): number {
+  let deleted = 0;
+  for (const filepath of filepaths) {
+    const file = new File(filepath);
+    if (!file.exists) continue;
+    try {
+      file.delete();
+      deleted++;
+    } catch {
+      // ignore single deletion failure
+    }
+  }
+  return deleted;
+}
+
 /**
  * 重命名 FITS 文件（真实文件 + 返回新路径）
  */
@@ -225,10 +347,13 @@ export function renameFitsFile(filepath: string, nextFilename: string): RenameFi
   }
 
   const originalName = source.name;
-  const originalExt = originalName.match(/\.[^.]+$/)?.[0] ?? ".fits";
-  const sanitizedBase = sanitizeFilename(nextFilename.replace(/\.[^.]+$/, ""));
-  const requestedExt = nextFilename.match(/\.[^.]+$/)?.[0];
-  const finalExt = requestedExt ?? originalExt;
+  const { extension: originalExtension } = splitFilenameExtension(originalName);
+  const originalExt = originalExtension || ".fits";
+
+  const { baseName: requestedBaseName, extension: requestedExtension } =
+    splitFilenameExtension(nextFilename);
+  const sanitizedBase = sanitizeFilename(requestedBaseName || nextFilename);
+  const finalExt = requestedExtension || originalExt;
   const safeExt = finalExt.startsWith(".") ? finalExt : `.${finalExt}`;
   const normalizedName = `${sanitizedBase}${safeExt}`;
 
@@ -242,8 +367,9 @@ export function renameFitsFile(filepath: string, nextFilename: string): RenameFi
 
   // Avoid name collision
   if (candidateFile.exists && candidateFile.uri !== source.uri) {
-    const base = candidateName.replace(/\.[^.]+$/, "");
-    const ext = candidateName.match(/\.[^.]+$/)?.[0] ?? "";
+    const { baseName, extension } = splitFilenameExtension(candidateName);
+    const base = baseName || candidateName;
+    const ext = extension || "";
     candidateName = `${base}_${Date.now()}${ext}`;
     candidatePath = `${normalizedParent}/${candidateName}`;
     candidateFile = new File(candidatePath);
@@ -284,4 +410,27 @@ function sanitizeFilename(name: string): string {
     .trim()
     .replace(/\s+/g, " ");
   return sanitized || "untitled";
+}
+
+function resolveUniquePath(
+  directory: Directory,
+  filename: string,
+  sourceUri?: string,
+): { file: File; filename: string } {
+  const normalized = sanitizeFilename(filename);
+  let candidateName = normalized;
+  let candidateFile = new File(directory, candidateName);
+
+  if (candidateFile.exists && (!sourceUri || candidateFile.uri !== sourceUri)) {
+    const { baseName, extension } = splitFilenameExtension(candidateName);
+    const base = baseName || candidateName;
+    const ext = extension || "";
+    candidateName = `${base}_${Date.now()}${ext}`;
+    candidateFile = new File(directory, candidateName);
+  }
+
+  return {
+    file: candidateFile,
+    filename: candidateName,
+  };
 }

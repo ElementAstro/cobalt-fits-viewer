@@ -280,6 +280,17 @@ describe("useFitsStore", () => {
       useFitsStore.getState().clearSelection();
       expect(useFitsStore.getState().selectedIds).toHaveLength(0);
     });
+
+    it("setSelectionMode keeps or clears selected ids by mode", () => {
+      useFitsStore.setState({ selectedIds: ["f1", "f2"], isSelectionMode: false });
+      useFitsStore.getState().setSelectionMode(true);
+      expect(useFitsStore.getState().isSelectionMode).toBe(true);
+      expect(useFitsStore.getState().selectedIds).toEqual(["f1", "f2"]);
+
+      useFitsStore.getState().setSelectionMode(false);
+      expect(useFitsStore.getState().isSelectionMode).toBe(false);
+      expect(useFitsStore.getState().selectedIds).toEqual([]);
+    });
   });
 
   // ===== Getters =====
@@ -311,6 +322,32 @@ describe("useFitsStore", () => {
       const last = useFitsStore.getState().getAdjacentFileIds("f2");
       expect(last.prevId).toBe("f1");
       expect(last.nextId).toBeNull();
+    });
+
+    it("getAdjacentFileIds returns null pair for unknown file", () => {
+      useFitsStore.setState({
+        files: [makeFile({ id: "f1" }), makeFile({ id: "f2" })],
+      });
+      expect(useFitsStore.getState().getAdjacentFileIds("missing")).toEqual({
+        prevId: null,
+        nextId: null,
+      });
+    });
+  });
+
+  describe("sort and filter setters", () => {
+    it("updates sortBy/sortOrder/searchQuery/filterTags", () => {
+      const store = useFitsStore.getState();
+      store.setSortBy("name");
+      store.setSortOrder("asc");
+      store.setSearchQuery("m31");
+      store.setFilterTags(["nebula", "ha"]);
+
+      const s = useFitsStore.getState();
+      expect(s.sortBy).toBe("name");
+      expect(s.sortOrder).toBe("asc");
+      expect(s.searchQuery).toBe("m31");
+      expect(s.filterTags).toEqual(["nebula", "ha"]);
     });
   });
 });

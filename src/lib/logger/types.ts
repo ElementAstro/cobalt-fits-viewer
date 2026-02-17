@@ -23,6 +23,15 @@ export interface LogEntry {
   stackTrace?: string;
 }
 
+export type LoggerListener = () => void;
+
+export interface LogSerializationOptions {
+  /** Redact sensitive keys such as token/apiKey/password */
+  redact?: boolean;
+  /** Maximum traversal depth to prevent huge payloads */
+  maxDepth?: number;
+}
+
 // ===== Logger 配置 =====
 export interface LoggerConfig {
   /** 最大日志条目数（环形缓冲区） */

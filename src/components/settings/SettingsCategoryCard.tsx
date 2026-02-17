@@ -1,7 +1,7 @@
 import { View, Text, TouchableOpacity } from "react-native";
 import { Card, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 
 export interface SettingsCategoryCardProps {
   icon: keyof typeof Ionicons.glyphMap;
@@ -20,9 +20,10 @@ export function SettingsCategoryCard({
 }: SettingsCategoryCardProps) {
   const accentColor = useThemeColor("accent");
   const mutedColor = useThemeColor("muted");
+  const haptics = useHapticFeedback();
 
   const handlePress = () => {
-    Haptics.selectionAsync();
+    haptics.selection();
     onPress();
   };
 

@@ -10,9 +10,13 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { useAppUpdate } from "../../hooks/useAppUpdate";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 
 export function UpdateBanner() {
   const { t } = useI18n();
+  const haptics = useHapticFeedback();
+  const autoCheckUpdates = useSettingsStore((s) => s.autoCheckUpdates);
   const accentColor = useThemeColor("accent");
   const successColor = useThemeColor("success");
 
@@ -25,13 +29,13 @@ export function UpdateBanner() {
 
   // Auto-check on mount (non-blocking, only in production)
   useEffect(() => {
-    if (!__DEV__) {
+    if (!__DEV__ && autoCheckUpdates) {
       const timer = setTimeout(() => {
         checkForUpdate();
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [checkForUpdate]);
+  }, [autoCheckUpdates, checkForUpdate]);
 
   // Animate banner in/out
   useEffect(() => {
@@ -44,18 +48,18 @@ export function UpdateBanner() {
   }, [showBanner, slideAnim]);
 
   const handleAction = useCallback(async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
     if (status === "available") {
       await downloadUpdate();
     } else if (status === "ready") {
       await applyUpdate();
     }
-  }, [status, downloadUpdate, applyUpdate]);
+  }, [status, downloadUpdate, applyUpdate, haptics]);
 
   const handleDismiss = useCallback(() => {
-    Haptics.selectionAsync();
+    haptics.selection();
     setDismissed(true);
-  }, []);
+  }, [haptics]);
 
   if (dismissed && status !== "ready") return null;
 

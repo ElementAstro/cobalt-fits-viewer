@@ -8,7 +8,7 @@ import { useRouter } from "expo-router";
 import { Alert, Button, Card, Chip, Dialog, Separator, Switch, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useBackup } from "../../hooks/useBackup";
 import { useBackupStore } from "../../stores/useBackupStore";
 import { ProviderCard } from "../../components/backup/ProviderCard";
@@ -26,7 +26,7 @@ export default function BackupScreen() {
   const { t } = useI18n();
   const router = useRouter();
   const mutedColor = useThemeColor("muted");
-  const { isLandscape } = useScreenOrientation();
+  const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const {
     connections,
@@ -288,7 +288,10 @@ export default function BackupScreen() {
   return (
     <View className="flex-1 bg-background">
       {/* Header */}
-      <View className={`flex-row items-center gap-3 px-4 pb-2 ${isLandscape ? "pt-2" : "pt-14"}`}>
+      <View
+        className="flex-row items-center gap-3 pb-2"
+        style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
+      >
         <Button variant="ghost" size="sm" isIconOnly onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={24} color={mutedColor} />
         </Button>
@@ -298,7 +301,11 @@ export default function BackupScreen() {
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingBottom: 24 }}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Connected providers */}
         {connections.length > 0 && (
           <View className="mt-4">

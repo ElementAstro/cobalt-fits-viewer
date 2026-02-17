@@ -4,6 +4,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useTargetStore } from "../stores/useTargetStore";
+import { useTargets } from "./useTargets";
 import {
   searchTargets,
   quickSearch,
@@ -129,7 +130,7 @@ export function useTargetSearch() {
 
 export function useDuplicateDetection() {
   const targets = useTargetStore((s) => s.targets);
-  const mergeIntoTarget = useTargetStore((s) => s.mergeIntoTarget);
+  const { mergeTargetsCascade } = useTargets();
 
   const [detectionResult, setDetectionResult] = useState<DuplicateDetectionResult | null>(null);
   const [isDetecting, setIsDetecting] = useState(false);
@@ -164,13 +165,13 @@ export function useDuplicateDetection() {
 
       // 合并其他目标到主目标
       for (let i = 1; i < sorted.length; i++) {
-        mergeIntoTarget(primary.id, sorted[i].id);
+        mergeTargetsCascade(primary.id, sorted[i].id);
       }
 
       // 重新检测
       detect();
     },
-    [mergeIntoTarget, detect],
+    [mergeTargetsCascade, detect],
   );
 
   // 清除检测结果

@@ -12,7 +12,7 @@ import * as service from "../lib/astrometry/astrometryService";
 import * as clientApi from "../lib/astrometry/astrometryClient";
 import * as Haptics from "expo-haptics";
 import type { AstrometryJob } from "../lib/astrometry/types";
-import { Logger } from "../lib/logger/logger";
+import { Logger } from "../lib/logger";
 
 function generateId(): string {
   return Crypto.randomUUID();

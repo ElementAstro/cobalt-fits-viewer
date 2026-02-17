@@ -245,4 +245,24 @@ describe("useScreenOrientation", () => {
       expect(result.current.orientation).toBe(ScreenOrientation.Orientation.LANDSCAPE_RIGHT);
     });
   });
+
+  describe("unknown orientation fallback", () => {
+    it("derives UNKNOWN orientation from current dimensions", async () => {
+      (ScreenOrientation.getOrientationAsync as jest.Mock).mockResolvedValue(
+        ScreenOrientation.Orientation.UNKNOWN,
+      );
+
+      const { result } = renderHook(() => useScreenOrientation());
+      await waitFor(() => {
+        expect(result.current.orientation).toBe(ScreenOrientation.Orientation.UNKNOWN);
+      });
+
+      expect(result.current.isLandscape).toBe(
+        result.current.screenWidth > result.current.screenHeight,
+      );
+      expect(result.current.isPortrait).toBe(
+        !(result.current.screenWidth > result.current.screenHeight),
+      );
+    });
+  });
 });

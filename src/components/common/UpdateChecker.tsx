@@ -9,9 +9,11 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { useAppUpdate } from "../../hooks/useAppUpdate";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 
 export function UpdateChecker() {
   const { t } = useI18n();
+  const haptics = useHapticFeedback();
   const successColor = useThemeColor("success");
   const dangerColor = useThemeColor("danger");
   const mutedColor = useThemeColor("muted");
@@ -29,17 +31,17 @@ export function UpdateChecker() {
   } = useAppUpdate();
 
   const handleCheck = async () => {
-    Haptics.selectionAsync();
+    haptics.selection();
     await checkForUpdate();
   };
 
   const handleDownload = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
     await downloadUpdate();
   };
 
   const handleRestart = async () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptics.notify(Haptics.NotificationFeedbackType.Success);
     await applyUpdate();
   };
 

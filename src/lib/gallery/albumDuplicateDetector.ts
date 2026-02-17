@@ -8,17 +8,31 @@ import type { FitsMetadata, Album, DuplicateImageInfo } from "../fits/types";
  * 查找存在于多个相簿中的图片
  */
 export function findDuplicateImages(files: FitsMetadata[], albums: Album[]): DuplicateImageInfo[] {
-  const duplicates: DuplicateImageInfo[] = [];
+  const fileIdSet = new Set(files.map((file) => file.id));
+  const albumNameMap = new Map(albums.map((album) => [album.id, album.name] as const));
+  const imageToAlbumIds = new Map<string, string[]>();
 
-  for (const file of files) {
-    if (file.albumIds.length > 1) {
-      const containingAlbums = albums.filter((a) => a.imageIds.includes(file.id));
-      duplicates.push({
-        imageId: file.id,
-        albumIds: file.albumIds,
-        albumNames: containingAlbums.map((a) => a.name),
-      });
+  for (const album of albums) {
+    const uniqueImageIds = [...new Set(album.imageIds)];
+    for (const imageId of uniqueImageIds) {
+      if (!fileIdSet.has(imageId)) continue;
+      const existing = imageToAlbumIds.get(imageId);
+      if (existing) {
+        existing.push(album.id);
+      } else {
+        imageToAlbumIds.set(imageId, [album.id]);
+      }
     }
+  }
+
+  const duplicates: DuplicateImageInfo[] = [];
+  for (const [imageId, albumIds] of imageToAlbumIds.entries()) {
+    if (albumIds.length < 2) continue;
+    duplicates.push({
+      imageId,
+      albumIds,
+      albumNames: albumIds.map((albumId) => albumNameMap.get(albumId) ?? albumId),
+    });
   }
 
   return duplicates.sort((a, b) => b.albumIds.length - a.albumIds.length);

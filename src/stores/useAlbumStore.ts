@@ -6,6 +6,11 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandMMKVStorage } from "../lib/storage";
 import type { Album, SmartAlbumRule } from "../lib/fits/types";
+import {
+  computeAlbumFileConsistencyPatches,
+  reconcileAlbumsWithValidFiles,
+} from "../lib/gallery/albumSync";
+import { useFitsStore } from "./useFitsStore";
 
 export type AlbumSortBy = "name" | "date" | "imageCount";
 
@@ -51,6 +56,9 @@ interface AlbumStoreState {
 
   // NEW: Get Filtered Albums
   getFilteredAlbums: () => Album[];
+
+  // NEW: Reconcile album references with available file ids
+  reconcileWithFiles: (validFileIds: string[]) => { prunedRefs: number; coverFixes: number };
 }
 
 export const useAlbumStore = create<AlbumStoreState>()(
@@ -61,40 +69,53 @@ export const useAlbumStore = create<AlbumStoreState>()(
       albumSortBy: "date" as AlbumSortBy,
       albumSortOrder: "desc" as "asc" | "desc",
 
-      addAlbum: (album) => set((state) => ({ albums: [...state.albums, album] })),
+      addAlbum: (album) => {
+        set((state) => ({ albums: [...state.albums, album] }));
+        syncFileAlbumIds(get().albums);
+      },
 
-      removeAlbum: (id) => set((state) => ({ albums: state.albums.filter((a) => a.id !== id) })),
+      removeAlbum: (id) => {
+        set((state) => ({ albums: state.albums.filter((a) => a.id !== id) }));
+        syncFileAlbumIds(get().albums);
+      },
 
-      updateAlbum: (id, updates) =>
+      updateAlbum: (id, updates) => {
         set((state) => ({
           albums: state.albums.map((a) =>
             a.id === id ? { ...a, ...updates, updatedAt: Date.now() } : a,
           ),
-        })),
+        }));
+        syncFileAlbumIds(get().albums);
+      },
 
-      addImageToAlbum: (albumId, imageId) =>
+      addImageToAlbum: (albumId, imageId) => {
         set((state) => ({
           albums: state.albums.map((a) =>
             a.id === albumId && !a.imageIds.includes(imageId)
               ? { ...a, imageIds: [...a.imageIds, imageId], updatedAt: Date.now() }
               : a,
           ),
-        })),
+        }));
+        syncFileAlbumIds(get().albums);
+      },
 
-      removeImageFromAlbum: (albumId, imageId) =>
+      removeImageFromAlbum: (albumId, imageId) => {
         set((state) => ({
           albums: state.albums.map((a) =>
             a.id === albumId
               ? {
                   ...a,
                   imageIds: a.imageIds.filter((id) => id !== imageId),
+                  coverImageId: a.coverImageId === imageId ? undefined : a.coverImageId,
                   updatedAt: Date.now(),
                 }
               : a,
           ),
-        })),
+        }));
+        syncFileAlbumIds(get().albums);
+      },
 
-      addImagesToAlbum: (albumId, imageIds) =>
+      addImagesToAlbum: (albumId, imageIds) => {
         set((state) => ({
           albums: state.albums.map((a) => {
             if (a.id !== albumId) return a;
@@ -105,21 +126,27 @@ export const useAlbumStore = create<AlbumStoreState>()(
               updatedAt: Date.now(),
             };
           }),
-        })),
+        }));
+        syncFileAlbumIds(get().albums);
+      },
 
       setCoverImage: (albumId, imageId) =>
         set((state) => ({
           albums: state.albums.map((a) =>
-            a.id === albumId ? { ...a, coverImageId: imageId, updatedAt: Date.now() } : a,
+            a.id === albumId && a.imageIds.includes(imageId)
+              ? { ...a, coverImageId: imageId, updatedAt: Date.now() }
+              : a,
           ),
         })),
 
-      updateSmartRules: (albumId, rules) =>
+      updateSmartRules: (albumId, rules) => {
         set((state) => ({
           albums: state.albums.map((a) =>
             a.id === albumId ? { ...a, smartRules: rules, updatedAt: Date.now() } : a,
           ),
-        })),
+        }));
+        syncFileAlbumIds(get().albums);
+      },
 
       reorderAlbums: (orderedIds) =>
         set((state) => ({
@@ -168,6 +195,11 @@ export const useAlbumStore = create<AlbumStoreState>()(
 
         const mergedImageIds = [...new Set([...target.imageIds, ...source.imageIds])];
         const mergedCoverImageId = target.coverImageId ?? source.coverImageId;
+        const normalizedCoverImageId = mergedCoverImageId
+          ? mergedImageIds.includes(mergedCoverImageId)
+            ? mergedCoverImageId
+            : undefined
+          : undefined;
 
         set({
           albums: state.albums
@@ -177,12 +209,13 @@ export const useAlbumStore = create<AlbumStoreState>()(
                 ? {
                     ...a,
                     imageIds: mergedImageIds,
-                    coverImageId: mergedCoverImageId,
+                    coverImageId: normalizedCoverImageId,
                     updatedAt: Date.now(),
                   }
                 : a,
             ),
         });
+        syncFileAlbumIds(get().albums);
         return true;
       },
 
@@ -234,6 +267,19 @@ export const useAlbumStore = create<AlbumStoreState>()(
 
         return filtered;
       },
+
+      reconcileWithFiles: (validFileIds) => {
+        const validIdSet = new Set(validFileIds);
+        const result = reconcileAlbumsWithValidFiles(get().albums, validIdSet);
+        if (result.prunedRefs > 0 || result.coverFixes > 0) {
+          set({ albums: result.albums });
+        }
+        syncFileAlbumIds(result.albums);
+        return {
+          prunedRefs: result.prunedRefs,
+          coverFixes: result.coverFixes,
+        };
+      },
     }),
     {
       name: "album-store",
@@ -246,3 +292,13 @@ export const useAlbumStore = create<AlbumStoreState>()(
     },
   ),
 );
+
+function syncFileAlbumIds(albums: Album[]): void {
+  const fitsState = useFitsStore.getState();
+  const patches = computeAlbumFileConsistencyPatches(fitsState.files, albums);
+  if (patches.length === 0) return;
+
+  for (const patch of patches) {
+    fitsState.updateFile(patch.fileId, { albumIds: patch.albumIds });
+  }
+}

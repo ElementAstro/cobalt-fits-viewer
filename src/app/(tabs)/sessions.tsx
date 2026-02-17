@@ -13,7 +13,7 @@ import { PlanObservationSheet } from "../../components/sessions/PlanObservationS
 import { SessionCard } from "../../components/sessions/SessionCard";
 import { SessionStatsCard } from "../../components/sessions/SessionStatsCard";
 import { useCalendar } from "../../hooks/useCalendar";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useSessions } from "../../hooks/useSessions";
 import { useI18n } from "../../i18n/useI18n";
 import type { ObservationPlan, ObservationSession } from "../../lib/fits/types";
@@ -36,7 +36,8 @@ export default function SessionsScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
-  const { isLandscape } = useScreenOrientation();
+  const { isLandscape, isLandscapeTablet, contentPaddingTop, sidePanelWidth } =
+    useResponsiveLayout();
 
   const { sessions, autoDetectSessions, getObservationDates, getSessionStats, getMonthlyData } =
     useSessions();
@@ -842,12 +843,12 @@ export default function SessionsScreen() {
   ) : null;
 
   return (
-    <View className={`flex-1 bg-background ${isLandscape ? "pt-2" : "pt-14"}`}>
+    <View className="flex-1 bg-background" style={{ paddingTop: contentPaddingTop }}>
       {selectionBar}
       {isLandscape ? (
         <View className="flex-1 flex-row">
           <ScrollView
-            style={{ flex: 1 }}
+            style={isLandscapeTablet ? { width: sidePanelWidth } : { flex: 1 }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ padding: 16 }}
           >

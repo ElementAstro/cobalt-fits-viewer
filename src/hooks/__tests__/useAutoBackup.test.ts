@@ -102,4 +102,25 @@ describe("useAutoBackup", () => {
 
     expect(mockBackupFn).not.toHaveBeenCalled();
   });
+
+  it("skips auto backup when no connected provider is available", async () => {
+    useBackupStore.setState({
+      connections: [],
+      activeProvider: null,
+      autoBackupNetwork: "any",
+      lastAutoBackupCheck: 0,
+    });
+    mockGetNetworkStateAsync.mockResolvedValue({
+      type: "WIFI",
+      isConnected: true,
+      isInternetReachable: true,
+    });
+
+    renderHook(() => useAutoBackup());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockBackupFn).not.toHaveBeenCalled();
+  });
 });

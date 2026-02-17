@@ -1,134 +1,129 @@
 #!/usr/bin/env node
-/**
- * List all available HeroUI Native components.
- *
- * Usage:
- *   node list_components.mjs
- *
- * Output:
- *   JSON with components array, latestVersion, and count
- */
 
-const API_BASE = process.env.HEROUI_NATIVE_API_BASE || "https://native-mcp-api.heroui.com";
-const APP_PARAM = "app=native-skills";
+import { pathToFileURL } from "node:url";
+import { parseCommonArgs } from "./_core/args.mjs";
+import { createHttpClient } from "./_core/client.mjs";
+import { EXIT_CODE, SkillError, failureEnvelope, successEnvelope } from "./_core/errors.mjs";
+import { resolveWithFallback } from "./_core/fallback.mjs";
+import {
+  normalizeComponentItems,
+  parseComponentsFromLlmsTxt,
+} from "./_core/normalize.mjs";
+import { createRuntime, emitEnvelope, log, writeStdout, writeStderr } from "./_core/output.mjs";
+
 const LLMS_TXT_URL = "https://v3.heroui.com/native/llms.txt";
+const USAGE = [
+  "Usage: node list_components.mjs [options]",
+  "",
+  "Options:",
+  "  --format <text|json>   Output format (default: text)",
+  "  --json                 Alias for --format json",
+  "  --timeout <ms>         Request timeout (default: 30000)",
+  "  --api-base <url>       Override API base URL",
+  "  --fallback <policy>    auto | never | only (default: auto)",
+  "  --verbose              Print debug logs to stderr",
+].join("\n");
 
-/**
- * Fetch data from HeroUI Native API with app parameter for analytics.
- */
-async function fetchApi(endpoint) {
-  const separator = endpoint.includes("?") ? "&" : "?";
-  const url = `${API_BASE}${endpoint}${separator}${APP_PARAM}`;
+function shouldOutputJson(argv) {
+  if (argv.includes("--json")) return true;
+  if (argv.includes("--format=json")) return true;
+  const idx = argv.indexOf("--format");
+  return idx >= 0 && argv[idx + 1] === "json";
+}
 
+function buildData(raw) {
+  const items = normalizeComponentItems(raw.components ?? []);
+  return {
+    latestVersion: raw.latestVersion ?? "unknown",
+    count: items.length,
+    components: items.map((item) => item.name),
+    componentItems: items,
+  };
+}
+
+async function fetchPrimary(client) {
+  const data = await client.getJsonFromApi("/v1/components");
+  return buildData(data ?? {});
+}
+
+async function fetchFallback(client) {
+  const content = await client.getText(LLMS_TXT_URL);
+  const components = parseComponentsFromLlmsTxt(content);
+  if (components.length === 0) {
+    throw new SkillError("FALLBACK_EMPTY", "Fallback returned no components");
+  }
+  return buildData({ latestVersion: "unknown", components });
+}
+
+export async function run(argv = process.argv.slice(2), runtime = createRuntime()) {
+  const jsonMode = shouldOutputJson(argv);
+  const startedAt = Date.now();
   try {
-    const response = await fetch(url, {
-      headers: { "User-Agent": "HeroUI-Native-Skill/1.0" },
-      signal: AbortSignal.timeout(30000),
+    const args = parseCommonArgs(argv, { usage: USAGE });
+    if (args.help) {
+      writeStderr(runtime, USAGE);
+      return EXIT_CODE.OK;
+    }
+
+    const client = createHttpClient({ apiBase: args.apiBase, timeoutMs: args.timeoutMs });
+    log(runtime, args, "debug", "Fetching Native component list...");
+
+    const resolved = await resolveWithFallback({
+      policy: args.fallback,
+      fetchPrimary: () => fetchPrimary(client),
+      fetchFallback: () => fetchFallback(client),
+      isPrimaryUsable: (data) => Array.isArray(data.components) && data.components.length > 0,
     });
 
-    if (!response.ok) {
-      console.error(`HTTP Error ${response.status}: ${response.statusText}`);
-
-      return null;
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`API Error: ${error.message}`);
-
-    return null;
-  }
-}
-
-/**
- * Fetch component list from llms.txt fallback URL.
- */
-async function fetchFallback() {
-  try {
-    const response = await fetch(LLMS_TXT_URL, {
-      headers: { "User-Agent": "HeroUI-Native-Skill/1.0" },
-      signal: AbortSignal.timeout(30000),
+    const envelope = successEnvelope(resolved.data, {
+      source: resolved.source,
+      meta: {
+        latestVersion: resolved.data.latestVersion,
+        fallbackUsed: resolved.usedFallback,
+        timingMs: Date.now() - startedAt,
+      },
     });
 
-    if (!response.ok) {
-      return null;
+    if (args.format === "json") {
+      emitEnvelope(runtime, args, envelope);
+    } else {
+      writeStdout(
+        runtime,
+        JSON.stringify(
+          {
+            latestVersion: resolved.data.latestVersion,
+            components: resolved.data.components,
+            count: resolved.data.count,
+          },
+          null,
+          2,
+        ),
+      );
+      writeStderr(
+        runtime,
+        `# Found ${resolved.data.count} Native components (${resolved.data.latestVersion})`,
+      );
     }
 
-    const content = await response.text();
-
-    // Parse markdown to extract component names from pattern: - [ComponentName](url)
-    // Look for links under the Components section (### Components)
-    const components = [];
-    let inComponentsSection = false;
-
-    for (const line of content.split("\n")) {
-      // Check if we're entering the Components section (uses ### header)
-      if (line.trim() === "### Components") {
-        inComponentsSection = true;
-        continue;
-      }
-
-      // Check if we're leaving the Components section (another ### header)
-      if (inComponentsSection && line.trim().startsWith("### ")) {
-        break;
-      }
-
-      // Extract component name from markdown link pattern
-      // Match: - [ComponentName](https://v3.heroui.com/docs/native/components/component-name)
-      // Skip "All Components" which links to /components without a specific component
-      if (inComponentsSection) {
-        const match = line.match(
-          /^\s*-\s*\[([^\]]+)\]\(https:\/\/v3\.heroui\.com\/docs\/native\/components\/[a-z]/,
-        );
-
-        if (match) {
-          components.push(match[1]);
-        }
-      }
-    }
-
-    if (components.length > 0) {
-      console.error(`# Using fallback: ${LLMS_TXT_URL}`);
-
-      return {
-        components: components.sort(),
-        count: components.length,
-        latestVersion: "unknown",
-      };
-    }
-
-    return null;
+    return EXIT_CODE.OK;
   } catch (error) {
-    console.error(`Fallback Error: ${error.message}`);
-
-    return null;
+    const envelope = failureEnvelope(error, {
+      source: "api",
+      meta: { timingMs: Date.now() - startedAt },
+    });
+    if (jsonMode) {
+      emitEnvelope(runtime, { format: "json" }, envelope);
+    } else {
+      writeStderr(runtime, `${envelope.error.code}: ${envelope.error.message}`);
+      if (envelope.error.detail?.usage) {
+        writeStderr(runtime, envelope.error.detail.usage);
+      }
+    }
+    return error instanceof SkillError ? error.exitCode : EXIT_CODE.FAILURE;
   }
 }
 
-/**
- * Main function to list all available HeroUI Native components.
- */
-async function main() {
-  let data = await fetchApi("/v1/components");
-
-  // Check if API returned valid data with components
-  if (!data || !data.components || data.components.length === 0) {
-    console.error("# API returned no components, trying fallback...");
-    data = await fetchFallback();
-  }
-
-  if (!data || !data.components || data.components.length === 0) {
-    console.error("Error: Failed to fetch component list from API and fallback");
-    process.exit(1);
-  }
-
-  // Output formatted JSON
-  console.log(JSON.stringify(data, null, 2));
-
-  // Print summary to stderr for human readability
-  console.error(
-    `\n# Found ${data.components.length} Native components (${data.latestVersion || "unknown"})`,
-  );
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const code = await run();
+  process.exit(code);
 }
-
-main();
