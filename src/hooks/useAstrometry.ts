@@ -11,8 +11,9 @@ import { useFitsStore } from "../stores/useFitsStore";
 import * as service from "../lib/astrometry/astrometryService";
 import * as clientApi from "../lib/astrometry/astrometryClient";
 import * as Haptics from "expo-haptics";
+import { useHapticFeedback } from "./useHapticFeedback";
 import type { AstrometryJob } from "../lib/astrometry/types";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 function generateId(): string {
   return Crypto.randomUUID();
@@ -21,6 +22,7 @@ function generateId(): string {
 export function useAstrometry() {
   const queueRef = useRef<string[]>([]);
   const processingRef = useRef(false);
+  const haptics = useHapticFeedback();
 
   const { config, jobs } = useAstrometryStore(
     useShallow((s) => ({ config: s.config, jobs: s.jobs })),
@@ -229,7 +231,7 @@ export function useAstrometry() {
 
     if (staleJobs.length === 0) return;
 
-    Logger.info("useAstrometry", `Resuming ${staleJobs.length} interrupted jobs`);
+    Logger.info(LOG_TAGS.useAstrometry, `Resuming ${staleJobs.length} interrupted jobs`);
     for (const j of staleJobs) {
       updateJob(j.id, { status: "pending", progress: 0 });
       queueRef.current.push(j.id);
@@ -266,12 +268,12 @@ export function useAstrometry() {
       // 启动队列处理
       processQueue();
       if (jobIds.length > 0) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
       }
 
       return jobIds;
     },
-    [addJob, processQueue],
+    [addJob, processQueue, haptics],
   );
 
   // 取消所有活跃任务

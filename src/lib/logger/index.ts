@@ -3,13 +3,17 @@
  */
 
 export { Logger } from "./logger";
+export { createLogger } from "./logger";
 export { sanitizeLogData, sanitizeLogEntry, serializeLogData } from "./logger";
 export { collectSystemInfo, formatSystemInfo, formatBytes } from "./systemInfo";
 export { exportLogsToFile, shareLogFile, cleanLogExports } from "./logExport";
+export { initLoggerRuntime } from "./runtime";
+export { LOG_TAGS } from "./tags";
 export type { LogExportOptions } from "./logExport";
 export type {
   LogLevel,
   LogEntry,
+  LogQuery,
   LoggerListener,
   LogSerializationOptions,
   LoggerConfig,
@@ -20,4 +24,5 @@ export type {
   NetworkInfo,
   RuntimeInfo,
 } from "./types";
+export type { LogTag } from "./tags";
 export { LOG_LEVEL_PRIORITY } from "./types";

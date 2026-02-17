@@ -1,7 +1,6 @@
 import { View, Text, Alert, ScrollView, StatusBar } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
-import * as Haptics from "expo-haptics";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Alert as HAlert, Button, Skeleton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -18,6 +17,7 @@ import { useImageProcessing } from "../../hooks/useImageProcessing";
 import { useViewerExport } from "../../hooks/useViewerExport";
 import { useThumbnail } from "../../hooks/useThumbnail";
 import { useViewerHotkeys } from "../../hooks/useViewerHotkeys";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { PixelInspector } from "../../components/fits/PixelInspector";
 import { RegionSelectOverlay } from "../../components/fits/RegionSelectOverlay";
 import {
@@ -138,6 +138,9 @@ export default function ViewerDetailScreen() {
   const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
   const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
   const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
+  const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
+  const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
+  const haptics = useHapticFeedback();
 
   // Cursor & frame — grouped
   const { cursorX, cursorY, currentFrame, totalFrames, currentHDU } = useViewerStore(
@@ -189,7 +192,7 @@ export default function ViewerDetailScreen() {
   const [showExport, setShowExport] = useState(false);
   const [showAstrometryResult, setShowAstrometryResult] = useState(false);
   const [showAnnotations, setShowAnnotations] = useState(true);
-  const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(defaultExportFormat);
 
   const closeExportDialog = useCallback(() => setShowExport(false), []);
   const {
@@ -249,20 +252,20 @@ export default function ViewerDetailScreen() {
     }
     if (!id) return;
     astrometrySubmit(id);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [astrometryConfig.apiKey, id, astrometrySubmit, t]);
+    haptics.notify();
+  }, [astrometryConfig.apiKey, id, astrometrySubmit, haptics, t]);
 
   const handleViewerExportWCS = useCallback(async () => {
     if (!latestSolvedJob?.result || !file) return;
     try {
       const shared = await shareWCS(latestSolvedJob.result, file.filename);
       if (shared) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptics.notify();
       }
     } catch {
       Alert.alert(t("common.error"), "Failed to export WCS.");
     }
-  }, [latestSolvedJob, file, t]);
+  }, [latestSolvedJob, file, haptics, t]);
 
   const navigateTo = useCallback(
     (fileId: string) => {
@@ -377,7 +380,7 @@ export default function ViewerDetailScreen() {
       { showGrid, showCrosshair, showPixelInfo, showMinimap },
     );
     updateFile(file.id, { viewerPreset: preset });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptics.notify();
   }, [
     file,
     stretch,
@@ -397,6 +400,7 @@ export default function ViewerDetailScreen() {
     showPixelInfo,
     showMinimap,
     updateFile,
+    haptics,
   ]);
 
   const handleResetToSaved = useCallback(() => {
@@ -473,7 +477,7 @@ export default function ViewerDetailScreen() {
 
   const handleApplyQuickPreset = useCallback(
     (preset: "auto" | "linearReset" | "deepSky" | "moonPlanet") => {
-      Haptics.selectionAsync();
+      haptics.selection();
       if (preset === "auto") {
         handleAutoStretch();
         return;
@@ -519,6 +523,7 @@ export default function ViewerDetailScreen() {
       setCurvePreset("highContrast");
     },
     [
+      haptics,
       pixels,
       handleAutoStretch,
       setStretch,
@@ -615,23 +620,42 @@ export default function ViewerDetailScreen() {
     prevPixelsRef.current = pixels;
 
     if (isNewPixelData) {
-      // New pixel data (initial load or frame change): show preview immediately
-      processImagePreview(
-        pixels,
-        dimensions.width,
-        dimensions.height,
-        stretch,
-        colormap,
-        blackPoint,
-        whitePoint,
-        gamma,
-        outputBlack,
-        outputWhite,
-        brightness,
-        contrast,
-        mtfMidtone,
-        curvePreset,
-      );
+      if (useHighQualityPreview) {
+        processImage(
+          pixels,
+          dimensions.width,
+          dimensions.height,
+          stretch,
+          colormap,
+          blackPoint,
+          whitePoint,
+          gamma,
+          outputBlack,
+          outputWhite,
+          brightness,
+          contrast,
+          mtfMidtone,
+          curvePreset,
+        );
+      } else {
+        // New pixel data (initial load or frame change): show preview immediately
+        processImagePreview(
+          pixels,
+          dimensions.width,
+          dimensions.height,
+          stretch,
+          colormap,
+          blackPoint,
+          whitePoint,
+          gamma,
+          outputBlack,
+          outputWhite,
+          brightness,
+          contrast,
+          mtfMidtone,
+          curvePreset,
+        );
+      }
       return;
     }
 
@@ -671,6 +695,7 @@ export default function ViewerDetailScreen() {
     contrast,
     mtfMidtone,
     curvePreset,
+    useHighQualityPreview,
   ]);
 
   // Histogram and stats only on pixel/dimension change (deferred after interactions)

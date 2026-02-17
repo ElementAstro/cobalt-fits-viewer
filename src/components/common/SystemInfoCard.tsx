@@ -9,6 +9,7 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { useSystemInfo } from "../../hooks/useLogger";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { formatBytes } from "../../lib/logger";
 
 function InfoRow({ label, value }: { label: string; value: string }) {
@@ -44,6 +45,7 @@ export function SystemInfoCard() {
   const { t } = useI18n();
   const accentColor = useThemeColor("accent");
   const successColor = useThemeColor("success");
+  const haptics = useHapticFeedback();
 
   const { systemInfo, isCollecting, refreshSystemInfo, getFormattedInfo } = useSystemInfo();
 
@@ -51,7 +53,7 @@ export function SystemInfoCard() {
     const text = getFormattedInfo();
     if (text) {
       await Clipboard.setStringAsync(text);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptics.notify(Haptics.NotificationFeedbackType.Success);
     }
   };
 
@@ -151,7 +153,7 @@ export function SystemInfoCard() {
             size="sm"
             variant="ghost"
             onPress={() => {
-              Haptics.selectionAsync();
+              haptics.selection();
               refreshSystemInfo();
             }}
           >

@@ -1,6 +1,5 @@
 import { View, Text, ScrollView, Alert, TextInput } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
-import * as Haptics from "expo-haptics";
 import { useState, useCallback, useEffect } from "react";
 import { Button, Card, PressableFeedback, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,9 +8,11 @@ import type { Href } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageEditor } from "../../hooks/useImageEditor";
 import { useExport } from "../../hooks/useExport";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { CropOverlay } from "../../components/fits/CropOverlay";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
@@ -103,17 +104,23 @@ export default function EditorDetailScreen() {
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
+  const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
+  const defaultBlurSigma = useSettingsStore((s) => s.defaultBlurSigma);
+  const defaultSharpenAmount = useSettingsStore((s) => s.defaultSharpenAmount);
+  const defaultDenoiseRadius = useSettingsStore((s) => s.defaultDenoiseRadius);
+  const editorMaxUndo = useSettingsStore((s) => s.editorMaxUndo);
   const { pixels, dimensions, isLoading: fitsLoading, loadFromPath } = useFitsFile();
-  const editor = useImageEditor();
+  const editor = useImageEditor({ maxHistory: editorMaxUndo });
+  const haptics = useHapticFeedback();
   const { isExporting, exportImage, shareImage, saveImage } = useExport();
 
   const [showExport, setShowExport] = useState(false);
-  const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
+  const [exportFormat, setExportFormat] = useState<ExportFormat>(defaultExportFormat);
   const [activeTool, setActiveTool] = useState<EditorTool>(null);
-  const [blurSigma, setBlurSigma] = useState(2.0);
-  const [sharpenAmount, setSharpenAmount] = useState(1.5);
+  const [blurSigma, setBlurSigma] = useState(defaultBlurSigma);
+  const [sharpenAmount, setSharpenAmount] = useState(defaultSharpenAmount);
   const [sharpenSigma, setSharpenSigma] = useState(1.0);
-  const [denoiseRadius, setDenoiseRadius] = useState(1);
+  const [denoiseRadius, setDenoiseRadius] = useState(defaultDenoiseRadius);
   const [brightnessAmount, setBrightnessAmount] = useState(0);
   const [contrastFactor, setContrastFactor] = useState(1.0);
   const [gammaValue, setGammaValue] = useState(1.0);
@@ -169,10 +176,13 @@ export default function EditorDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixels, dimensions]);
 
-  const handleToolPress = useCallback((tool: EditorTool & string) => {
-    Haptics.selectionAsync();
-    setActiveTool((prev) => (prev === tool ? null : tool));
-  }, []);
+  const handleToolPress = useCallback(
+    (tool: EditorTool & string) => {
+      haptics.selection();
+      setActiveTool((prev) => (prev === tool ? null : tool));
+    },
+    [haptics],
+  );
 
   const handleApply = useCallback(() => {
     if (!activeTool) return;
@@ -315,7 +325,7 @@ export default function EditorDetailScreen() {
     }
 
     if (op) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+      haptics.impact();
       editor.applyEdit(op);
     }
     setActiveTool(null);
@@ -354,6 +364,7 @@ export default function EditorDetailScreen() {
     deconvRegularization,
     pixelMathExpr,
     curvesPreset,
+    haptics,
   ]);
 
   const handleQuickAction = useCallback(

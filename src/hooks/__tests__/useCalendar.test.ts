@@ -12,8 +12,18 @@ jest.mock("../../lib/storage", () => ({
 }));
 
 jest.mock("../../stores/useSettingsStore", () => ({
-  useSettingsStore: (selector: (state: { defaultReminderMinutes: number }) => unknown) =>
-    selector({ defaultReminderMinutes: 30 }),
+  useSettingsStore: (
+    selector: (state: {
+      defaultReminderMinutes: number;
+      calendarSyncEnabled: boolean;
+      hapticsEnabled: boolean;
+    }) => unknown,
+  ) =>
+    selector({
+      defaultReminderMinutes: 30,
+      calendarSyncEnabled: true,
+      hapticsEnabled: true,
+    }),
 }));
 
 jest.mock("expo-haptics", () => ({
@@ -46,6 +56,9 @@ jest.mock("../../lib/calendar", () => ({
 }));
 
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    Calendar: "Calendar",
+  },
   Logger: {
     debug: jest.fn(),
     info: jest.fn(),

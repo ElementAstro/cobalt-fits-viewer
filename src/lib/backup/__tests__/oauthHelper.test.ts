@@ -33,11 +33,17 @@ function loadOAuthModule({
     exchangeCodeAsync: (...args: unknown[]) => mockExchangeCodeAsync(...args),
     makeRedirectUri: () => "cobalt://redirect",
   }));
-  jest.doMock("../../logger", () => ({
-    Logger: {
-      info: (...args: unknown[]) => mockLoggerInfo(...args),
-    },
-  }));
+  jest.doMock("../../logger", () => {
+    const actual = jest.requireActual("../../logger") as typeof import("../../logger");
+    return {
+      __esModule: true,
+      ...actual,
+      Logger: {
+        ...actual.Logger,
+        info: (...args: unknown[]) => mockLoggerInfo(...args),
+      },
+    };
+  });
   jest.doMock("../providers/onedrive", () => ({
     ONEDRIVE_DISCOVERY: { tokenEndpoint: "https://onedrive/token" },
     ONEDRIVE_SCOPES: ["scope.a", "scope.b"],

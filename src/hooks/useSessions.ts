@@ -19,7 +19,7 @@ import {
   exportAllSessionsToJSON,
 } from "../lib/sessions/observationLog";
 import { calculateObservationStats, getMonthlyTrend } from "../lib/sessions/statsCalculator";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 export function useSessions() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -38,7 +38,7 @@ export function useSessions() {
   const autoDetectSessions = useCallback((): { newCount: number; totalDetected: number } => {
     const detected = detectSessions(files, sessionGapMinutes);
     Logger.info(
-      "Sessions",
+      LOG_TAGS.Sessions,
       `Auto-detect: ${detected.length} sessions found from ${files.length} files`,
     );
 

@@ -7,6 +7,7 @@ import type { FitsMetadata } from "../../lib/fits/types";
 
 interface ObservationTimelineProps {
   files: FitsMetadata[];
+  grouping?: "day" | "week" | "month";
 }
 
 interface DayGroup {
@@ -16,11 +17,11 @@ interface DayGroup {
   filterCounts: Record<string, number>;
 }
 
-export function ObservationTimeline({ files }: ObservationTimelineProps) {
+export function ObservationTimeline({ files, grouping = "day" }: ObservationTimelineProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
 
-  const groups = groupByDate(files);
+  const groups = groupByPeriod(files, grouping);
 
   if (groups.length === 0) return null;
 
@@ -70,11 +71,30 @@ export function ObservationTimeline({ files }: ObservationTimelineProps) {
   );
 }
 
-function groupByDate(files: FitsMetadata[]): DayGroup[] {
+function getDateKey(dateObs: string | undefined, grouping: "day" | "week" | "month") {
+  if (!dateObs) return "Unknown";
+  const date = new Date(dateObs);
+  if (Number.isNaN(date.getTime())) return "Unknown";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  if (grouping === "day") {
+    return `${year}-${month}-${day}`;
+  }
+  if (grouping === "month") {
+    return `${year}-${month}`;
+  }
+  const jan1 = new Date(year, 0, 1);
+  const dayOfYear = Math.floor((date.getTime() - jan1.getTime()) / 86400000) + 1;
+  const week = Math.ceil(dayOfYear / 7);
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+
+function groupByPeriod(files: FitsMetadata[], grouping: "day" | "week" | "month"): DayGroup[] {
   const map = new Map<string, FitsMetadata[]>();
 
   for (const file of files) {
-    const date = file.dateObs?.split("T")[0] ?? "Unknown";
+    const date = getDateKey(file.dateObs, grouping);
     if (!map.has(date)) map.set(date, []);
     map.get(date)!.push(file);
   }

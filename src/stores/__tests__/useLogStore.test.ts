@@ -49,10 +49,16 @@ describe("useLogStore", () => {
     useLogStore.getState().setFilterTag("network");
     useLogStore.getState().setFilterQuery("timeout");
 
+    const querySpy = jest.spyOn(Logger, "queryEntries");
     const filtered = useLogStore.getState().getFilteredEntries();
     expect(filtered).toHaveLength(1);
     expect(filtered[0].tag).toBe("Network");
     expect(filtered[0].level).toBe("warn");
+    expect(querySpy).toHaveBeenCalledWith({
+      level: "warn",
+      tag: "network",
+      query: "timeout",
+    });
   });
 
   it("clearLogs updates reactive snapshot without forcing set({})", () => {

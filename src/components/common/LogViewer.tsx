@@ -19,6 +19,7 @@ import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { useLogViewer } from "../../hooks/useLogger";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import type { LogLevel, LogEntry, LogExportOptions } from "../../lib/logger";
 
 const LEVEL_COLORS: Record<LogLevel, string> = {
@@ -93,6 +94,7 @@ export function LogViewer() {
   const { t } = useI18n();
   const accentColor = useThemeColor("accent");
   const dangerColor = useThemeColor("danger");
+  const haptics = useHapticFeedback();
 
   const {
     entries,
@@ -114,18 +116,20 @@ export function LogViewer() {
   const [exportFormat, setExportFormat] = useState<"json" | "text">("text");
   const [compressEnabled, setCompressEnabled] = useState(false);
   const [includeSystemInfo, setIncludeSystemInfo] = useState(true);
+  const [filteredOnly, setFilteredOnly] = useState(false);
 
-  const getExportOptions = (): LogExportOptions => ({
+  const getExportOptions = (): LogExportOptions & { filteredOnly: boolean } => ({
     format: exportFormat,
     compress: compressEnabled,
     includeSystemInfo,
+    filteredOnly,
   });
 
   const handleCopyToClipboard = async () => {
-    const text = exportLogs("text");
+    const text = exportLogs("text", filteredOnly);
     if (text) {
       await Clipboard.setStringAsync(text);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptics.notify(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t("common.success"), t("logs.copied"));
     }
   };
@@ -133,10 +137,10 @@ export function LogViewer() {
   const handleExportToFile = async () => {
     const uri = await exportToFile(getExportOptions());
     if (uri) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptics.notify(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t("common.success"), t("logs.exportSuccess"));
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      haptics.notify(Haptics.NotificationFeedbackType.Error);
       Alert.alert(t("common.error"), t("logs.exportFailed"));
     }
   };
@@ -144,15 +148,15 @@ export function LogViewer() {
   const handleShare = async () => {
     const ok = await shareLogs(getExportOptions());
     if (ok) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptics.notify(Haptics.NotificationFeedbackType.Success);
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      haptics.notify(Haptics.NotificationFeedbackType.Error);
       Alert.alert(t("common.error"), t("logs.shareFailed"));
     }
   };
 
   const handleClear = () => {
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    haptics.notify(Haptics.NotificationFeedbackType.Warning);
     Alert.alert(t("logs.clearTitle"), t("logs.clearConfirm"), [
       { text: t("common.cancel"), style: "cancel" },
       {
@@ -160,7 +164,7 @@ export function LogViewer() {
         style: "destructive",
         onPress: () => {
           clearLogs();
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          haptics.notify(Haptics.NotificationFeedbackType.Success);
         },
       },
     ]);
@@ -253,6 +257,14 @@ export function LogViewer() {
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-[11px] text-foreground">{t("logs.includeSystemInfo")}</Text>
               <Switch isSelected={includeSystemInfo} onSelectedChange={setIncludeSystemInfo}>
+                <Switch.Thumb />
+              </Switch>
+            </View>
+
+            {/* Filtered-only Toggle */}
+            <View className="flex-row items-center justify-between mb-2">
+              <Text className="text-[11px] text-foreground">{t("logs.exportFilteredOnly")}</Text>
+              <Switch isSelected={filteredOnly} onSelectedChange={setFilteredOnly}>
                 <Switch.Thumb />
               </Switch>
             </View>

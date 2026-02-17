@@ -80,10 +80,17 @@ function loadWebDAVProvider() {
     serializeManifest: jest.fn((m: unknown) => JSON.stringify(m)),
   }));
 
-  jest.doMock("../../../logger", () => ({
-    __esModule: true,
-    Logger: mockLogger,
-  }));
+  jest.doMock("../../../logger", () => {
+    const actual = jest.requireActual("../../../logger") as typeof import("../../../logger");
+    return {
+      __esModule: true,
+      ...actual,
+      Logger: {
+        ...actual.Logger,
+        ...mockLogger,
+      },
+    };
+  });
 
   return require("../webdav") as { WebDAVProvider: new () => WebDAVProviderInstance };
 }

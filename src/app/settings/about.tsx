@@ -26,9 +26,17 @@ export default function AboutSettingsScreen() {
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const confirmDestructiveActions = useSettingsStore((s) => s.confirmDestructiveActions);
   const autoCheckUpdates = useSettingsStore((s) => s.autoCheckUpdates);
+  const logMinLevel = useSettingsStore((s) => s.logMinLevel);
+  const logMaxEntries = useSettingsStore((s) => s.logMaxEntries);
+  const logConsoleOutput = useSettingsStore((s) => s.logConsoleOutput);
+  const logPersistEnabled = useSettingsStore((s) => s.logPersistEnabled);
   const setHapticsEnabled = useSettingsStore((s) => s.setHapticsEnabled);
   const setConfirmDestructiveActions = useSettingsStore((s) => s.setConfirmDestructiveActions);
   const setAutoCheckUpdates = useSettingsStore((s) => s.setAutoCheckUpdates);
+  const setLogMinLevel = useSettingsStore((s) => s.setLogMinLevel);
+  const setLogMaxEntries = useSettingsStore((s) => s.setLogMaxEntries);
+  const setLogConsoleOutput = useSettingsStore((s) => s.setLogConsoleOutput);
+  const setLogPersistEnabled = useSettingsStore((s) => s.setLogPersistEnabled);
   const resetOnboarding = useOnboardingStore((s) => s.resetOnboarding);
 
   const doResetAll = () => {
@@ -66,6 +74,44 @@ export default function AboutSettingsScreen() {
         },
       },
     ]);
+  };
+
+  const openLogLevelPicker = () => {
+    const levels = ["debug", "info", "warn", "error"] as const;
+    Alert.alert(
+      t("logs.logMinLevel"),
+      t("logs.logMinLevelDesc"),
+      [
+        ...levels.map((level) => ({
+          text: level.toUpperCase(),
+          onPress: () => {
+            haptics.selection();
+            setLogMinLevel(level);
+          },
+        })),
+        { text: t("common.cancel"), style: "cancel" as const },
+      ],
+      { cancelable: true },
+    );
+  };
+
+  const openLogMaxEntriesPicker = () => {
+    const options = [1000, 2000, 5000];
+    Alert.alert(
+      t("logs.logMaxEntries"),
+      t("logs.logMaxEntriesDesc"),
+      [
+        ...options.map((value) => ({
+          text: `${value}`,
+          onPress: () => {
+            haptics.selection();
+            setLogMaxEntries(value);
+          },
+        })),
+        { text: t("common.cancel"), style: "cancel" as const },
+      ],
+      { cancelable: true },
+    );
   };
 
   return (
@@ -148,6 +194,52 @@ export default function AboutSettingsScreen() {
         <Separator className="my-4" />
 
         {/* App Logs */}
+        <SettingsSection title={t("logs.configTitle")}>
+          <SettingsRow
+            icon="funnel-outline"
+            label={t("logs.logMinLevel")}
+            value={logMinLevel.toUpperCase()}
+            onPress={openLogLevelPicker}
+          />
+          <Separator />
+          <SettingsRow
+            icon="albums-outline"
+            label={t("logs.logMaxEntries")}
+            value={`${logMaxEntries}`}
+            onPress={openLogMaxEntriesPicker}
+          />
+          <Separator />
+          <SettingsRow
+            icon="terminal-outline"
+            label={t("logs.logConsoleOutput")}
+            rightElement={
+              <Switch
+                isSelected={logConsoleOutput}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setLogConsoleOutput(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="save-outline"
+            label={t("logs.logPersistEnabled")}
+            rightElement={
+              <Switch
+                isSelected={logPersistEnabled}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setLogPersistEnabled(value);
+                }}
+              />
+            }
+          />
+        </SettingsSection>
+
+        <Separator className="my-4" />
+
         <LogViewer />
 
         <Separator className="my-4" />

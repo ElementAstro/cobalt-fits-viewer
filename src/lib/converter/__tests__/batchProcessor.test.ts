@@ -132,7 +132,7 @@ describe("batchProcessor", () => {
       expect.objectContaining({ status: "running" }),
     );
     expect(mockEncodeToBytes).toHaveBeenCalledWith(2, 77);
-    expect(mockWrittenFiles.get("/exports/m42_converted.jpg")).toEqual(new Uint8Array([9, 8, 7]));
+    expect(mockWrittenFiles.get("/exports/m42.jpg")).toEqual(new Uint8Array([9, 8, 7]));
 
     const final = onProgress.mock.calls[onProgress.mock.calls.length - 1][1] as Partial<BatchTask>;
     expect(final.status).toBe("completed");

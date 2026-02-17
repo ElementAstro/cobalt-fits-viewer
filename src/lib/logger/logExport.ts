@@ -9,7 +9,8 @@ import { gzip } from "pako";
 import { getAppVersionInfo } from "../version";
 import { Logger, sanitizeLogEntry, serializeLogData } from "./logger";
 import { collectSystemInfo, formatSystemInfo } from "./systemInfo";
-import type { LogEntry, SystemInfo } from "./types";
+import { LOG_TAGS } from "./tags";
+import type { LogEntry, LogQuery, SystemInfo } from "./types";
 
 const LOG_EXPORT_SUBDIR = "log_exports";
 
@@ -20,9 +21,14 @@ export interface LogExportOptions {
   compress?: boolean;
   /** 是否附带系统信息 */
   includeSystemInfo?: boolean;
+  /** 仅导出符合筛选条件的日志 */
+  query?: LogQuery;
 }
 
 interface LogExportPackage {
+  schemaVersion?: number;
+  format?: "json" | "text";
+  query?: LogQuery;
   exportedAt: string;
   appVersion: string;
   totalEntries: number;
@@ -30,8 +36,8 @@ interface LogExportPackage {
   entries: LogEntry[];
 }
 
-function getRedactedEntries(): LogEntry[] {
-  return Logger.getEntries().map((entry) => sanitizeLogEntry(entry, { redact: true }));
+function getRedactedEntries(query?: LogQuery): LogEntry[] {
+  return Logger.queryEntries(query).map((entry) => sanitizeLogEntry(entry, { redact: true }));
 }
 
 /**
@@ -91,9 +97,12 @@ function buildTextContent(entries: LogEntry[], systemInfo?: SystemInfo): string 
 /**
  * 构建 JSON 格式的导出内容
  */
-function buildJsonContent(entries: LogEntry[], systemInfo?: SystemInfo): string {
+function buildJsonContent(entries: LogEntry[], systemInfo?: SystemInfo, query?: LogQuery): string {
   const versionInfo = getAppVersionInfo();
   const pkg: LogExportPackage = {
+    schemaVersion: 2,
+    format: "json",
+    query,
     exportedAt: new Date().toISOString(),
     appVersion: versionInfo.nativeVersion,
     totalEntries: entries.length,
@@ -114,10 +123,10 @@ function buildJsonContent(entries: LogEntry[], systemInfo?: SystemInfo): string 
 export async function exportLogsToFile(
   options: LogExportOptions = { format: "text" },
 ): Promise<string | null> {
-  const { format, compress = false, includeSystemInfo = false } = options;
+  const { format, compress = false, includeSystemInfo = false, query } = options;
 
   try {
-    const entries = getRedactedEntries();
+    const entries = getRedactedEntries(query);
 
     let systemInfo: SystemInfo | undefined;
     if (includeSystemInfo) {
@@ -130,7 +139,7 @@ export async function exportLogsToFile(
 
     const content =
       format === "json"
-        ? buildJsonContent(entries, systemInfo)
+        ? buildJsonContent(entries, systemInfo, query)
         : buildTextContent(entries, systemInfo);
 
     const dir = getLogExportDir();
@@ -140,7 +149,7 @@ export async function exportLogsToFile(
       const compressed = gzip(content);
       const file = new FSFile(dir, filename);
       file.write(compressed);
-      Logger.info("LogExport", `Logs exported (compressed): ${filename}`, {
+      Logger.info(LOG_TAGS.LogExport, `Logs exported (compressed): ${filename}`, {
         entries: entries.length,
         size: compressed.length,
       });
@@ -148,14 +157,14 @@ export async function exportLogsToFile(
     } else {
       const file = new FSFile(dir, filename);
       file.write(content);
-      Logger.info("LogExport", `Logs exported: ${filename}`, {
+      Logger.info(LOG_TAGS.LogExport, `Logs exported: ${filename}`, {
         entries: entries.length,
         size: content.length,
       });
       return file.uri;
     }
   } catch (e) {
-    Logger.error("LogExport", "Failed to export logs to file", e);
+    Logger.error(LOG_TAGS.LogExport, "Failed to export logs to file", e);
     return null;
   }
 }
@@ -172,7 +181,7 @@ export async function shareLogFile(
 
     const isAvailable = await Sharing.isAvailableAsync();
     if (!isAvailable) {
-      Logger.warn("LogExport", "Sharing is not available on this device");
+      Logger.warn(LOG_TAGS.LogExport, "Sharing is not available on this device");
       return false;
     }
 
@@ -187,10 +196,10 @@ export async function shareLogFile(
       dialogTitle: "Share App Logs",
     });
 
-    Logger.info("LogExport", "Logs shared successfully");
+    Logger.info(LOG_TAGS.LogExport, "Logs shared successfully");
     return true;
   } catch (e) {
-    Logger.error("LogExport", "Failed to share logs", e);
+    Logger.error(LOG_TAGS.LogExport, "Failed to share logs", e);
     return false;
   }
 }

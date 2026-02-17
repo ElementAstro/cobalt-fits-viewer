@@ -3,6 +3,7 @@ import { Alert } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../i18n/useI18n";
 import { useExport } from "./useExport";
+import { useHapticFeedback } from "./useHapticFeedback";
 import type { ExportFormat } from "../lib/fits/types";
 
 interface UseViewerExportParams {
@@ -23,6 +24,7 @@ export function useViewerExport({
   onDone,
 }: UseViewerExportParams) {
   const { t } = useI18n();
+  const haptics = useHapticFeedback();
   const { isExporting, exportImage, shareImage, saveImage, printImage, printToPdf } = useExport();
 
   const handleExport = useCallback(
@@ -33,15 +35,15 @@ export function useViewerExport({
       }
       const path = await exportImage(rgbaData, width, height, filename, format, quality);
       if (path) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
         Alert.alert(t("common.success"), t("viewer.exportSuccess"));
       } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        haptics.notify(Haptics.NotificationFeedbackType.Error);
         Alert.alert(t("common.error"), t("viewer.exportFailed"));
       }
       onDone();
     },
-    [rgbaData, width, height, exportImage, filename, format, t, onDone],
+    [rgbaData, width, height, exportImage, filename, format, haptics, t, onDone],
   );
 
   const handleShare = useCallback(
@@ -68,15 +70,15 @@ export function useViewerExport({
       }
       const uri = await saveImage(rgbaData, width, height, filename, format, quality);
       if (uri) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
         Alert.alert(t("common.success"), t("viewer.savedToDevice"));
       } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        haptics.notify(Haptics.NotificationFeedbackType.Error);
         Alert.alert(t("common.error"), t("viewer.exportFailed"));
       }
       onDone();
     },
-    [rgbaData, width, height, saveImage, filename, format, t, onDone],
+    [rgbaData, width, height, saveImage, filename, format, haptics, t, onDone],
   );
 
   const handlePrint = useCallback(async () => {

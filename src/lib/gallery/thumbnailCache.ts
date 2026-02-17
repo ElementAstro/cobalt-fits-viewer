@@ -5,7 +5,7 @@
 
 import { Paths, File, Directory } from "expo-file-system";
 import { Skia, AlphaType, ColorType, ImageFormat } from "@shopify/react-native-skia";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 
 const THUMBNAIL_SUBDIR = "thumbnails";
 
@@ -125,13 +125,13 @@ export function generateAndSaveThumbnail(
     );
 
     if (!skImage) {
-      Logger.warn("Thumbnail", `Failed to create Skia image for ${fileId}`);
+      Logger.warn(LOG_TAGS.Thumbnail, `Failed to create Skia image for ${fileId}`);
       return null;
     }
 
     const bytes = skImage.encodeToBytes(ImageFormat.JPEG, quality);
     if (!bytes || bytes.length === 0) {
-      Logger.warn("Thumbnail", `Failed to encode thumbnail for ${fileId}`);
+      Logger.warn(LOG_TAGS.Thumbnail, `Failed to encode thumbnail for ${fileId}`);
       return null;
     }
 
@@ -139,10 +139,10 @@ export function generateAndSaveThumbnail(
     const thumbFile = new File(thumbPath);
     thumbFile.write(bytes);
 
-    Logger.debug("Thumbnail", `Generated thumbnail for ${fileId} (${bytes.length} bytes)`);
+    Logger.debug(LOG_TAGS.Thumbnail, `Generated thumbnail for ${fileId} (${bytes.length} bytes)`);
     return thumbPath;
   } catch (err) {
-    Logger.warn("Thumbnail", `Thumbnail generation failed for ${fileId}`, err);
+    Logger.warn(LOG_TAGS.Thumbnail, `Thumbnail generation failed for ${fileId}`, err);
     return null;
   }
 }

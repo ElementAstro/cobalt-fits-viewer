@@ -6,7 +6,9 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { Uniwind } from "uniwind";
 import { zustandMMKVStorage } from "../lib/storage";
+import { setI18nLocale } from "../i18n";
 import type { StretchType, ColormapType, ExportFormat } from "../lib/fits/types";
+import type { LogLevel } from "../lib/logger";
 import {
   ACCENT_PRESETS,
   DEFAULT_CUSTOM_THEME_COLORS,
@@ -67,6 +69,10 @@ interface SettingsStoreState {
   hapticsEnabled: boolean;
   confirmDestructiveActions: boolean;
   autoCheckUpdates: boolean;
+  logMinLevel: LogLevel;
+  logMaxEntries: number;
+  logConsoleOutput: boolean;
+  logPersistEnabled: boolean;
 
   // 自定义风格
   themeColorMode: ThemeColorMode;
@@ -180,6 +186,10 @@ interface SettingsStoreState {
   setHapticsEnabled: (value: boolean) => void;
   setConfirmDestructiveActions: (value: boolean) => void;
   setAutoCheckUpdates: (value: boolean) => void;
+  setLogMinLevel: (level: LogLevel) => void;
+  setLogMaxEntries: (value: number) => void;
+  setLogConsoleOutput: (value: boolean) => void;
+  setLogPersistEnabled: (value: boolean) => void;
   setThemeColorMode: (mode: ThemeColorMode) => void;
   setAccentColor: (color: AccentColorKey | null) => void;
   setActivePreset: (preset: StylePresetKey) => void;
@@ -294,6 +304,10 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   hapticsEnabled: true,
   confirmDestructiveActions: true,
   autoCheckUpdates: true,
+  logMinLevel: __DEV__ ? "debug" : "info",
+  logMaxEntries: 2000,
+  logConsoleOutput: __DEV__,
+  logPersistEnabled: true,
   themeColorMode: "preset",
   accentColor: null,
   activePreset: "default",
@@ -454,6 +468,7 @@ function sanitizeSettingsPatch(
     { key: "composeGreenWeight", min: 0, max: 4 },
     { key: "composeBlueWeight", min: 0, max: 4 },
     { key: "imageProcessingDebounce", min: 0, max: 2000, integer: true },
+    { key: "logMaxEntries", min: 100, max: 10000, integer: true },
   ];
 
   const numericRuleKeys = new Set(numericRules.map((rule) => rule.key));
@@ -487,6 +502,7 @@ function sanitizeSettingsPatch(
     targetSortBy: ["name", "date", "frames", "exposure", "favorite"],
     targetSortOrder: ["asc", "desc"],
     defaultComposePreset: ["rgb", "sho", "hoo", "lrgb", "custom"],
+    logMinLevel: ["debug", "info", "warn", "error"],
   };
 
   const rawTargetSortBy = (sanitized as Record<string, unknown>).targetSortBy;
@@ -657,11 +673,18 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setCalendarSyncEnabled: (value) => set({ calendarSyncEnabled: value }),
       setDefaultReminderMinutes: (minutes) =>
         get().applySettingsPatch({ defaultReminderMinutes: minutes }),
-      setLanguage: (lang) => set({ language: lang }),
+      setLanguage: (lang) => {
+        const normalized = setI18nLocale(lang);
+        set({ language: normalized });
+      },
       setOrientationLock: (lock) => set({ orientationLock: lock }),
       setHapticsEnabled: (value) => set({ hapticsEnabled: value }),
       setConfirmDestructiveActions: (value) => set({ confirmDestructiveActions: value }),
       setAutoCheckUpdates: (value) => set({ autoCheckUpdates: value }),
+      setLogMinLevel: (level) => set({ logMinLevel: level }),
+      setLogMaxEntries: (value) => get().applySettingsPatch({ logMaxEntries: value }),
+      setLogConsoleOutput: (value) => set({ logConsoleOutput: value }),
+      setLogPersistEnabled: (value) => set({ logPersistEnabled: value }),
 
       setTheme: (theme) => {
         const { themeColorMode, accentColor, activePreset, customThemeColors } = get();
@@ -818,6 +841,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
       applySettingsPatch: (patch) => {
         const current = get() as SettingsDataState;
         const sanitized = sanitizeSettingsPatch(patch, current);
+        if (sanitized.language !== undefined) {
+          sanitized.language = setI18nLocale(sanitized.language);
+        }
         set(sanitized);
         if (THEME_SYNC_KEYS.some((key) => sanitized[key] !== undefined)) {
           const { theme, themeColorMode, accentColor, activePreset, customThemeColors } = get();
@@ -831,6 +857,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
           customThemeColors: cloneCustomThemeColors(DEFAULT_SETTINGS.customThemeColors),
         };
         set(nextDefaults);
+        setI18nLocale(nextDefaults.language);
         syncThemeToRuntime(
           nextDefaults.theme,
           nextDefaults.themeColorMode,
@@ -867,6 +894,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       partialize: (state) => pickSettingsData(state),
       onRehydrateStorage: () => (state) => {
         if (state) {
+          setI18nLocale(state.language);
           syncThemeToRuntime(
             state.theme,
             state.themeColorMode,

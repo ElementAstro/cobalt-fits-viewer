@@ -3,7 +3,7 @@
  */
 
 import { create } from "zustand";
-import { Logger, LOG_LEVEL_PRIORITY, collectSystemInfo, serializeLogData } from "../lib/logger";
+import { Logger, LOG_TAGS, collectSystemInfo } from "../lib/logger";
 import type { LogLevel, LogEntry, SystemInfo } from "../lib/logger";
 
 interface LogStoreState {
@@ -39,6 +39,27 @@ function getLoggerSnapshot() {
   };
 }
 
+function isSameLoggerSnapshot(
+  state: Pick<LogStoreState, "entries" | "totalCount">,
+  snapshot: Pick<LogStoreState, "entries" | "totalCount">,
+): boolean {
+  if (state.totalCount !== snapshot.totalCount) return false;
+  if (state.entries.length !== snapshot.entries.length) return false;
+  if (state.entries.length === 0) return true;
+
+  const currentFirst = state.entries[0];
+  const nextFirst = snapshot.entries[0];
+  const currentLast = state.entries[state.entries.length - 1];
+  const nextLast = snapshot.entries[snapshot.entries.length - 1];
+
+  return (
+    currentFirst?.id === nextFirst?.id &&
+    currentFirst?.timestamp === nextFirst?.timestamp &&
+    currentLast?.id === nextLast?.id &&
+    currentLast?.timestamp === nextLast?.timestamp
+  );
+}
+
 export const useLogStore = create<LogStoreState>((set, get) => ({
   ...getLoggerSnapshot(),
   systemInfo: null,
@@ -48,55 +69,39 @@ export const useLogStore = create<LogStoreState>((set, get) => ({
   filterQuery: "",
 
   refreshSystemInfo: async () => {
+    if (get().isCollecting) return;
     set({ isCollecting: true });
     try {
       const info = await collectSystemInfo();
       set({ systemInfo: info, isCollecting: false });
-      Logger.info("SystemInfo", "System information collected successfully");
+      Logger.info(LOG_TAGS.SystemInfo, "System information collected successfully");
     } catch (e) {
       set({ isCollecting: false });
-      Logger.error("SystemInfo", "Failed to collect system information", e);
+      Logger.error(LOG_TAGS.SystemInfo, "Failed to collect system information", e);
     }
   },
 
-  setFilterLevel: (level) => set({ filterLevel: level }),
-  setFilterTag: (tag) => set({ filterTag: tag }),
-  setFilterQuery: (query) => set({ filterQuery: query }),
+  setFilterLevel: (level) =>
+    set((state) => (state.filterLevel === level ? state : { filterLevel: level })),
+  setFilterTag: (tag) => set((state) => (state.filterTag === tag ? state : { filterTag: tag })),
+  setFilterQuery: (query) =>
+    set((state) => (state.filterQuery === query ? state : { filterQuery: query })),
 
   clearLogs: () => {
     Logger.clear();
   },
 
   getFilteredEntries: () => {
-    const { entries, filterLevel, filterTag, filterQuery } = get();
-    let result = entries;
-
-    if (filterLevel) {
-      const levelIndex = LOG_LEVEL_PRIORITY[filterLevel];
-      result = result.filter((entry) => LOG_LEVEL_PRIORITY[entry.level] >= levelIndex);
-    }
-
-    if (filterTag.trim()) {
-      const tagLower = filterTag.trim().toLowerCase();
-      result = result.filter((entry) => entry.tag.toLowerCase().includes(tagLower));
-    }
-
-    if (filterQuery.trim()) {
-      const query = filterQuery.trim().toLowerCase();
-      result = result.filter((entry) => {
-        const inTag = entry.tag.toLowerCase().includes(query);
-        const inMessage = entry.message.toLowerCase().includes(query);
-        const inData =
-          entry.data !== undefined &&
-          serializeLogData(entry.data, { redact: true }).toLowerCase().includes(query);
-        return inTag || inMessage || inData;
-      });
-    }
-
-    return result;
+    const { filterLevel, filterTag, filterQuery } = get();
+    return Logger.queryEntries({
+      level: filterLevel ?? undefined,
+      tag: filterTag,
+      query: filterQuery,
+    });
   },
 }));
 
 Logger.subscribe(() => {
-  useLogStore.setState(getLoggerSnapshot());
+  const snapshot = getLoggerSnapshot();
+  useLogStore.setState((state) => (isSameLoggerSnapshot(state, snapshot) ? state : snapshot));
 });

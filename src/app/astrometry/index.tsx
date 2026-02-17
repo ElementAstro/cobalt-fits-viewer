@@ -20,6 +20,7 @@ import { FlashList } from "@shopify/flash-list";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useAstrometry } from "../../hooks/useAstrometry";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { AstrometryJobCard } from "../../components/astrometry/AstrometryJobCard";
@@ -36,6 +37,7 @@ export default function AstrometryScreen() {
   const { t } = useI18n();
   const [borderColor, mutedColor] = useThemeColor(["separator", "muted"]);
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
+  const haptics = useHapticFeedback();
 
   const {
     config,
@@ -90,9 +92,9 @@ export default function AstrometryScreen() {
     (file: FitsMetadata) => {
       setShowFilePicker(false);
       submitFile(file.id);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      haptics.notify(Haptics.NotificationFeedbackType.Success);
     },
-    [submitFile],
+    [submitFile, haptics],
   );
 
   // 打开 URL 输入 Dialog
@@ -112,8 +114,8 @@ export default function AstrometryScreen() {
     submitUrl(urlInput.trim(), fileName);
     setUrlInput("");
     setShowUrlDialog(false);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  }, [urlInput, submitUrl]);
+    haptics.notify(Haptics.NotificationFeedbackType.Success);
+  }, [urlInput, submitUrl, haptics]);
 
   // 清除历史
   const handleClearHistory = useCallback(() => {

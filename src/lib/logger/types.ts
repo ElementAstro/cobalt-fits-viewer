@@ -32,6 +32,17 @@ export interface LogSerializationOptions {
   maxDepth?: number;
 }
 
+export interface LogQuery {
+  /** minimum level filter (inclusive) */
+  level?: LogLevel;
+  /** tag contains (case-insensitive) */
+  tag?: string;
+  /** message/tag/data contains (case-insensitive) */
+  query?: string;
+  /** keep latest N entries */
+  limit?: number;
+}
+
 // ===== Logger 配置 =====
 export interface LoggerConfig {
   /** 最大日志条目数（环形缓冲区） */
@@ -40,6 +51,12 @@ export interface LoggerConfig {
   minLevel: LogLevel;
   /** 是否输出到 console */
   consoleOutput: boolean;
+  /** 是否启用本地持久化 */
+  persistEnabled: boolean;
+  /** 持久化存储 key */
+  persistKey: string;
+  /** 持久化写入防抖（毫秒） */
+  persistDebounceMs: number;
 }
 
 // ===== 系统信息 =====

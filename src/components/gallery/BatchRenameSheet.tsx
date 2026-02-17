@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { View, Text, FlatList, Alert } from "react-native";
 import {
   BottomSheet,
@@ -11,27 +11,43 @@ import {
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useFileManager } from "../../hooks/useFileManager";
 import {
   previewRenames,
   getTemplateVariables,
   DEFAULT_TEMPLATE,
 } from "../../lib/gallery/fileRenamer";
+import type { FitsMetadata } from "../../lib/fits/types";
+
+interface RenameOperation {
+  fileId: string;
+  filename: string;
+}
+
+interface RenameOperationResult {
+  success: number;
+  failed: number;
+}
 
 interface BatchRenameSheetProps {
   visible: boolean;
+  files: FitsMetadata[];
   selectedIds: string[];
+  onApplyRenames: (operations: RenameOperation[]) => RenameOperationResult;
   onClose: () => void;
+  isApplying?: boolean;
 }
 
-export function BatchRenameSheet({ visible, selectedIds, onClose }: BatchRenameSheetProps) {
+export function BatchRenameSheet({
+  visible,
+  files,
+  selectedIds,
+  onApplyRenames,
+  onClose,
+  isApplying = false,
+}: BatchRenameSheetProps) {
   const { t } = useI18n();
   const [_mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
-
-  const files = useFitsStore((s) => s.files);
-  const { handleRenameFiles } = useFileManager();
 
   const selectedFiles = useMemo(
     () => files.filter((f) => selectedIds.includes(f.id)),
@@ -49,27 +65,38 @@ export function BatchRenameSheet({ visible, selectedIds, onClose }: BatchRenameS
     setTemplate((prev) => prev + key);
   };
 
+  const handleClose = () => {
+    setTemplate(DEFAULT_TEMPLATE);
+    onClose();
+  };
+
   const handleApply = () => {
     const changed = previews.filter((preview) => preview.oldName !== preview.newName);
-    const result = handleRenameFiles(
+    if (changed.length === 0) {
+      Alert.alert(t("common.success"), t("files.renameNoChanges"));
+      return;
+    }
+
+    const result = onApplyRenames(
       changed.map((item) => ({ fileId: item.id, filename: item.newName })),
     );
+    const message = t("files.renamePartial")
+      .replace("{success}", String(result.success))
+      .replace("{failed}", String(result.failed));
+
     if (result.failed > 0) {
-      Alert.alert(
-        t("common.error"),
-        t("files.renamePartial")
-          .replace("{success}", String(result.success))
-          .replace("{failed}", String(result.failed)),
-      );
+      Alert.alert(t("common.error"), message);
+    } else {
+      Alert.alert(t("common.success"), message);
     }
-    onClose();
+    handleClose();
   };
 
   return (
     <BottomSheet
       isOpen={visible}
       onOpenChange={(open) => {
-        if (!open) onClose();
+        if (!open) handleClose();
       }}
     >
       <BottomSheet.Portal>
@@ -88,6 +115,7 @@ export function BatchRenameSheet({ visible, selectedIds, onClose }: BatchRenameS
             </Text>
             <TextField>
               <Input
+                testID="batch-rename-template-input"
                 value={template}
                 onChangeText={setTemplate}
                 placeholder={DEFAULT_TEMPLATE}
@@ -149,14 +177,20 @@ export function BatchRenameSheet({ visible, selectedIds, onClose }: BatchRenameS
 
           <Separator className="my-1" />
           <View className="flex-row gap-2 px-4 py-2">
-            <Button variant="outline" onPress={onClose} className="flex-1">
+            <Button
+              testID="batch-rename-cancel"
+              variant="outline"
+              onPress={handleClose}
+              className="flex-1"
+            >
               <Button.Label>{t("common.cancel")}</Button.Label>
             </Button>
             <Button
+              testID="batch-rename-apply"
               variant="primary"
               onPress={handleApply}
               className="flex-1"
-              isDisabled={!template.trim()}
+              isDisabled={!template.trim() || selectedFiles.length === 0 || isApplying}
             >
               <Ionicons name="checkmark-outline" size={14} color="#fff" />
               <Button.Label>{t("common.confirm") ?? "Rename"}</Button.Label>

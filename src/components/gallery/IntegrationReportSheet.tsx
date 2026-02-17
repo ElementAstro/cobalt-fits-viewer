@@ -4,6 +4,7 @@ import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import {
   generateIntegrationReport,
   formatExposureTime,
@@ -37,6 +38,7 @@ function QualityBadge({ score }: { score: number | null }) {
 export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSheetProps) {
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const haptics = useHapticFeedback();
   const files = useFitsStore((s) => s.files);
 
   const report = useMemo(() => generateIntegrationReport(files), [files]);
@@ -44,7 +46,7 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
   const handleCopyMarkdown = async () => {
     const md = exportReportAsMarkdown(report);
     await Clipboard.setStringAsync(md);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptics.notify(Haptics.NotificationFeedbackType.Success);
   };
 
   const renderTarget = ({ item }: { item: TargetReport }) => (

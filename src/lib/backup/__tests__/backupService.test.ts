@@ -24,10 +24,13 @@ jest.mock("../../utils/fileManager", () => ({
 
 // Mock logger
 jest.mock("../../logger", () => ({
+  LOG_TAGS: {
+    BackupService: "BackupService",
+  },
   Logger: {
     info: jest.fn(),
-    error: jest.fn(),
     warn: jest.fn(),
+    error: jest.fn(),
     debug: jest.fn(),
   },
 }));

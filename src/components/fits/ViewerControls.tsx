@@ -2,8 +2,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Button, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { SimpleSlider } from "../common/SimpleSlider";
 import type { StretchType, ColormapType, ViewerCurvePreset } from "../../lib/fits/types";
 import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";
@@ -142,6 +142,7 @@ export function ViewerControls({
 }: ViewerControlsProps) {
   const { t } = useI18n();
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const haptics = useHapticFeedback();
 
   return (
     <ScrollView className="border-t border-separator bg-background max-h-72">
@@ -204,7 +205,7 @@ export function ViewerControls({
                   size="sm"
                   variant="secondary"
                   onPress={() => {
-                    Haptics.selectionAsync();
+                    haptics.selection();
                     onApplyQuickPreset(preset.key);
                   }}
                 >
@@ -226,7 +227,7 @@ export function ViewerControls({
                 size="sm"
                 variant={stretch === s ? "primary" : "secondary"}
                 onPress={() => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   onStretchChange(s);
                 }}
               >
@@ -247,7 +248,7 @@ export function ViewerControls({
                 size="sm"
                 variant={colormap === c ? "primary" : "secondary"}
                 onPress={() => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   onColormapChange(c);
                 }}
               >
@@ -346,7 +347,7 @@ export function ViewerControls({
             variant={showGrid ? "primary" : "ghost"}
             isIconOnly
             onPress={() => {
-              Haptics.selectionAsync();
+              haptics.selection();
               onToggleGrid();
             }}
             className="h-7 w-7"
@@ -358,7 +359,7 @@ export function ViewerControls({
             variant={showCrosshair ? "primary" : "ghost"}
             isIconOnly
             onPress={() => {
-              Haptics.selectionAsync();
+              haptics.selection();
               onToggleCrosshair();
             }}
             className="h-7 w-7"
@@ -374,7 +375,7 @@ export function ViewerControls({
             variant={showPixelInfo ? "primary" : "ghost"}
             isIconOnly
             onPress={() => {
-              Haptics.selectionAsync();
+              haptics.selection();
               onTogglePixelInfo();
             }}
             className="h-7 w-7"
@@ -390,7 +391,7 @@ export function ViewerControls({
             variant={showMinimap ? "primary" : "ghost"}
             isIconOnly
             onPress={() => {
-              Haptics.selectionAsync();
+              haptics.selection();
               onToggleMinimap();
             }}
             className="h-7 w-7"
@@ -423,6 +424,7 @@ function FrameNavigation({
   successColor,
 }: FrameNavigationProps) {
   const { t } = useI18n();
+  const haptics = useHapticFeedback();
   const [isPlaying, setIsPlaying] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const frameRef = useRef(currentFrame);
@@ -468,7 +470,7 @@ function FrameNavigation({
         variant="ghost"
         isIconOnly
         onPress={() => {
-          Haptics.selectionAsync();
+          haptics.selection();
           if (isPlaying) stopPlayback();
           else startPlayback();
         }}

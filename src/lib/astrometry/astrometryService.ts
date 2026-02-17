@@ -3,7 +3,7 @@
  * 管理并行任务队列、轮询、重试
  */
 
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 import * as client from "./astrometryClient";
 import type {
   AstrometryJob,
@@ -16,7 +16,7 @@ import { ASTROMETRY_POLL_INTERVAL, ASTROMETRY_MAX_POLL_ATTEMPTS } from "./types"
 
 const POLL_BACKOFF_MAX = 15000;
 
-const TAG = "AstrometryService";
+const TAG = LOG_TAGS.AstrometryService;
 
 // ===== 回调类型 =====
 

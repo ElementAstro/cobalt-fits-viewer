@@ -8,9 +8,9 @@ import { AppState } from "react-native";
 import * as Network from "expo-network";
 import { useBackupStore } from "../stores/useBackupStore";
 import { useBackup } from "./useBackup";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
-const TAG = "AutoBackup";
+const TAG = LOG_TAGS.AutoBackup;
 
 export function useAutoBackup() {
   const runningRef = useRef(false);

@@ -25,7 +25,7 @@ import {
   createEventViaSystemUI,
 } from "../lib/calendar";
 import type { ObservationSession, ObservationPlan } from "../lib/fits/types";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 type CalendarRefreshOutcome = "updated" | "cleared" | "unchanged" | "skipped" | "error";
 
@@ -68,43 +68,69 @@ export function useCalendar() {
   const plans = useSessionStore((s) => s.plans);
 
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
+  const calendarSyncEnabled = useSettingsStore((s) => s.calendarSyncEnabled);
+  const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
 
-  const ensurePermission = useCallback(async (withPrompt: boolean = false): Promise<boolean> => {
-    const available = await isCalendarAvailable();
-    if (!available) {
-      if (withPrompt) {
-        Alert.alert("Calendar unavailable", "Calendar API is not available on this device.");
-      }
-      return false;
-    }
+  const notifyHaptic = useCallback(
+    (type: Haptics.NotificationFeedbackType = Haptics.NotificationFeedbackType.Success) => {
+      if (!hapticsEnabled) return;
+      void Promise.resolve(Haptics.notificationAsync(type)).catch(() => undefined);
+    },
+    [hapticsEnabled],
+  );
 
-    const hasPermission = await checkCalendarPermission();
-    if (hasPermission) return true;
-
-    const granted = await requestCalendarPermission();
-    if (!granted) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      if (withPrompt) {
-        Alert.alert(
-          "Calendar permission denied",
-          "Please grant calendar permission in system settings to continue.",
-          [
-            { text: "Cancel", style: "cancel" },
-            {
-              text: "Settings",
-              onPress: () => {
-                Linking.openSettings().catch(() => {
-                  // no-op
-                });
-              },
-            },
-          ],
-        );
-      }
-      return false;
-    }
-    return true;
+  const showCalendarSyncDisabledAlert = useCallback((withPrompt: boolean) => {
+    if (!withPrompt) return;
+    Alert.alert(
+      "Calendar sync disabled",
+      "Enable Calendar Sync in Settings to use calendar integration.",
+    );
   }, []);
+
+  const ensurePermission = useCallback(
+    async (withPrompt: boolean = false): Promise<boolean> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(withPrompt);
+        return false;
+      }
+
+      const available = await isCalendarAvailable();
+      if (!available) {
+        if (withPrompt) {
+          Alert.alert("Calendar unavailable", "Calendar API is not available on this device.");
+        }
+        return false;
+      }
+
+      const hasPermission = await checkCalendarPermission();
+      if (hasPermission) return true;
+
+      const granted = await requestCalendarPermission();
+      if (!granted) {
+        notifyHaptic(Haptics.NotificationFeedbackType.Error);
+        if (withPrompt) {
+          Alert.alert(
+            "Calendar permission denied",
+            "Please grant calendar permission in system settings to continue.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Settings",
+                onPress: () => {
+                  Linking.openSettings().catch(() => {
+                    // no-op
+                  });
+                },
+              },
+            ],
+          );
+        }
+        return false;
+      }
+      return true;
+    },
+    [calendarSyncEnabled, notifyHaptic, showCalendarSyncDisabledAlert],
+  );
 
   const syncSession = useCallback(
     async (session: ObservationSession): Promise<boolean> => {
@@ -117,18 +143,18 @@ export function useCalendar() {
         setSyncing(true);
         const eventId = await syncSessionToCalendar(session, defaultReminderMinutes);
         updateSession(session.id, { calendarEventId: eventId });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Logger.info("Calendar", `Session synced: ${session.id}`);
+        notifyHaptic(Haptics.NotificationFeedbackType.Success);
+        Logger.info(LOG_TAGS.Calendar, `Session synced: ${session.id}`);
         return true;
       } catch (e) {
-        Logger.error("Calendar", `Session sync failed: ${session.id}`, e);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Logger.error(LOG_TAGS.Calendar, `Session sync failed: ${session.id}`, e);
+        notifyHaptic(Haptics.NotificationFeedbackType.Error);
         return false;
       } finally {
         setSyncing(false);
       }
     },
-    [ensurePermission, defaultReminderMinutes, updateSession],
+    [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession],
   );
 
   const syncAllSessions = useCallback(
@@ -150,69 +176,80 @@ export function useCalendar() {
           }
         }
         if (count > 0) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
         }
       } finally {
         setSyncing(false);
       }
       return count;
     },
-    [ensurePermission, defaultReminderMinutes, updateSession],
+    [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession],
   );
 
   const unsyncSession = useCallback(
     async (session: ObservationSession): Promise<void> => {
       if (!session.calendarEventId) return;
+      if (!calendarSyncEnabled) return;
 
       try {
         await deleteCalendarEvent(session.calendarEventId);
         updateSession(session.id, { calendarEventId: undefined });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        notifyHaptic(Haptics.NotificationFeedbackType.Success);
       } catch {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        notifyHaptic(Haptics.NotificationFeedbackType.Error);
       }
     },
-    [updateSession],
+    [calendarSyncEnabled, notifyHaptic, updateSession],
   );
 
   const createObservationPlan = useCallback(
     async (
       plan: Omit<ObservationPlan, "id" | "calendarEventId" | "createdAt">,
     ): Promise<boolean> => {
-      const permitted = await ensurePermission(true);
-      if (!permitted) return false;
-
       const fullPlan: ObservationPlan = {
         ...plan,
         id: `plan_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
         createdAt: Date.now(),
       };
 
+      if (!calendarSyncEnabled) {
+        addPlan(fullPlan);
+        return true;
+      }
+
+      const permitted = await ensurePermission(true);
+      if (!permitted) return false;
+
       try {
         setSyncing(true);
         const eventId = await createPlanEvent(fullPlan);
         fullPlan.calendarEventId = eventId;
         addPlan(fullPlan);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Logger.info("Calendar", `Plan created: ${fullPlan.id}`);
+        notifyHaptic(Haptics.NotificationFeedbackType.Success);
+        Logger.info(LOG_TAGS.Calendar, `Plan created: ${fullPlan.id}`);
         return true;
       } catch (e) {
         // 即使日历同步失败，也保存计划到本地
-        Logger.warn("Calendar", "Calendar sync failed for plan, saved locally", e);
+        Logger.warn(LOG_TAGS.Calendar, "Calendar sync failed for plan, saved locally", e);
         addPlan(fullPlan);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         return true;
       } finally {
         setSyncing(false);
       }
     },
-    [ensurePermission, addPlan],
+    [calendarSyncEnabled, ensurePermission, addPlan, notifyHaptic],
   );
 
   const updateObservationPlan = useCallback(
     async (planId: string, updates: Partial<ObservationPlan>): Promise<boolean> => {
       const existing = plans.find((p) => p.id === planId);
       if (!existing) return false;
+
+      if (!calendarSyncEnabled) {
+        updatePlan(planId, updates);
+        return true;
+      }
 
       const mergedPlan: ObservationPlan = { ...existing, ...updates };
 
@@ -222,14 +259,18 @@ export function useCalendar() {
           try {
             await updatePlanEvent(existing.calendarEventId, mergedPlan);
             updatePlan(planId, updates);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            notifyHaptic(Haptics.NotificationFeedbackType.Success);
             return true;
           } catch (e) {
-            Logger.warn("Calendar", `Plan event update failed: ${existing.calendarEventId}`, e);
+            Logger.warn(
+              LOG_TAGS.Calendar,
+              `Plan event update failed: ${existing.calendarEventId}`,
+              e,
+            );
             // 事件可能已被用户手动删除，改为创建新事件并回写 eventId
             const eventId = await createPlanEvent(mergedPlan);
             updatePlan(planId, { ...updates, calendarEventId: eventId });
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            notifyHaptic(Haptics.NotificationFeedbackType.Warning);
             return true;
           }
         }
@@ -237,29 +278,30 @@ export function useCalendar() {
         const permitted = await ensurePermission();
         if (!permitted) {
           updatePlan(planId, updates);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
           return true;
         }
 
         const eventId = await createPlanEvent(mergedPlan);
         updatePlan(planId, { ...updates, calendarEventId: eventId });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        notifyHaptic(Haptics.NotificationFeedbackType.Success);
         return true;
       } catch (e) {
-        Logger.error("Calendar", `Plan update failed: ${planId}`, e);
+        Logger.error(LOG_TAGS.Calendar, `Plan update failed: ${planId}`, e);
         // 日历失败时仍保留本地变更
         updatePlan(planId, updates);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         return true;
       } finally {
         setSyncing(false);
       }
     },
-    [plans, updatePlan, ensurePermission],
+    [calendarSyncEnabled, plans, updatePlan, ensurePermission, notifyHaptic],
   );
 
   const syncObservationPlan = useCallback(
     async (planId: string): Promise<boolean> => {
+      if (!calendarSyncEnabled) return false;
       const plan = plans.find((p) => p.id === planId);
       if (!plan) return false;
       if (plan.calendarEventId) return true;
@@ -271,21 +313,22 @@ export function useCalendar() {
         setSyncing(true);
         const eventId = await createPlanEvent(plan);
         updatePlan(planId, { calendarEventId: eventId });
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        notifyHaptic(Haptics.NotificationFeedbackType.Success);
         return true;
       } catch (e) {
-        Logger.error("Calendar", `Plan sync failed: ${planId}`, e);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        Logger.error(LOG_TAGS.Calendar, `Plan sync failed: ${planId}`, e);
+        notifyHaptic(Haptics.NotificationFeedbackType.Error);
         return false;
       } finally {
         setSyncing(false);
       }
     },
-    [plans, updatePlan, ensurePermission],
+    [calendarSyncEnabled, plans, updatePlan, ensurePermission, notifyHaptic],
   );
 
   const syncAllObservationPlans = useCallback(
     async (targetPlans: ObservationPlan[] = plans): Promise<number> => {
+      if (!calendarSyncEnabled) return 0;
       const permitted = await ensurePermission(true);
       if (!permitted) return 0;
 
@@ -303,14 +346,14 @@ export function useCalendar() {
           }
         }
         if (count > 0) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
         }
       } finally {
         setSyncing(false);
       }
       return count;
     },
-    [plans, ensurePermission, updatePlan],
+    [calendarSyncEnabled, plans, ensurePermission, updatePlan, notifyHaptic],
   );
 
   const refreshSessionFromCalendarCore = useCallback(
@@ -345,7 +388,7 @@ export function useCalendar() {
         updateSession(session.id, updates);
         return "updated";
       } catch (e) {
-        Logger.warn("Calendar", `Refresh session from calendar failed: ${session.id}`, e);
+        Logger.warn(LOG_TAGS.Calendar, `Refresh session from calendar failed: ${session.id}`, e);
         return "error";
       }
     },
@@ -410,7 +453,7 @@ export function useCalendar() {
         updatePlan(plan.id, updates);
         return "updated";
       } catch (e) {
-        Logger.warn("Calendar", `Refresh plan from calendar failed: ${plan.id}`, e);
+        Logger.warn(LOG_TAGS.Calendar, `Refresh plan from calendar failed: ${plan.id}`, e);
         return "error";
       }
     },
@@ -419,6 +462,7 @@ export function useCalendar() {
 
   const refreshSessionFromCalendar = useCallback(
     async (session: ObservationSession): Promise<CalendarRefreshOutcome> => {
+      if (!calendarSyncEnabled) return "skipped";
       const permitted = await ensurePermission(true);
       if (!permitted) return "error";
 
@@ -426,20 +470,21 @@ export function useCalendar() {
         setSyncing(true);
         const outcome = await refreshSessionFromCalendarCore(session);
         if (outcome === "updated") {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
         } else if (outcome === "cleared") {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         }
         return outcome;
       } finally {
         setSyncing(false);
       }
     },
-    [ensurePermission, refreshSessionFromCalendarCore],
+    [calendarSyncEnabled, ensurePermission, refreshSessionFromCalendarCore, notifyHaptic],
   );
 
   const refreshPlanFromCalendar = useCallback(
     async (plan: ObservationPlan): Promise<CalendarRefreshOutcome> => {
+      if (!calendarSyncEnabled) return "skipped";
       const permitted = await ensurePermission(true);
       if (!permitted) return "error";
 
@@ -447,16 +492,16 @@ export function useCalendar() {
         setSyncing(true);
         const outcome = await refreshPlanFromCalendarCore(plan);
         if (outcome === "updated") {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
         } else if (outcome === "cleared") {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         }
         return outcome;
       } finally {
         setSyncing(false);
       }
     },
-    [ensurePermission, refreshPlanFromCalendarCore],
+    [calendarSyncEnabled, ensurePermission, refreshPlanFromCalendarCore, notifyHaptic],
   );
 
   const refreshAllFromCalendar = useCallback(
@@ -464,6 +509,16 @@ export function useCalendar() {
       sessions: ObservationSession[],
       targetPlans: ObservationPlan[] = plans,
     ): Promise<CalendarRefreshSummary> => {
+      if (!calendarSyncEnabled) {
+        return {
+          sessionsUpdated: 0,
+          plansUpdated: 0,
+          sessionsCleared: 0,
+          plansCleared: 0,
+          errors: 0,
+          permissionDenied: true,
+        };
+      }
       const permitted = await ensurePermission(true);
       if (!permitted) {
         return {
@@ -502,9 +557,9 @@ export function useCalendar() {
         }
 
         if (summary.sessionsUpdated + summary.plansUpdated > 0) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
         } else if (summary.sessionsCleared + summary.plansCleared > 0) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         }
       } finally {
         setSyncing(false);
@@ -512,7 +567,14 @@ export function useCalendar() {
 
       return summary;
     },
-    [plans, ensurePermission, refreshPlanFromCalendarCore, refreshSessionFromCalendarCore],
+    [
+      calendarSyncEnabled,
+      plans,
+      ensurePermission,
+      refreshPlanFromCalendarCore,
+      refreshSessionFromCalendarCore,
+      notifyHaptic,
+    ],
   );
 
   const cleanupMissingCalendarLinks = useCallback(
@@ -520,6 +582,7 @@ export function useCalendar() {
       sessions: ObservationSession[],
       targetPlans: ObservationPlan[] = plans,
     ): Promise<{ sessionsCleared: number; plansCleared: number }> => {
+      if (!calendarSyncEnabled) return { sessionsCleared: 0, plansCleared: 0 };
       const permitted = await ensurePermission(true);
       if (!permitted) return { sessionsCleared: 0, plansCleared: 0 };
 
@@ -547,7 +610,7 @@ export function useCalendar() {
         }
 
         if (sessionsCleared > 0 || plansCleared > 0) {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         }
       } finally {
         setSyncing(false);
@@ -555,11 +618,15 @@ export function useCalendar() {
 
       return { sessionsCleared, plansCleared };
     },
-    [plans, ensurePermission, updatePlan, updateSession],
+    [calendarSyncEnabled, plans, ensurePermission, updatePlan, updateSession, notifyHaptic],
   );
 
   const openSessionInCalendar = useCallback(
     async (session: ObservationSession): Promise<boolean> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(true);
+        return false;
+      }
       try {
         let eventId = session.calendarEventId;
         if (eventId) {
@@ -590,11 +657,23 @@ export function useCalendar() {
         return false;
       }
     },
-    [defaultReminderMinutes, ensurePermission, syncSession, getSessionById, updateSession],
+    [
+      calendarSyncEnabled,
+      defaultReminderMinutes,
+      ensurePermission,
+      syncSession,
+      getSessionById,
+      updateSession,
+      showCalendarSyncDisabledAlert,
+    ],
   );
 
   const openPlanInCalendar = useCallback(
     async (plan: ObservationPlan): Promise<boolean> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(true);
+        return false;
+      }
       try {
         let eventId = plan.calendarEventId;
         if (eventId) {
@@ -625,11 +704,22 @@ export function useCalendar() {
         return false;
       }
     },
-    [ensurePermission, syncObservationPlan, plans, updatePlan],
+    [
+      calendarSyncEnabled,
+      ensurePermission,
+      syncObservationPlan,
+      plans,
+      updatePlan,
+      showCalendarSyncDisabledAlert,
+    ],
   );
 
   const editSessionInCalendar = useCallback(
     async (session: ObservationSession): Promise<boolean> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(true);
+        return false;
+      }
       const eventId = session.calendarEventId;
       if (!eventId) return false;
 
@@ -651,11 +741,20 @@ export function useCalendar() {
         return false;
       }
     },
-    [refreshSessionFromCalendarCore, updateSession],
+    [
+      calendarSyncEnabled,
+      refreshSessionFromCalendarCore,
+      updateSession,
+      showCalendarSyncDisabledAlert,
+    ],
   );
 
   const editPlanInCalendar = useCallback(
     async (plan: ObservationPlan): Promise<boolean> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(true);
+        return false;
+      }
       const eventId = plan.calendarEventId;
       if (!eventId) return false;
 
@@ -677,11 +776,15 @@ export function useCalendar() {
         return false;
       }
     },
-    [refreshPlanFromCalendarCore, updatePlan],
+    [calendarSyncEnabled, refreshPlanFromCalendarCore, updatePlan, showCalendarSyncDisabledAlert],
   );
 
   const createSessionViaSystemCalendar = useCallback(
     async (session: ObservationSession): Promise<boolean> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(true);
+        return false;
+      }
       try {
         const result = await createEventViaSystemUI(
           buildSessionEventDetails(session, defaultReminderMinutes),
@@ -696,11 +799,15 @@ export function useCalendar() {
         return false;
       }
     },
-    [defaultReminderMinutes, updateSession],
+    [calendarSyncEnabled, defaultReminderMinutes, updateSession, showCalendarSyncDisabledAlert],
   );
 
   const createPlanViaSystemCalendar = useCallback(
     async (plan: ObservationPlan): Promise<boolean> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(true);
+        return false;
+      }
       try {
         const result = await createEventViaSystemUI(buildPlanEventDetails(plan), {
           startNewActivityTask: false,
@@ -714,7 +821,7 @@ export function useCalendar() {
         return false;
       }
     },
-    [updatePlan],
+    [calendarSyncEnabled, updatePlan, showCalendarSyncDisabledAlert],
   );
 
   const deleteObservationPlan = useCallback(
@@ -722,7 +829,7 @@ export function useCalendar() {
       const plan = plans.find((p) => p.id === planId);
       if (!plan) return;
 
-      if (plan.calendarEventId) {
+      if (calendarSyncEnabled && plan.calendarEventId) {
         try {
           await deleteCalendarEvent(plan.calendarEventId);
         } catch {
@@ -730,21 +837,29 @@ export function useCalendar() {
         }
       }
       removePlan(planId);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      notifyHaptic(Haptics.NotificationFeedbackType.Success);
     },
-    [plans, removePlan],
+    [calendarSyncEnabled, plans, removePlan, notifyHaptic],
   );
 
-  const openInCalendar = useCallback(async (eventId: string): Promise<void> => {
-    try {
-      await openEventInSystemCalendar(eventId);
-    } catch {
-      Alert.alert("Error", "Could not open calendar event");
-    }
-  }, []);
+  const openInCalendar = useCallback(
+    async (eventId: string): Promise<void> => {
+      if (!calendarSyncEnabled) {
+        showCalendarSyncDisabledAlert(true);
+        return;
+      }
+      try {
+        await openEventInSystemCalendar(eventId);
+      } catch {
+        Alert.alert("Error", "Could not open calendar event");
+      }
+    },
+    [calendarSyncEnabled, showCalendarSyncDisabledAlert],
+  );
 
   return {
     syncing,
+    calendarSyncEnabled,
     syncSession,
     syncAllSessions,
     unsyncSession,

@@ -7,11 +7,11 @@ import { File, Paths } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { BaseCloudProvider } from "../cloudProvider";
 import { parseManifest, serializeManifest } from "../manifest";
-import { Logger } from "../../logger";
+import { LOG_TAGS, Logger } from "../../logger";
 import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
 import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR } from "../types";
 
-const TAG = "DropboxProvider";
+const TAG = LOG_TAGS.DropboxProvider;
 const SECURE_STORE_KEY = "backup_dropbox_tokens";
 
 const DROPBOX_API = "https://api.dropboxapi.com/2";

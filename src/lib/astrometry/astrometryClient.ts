@@ -5,7 +5,7 @@
 
 import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 import type {
   AstrometryLoginResponse,
   AstrometrySubmitResponse,
@@ -20,7 +20,7 @@ import type {
 } from "./types";
 import { ASTROMETRY_API_PATHS, ASTROMETRY_REQUEST_TIMEOUT } from "./types";
 
-const TAG = "AstrometryClient";
+const TAG = LOG_TAGS.AstrometryClient;
 const SECURE_STORE_KEY = "astrometry_api_key";
 const REFERER_HEADER = "https://nova.astrometry.net/api/login";
 const MAX_RETRIES = 3;

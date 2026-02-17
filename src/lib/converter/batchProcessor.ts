@@ -35,6 +35,13 @@ interface BatchProgressCallback {
   (taskId: string, updates: Partial<BatchTask>): void;
 }
 
+export interface BatchNamingOptions {
+  rule: "original" | "prefix" | "suffix" | "sequence";
+  prefix?: string;
+  suffix?: string;
+  sequenceStart?: number;
+}
+
 function resolveSkiaFormat(
   format: ConvertOptions["format"],
 ): (typeof ImageFormat)[keyof typeof ImageFormat] {
@@ -62,6 +69,7 @@ export async function executeBatchConvert(
   options: ConvertOptions,
   onProgress: BatchProgressCallback,
   signal?: AbortSignal,
+  naming?: BatchNamingOptions,
 ): Promise<void> {
   onProgress(taskId, { status: "running", startedAt: Date.now() });
 
@@ -112,8 +120,17 @@ export async function executeBatchConvert(
       const bytes = skImage.encodeToBytes(skiaFmt, quality);
       if (!bytes || bytes.length === 0) throw new Error("Failed to encode image");
 
-      const baseName = file.filename.replace(/\.[^.]+$/, "");
-      const outFile = new FSFile(exportDir, `${baseName}_converted.${ext}`);
+      const outputFilename = generateOutputFilename(
+        file.filename,
+        ext,
+        naming?.rule ?? "original",
+        {
+          prefix: naming?.prefix,
+          suffix: naming?.suffix,
+          index: (naming?.sequenceStart ?? 1) + i,
+        },
+      );
+      const outFile = new FSFile(exportDir, outputFilename);
       outFile.write(bytes);
 
       completed++;

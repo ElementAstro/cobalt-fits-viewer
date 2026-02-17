@@ -1,29 +1,14 @@
 import { useCallback, useSyncExternalStore } from "react";
-import i18n from "./index";
+import i18n, { getI18nLocale, setI18nLocale, subscribeI18nChange } from "./index";
 
 type TranslateOptions = Parameters<typeof i18n.t>[1];
 
-let listeners: (() => void)[] = [];
-
-function emitChange() {
-  for (const listener of listeners) {
-    listener();
-  }
-}
-
-function subscribe(listener: () => void) {
-  listeners = [...listeners, listener];
-  return () => {
-    listeners = listeners.filter((l) => l !== listener);
-  };
-}
-
 function getSnapshot() {
-  return i18n.locale;
+  return getI18nLocale();
 }
 
 export function useI18n() {
-  const locale = useSyncExternalStore(subscribe, getSnapshot);
+  const locale = useSyncExternalStore(subscribeI18nChange, getSnapshot);
 
   const t = useCallback(
     (scope: string, options?: TranslateOptions) => i18n.t(scope, options),
@@ -32,8 +17,7 @@ export function useI18n() {
   );
 
   const setLocale = useCallback((newLocale: string) => {
-    i18n.locale = newLocale;
-    emitChange();
+    setI18nLocale(newLocale);
   }, []);
 
   return { t, locale, setLocale };

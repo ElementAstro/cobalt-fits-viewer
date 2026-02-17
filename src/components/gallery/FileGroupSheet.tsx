@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { View, Text } from "react-native";
+import { Alert, View, Text } from "react-native";
 import { BottomSheet, Button, Chip, Input, Separator, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { useFileGroupStore } from "../../stores/useFileGroupStore";
@@ -8,7 +8,7 @@ interface FileGroupSheetProps {
   visible: boolean;
   selectedCount: number;
   onClose: () => void;
-  onApplyGroup: (groupId: string) => void;
+  onApplyGroup: (groupId: string) => { success: number; failed: number };
 }
 
 export function FileGroupSheet({
@@ -36,9 +36,24 @@ export function FileGroupSheet({
 
   const handleApply = () => {
     if (!selectedGroupId) return;
-    onApplyGroup(selectedGroupId);
-    onClose();
-    setSelectedGroupId("");
+    const result = onApplyGroup(selectedGroupId);
+    if (result.success > 0) {
+      Alert.alert(
+        t("common.success"),
+        t("files.groupPartial")
+          .replace("{success}", String(result.success))
+          .replace("{failed}", String(result.failed)),
+      );
+      handleClose();
+      return;
+    }
+
+    Alert.alert(
+      t("common.error"),
+      t("files.groupPartial")
+        .replace("{success}", String(result.success))
+        .replace("{failed}", String(result.failed)),
+    );
   };
 
   const handleClose = () => {

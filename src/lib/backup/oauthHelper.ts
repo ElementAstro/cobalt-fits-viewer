@@ -5,12 +5,12 @@
  */
 
 import { AuthRequest, exchangeCodeAsync, makeRedirectUri } from "expo-auth-session";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 import { ONEDRIVE_DISCOVERY, ONEDRIVE_SCOPES } from "./providers/onedrive";
 import { DROPBOX_DISCOVERY } from "./providers/dropbox";
 import type { CloudProviderConfig } from "./types";
 
-const TAG = "OAuthHelper";
+const TAG = LOG_TAGS.OAuthHelper;
 
 const REDIRECT_URI = makeRedirectUri({ scheme: "cobalt" });
 

@@ -9,6 +9,9 @@ jest.mock("../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(() => new Uint8ClampedArray([1, 2, 3, 4])),
 }));
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    ImageEditor: "ImageEditor",
+  },
   Logger: {
     debug: jest.fn(),
     info: jest.fn(),
@@ -67,7 +70,7 @@ describe("useImageEditor", () => {
   });
 
   it("caps history length at max and updates display", () => {
-    const { result } = renderHook(() => useImageEditor());
+    const { result } = renderHook(() => useImageEditor({ maxHistory: 5 }));
     const px = new Float32Array([0, 1, 2, 3]);
     act(() => {
       result.current.initialize(px, 2, 2);
@@ -78,7 +81,7 @@ describe("useImageEditor", () => {
         result.current.applyEdit({ type: "flipHorizontal" } as never);
       });
     }
-    expect(result.current.historyLength).toBe(10);
+    expect(result.current.historyLength).toBe(5);
 
     converterLib.fitsToRGBA.mockClear();
     act(() => {

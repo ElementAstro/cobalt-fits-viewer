@@ -113,10 +113,17 @@ function loadThumbnailCacheModule() {
     ImageFormat: { JPEG: 2 },
   }));
 
-  jest.doMock("../../logger", () => ({
-    __esModule: true,
-    Logger: mockLogger,
-  }));
+  jest.doMock("../../logger", () => {
+    const actual = jest.requireActual("../../logger") as typeof import("../../logger");
+    return {
+      __esModule: true,
+      ...actual,
+      Logger: {
+        ...actual.Logger,
+        ...mockLogger,
+      },
+    };
+  });
 
   return require("../thumbnailCache") as {
     ensureThumbnailDir: () => void;

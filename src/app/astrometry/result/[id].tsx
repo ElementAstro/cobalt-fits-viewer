@@ -11,6 +11,7 @@ import * as Clipboard from "expo-clipboard";
 import { useState, useCallback, useMemo } from "react";
 import { useI18n } from "../../../i18n/useI18n";
 import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
+import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
 import { useAstrometryStore } from "../../../stores/useAstrometryStore";
 import { useFitsStore } from "../../../stores/useFitsStore";
 import { AstrometryResultView } from "../../../components/astrometry/AstrometryResultView";
@@ -30,6 +31,7 @@ export default function AstrometryResultScreen() {
   const { t } = useI18n();
   const [borderColor, mutedColor] = useThemeColor(["separator", "muted"]);
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
+  const haptics = useHapticFeedback();
 
   const job = useAstrometryStore((s) => s.getJobById(id ?? ""));
   const getFileById = useFitsStore((s) => s.getFileById);
@@ -44,14 +46,14 @@ export default function AstrometryResultScreen() {
     try {
       const shared = await shareWCS(currentJob.result, currentJob.fileName);
       if (shared) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
       } else {
         Alert.alert(t("common.error"), "Sharing is not available on this device.");
       }
     } catch {
       Alert.alert(t("common.error"), "Failed to export WCS data.");
     }
-  }, [id, t]);
+  }, [id, t, haptics]);
 
   const handleWriteToHeader = useCallback(() => {
     const currentJob = useAstrometryStore.getState().getJobById(id ?? "");
@@ -70,7 +72,7 @@ export default function AstrometryResultScreen() {
         onPress: async () => {
           try {
             const count = await writeWCSToFitsHeader(currentJob.result!, file.filepath);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            haptics.notify(Haptics.NotificationFeedbackType.Success);
             Alert.alert(t("common.success"), `Wrote ${count} WCS keywords to FITS header.`);
           } catch (e) {
             const msg = e instanceof Error ? e.message : "Unknown error";
@@ -79,7 +81,7 @@ export default function AstrometryResultScreen() {
         },
       },
     ]);
-  }, [id, getFileById, t]);
+  }, [id, getFileById, t, haptics]);
 
   const handleSyncToTarget = useCallback(() => {
     const currentJob = useAstrometryStore.getState().getJobById(id ?? "");
@@ -104,14 +106,14 @@ export default function AstrometryResultScreen() {
       return;
     }
 
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptics.notify(Haptics.NotificationFeedbackType.Success);
     Alert.alert(
       t("common.success"),
       syncResult.isNew
         ? `Created new target "${syncResult.target.name}".`
         : `Updated target "${syncResult.target.name}" with plate solve coordinates.`,
     );
-  }, [id, t, upsertAndLinkFileTarget]);
+  }, [id, t, upsertAndLinkFileTarget, haptics]);
 
   const wcsKeywords = useMemo(
     () => (job?.result ? generateWCSKeywords(job.result.calibration) : []),
@@ -123,9 +125,9 @@ export default function AstrometryResultScreen() {
     const text = formatWCSAsText(wcsKeywords);
     await Clipboard.setStringAsync(text);
     setCopied(true);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    haptics.notify(Haptics.NotificationFeedbackType.Success);
     setTimeout(() => setCopied(false), 2000);
-  }, [job?.result, wcsKeywords]);
+  }, [job?.result, wcsKeywords, haptics]);
 
   if (!job || !job.result) {
     return (

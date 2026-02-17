@@ -17,9 +17,9 @@ import Animated, {
 } from "react-native-reanimated";
 import { Button, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
 import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useOnboardingStore, ONBOARDING_TOTAL_STEPS } from "../../stores/useOnboardingStore";
 
 interface OnboardingStep {
@@ -91,6 +91,7 @@ interface OnboardingScreenProps {
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const { t } = useI18n();
   const { isLandscape } = useScreenOrientation();
+  const haptics = useHapticFeedback();
   const insets = useSafeAreaInsets();
   const [accentColor, mutedColor, bgColor] = useThemeColor(["success", "muted", "background"]);
 
@@ -154,7 +155,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   );
 
   const handleNext = useCallback(() => {
-    Haptics.selectionAsync();
+    haptics.selection();
     if (isLast) {
       completeOnboarding();
       onComplete();
@@ -172,22 +173,23 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     setCurrentStep,
     animateTransition,
     enterAnimation,
+    haptics,
   ]);
 
   const handlePrev = useCallback(() => {
     if (isFirst) return;
-    Haptics.selectionAsync();
+    haptics.selection();
     animateTransition("prev", () => {
       setCurrentStep(currentStep - 1);
       enterAnimation("prev");
     });
-  }, [isFirst, currentStep, setCurrentStep, animateTransition, enterAnimation]);
+  }, [isFirst, currentStep, setCurrentStep, animateTransition, enterAnimation, haptics]);
 
   const handleSkip = useCallback(() => {
-    Haptics.selectionAsync();
+    haptics.selection();
     completeOnboarding();
     onComplete();
-  }, [completeOnboarding, onComplete]);
+  }, [completeOnboarding, onComplete, haptics]);
 
   const contentAnimStyle = useAnimatedStyle(() => ({
     opacity: contentOpacity.value,

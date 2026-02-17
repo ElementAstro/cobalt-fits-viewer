@@ -6,13 +6,13 @@
 import { File } from "expo-file-system";
 import type { ICloudProvider } from "./cloudProvider";
 import { createManifest } from "./manifest";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 import type { BackupOptions, BackupProgress, BackupInfo, RestoreConflictStrategy } from "./types";
 import { DEFAULT_BACKUP_OPTIONS, BACKUP_DIR, FITS_SUBDIR } from "./types";
 import type { FitsMetadata, Album, Target, ObservationSession } from "../fits/types";
 import { getFitsDir } from "../utils/fileManager";
 
-const TAG = "BackupService";
+const TAG = LOG_TAGS.BackupService;
 
 export interface BackupDataSource {
   getFiles(): FitsMetadata[];

@@ -2,8 +2,9 @@
  * 格式转换 Hook
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useConverterStore } from "../stores/useConverterStore";
+import { useSettingsStore } from "../stores/useSettingsStore";
 import { fitsToRGBA, estimateFileSize } from "../lib/converter/formatConverter";
 import {
   createBatchTask,
@@ -17,7 +18,7 @@ import {
   getSupportedBitDepths,
 } from "../lib/converter/convertPresets";
 import type { ExportFormat } from "../lib/fits/types";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 interface BatchFileInfo {
   id: string;
@@ -38,15 +39,33 @@ export function useConverter() {
   const addBatchTask = useConverterStore((s) => s.addBatchTask);
   const updateBatchTask = useConverterStore((s) => s.updateBatchTask);
   const clearCompletedTasks = useConverterStore((s) => s.clearCompletedTasks);
+  const defaultConverterFormat = useSettingsStore((s) => s.defaultConverterFormat);
+  const defaultConverterQuality = useSettingsStore((s) => s.defaultConverterQuality);
+  const batchNamingRule = useSettingsStore((s) => s.batchNamingRule);
 
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
+  const initializedRef = useRef(false);
+
+  useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
+
+    const initialFormat = defaultConverterFormat as ExportFormat;
+    const defaults = getDefaultOptionsForFormat(initialFormat);
+    setFormat(initialFormat);
+    setOptions({
+      ...defaults,
+      format: initialFormat,
+      quality: defaultConverterQuality,
+    });
+  }, [defaultConverterFormat, defaultConverterQuality, setFormat, setOptions]);
 
   const changeFormat = useCallback(
     (format: ExportFormat) => {
       setFormat(format);
       const defaults = getDefaultOptionsForFormat(format);
       setOptions(defaults);
-      Logger.debug("Converter", `Format changed: ${format}`);
+      Logger.debug(LOG_TAGS.Converter, `Format changed: ${format}`);
     },
     [setFormat, setOptions],
   );
@@ -80,7 +99,7 @@ export function useConverter() {
       const controller = new AbortController();
       abortControllers.current.set(task.id, controller);
 
-      Logger.info("Converter", `Batch convert started: ${files.length} files`, {
+      Logger.info(LOG_TAGS.Converter, `Batch convert started: ${files.length} files`, {
         format: currentOptions.format,
         taskId: task.id,
       });
@@ -91,20 +110,23 @@ export function useConverter() {
         currentOptions,
         (taskId, updates) => updateBatchTask(taskId, updates),
         controller.signal,
+        {
+          rule: batchNamingRule,
+        },
       ).finally(() => {
         abortControllers.current.delete(task.id);
       });
 
       return task.id;
     },
-    [currentOptions, addBatchTask, updateBatchTask],
+    [currentOptions, addBatchTask, updateBatchTask, batchNamingRule],
   );
 
   const getOutputFilename = useCallback(
     (originalName: string) => {
-      return generateOutputFilename(originalName, currentOptions.format, "original");
+      return generateOutputFilename(originalName, currentOptions.format, batchNamingRule);
     },
-    [currentOptions.format],
+    [currentOptions.format, batchNamingRule],
   );
 
   const cancelTask = useCallback(
@@ -114,7 +136,7 @@ export function useConverter() {
         controller.abort();
       }
       updateBatchTask(taskId, { status: "cancelled" });
-      Logger.info("Converter", `Batch task cancelled: ${taskId}`);
+      Logger.info(LOG_TAGS.Converter, `Batch task cancelled: ${taskId}`);
     },
     [updateBatchTask],
   );

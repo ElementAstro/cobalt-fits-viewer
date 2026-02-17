@@ -8,6 +8,7 @@ import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useTargets } from "../../hooks/useTargets";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useGalleryStore } from "../../stores/useGalleryStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { ExposureProgress } from "../../components/targets/ExposureProgress";
 import { EditTargetSheet } from "../../components/targets/EditTargetSheet";
 import { ObservationTimeline } from "../../components/targets/ObservationTimeline";
@@ -61,6 +62,7 @@ export default function TargetDetailScreen() {
   const target = targets.find((tgt) => tgt.id === id);
   const files = useFitsStore((s) => s.files);
   const setFilterTargetId = useGalleryStore((s) => s.setFilterTargetId);
+  const timelineGrouping = useSettingsStore((s) => s.timelineGrouping);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [showRatingSheet, setShowRatingSheet] = useState(false);
@@ -357,7 +359,7 @@ export default function TargetDetailScreen() {
 
         {targetFiles.length > 0 && (
           <View className="mb-4">
-            <ObservationTimeline files={targetFiles} />
+            <ObservationTimeline files={targetFiles} grouping={timelineGrouping} />
           </View>
         )}
 

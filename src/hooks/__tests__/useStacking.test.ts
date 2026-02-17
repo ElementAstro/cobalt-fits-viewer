@@ -37,14 +37,19 @@ jest.mock("../../lib/stacking/frameQuality", () => ({
   evaluateFrameQuality: jest.fn(() => ({ score: 0.9 })),
   qualityToWeights: jest.fn(() => [0.7, 0.3]),
 }));
-jest.mock("../../lib/logger", () => ({
-  Logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
+jest.mock("../../lib/logger", () => {
+  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+  return {
+    ...actual,
+    Logger: {
+      ...actual.Logger,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
   readFileAsArrayBuffer: jest.Mock;

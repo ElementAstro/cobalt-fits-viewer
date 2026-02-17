@@ -13,7 +13,7 @@ import {
   cleanupExport,
   type ExportProgress,
 } from "../../lib/gallery/albumExporter";
-import { Logger } from "../../lib/logger";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 import type { Album, FitsMetadata } from "../../lib/fits/types";
 
 interface AlbumExportSheetProps {
@@ -56,7 +56,7 @@ export function AlbumExportSheet({ visible, album, files, onClose }: AlbumExport
     if (exportPath) {
       const success = await shareAlbumExport(exportPath);
       if (!success) {
-        Logger.warn("AlbumExportSheet", "Sharing not available");
+        Logger.warn(LOG_TAGS.AlbumExportSheet, "Sharing not available");
         Alert.alert(t("common.error"), t("share.notAvailable"));
       }
     }

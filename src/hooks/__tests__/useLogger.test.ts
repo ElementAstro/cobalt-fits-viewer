@@ -43,9 +43,9 @@ describe("useLogger hooks", () => {
     const state = {
       getFilteredEntries: () => [{ id: "1" }],
       totalCount: 3,
-      filterLevel: null,
-      filterTag: "",
-      filterQuery: "",
+      filterLevel: "warn",
+      filterTag: "Viewer",
+      filterQuery: "needle",
       setFilterLevel: jest.fn(),
       setFilterTag: jest.fn(),
       setFilterQuery: jest.fn(),
@@ -96,9 +96,9 @@ describe("useLogger hooks", () => {
     const state = {
       getFilteredEntries: () => [{ id: "1" }],
       totalCount: 3,
-      filterLevel: null,
-      filterTag: "",
-      filterQuery: "",
+      filterLevel: "warn",
+      filterTag: "Viewer",
+      filterQuery: "needle",
       setFilterLevel,
       setFilterTag,
       setFilterQuery,
@@ -124,19 +124,36 @@ describe("useLogger hooks", () => {
 
     expect(result.current.exportLogs("text")).toBe("ok");
     expect(result.current.exportLogs("json")).toBe('{"ok":true}');
+    expect(result.current.exportLogs("json", true)).toBe('{"ok":true}');
 
     await act(async () => {
-      const out = await result.current.exportToFile({ format: "text" });
+      const out = await result.current.exportToFile({ format: "text", filteredOnly: true });
       expect(out).toBe("file://logs.txt");
     });
     await flushPromises();
     expect(result.current.isExporting).toBe(false);
+    expect(loggerLib.exportLogsToFile).toHaveBeenCalledWith({
+      format: "text",
+      query: {
+        level: "warn",
+        tag: "Viewer",
+        query: "needle",
+      },
+    });
 
     await act(async () => {
-      const ok = await result.current.shareLogs({ format: "text" });
+      const ok = await result.current.shareLogs({ format: "text", filteredOnly: true });
       expect(ok).toBe(true);
     });
     await flushPromises();
     expect(result.current.isExporting).toBe(false);
+    expect(loggerLib.shareLogFile).toHaveBeenCalledWith({
+      format: "text",
+      query: {
+        level: "warn",
+        tag: "Viewer",
+        query: "needle",
+      },
+    });
   });
 });

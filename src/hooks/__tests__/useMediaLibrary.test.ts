@@ -8,14 +8,19 @@ jest.mock("expo-media-library", () => ({
   getAlbumsAsync: jest.fn(),
 }));
 
-jest.mock("../../lib/logger", () => ({
-  Logger: {
-    warn: jest.fn(),
-    info: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
+jest.mock("../../lib/logger", () => {
+  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+  return {
+    ...actual,
+    Logger: {
+      ...actual.Logger,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 const requestPermissionsAsyncMock = MediaLibrary.requestPermissionsAsync as jest.Mock;
 const createAssetAsyncMock = MediaLibrary.createAssetAsync as jest.Mock;

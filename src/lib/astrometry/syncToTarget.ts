@@ -4,11 +4,11 @@
  */
 
 import * as Crypto from "expo-crypto";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 import type { AstrometryResult } from "./types";
 import type { Target, TargetType } from "../fits/types";
 
-const TAG = "SyncToTarget";
+const TAG = LOG_TAGS.SyncToTarget;
 
 /**
  * 从解析结果中推断目标类型

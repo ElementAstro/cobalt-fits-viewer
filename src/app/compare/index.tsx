@@ -86,6 +86,7 @@ export default function CompareScreen() {
   const defaultShowPixelInfo = useSettingsStore((s) => s.defaultShowPixelInfo);
   const defaultShowMinimap = useSettingsStore((s) => s.defaultShowMinimap);
   const debounceMs = useSettingsStore((s) => s.imageProcessingDebounce);
+  const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
 
   const defaultAdjustments = useMemo<ViewerAdjustments>(
     () => ({
@@ -216,7 +217,8 @@ export default function CompareScreen() {
     const isNew = prevPixelsA.current !== pixels;
     prevPixelsA.current = pixels;
     if (isNew) {
-      procA.processImagePreview(
+      const processFn = useHighQualityPreview ? procA.processImage : procA.processImagePreview;
+      processFn(
         pixels,
         dimensions.width,
         dimensions.height,
@@ -253,7 +255,7 @@ export default function CompareScreen() {
       );
     }, debounceMs);
     return () => clearTimeout(timer);
-  }, [fitsA.pixels, fitsA.dimensions, adjustmentsA, procA, debounceMs]);
+  }, [fitsA.pixels, fitsA.dimensions, adjustmentsA, procA, debounceMs, useHighQualityPreview]);
 
   useEffect(() => {
     const pixels = fitsB.pixels;
@@ -262,7 +264,8 @@ export default function CompareScreen() {
     const isNew = prevPixelsB.current !== pixels;
     prevPixelsB.current = pixels;
     if (isNew) {
-      procB.processImagePreview(
+      const processFn = useHighQualityPreview ? procB.processImage : procB.processImagePreview;
+      processFn(
         pixels,
         dimensions.width,
         dimensions.height,
@@ -299,7 +302,7 @@ export default function CompareScreen() {
       );
     }, debounceMs);
     return () => clearTimeout(timer);
-  }, [fitsB.pixels, fitsB.dimensions, adjustmentsB, procB, debounceMs]);
+  }, [fitsB.pixels, fitsB.dimensions, adjustmentsB, procB, debounceMs, useHighQualityPreview]);
 
   const activeAdjustments = activeSide === "A" ? adjustmentsA : adjustmentsB;
 

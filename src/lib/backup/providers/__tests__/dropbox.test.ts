@@ -31,15 +31,20 @@ jest.mock("../../manifest", () => ({
   parseManifest: jest.fn((x: string) => JSON.parse(x)),
   serializeManifest: jest.fn((m: unknown) => JSON.stringify(m)),
 }));
-jest.mock("../../../logger", () => ({
-  __esModule: true,
-  Logger: {
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
+jest.mock("../../../logger", () => {
+  const actual = jest.requireActual("../../../logger") as typeof import("../../../logger");
+  return {
+    __esModule: true,
+    ...actual,
+    Logger: {
+      ...actual.Logger,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 import { DropboxProvider } from "../dropbox";
 

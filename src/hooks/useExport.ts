@@ -8,7 +8,7 @@ import { Platform } from "react-native";
 import { Skia, AlphaType, ColorType, ImageFormat } from "@shopify/react-native-skia";
 import { File as FSFile } from "expo-file-system";
 import * as Print from "expo-print";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 import type { ExportFormat } from "../lib/fits/types";
 import {
   shareFile,
@@ -155,7 +155,7 @@ export function useExport(): UseExportReturn {
 
         return outFile.uri;
       } catch (e) {
-        Logger.warn("Export", "Export failed", e);
+        Logger.warn(LOG_TAGS.Export, "Export failed", e);
         return null;
       }
     },
@@ -241,7 +241,7 @@ export function useExport(): UseExportReturn {
         if (!bytes || bytes.length === 0) return null;
         return encodeToBase64(bytes);
       } catch (e) {
-        Logger.warn("Export", "Base64 encoding failed", e);
+        Logger.warn(LOG_TAGS.Export, "Base64 encoding failed", e);
         return null;
       }
     },

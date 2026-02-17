@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { View, Text } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Alert, View, Text } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -65,7 +65,18 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
     setNewTag("");
   };
 
+  const handleClose = () => {
+    setNewTag("");
+    setSelectedTags(new Set());
+    onClose();
+  };
+
   const handleApply = () => {
+    if (selectedIds.length === 0) {
+      Alert.alert(t("common.error"), t("gallery.noImages"));
+      return;
+    }
+
     for (const tag of selectedTags) {
       batchAddTag(selectedIds, tag);
     }
@@ -75,23 +86,33 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
     for (const tag of tagsToRemove) {
       batchRemoveTag(selectedIds, tag);
     }
-    onClose();
-    setSelectedTags(new Set());
+
+    Alert.alert(
+      t("common.success"),
+      t("gallery.batchTagApplied").replace("{count}", String(selectedIds.length)),
+    );
+    handleClose();
   };
 
-  const handleOpen = () => {
+  const handleOpen = useCallback(() => {
     const fullyApplied = [...currentTags.entries()]
       .filter(([, count]) => count === selectedIds.length)
       .map(([tag]) => tag);
+    setNewTag("");
     setSelectedTags(new Set(fullyApplied));
-  };
+  }, [currentTags, selectedIds.length]);
+
+  useEffect(() => {
+    if (!visible) return;
+    handleOpen();
+  }, [handleOpen, visible]);
 
   return (
     <BottomSheet
       isOpen={visible}
       onOpenChange={(open) => {
         if (open) handleOpen();
-        if (!open) onClose();
+        if (!open) handleClose();
       }}
     >
       <BottomSheet.Portal>
@@ -107,6 +128,7 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
           <View className="flex-row items-center gap-2 px-4 py-2">
             <TextField className="flex-1">
               <Input
+                testID="batch-tag-input"
                 placeholder={t("gallery.newTag")}
                 value={newTag}
                 onChangeText={setNewTag}
@@ -115,6 +137,7 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
               />
             </TextField>
             <Button
+              testID="batch-tag-add"
               size="sm"
               variant="outline"
               onPress={handleAddNewTag}
@@ -133,6 +156,7 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
                 const isPartial = count > 0 && count < selectedIds.length;
                 return (
                   <Chip
+                    testID={`batch-tag-chip-${tag}`}
                     key={tag}
                     size="sm"
                     variant={isSelected ? "primary" : "secondary"}
@@ -164,10 +188,20 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
 
           <Separator className="my-1" />
           <View className="flex-row gap-2 px-4 py-2">
-            <Button variant="outline" onPress={onClose} className="flex-1">
+            <Button
+              testID="batch-tag-cancel"
+              variant="outline"
+              onPress={handleClose}
+              className="flex-1"
+            >
               <Button.Label>{t("common.cancel")}</Button.Label>
             </Button>
-            <Button variant="primary" onPress={handleApply} className="flex-1">
+            <Button
+              testID="batch-tag-apply"
+              variant="primary"
+              onPress={handleApply}
+              className="flex-1"
+            >
               <Button.Label>{t("common.confirm") ?? "Apply"}</Button.Label>
             </Button>
           </View>

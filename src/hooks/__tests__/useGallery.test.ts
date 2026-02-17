@@ -1,7 +1,8 @@
-import { renderHook } from "@testing-library/react-native";
+import { act, renderHook } from "@testing-library/react-native";
 import { useGallery } from "../useGallery";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useGalleryStore } from "../../stores/useGalleryStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 jest.mock("../../lib/storage", () => ({
@@ -62,6 +63,10 @@ describe("useGallery", () => {
       filterFrameType: "",
       filterTargetId: "",
     });
+    useSettingsStore.setState({
+      defaultGallerySortBy: "date",
+      defaultGallerySortOrder: "desc",
+    });
   });
 
   it("applies all filters and keeps counts", () => {
@@ -93,5 +98,24 @@ describe("useGallery", () => {
     const matched = result.current.search("M31");
     expect(matched.length).toBe(1);
     expect(matched[0].id).toBe("f1");
+  });
+
+  it("applies default settings sort field and order", () => {
+    useSettingsStore.setState({
+      defaultGallerySortBy: "name",
+      defaultGallerySortOrder: "asc",
+    });
+
+    const { result } = renderHook(() => useGallery());
+    expect(result.current.files.map((f) => f.filename)).toEqual(["a.fits", "b.fits"]);
+
+    act(() => {
+      useSettingsStore.setState({
+        defaultGallerySortBy: "name",
+        defaultGallerySortOrder: "desc",
+      });
+    });
+    const { result: next } = renderHook(() => useGallery());
+    expect(next.current.files.map((f) => f.filename)).toEqual(["b.fits", "a.fits"]);
   });
 });

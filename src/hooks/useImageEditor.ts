@@ -8,7 +8,7 @@ import { InteractionManager } from "react-native";
 import { applyOperation, type ImageEditOperation } from "../lib/utils/imageOperations";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
 import type { StretchType, ColormapType } from "../lib/fits/types";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 interface ImageState {
   pixels: Float32Array;
@@ -27,9 +27,17 @@ interface EditorState {
   historyIndex: number;
 }
 
-const MAX_HISTORY = 10;
+interface UseImageEditorOptions {
+  maxHistory?: number;
+}
 
-export function useImageEditor() {
+function resolveMaxHistory(maxHistory: number | undefined) {
+  if (typeof maxHistory !== "number" || Number.isNaN(maxHistory)) return 10;
+  return Math.max(1, Math.min(200, Math.round(maxHistory)));
+}
+
+export function useImageEditor(options: UseImageEditorOptions = {}) {
+  const maxHistory = resolveMaxHistory(options.maxHistory);
   const [current, setCurrent] = useState<ImageState | null>(null);
   const [rgbaData, setRgbaData] = useState<Uint8ClampedArray | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -55,28 +63,31 @@ export function useImageEditor() {
       });
       setRgbaData(rgba);
     } catch (e) {
-      Logger.error("ImageEditor", "RGBA conversion failed", e);
+      Logger.error(LOG_TAGS.ImageEditor, "RGBA conversion failed", e);
       setError(e instanceof Error ? e.message : "RGBA conversion failed");
     }
   }, []);
 
-  const pushHistory = useCallback((state: ImageState) => {
-    const history = historyRef.current;
-    const idx = historyIndexRef.current;
+  const pushHistory = useCallback(
+    (state: ImageState) => {
+      const history = historyRef.current;
+      const idx = historyIndexRef.current;
 
-    // 丢弃 redo 分支
-    historyRef.current = history.slice(0, idx + 1);
-    historyRef.current.push(state);
+      // 丢弃 redo 分支
+      historyRef.current = history.slice(0, idx + 1);
+      historyRef.current.push(state);
 
-    // 限制历史长度
-    if (historyRef.current.length > MAX_HISTORY) {
-      historyRef.current = historyRef.current.slice(-MAX_HISTORY);
-    }
+      // 限制历史长度
+      if (historyRef.current.length > maxHistory) {
+        historyRef.current = historyRef.current.slice(-maxHistory);
+      }
 
-    historyIndexRef.current = historyRef.current.length - 1;
-    setHistoryLength(historyRef.current.length);
-    setHistoryIndex(historyIndexRef.current);
-  }, []);
+      historyIndexRef.current = historyRef.current.length - 1;
+      setHistoryLength(historyRef.current.length);
+      setHistoryIndex(historyIndexRef.current);
+    },
+    [maxHistory],
+  );
 
   const initialize = useCallback(
     (
@@ -122,9 +133,9 @@ export function useImageEditor() {
           pushHistory(newState);
           setCurrent(newState);
           updateRGBA(newState);
-          Logger.debug("ImageEditor", `Edit applied: ${op.type}`);
+          Logger.debug(LOG_TAGS.ImageEditor, `Edit applied: ${op.type}`);
         } catch (e) {
-          Logger.error("ImageEditor", `Edit failed: ${op.type}`, e);
+          Logger.error(LOG_TAGS.ImageEditor, `Edit failed: ${op.type}`, e);
           setError(e instanceof Error ? e.message : "Edit operation failed");
         } finally {
           setIsProcessing(false);

@@ -16,6 +16,7 @@ import { cleanOldExports } from "../lib/utils/imageExport";
 import { useAutoSolve } from "../hooks/useAutoSolve";
 import { useAutoBackup } from "../hooks/useAutoBackup";
 import { useTargets } from "../hooks/useTargets";
+import { Logger, cleanLogExports, initLoggerRuntime } from "../lib/logger";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useOnboardingStore } from "../stores/useOnboardingStore";
 import { useTargetStore } from "../stores/useTargetStore";
@@ -118,10 +119,16 @@ export default function RootLayout() {
   const { theme } = useUniwind();
   const { fontsLoaded, fontError } = useFontLoader();
   const orientationLock = useSettingsStore((s) => s.orientationLock);
+  const logMinLevel = useSettingsStore((s) => s.logMinLevel);
+  const logMaxEntries = useSettingsStore((s) => s.logMaxEntries);
+  const logConsoleOutput = useSettingsStore((s) => s.logConsoleOutput);
+  const logPersistEnabled = useSettingsStore((s) => s.logPersistEnabled);
   const [settingsHydrated, setSettingsHydrated] = useState(false);
 
   useEffect(() => {
     cleanOldExports();
+    cleanLogExports();
+    void initLoggerRuntime();
   }, []);
 
   useEffect(() => {
@@ -139,6 +146,15 @@ export default function RootLayout() {
   useEffect(() => {
     ScreenOrientation.lockAsync(ORIENTATION_LOCK_MAP[orientationLock]);
   }, [orientationLock]);
+
+  useEffect(() => {
+    Logger.configure({
+      minLevel: logMinLevel,
+      maxEntries: logMaxEntries,
+      consoleOutput: logConsoleOutput,
+      persistEnabled: logPersistEnabled,
+    });
+  }, [logMinLevel, logMaxEntries, logConsoleOutput, logPersistEnabled]);
 
   useEffect(() => {
     if ((fontsLoaded || fontError) && settingsHydrated) {

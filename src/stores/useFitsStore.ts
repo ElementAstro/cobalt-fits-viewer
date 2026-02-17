@@ -7,12 +7,15 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandMMKVStorage } from "../lib/storage";
 import type { FitsMetadata } from "../lib/fits/types";
 
+export type FitsSortBy = "name" | "date" | "size" | "quality";
+export type FitsSortOrder = "asc" | "desc";
+
 interface FitsStoreState {
   files: FitsMetadata[];
   selectedIds: string[];
   isSelectionMode: boolean;
-  sortBy: "name" | "date" | "size" | "quality";
-  sortOrder: "asc" | "desc";
+  sortBy: FitsSortBy;
+  sortOrder: FitsSortOrder;
   searchQuery: string;
   filterTags: string[];
 
@@ -32,13 +35,15 @@ interface FitsStoreState {
 
   // Selection
   toggleSelection: (id: string) => void;
+  setSelectedIds: (ids: string[]) => void;
+  toggleSelectionBatch: (ids: string[]) => void;
   selectAll: () => void;
   clearSelection: () => void;
   setSelectionMode: (mode: boolean) => void;
 
   // Sorting & Filtering
-  setSortBy: (sortBy: "name" | "date" | "size" | "quality") => void;
-  setSortOrder: (order: "asc" | "desc") => void;
+  setSortBy: (sortBy: FitsSortBy) => void;
+  setSortOrder: (order: FitsSortOrder) => void;
   setSearchQuery: (query: string) => void;
   setFilterTags: (tags: string[]) => void;
 
@@ -46,6 +51,52 @@ interface FitsStoreState {
   getFileById: (id: string) => FitsMetadata | undefined;
   getFilteredFiles: () => FitsMetadata[];
   getAdjacentFileIds: (currentId: string) => { prevId: string | null; nextId: string | null };
+}
+
+export function filterAndSortFiles(
+  files: FitsMetadata[],
+  searchQuery: string,
+  filterTags: string[],
+  sortBy: FitsSortBy,
+  sortOrder: FitsSortOrder,
+): FitsMetadata[] {
+  let filtered = [...files];
+
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(
+      (f) =>
+        f.filename.toLowerCase().includes(q) ||
+        f.sourceFormat?.toLowerCase().includes(q) ||
+        f.object?.toLowerCase().includes(q) ||
+        f.filter?.toLowerCase().includes(q),
+    );
+  }
+
+  if (filterTags.length > 0) {
+    filtered = filtered.filter((f) => filterTags.some((tag) => f.tags.includes(tag)));
+  }
+
+  filtered.sort((a, b) => {
+    let cmp = 0;
+    switch (sortBy) {
+      case "name":
+        cmp = a.filename.localeCompare(b.filename);
+        break;
+      case "date":
+        cmp = a.importDate - b.importDate;
+        break;
+      case "size":
+        cmp = a.fileSize - b.fileSize;
+        break;
+      case "quality":
+        cmp = (a.qualityScore ?? -1) - (b.qualityScore ?? -1);
+        break;
+    }
+    return sortOrder === "asc" ? cmp : -cmp;
+  });
+
+  return filtered;
 }
 
 export const useFitsStore = create<FitsStoreState>()(
@@ -130,6 +181,52 @@ export const useFitsStore = create<FitsStoreState>()(
             : [...state.selectedIds, id],
         })),
 
+      setSelectedIds: (ids) =>
+        set((state) => {
+          if (ids.length === 0) {
+            return { selectedIds: [] };
+          }
+
+          const existingIds = new Set(state.files.map((file) => file.id));
+          const uniqueIds = new Set<string>();
+          const selectedIds: string[] = [];
+
+          for (const id of ids) {
+            if (!existingIds.has(id) || uniqueIds.has(id)) continue;
+            uniqueIds.add(id);
+            selectedIds.push(id);
+          }
+
+          return { selectedIds };
+        }),
+
+      toggleSelectionBatch: (ids) =>
+        set((state) => {
+          if (ids.length === 0) return { selectedIds: state.selectedIds };
+
+          const idSet = new Set(ids);
+          const existingIds = new Set(state.files.map((file) => file.id));
+          const selectedSet = new Set(state.selectedIds);
+
+          for (const id of idSet) {
+            if (!existingIds.has(id)) continue;
+            if (selectedSet.has(id)) {
+              selectedSet.delete(id);
+            } else {
+              selectedSet.add(id);
+            }
+          }
+
+          const selectedIds = [
+            ...state.selectedIds.filter((id) => selectedSet.has(id)),
+            ...state.files
+              .map((file) => file.id)
+              .filter((id) => !state.selectedIds.includes(id) && selectedSet.has(id)),
+          ];
+
+          return { selectedIds };
+        }),
+
       selectAll: () =>
         set((state) => ({
           selectedIds: state.files.map((f) => f.id),
@@ -162,44 +259,7 @@ export const useFitsStore = create<FitsStoreState>()(
 
       getFilteredFiles: () => {
         const { files, searchQuery, filterTags, sortBy, sortOrder } = get();
-
-        let filtered = [...files];
-
-        if (searchQuery) {
-          const q = searchQuery.toLowerCase();
-          filtered = filtered.filter(
-            (f) =>
-              f.filename.toLowerCase().includes(q) ||
-              f.sourceFormat?.toLowerCase().includes(q) ||
-              f.object?.toLowerCase().includes(q) ||
-              f.filter?.toLowerCase().includes(q),
-          );
-        }
-
-        if (filterTags.length > 0) {
-          filtered = filtered.filter((f) => filterTags.some((tag) => f.tags.includes(tag)));
-        }
-
-        filtered.sort((a, b) => {
-          let cmp = 0;
-          switch (sortBy) {
-            case "name":
-              cmp = a.filename.localeCompare(b.filename);
-              break;
-            case "date":
-              cmp = a.importDate - b.importDate;
-              break;
-            case "size":
-              cmp = a.fileSize - b.fileSize;
-              break;
-            case "quality":
-              cmp = (a.qualityScore ?? -1) - (b.qualityScore ?? -1);
-              break;
-          }
-          return sortOrder === "asc" ? cmp : -cmp;
-        });
-
-        return filtered;
+        return filterAndSortFiles(files, searchQuery, filterTags, sortBy, sortOrder);
       },
     }),
     {

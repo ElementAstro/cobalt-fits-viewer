@@ -2,6 +2,7 @@ import { View, Text, ScrollView, Alert, FlatList } from "react-native";
 import { useState, useMemo, useCallback } from "react";
 import * as Haptics from "expo-haptics";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -51,6 +52,7 @@ const FRAME_TYPE_ICONS: Record<FrameType, keyof typeof Ionicons.glyphMap> = {
 export default function GalleryScreen() {
   const router = useRouter();
   const { t } = useI18n();
+  const haptics = useHapticFeedback();
 
   const FRAME_TYPES = useMemo(
     () =>
@@ -94,7 +96,7 @@ export default function GalleryScreen() {
     getAlbumStatistics,
     duplicateImages,
   } = useAlbums();
-  const { handleDeleteFiles } = useFileManager();
+  const { handleDeleteFiles, handleRenameFiles } = useFileManager();
   const setViewMode = useGalleryStore((s) => s.setViewMode);
   const setFilterObject = useGalleryStore((s) => s.setFilterObject);
   const filterObject = useGalleryStore((s) => s.filterObject);
@@ -172,11 +174,11 @@ export default function GalleryScreen() {
   const handleFileLongPress = useCallback(
     (file: FitsMetadata) => {
       if (!isSelectionMode) {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        haptics.impact();
         enterSelectionMode(file.id);
       }
     },
-    [isSelectionMode, enterSelectionMode],
+    [isSelectionMode, enterSelectionMode, haptics],
   );
 
   const handleAddToAlbum = (albumId: string) => {
@@ -192,13 +194,24 @@ export default function GalleryScreen() {
         text: t("common.delete"),
         style: "destructive",
         onPress: () => {
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          haptics.notify(Haptics.NotificationFeedbackType.Warning);
           handleDeleteFiles(selectedIds);
           exitSelectionMode();
         },
       },
     ]);
-  }, [selectedIds, t, handleDeleteFiles, exitSelectionMode]);
+  }, [selectedIds, t, handleDeleteFiles, exitSelectionMode, haptics]);
+
+  const handleBatchRenameApply = useCallback(
+    (operations: Array<{ fileId: string; filename: string }>) => {
+      const result = handleRenameFiles(operations);
+      if (result.success > 0) {
+        exitSelectionMode();
+      }
+      return result;
+    },
+    [exitSelectionMode, handleRenameFiles],
+  );
 
   const handleAlbumRename = () => {
     if (!actionAlbum) return;
@@ -844,7 +857,9 @@ export default function GalleryScreen() {
       />
       <BatchRenameSheet
         visible={showBatchRename}
+        files={files}
         selectedIds={selectedIds}
+        onApplyRenames={handleBatchRenameApply}
         onClose={() => setShowBatchRename(false)}
       />
       <IntegrationReportSheet visible={showReport} onClose={() => setShowReport(false)} />

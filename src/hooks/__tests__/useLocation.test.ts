@@ -13,14 +13,19 @@ jest.mock("expo-location", () => ({
   getLastKnownPositionAsync: jest.fn(),
 }));
 
-jest.mock("../../lib/logger", () => ({
-  Logger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
+jest.mock("../../lib/logger", () => {
+  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+  return {
+    ...actual,
+    Logger: {
+      ...actual.Logger,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 const getForegroundPermissionsAsync = ExpoLocation.getForegroundPermissionsAsync as jest.Mock;
 const requestForegroundPermissionsAsync =

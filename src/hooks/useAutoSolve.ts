@@ -7,9 +7,9 @@ import { useEffect, useRef } from "react";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useAstrometryStore } from "../stores/useAstrometryStore";
 import { useAstrometry } from "./useAstrometry";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
-const TAG = "useAutoSolve";
+const TAG = LOG_TAGS.useAutoSolve;
 
 export function useAutoSolve() {
   const { submitFile } = useAstrometry();

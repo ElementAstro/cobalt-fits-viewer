@@ -16,14 +16,19 @@ jest.mock("../../lib/version", () => ({
   })),
 }));
 
-jest.mock("../../lib/logger", () => ({
-  Logger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    warn: jest.fn(),
-    debug: jest.fn(),
-  },
-}));
+jest.mock("../../lib/logger", () => {
+  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+  return {
+    ...actual,
+    Logger: {
+      ...actual.Logger,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 const useUpdatesMock = Updates.useUpdates as jest.Mock;
 const checkForUpdateAsyncMock = Updates.checkForUpdateAsync as jest.Mock;

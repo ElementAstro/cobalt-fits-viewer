@@ -1,51 +1,89 @@
 /**
- * 结构化日志服务 - 单例模式，环形缓冲区
+ * 结构化日志服务 - 单例模式，环形缓冲区 + 本地持久化
  */
 
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import type {
   LogEntry,
   LogLevel,
   LoggerConfig,
   LoggerListener,
+  LogQuery,
   LogSerializationOptions,
 } from "./types";
 import { LOG_LEVEL_PRIORITY } from "./types";
 
 const DEFAULT_CONFIG: LoggerConfig = {
-  maxEntries: 500,
+  maxEntries: 2000,
   minLevel: __DEV__ ? "debug" : "info",
   consoleOutput: __DEV__,
+  persistEnabled: true,
+  persistKey: "cobalt_logger_entries_v1",
+  persistDebounceMs: 500,
 };
-
-let entries: LogEntry[] = [];
-let config: LoggerConfig = { ...DEFAULT_CONFIG };
-let listeners: LoggerListener[] = [];
-let idCounter = 0;
 
 const DEFAULT_SERIALIZATION_DEPTH = 6;
 const REDACTED_TEXT = "[REDACTED]";
 const MAX_DEPTH_TEXT = "[MaxDepth]";
 const CIRCULAR_TEXT = "[Circular]";
+const PERSIST_VERSION = 1;
 
 const SENSITIVE_KEY_PATTERN =
-  /token|api[_-]?key|authorization|cookie|password|secret|session|access[_-]?key/i;
+  /token|api[_-]?key|authorization|cookie|password|secret|session|access[_-]?key|refresh[_-]?token|private[_-]?key|credential|passphrase|client[_-]?secret/i;
+const SENSITIVE_VALUE_PATTERNS = [
+  /\bBearer\s+[A-Za-z0-9\-._~+/]+=*/i,
+  /\bBasic\s+[A-Za-z0-9+/=]{8,}/i,
+  /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9._-]+\.[A-Za-z0-9._-]+\b/, // JWT-like
+  /sk_[a-zA-Z0-9]{20,}/,
+];
+
+interface PersistedPayload {
+  version: number;
+  entries: LogEntry[];
+}
+
+let entries: LogEntry[] = [];
+let config: LoggerConfig = { ...DEFAULT_CONFIG };
+let listeners: LoggerListener[] = [];
+let idCounter = 0;
+let persistTimer: ReturnType<typeof setTimeout> | null = null;
+let hydrationPromise: Promise<void> | null = null;
 
 function generateId(): string {
   return `log_${Date.now()}_${++idCounter}`;
+}
+
+function isLogLevel(level: unknown): level is LogLevel {
+  return level === "debug" || level === "info" || level === "warn" || level === "error";
 }
 
 function shouldLog(level: LogLevel): boolean {
   return LOG_LEVEL_PRIORITY[level] >= LOG_LEVEL_PRIORITY[config.minLevel];
 }
 
+function trimEntriesToRingBuffer(): void {
+  const safeMaxEntries = Number.isFinite(config.maxEntries) ? Math.max(1, config.maxEntries) : 1;
+  if (entries.length > safeMaxEntries) {
+    entries = entries.slice(entries.length - safeMaxEntries);
+  }
+}
+
 function emitChange(): void {
   for (const listener of [...listeners]) {
-    listener();
+    try {
+      listener();
+    } catch {
+      // isolate listener failures
+    }
   }
 }
 
 function shouldRedactKey(key: string): boolean {
   return SENSITIVE_KEY_PATTERN.test(key);
+}
+
+function shouldRedactValue(value: string): boolean {
+  return SENSITIVE_VALUE_PATTERNS.some((pattern) => pattern.test(value));
 }
 
 function extractErrorFromData(data: unknown): Error | null {
@@ -56,11 +94,59 @@ function extractErrorFromData(data: unknown): Error | null {
   return maybeError instanceof Error ? maybeError : null;
 }
 
-function trimEntriesToRingBuffer(): void {
-  const safeMaxEntries = Number.isFinite(config.maxEntries) ? Math.max(1, config.maxEntries) : 1;
-  if (entries.length > safeMaxEntries) {
-    entries = entries.slice(entries.length - safeMaxEntries);
+function normalizePersistEntry(value: unknown): LogEntry | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<LogEntry>;
+
+  if (!isLogLevel(raw.level) || typeof raw.tag !== "string" || typeof raw.message !== "string") {
+    return null;
   }
+
+  const timestamp = Number.isFinite(raw.timestamp) ? (raw.timestamp as number) : Date.now();
+  const id = typeof raw.id === "string" && raw.id.trim() ? raw.id : generateId();
+
+  return {
+    id,
+    timestamp,
+    level: raw.level,
+    tag: raw.tag,
+    message: raw.message,
+    data: sanitizeLogData(raw.data, { redact: true }),
+    stackTrace: typeof raw.stackTrace === "string" ? raw.stackTrace : undefined,
+  };
+}
+
+function clearPersistTimer() {
+  if (!persistTimer) return;
+  clearTimeout(persistTimer);
+  persistTimer = null;
+}
+
+async function persistEntriesNow(): Promise<void> {
+  if (!config.persistEnabled) return;
+  const payload: PersistedPayload = {
+    version: PERSIST_VERSION,
+    entries: entries.map((entry) => sanitizeLogEntry(entry, { redact: true })),
+  };
+  await AsyncStorage.setItem(config.persistKey, JSON.stringify(payload));
+}
+
+function schedulePersist(): void {
+  if (!config.persistEnabled) return;
+
+  clearPersistTimer();
+  const delay = Number.isFinite(config.persistDebounceMs)
+    ? Math.max(0, Math.floor(config.persistDebounceMs))
+    : DEFAULT_CONFIG.persistDebounceMs;
+
+  persistTimer = setTimeout(() => {
+    persistTimer = null;
+    void persistEntriesNow();
+  }, delay);
+}
+
+async function removePersistedEntries(storageKey: string): Promise<void> {
+  await AsyncStorage.removeItem(storageKey);
 }
 
 export function sanitizeLogData(data: unknown, options: LogSerializationOptions = {}): unknown {
@@ -76,7 +162,11 @@ export function sanitizeLogData(data: unknown, options: LogSerializationOptions 
     if (value === undefined || value === null) return value;
 
     const valueType = typeof value;
-    if (valueType === "string" || valueType === "boolean") return value;
+    if (valueType === "string") {
+      const stringValue = value as string;
+      return redact && shouldRedactValue(stringValue) ? REDACTED_TEXT : stringValue;
+    }
+    if (valueType === "boolean") return value;
 
     if (valueType === "number") {
       return Number.isFinite(value) ? value : String(value);
@@ -158,6 +248,43 @@ export function sanitizeLogEntry(entry: LogEntry, options: LogSerializationOptio
   };
 }
 
+function queryEntriesInternal(query: LogQuery = {}): LogEntry[] {
+  let result = [...entries];
+
+  if (query.level) {
+    const minPriority = LOG_LEVEL_PRIORITY[query.level];
+    result = result.filter((e) => LOG_LEVEL_PRIORITY[e.level] >= minPriority);
+  }
+
+  if (query.tag) {
+    const tagLower = query.tag.trim().toLowerCase();
+    if (tagLower) {
+      result = result.filter((e) => e.tag.toLowerCase().includes(tagLower));
+    }
+  }
+
+  if (query.query) {
+    const q = query.query.trim().toLowerCase();
+    if (q) {
+      result = result.filter((entry) => {
+        const inTag = entry.tag.toLowerCase().includes(q);
+        const inMessage = entry.message.toLowerCase().includes(q);
+        const inData =
+          entry.data !== undefined &&
+          serializeLogData(entry.data, { redact: true }).toLowerCase().includes(q);
+        const inStack = entry.stackTrace?.toLowerCase().includes(q) ?? false;
+        return inTag || inMessage || inData || inStack;
+      });
+    }
+  }
+
+  if (query.limit && query.limit > 0) {
+    result = result.slice(-query.limit);
+  }
+
+  return result;
+}
+
 function addEntry(level: LogLevel, tag: string, message: string, data?: unknown): LogEntry {
   const extractedError = extractErrorFromData(data);
 
@@ -177,6 +304,7 @@ function addEntry(level: LogLevel, tag: string, message: string, data?: unknown)
   entries.push(entry);
   trimEntriesToRingBuffer();
   emitChange();
+  schedulePersist();
 
   if (config.consoleOutput) {
     const prefix = `[${level.toUpperCase()}][${tag}]`;
@@ -199,6 +327,30 @@ function addEntry(level: LogLevel, tag: string, message: string, data?: unknown)
   return entry;
 }
 
+async function hydrateEntriesInternal(): Promise<void> {
+  const raw = await AsyncStorage.getItem(config.persistKey);
+  if (!raw) return;
+
+  let payload: PersistedPayload | null = null;
+  try {
+    payload = JSON.parse(raw) as PersistedPayload;
+  } catch {
+    payload = null;
+  }
+
+  if (!payload || payload.version !== PERSIST_VERSION || !Array.isArray(payload.entries)) {
+    return;
+  }
+
+  const restored: LogEntry[] = [];
+  for (const item of payload.entries) {
+    const entry = normalizePersistEntry(item);
+    if (entry) restored.push(entry);
+  }
+  entries = restored;
+  trimEntriesToRingBuffer();
+}
+
 // ===== Public API =====
 
 export const Logger = {
@@ -218,27 +370,38 @@ export const Logger = {
     if (shouldLog("error")) addEntry("error", tag, message, data);
   },
 
+  async hydrate(): Promise<void> {
+    if (!config.persistEnabled) return;
+    if (hydrationPromise) return hydrationPromise;
+
+    hydrationPromise = (async () => {
+      await hydrateEntriesInternal();
+      emitChange();
+    })();
+
+    try {
+      await hydrationPromise;
+    } finally {
+      hydrationPromise = null;
+    }
+  },
+
   /**
    * 获取日志条目（支持过滤）
    */
   getEntries(filter?: { level?: LogLevel; tag?: string; limit?: number }): LogEntry[] {
-    let result = [...entries];
+    return queryEntriesInternal({
+      level: filter?.level,
+      tag: filter?.tag,
+      limit: filter?.limit,
+    });
+  },
 
-    if (filter?.level) {
-      const minPriority = LOG_LEVEL_PRIORITY[filter.level];
-      result = result.filter((e) => LOG_LEVEL_PRIORITY[e.level] >= minPriority);
-    }
-
-    if (filter?.tag) {
-      const tagLower = filter.tag.toLowerCase();
-      result = result.filter((e) => e.tag.toLowerCase().includes(tagLower));
-    }
-
-    if (filter?.limit && filter.limit > 0) {
-      result = result.slice(-filter.limit);
-    }
-
-    return result;
+  /**
+   * 获取日志条目（支持 level/tag/query/limit）
+   */
+  queryEntries(query?: LogQuery): LogEntry[] {
+    return queryEntriesInternal(query);
   },
 
   /**
@@ -254,14 +417,15 @@ export const Logger = {
   clear(): void {
     entries = [];
     emitChange();
+    schedulePersist();
   },
 
   /**
    * 导出日志为 JSON 字符串
    */
-  exportJSON(): string {
+  exportJSON(query?: LogQuery): string {
     return JSON.stringify(
-      entries.map((entry) => sanitizeLogEntry(entry, { redact: true })),
+      queryEntriesInternal(query).map((entry) => sanitizeLogEntry(entry, { redact: true })),
       null,
       2,
     );
@@ -270,8 +434,8 @@ export const Logger = {
   /**
    * 导出日志为可读文本
    */
-  exportText(): string {
-    return entries
+  exportText(query?: LogQuery): string {
+    return queryEntriesInternal(query)
       .map((e) => {
         const time = new Date(e.timestamp).toISOString();
         const line = `[${time}][${e.level.toUpperCase()}][${e.tag}] ${e.message}`;
@@ -287,15 +451,54 @@ export const Logger = {
    * 更新 Logger 配置
    */
   configure(updates: Partial<LoggerConfig>): void {
+    const prevConfig = config;
     const nextConfig = { ...config, ...updates };
+
     if (!Number.isFinite(nextConfig.maxEntries) || nextConfig.maxEntries <= 0) {
       nextConfig.maxEntries = DEFAULT_CONFIG.maxEntries;
     } else {
       nextConfig.maxEntries = Math.floor(nextConfig.maxEntries);
     }
+
+    if (!isLogLevel(nextConfig.minLevel)) {
+      nextConfig.minLevel = DEFAULT_CONFIG.minLevel;
+    }
+
+    if (typeof nextConfig.consoleOutput !== "boolean") {
+      nextConfig.consoleOutput = DEFAULT_CONFIG.consoleOutput;
+    }
+
+    if (typeof nextConfig.persistEnabled !== "boolean") {
+      nextConfig.persistEnabled = DEFAULT_CONFIG.persistEnabled;
+    }
+
+    if (typeof nextConfig.persistKey !== "string" || !nextConfig.persistKey.trim()) {
+      nextConfig.persistKey = DEFAULT_CONFIG.persistKey;
+    }
+
+    if (!Number.isFinite(nextConfig.persistDebounceMs) || nextConfig.persistDebounceMs < 0) {
+      nextConfig.persistDebounceMs = DEFAULT_CONFIG.persistDebounceMs;
+    } else {
+      nextConfig.persistDebounceMs = Math.floor(nextConfig.persistDebounceMs);
+    }
+
     config = nextConfig;
     trimEntriesToRingBuffer();
     emitChange();
+
+    if (!nextConfig.persistEnabled) {
+      clearPersistTimer();
+      void removePersistedEntries(nextConfig.persistKey);
+      if (prevConfig.persistKey !== nextConfig.persistKey) {
+        void removePersistedEntries(prevConfig.persistKey);
+      }
+      return;
+    }
+
+    if (prevConfig.persistKey !== nextConfig.persistKey) {
+      void removePersistedEntries(prevConfig.persistKey);
+    }
+    schedulePersist();
   },
 
   /**
@@ -315,3 +518,12 @@ export const Logger = {
     };
   },
 };
+
+export function createLogger(tag: string) {
+  return {
+    debug: (message: string, data?: unknown) => Logger.debug(tag, message, data),
+    info: (message: string, data?: unknown) => Logger.info(tag, message, data),
+    warn: (message: string, data?: unknown) => Logger.warn(tag, message, data),
+    error: (message: string, data?: unknown) => Logger.error(tag, message, data),
+  };
+}

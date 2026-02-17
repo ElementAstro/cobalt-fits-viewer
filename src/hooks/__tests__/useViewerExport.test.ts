@@ -7,6 +7,10 @@ jest.mock("../useExport", () => ({
   useExport: jest.fn(),
 }));
 
+jest.mock("../useHapticFeedback", () => ({
+  useHapticFeedback: jest.fn(),
+}));
+
 jest.mock("../../i18n/useI18n", () => ({
   useI18n: jest.fn(() => ({
     t: (key: string) => key,
@@ -24,7 +28,10 @@ jest.mock("expo-haptics", () => ({
 const { useExport } = jest.requireMock("../useExport") as {
   useExport: jest.Mock;
 };
-const notificationAsyncMock = Haptics.notificationAsync as jest.Mock;
+const { useHapticFeedback } = jest.requireMock("../useHapticFeedback") as {
+  useHapticFeedback: jest.Mock;
+};
+const notifyMock = jest.fn();
 
 describe("useViewerExport", () => {
   const exportImage = jest.fn();
@@ -37,6 +44,12 @@ describe("useViewerExport", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
+    useHapticFeedback.mockReturnValue({
+      hapticsEnabled: true,
+      selection: jest.fn(),
+      impact: jest.fn(),
+      notify: notifyMock,
+    });
     useExport.mockReturnValue({
       isExporting: false,
       exportImage,
@@ -89,7 +102,7 @@ describe("useViewerExport", () => {
       await result.current.handleExport(90);
     });
     expect(exportImage).toHaveBeenCalled();
-    expect(notificationAsyncMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Success);
+    expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Success);
     expect(Alert.alert).toHaveBeenCalledWith("common.success", "viewer.exportSuccess");
     expect(onDone).toHaveBeenCalledTimes(1);
 
@@ -97,7 +110,7 @@ describe("useViewerExport", () => {
     await act(async () => {
       await result.current.handleExport(90);
     });
-    expect(notificationAsyncMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);
+    expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);
     expect(Alert.alert).toHaveBeenCalledWith("common.error", "viewer.exportFailed");
     expect(onDone).toHaveBeenCalledTimes(2);
   });

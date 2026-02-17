@@ -9,7 +9,7 @@
 import { useState, useCallback, useEffect } from "react";
 import * as Location from "expo-location";
 import type { GeoLocation } from "../lib/fits/types";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 分钟缓存
 
@@ -36,10 +36,10 @@ export const LocationService = {
   async requestPermission(): Promise<boolean> {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      Logger.info("Location", `Permission request: ${status}`);
+      Logger.info(LOG_TAGS.Location, `Permission request: ${status}`);
       return status === "granted";
     } catch (e) {
-      Logger.error("Location", "Failed to request location permission", e);
+      Logger.error(LOG_TAGS.Location, "Failed to request location permission", e);
       return false;
     }
   },
@@ -95,11 +95,15 @@ export const LocationService = {
           accuracy: Location.Accuracy.Balanced,
         });
       } catch (err) {
-        Logger.warn("Location", "Failed to get current position, fallback to last known", err);
+        Logger.warn(
+          LOG_TAGS.Location,
+          "Failed to get current position, fallback to last known",
+          err,
+        );
         try {
           position = await Location.getLastKnownPositionAsync();
         } catch (fallbackErr) {
-          Logger.warn("Location", "Failed to get last known position", fallbackErr);
+          Logger.warn(LOG_TAGS.Location, "Failed to get last known position", fallbackErr);
           position = null;
         }
       }
@@ -118,7 +122,7 @@ export const LocationService = {
 
       globalCache = { location: geoLocation, timestamp: Date.now() };
 
-      Logger.info("Location", "Location acquired", {
+      Logger.info(LOG_TAGS.Location, "Location acquired", {
         lat: latitude.toFixed(4),
         lon: longitude.toFixed(4),
         place: placeInfo.placeName ?? placeInfo.city,
@@ -126,7 +130,7 @@ export const LocationService = {
 
       return geoLocation;
     } catch (err) {
-      Logger.warn("Location", "Failed to get location", err);
+      Logger.warn(LOG_TAGS.Location, "Failed to get location", err);
       return null;
     }
   },

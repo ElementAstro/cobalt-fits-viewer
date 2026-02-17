@@ -3,8 +3,8 @@ import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, BottomSheet, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 
 interface ViewerToolbarProps {
   filename: string;
@@ -53,6 +53,7 @@ export function ViewerToolbar({
 }: ViewerToolbarProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const haptics = useHapticFeedback();
   const insets = useSafeAreaInsets();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
 
@@ -156,7 +157,7 @@ export function ViewerToolbar({
             size="sm"
             variant="ghost"
             onPress={() => {
-              Haptics.selectionAsync();
+              haptics.selection();
               onToggleControls();
             }}
             className="h-8 w-8"
@@ -173,7 +174,7 @@ export function ViewerToolbar({
             size="sm"
             variant="ghost"
             onPress={() => {
-              Haptics.selectionAsync();
+              haptics.selection();
               onToggleFullscreen();
             }}
             className="h-8 w-8"
@@ -209,7 +210,7 @@ export function ViewerToolbar({
               <Pressable
                 key={i}
                 onPress={() => {
-                  Haptics.selectionAsync();
+                  haptics.selection();
                   setShowMoreMenu(false);
                   action.onPress();
                 }}

@@ -24,11 +24,17 @@ jest.mock("../../lib/astrometry/astrometryClient", () => ({
   testConnection: jest.fn(),
   saveApiKey: jest.fn(),
 }));
+jest.mock("../useHapticFeedback", () => ({
+  useHapticFeedback: jest.fn(),
+}));
 jest.mock("expo-haptics", () => ({
   notificationAsync: jest.fn(),
   NotificationFeedbackType: { Success: "Success" },
 }));
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    useAstrometry: "useAstrometry",
+  },
   Logger: {
     info: jest.fn(),
     warn: jest.fn(),
@@ -60,8 +66,8 @@ const clientLib = jest.requireMock("../../lib/astrometry/astrometryClient") as {
   testConnection: jest.Mock;
   saveApiKey: jest.Mock;
 };
-const hapticsLib = jest.requireMock("expo-haptics") as {
-  notificationAsync: jest.Mock;
+const { useHapticFeedback } = jest.requireMock("../useHapticFeedback") as {
+  useHapticFeedback: jest.Mock;
 };
 
 describe("useAstrometry", () => {
@@ -141,6 +147,12 @@ describe("useAstrometry", () => {
     clientLib.getApiKey.mockResolvedValue("api-key");
     clientLib.testConnection.mockResolvedValue(true);
     clientLib.saveApiKey.mockResolvedValue(undefined);
+    useHapticFeedback.mockReturnValue({
+      hapticsEnabled: true,
+      selection: jest.fn(),
+      impact: jest.fn(),
+      notify: jest.fn(),
+    });
   });
 
   afterEach(() => {
@@ -243,7 +255,7 @@ describe("useAstrometry", () => {
 
     const ids = result.current.submitBatch(["f1", "f2"]);
     expect(ids).toHaveLength(2);
-    expect(hapticsLib.notificationAsync).toHaveBeenCalled();
+    expect(useHapticFeedback).toHaveBeenCalled();
   });
 
   it("resumes stale jobs on mount and processes queue after timeout", () => {

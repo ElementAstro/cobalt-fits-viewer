@@ -15,7 +15,7 @@ import {
 import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
 import { generateFileId } from "../lib/utils/fileManager";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 import {
   detectPreferredSupportedImageFormat,
   detectSupportedImageFormat,
@@ -143,10 +143,13 @@ export function useFitsFile(): UseFitsFileReturn {
         } else {
           processRaster(buffer, filename, filepath, fileSize, toImageSourceFormat(detectedFormat));
         }
-        Logger.info("FitsFile", `Loaded: ${filename}`, { fileSize, format: detectedFormat.id });
+        Logger.info(LOG_TAGS.FitsFile, `Loaded: ${filename}`, {
+          fileSize,
+          format: detectedFormat.id,
+        });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load image file";
-        Logger.error("FitsFile", `Load failed: ${filename}`, e);
+        Logger.error(LOG_TAGS.FitsFile, `Load failed: ${filename}`, e);
         setError(msg);
       } finally {
         setIsLoading(false);
@@ -186,10 +189,12 @@ export function useFitsFile(): UseFitsFileReturn {
             toImageSourceFormat(detectedFormat),
           );
         }
-        Logger.info("FitsFile", `Loaded from buffer: ${filename}`, { format: detectedFormat.id });
+        Logger.info(LOG_TAGS.FitsFile, `Loaded from buffer: ${filename}`, {
+          format: detectedFormat.id,
+        });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to parse image data";
-        Logger.error("FitsFile", `Buffer load failed: ${filename}`, e);
+        Logger.error(LOG_TAGS.FitsFile, `Buffer load failed: ${filename}`, e);
         setError(msg);
       } finally {
         setIsLoading(false);
@@ -207,10 +212,10 @@ export function useFitsFile(): UseFitsFileReturn {
         if (dims) setDimensions(dims);
         const px = await getImagePixels(fits, hduIndex, frame);
         setPixels(px);
-        Logger.debug("FitsFile", `Frame loaded: ${frame}`, { hduIndex });
+        Logger.debug(LOG_TAGS.FitsFile, `Frame loaded: ${frame}`, { hduIndex });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load frame";
-        Logger.error("FitsFile", `Frame load failed: ${frame}`, e);
+        Logger.error(LOG_TAGS.FitsFile, `Frame load failed: ${frame}`, e);
         setError(msg);
       } finally {
         setIsLoading(false);

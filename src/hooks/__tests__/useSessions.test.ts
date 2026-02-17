@@ -27,6 +27,9 @@ jest.mock("../../lib/sessions/statsCalculator", () => ({
   getMonthlyTrend: jest.fn(() => [{ month: "2025-01" }]),
 }));
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    Sessions: "Sessions",
+  },
   Logger: {
     info: jest.fn(),
     debug: jest.fn(),

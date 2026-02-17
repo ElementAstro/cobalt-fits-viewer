@@ -6,7 +6,7 @@
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import * as Updates from "expo-updates";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 import { getAppVersionInfo } from "../lib/version";
 
 export type UpdateStatus =
@@ -66,7 +66,7 @@ export function useAppUpdate(): AppUpdateState {
   useEffect(() => {
     if (nativeUpdatePending && status !== "ready") {
       setStatus("ready");
-      Logger.info("AppUpdate", "Update downloaded, ready to apply");
+      Logger.info(LOG_TAGS.AppUpdate, "Update downloaded, ready to apply");
     } else if (
       nativeUpdateAvailable &&
       status !== "available" &&
@@ -74,7 +74,7 @@ export function useAppUpdate(): AppUpdateState {
       status !== "ready"
     ) {
       setStatus("available");
-      Logger.info("AppUpdate", "Update available");
+      Logger.info(LOG_TAGS.AppUpdate, "Update available");
     }
   }, [nativeUpdateAvailable, nativeUpdatePending, status]);
 
@@ -97,14 +97,14 @@ export function useAppUpdate(): AppUpdateState {
 
       if (result.isAvailable) {
         setStatus("available");
-        Logger.info("AppUpdate", "Update available");
+        Logger.info(LOG_TAGS.AppUpdate, "Update available");
       } else {
         setStatus("upToDate");
-        Logger.info("AppUpdate", "App is up to date");
+        Logger.info(LOG_TAGS.AppUpdate, "App is up to date");
       }
       setLastCheckedAt(Date.now());
     } catch (e) {
-      Logger.error("AppUpdate", "Update check failed", e);
+      Logger.error(LOG_TAGS.AppUpdate, "Update check failed", e);
       setStatus("error");
       setError(e instanceof Error ? e.message : "Unknown error");
     }
@@ -120,9 +120,9 @@ export function useAppUpdate(): AppUpdateState {
       await Updates.fetchUpdateAsync();
 
       setStatus("ready");
-      Logger.info("AppUpdate", "Update downloaded, ready to apply");
+      Logger.info(LOG_TAGS.AppUpdate, "Update downloaded, ready to apply");
     } catch (e) {
-      Logger.error("AppUpdate", "Update download failed", e);
+      Logger.error(LOG_TAGS.AppUpdate, "Update download failed", e);
       setStatus("error");
       setError(e instanceof Error ? e.message : "Download failed");
     }

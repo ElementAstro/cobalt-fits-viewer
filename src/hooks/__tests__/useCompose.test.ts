@@ -13,6 +13,9 @@ jest.mock("../../lib/utils/rgbCompose", () => ({
   composeRGB: jest.fn(),
 }));
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    Compose: "Compose",
+  },
   Logger: {
     info: jest.fn(),
     error: jest.fn(),
@@ -101,5 +104,19 @@ describe("useCompose", () => {
     expect(result.current.assignedCount).toBe(0);
     expect(result.current.result).toBeNull();
     expect(result.current.error).toBeNull();
+  });
+
+  it("accepts initial preset and channel weights", () => {
+    const { result } = renderHook(() =>
+      useCompose({
+        initialPreset: "sho",
+        initialWeights: { red: 1.5, green: 0.8, blue: 1.2 },
+      }),
+    );
+
+    expect(result.current.initialPreset).toBe("sho");
+    expect(result.current.channels.red.weight).toBe(1.5);
+    expect(result.current.channels.green.weight).toBe(0.8);
+    expect(result.current.channels.blue.weight).toBe(1.2);
   });
 });

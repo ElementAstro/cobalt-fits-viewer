@@ -7,7 +7,7 @@ import { useState, useCallback } from "react";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
 import { loadFitsFromBuffer, getImagePixels, getImageDimensions } from "../lib/fits/parser";
 import { composeRGB, type ChannelData } from "../lib/utils/rgbCompose";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 interface ChannelState {
   fileId: string | null;
@@ -23,34 +23,54 @@ interface ComposeResult {
   height: number;
 }
 
-export function useCompose() {
+interface UseComposeOptions {
+  initialPreset?: "rgb" | "sho" | "hoo" | "lrgb" | "custom";
+  initialWeights?: {
+    red?: number;
+    green?: number;
+    blue?: number;
+    luminance?: number;
+  };
+}
+
+function clampWeight(value: number | undefined, fallback = 1) {
+  if (typeof value !== "number" || Number.isNaN(value)) return fallback;
+  return Math.max(0, Math.min(4, value));
+}
+
+export function useCompose(options: UseComposeOptions = {}) {
+  const initialRedWeight = clampWeight(options.initialWeights?.red, 1);
+  const initialGreenWeight = clampWeight(options.initialWeights?.green, 1);
+  const initialBlueWeight = clampWeight(options.initialWeights?.blue, 1);
+  const initialLuminanceWeight = clampWeight(options.initialWeights?.luminance, 1);
+
   const [red, setRed] = useState<ChannelState>({
     fileId: null,
     filepath: null,
     filename: null,
     pixels: null,
-    weight: 1.0,
+    weight: initialRedWeight,
   });
   const [green, setGreen] = useState<ChannelState>({
     fileId: null,
     filepath: null,
     filename: null,
     pixels: null,
-    weight: 1.0,
+    weight: initialGreenWeight,
   });
   const [blue, setBlue] = useState<ChannelState>({
     fileId: null,
     filepath: null,
     filename: null,
     pixels: null,
-    weight: 1.0,
+    weight: initialBlueWeight,
   });
   const [luminance, setLuminance] = useState<ChannelState>({
     fileId: null,
     filepath: null,
     filename: null,
     pixels: null,
-    weight: 1.0,
+    weight: initialLuminanceWeight,
   });
 
   const [linkedStretch, setLinkedStretch] = useState(true);
@@ -93,32 +113,32 @@ export function useCompose() {
           setRefDimensions({ width: dims.width, height: dims.height });
         }
 
-        const state: ChannelState = {
+        const buildState = (weight: number): ChannelState => ({
           fileId,
           filepath,
           filename,
           pixels,
-          weight: 1.0,
-        };
+          weight,
+        });
 
         switch (channel) {
           case "red":
-            setRed(state);
+            setRed((prev) => buildState(prev.weight));
             break;
           case "green":
-            setGreen(state);
+            setGreen((prev) => buildState(prev.weight));
             break;
           case "blue":
-            setBlue(state);
+            setBlue((prev) => buildState(prev.weight));
             break;
           case "luminance":
-            setLuminance(state);
+            setLuminance((prev) => buildState(prev.weight));
             break;
         }
-        Logger.info("Compose", `Channel ${channel} loaded: ${filename}`);
+        Logger.info(LOG_TAGS.Compose, `Channel ${channel} loaded: ${filename}`);
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load channel";
-        Logger.error("Compose", `Channel ${channel} load failed: ${filename}`, e);
+        Logger.error(LOG_TAGS.Compose, `Channel ${channel} load failed: ${filename}`, e);
         setError(msg);
       } finally {
         setIsLoading(false);
@@ -148,29 +168,38 @@ export function useCompose() {
     [],
   );
 
-  const clearChannel = useCallback((channel: "red" | "green" | "blue" | "luminance") => {
-    const empty: ChannelState = {
-      fileId: null,
-      filepath: null,
-      filename: null,
-      pixels: null,
-      weight: 1.0,
-    };
-    switch (channel) {
-      case "red":
-        setRed(empty);
-        break;
-      case "green":
-        setGreen(empty);
-        break;
-      case "blue":
-        setBlue(empty);
-        break;
-      case "luminance":
-        setLuminance(empty);
-        break;
-    }
-  }, []);
+  const clearChannel = useCallback(
+    (channel: "red" | "green" | "blue" | "luminance") => {
+      const getDefaultWeight = (target: typeof channel) => {
+        if (target === "red") return initialRedWeight;
+        if (target === "green") return initialGreenWeight;
+        if (target === "blue") return initialBlueWeight;
+        return initialLuminanceWeight;
+      };
+      const buildEmpty = (target: typeof channel): ChannelState => ({
+        fileId: null,
+        filepath: null,
+        filename: null,
+        pixels: null,
+        weight: getDefaultWeight(target),
+      });
+      switch (channel) {
+        case "red":
+          setRed(buildEmpty("red"));
+          break;
+        case "green":
+          setGreen(buildEmpty("green"));
+          break;
+        case "blue":
+          setBlue(buildEmpty("blue"));
+          break;
+        case "luminance":
+          setLuminance(buildEmpty("luminance"));
+          break;
+      }
+    },
+    [initialBlueWeight, initialGreenWeight, initialLuminanceWeight, initialRedWeight],
+  );
 
   const compose = useCallback(() => {
     if (!refDimensions) {
@@ -217,13 +246,13 @@ export function useCompose() {
         width: refDimensions.width,
         height: refDimensions.height,
       });
-      Logger.info("Compose", "RGB composition completed", {
+      Logger.info(LOG_TAGS.Compose, "RGB composition completed", {
         width: refDimensions.width,
         height: refDimensions.height,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Composition failed";
-      Logger.error("Compose", "Composition failed", e);
+      Logger.error(LOG_TAGS.Compose, "Composition failed", e);
       setError(msg);
     } finally {
       setIsComposing(false);
@@ -231,23 +260,24 @@ export function useCompose() {
   }, [red, green, blue, luminance, linkedStretch, refDimensions]);
 
   const reset = useCallback(() => {
-    const empty: ChannelState = {
+    const empty = (weight: number): ChannelState => ({
       fileId: null,
       filepath: null,
       filename: null,
       pixels: null,
-      weight: 1.0,
-    };
-    setRed(empty);
-    setGreen(empty);
-    setBlue(empty);
-    setLuminance(empty);
+      weight,
+    });
+    setRed(empty(initialRedWeight));
+    setGreen(empty(initialGreenWeight));
+    setBlue(empty(initialBlueWeight));
+    setLuminance(empty(initialLuminanceWeight));
     setResult(null);
     setError(null);
     setRefDimensions(null);
-  }, []);
+  }, [initialBlueWeight, initialGreenWeight, initialLuminanceWeight, initialRedWeight]);
 
   return {
+    initialPreset: options.initialPreset ?? "rgb",
     channels: { red, green, blue, luminance },
     isLoading,
     isComposing,

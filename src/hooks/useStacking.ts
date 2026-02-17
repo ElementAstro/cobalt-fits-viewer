@@ -24,7 +24,7 @@ import {
   qualityToWeights,
   type FrameQualityMetrics,
 } from "../lib/stacking/frameQuality";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 export type StackMethod =
   | "average"
@@ -114,7 +114,7 @@ export function useStacking() {
     ) => {
       if (files.length < 2) {
         setError("At least 2 frames are required for stacking");
-        Logger.warn("Stacking", "Insufficient frames for stacking", { count: files.length });
+        Logger.warn(LOG_TAGS.Stacking, "Insufficient frames for stacking", { count: files.length });
         return;
       }
 
@@ -422,7 +422,7 @@ export function useStacking() {
       } catch (e) {
         if (!cancelledRef.current) {
           const msg = e instanceof Error ? e.message : "Stacking failed";
-          Logger.error("Stacking", `Failed: ${msg}`, e);
+          Logger.error(LOG_TAGS.Stacking, `Failed: ${msg}`, e);
           setError(msg);
         }
       } finally {
@@ -436,7 +436,7 @@ export function useStacking() {
     cancelledRef.current = true;
     setIsStacking(false);
     setProgress(null);
-    Logger.info("Stacking", "Cancelled by user");
+    Logger.info(LOG_TAGS.Stacking, "Cancelled by user");
   }, []);
 
   const reset = useCallback(() => {

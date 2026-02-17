@@ -36,6 +36,10 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.hapticsEnabled).toBe(true);
       expect(s.confirmDestructiveActions).toBe(true);
       expect(s.autoCheckUpdates).toBe(true);
+      expect(s.logMinLevel).toBe(__DEV__ ? "debug" : "info");
+      expect(s.logMaxEntries).toBe(2000);
+      expect(s.logConsoleOutput).toBe(__DEV__);
+      expect(s.logPersistEnabled).toBe(true);
     });
   });
 
@@ -81,6 +85,20 @@ describe("useSettingsStore — orientationLock", () => {
     it("updates autoCheckUpdates", () => {
       useSettingsStore.getState().setAutoCheckUpdates(false);
       expect(useSettingsStore.getState().autoCheckUpdates).toBe(false);
+    });
+
+    it("updates log settings", () => {
+      const store = useSettingsStore.getState();
+      store.setLogMinLevel("warn");
+      store.setLogMaxEntries(5000);
+      store.setLogConsoleOutput(false);
+      store.setLogPersistEnabled(false);
+
+      const s = useSettingsStore.getState();
+      expect(s.logMinLevel).toBe("warn");
+      expect(s.logMaxEntries).toBe(5000);
+      expect(s.logConsoleOutput).toBe(false);
+      expect(s.logPersistEnabled).toBe(false);
     });
   });
 
@@ -203,12 +221,20 @@ describe("useSettingsStore — orientationLock", () => {
         hapticsEnabled?: boolean;
         confirmDestructiveActions?: boolean;
         autoCheckUpdates?: boolean;
+        logMinLevel?: string;
+        logMaxEntries?: number;
+        logConsoleOutput?: boolean;
+        logPersistEnabled?: boolean;
       };
       expect(partial?.hapticsEnabled).toBe(useSettingsStore.getState().hapticsEnabled);
       expect(partial?.confirmDestructiveActions).toBe(
         useSettingsStore.getState().confirmDestructiveActions,
       );
       expect(partial?.autoCheckUpdates).toBe(useSettingsStore.getState().autoCheckUpdates);
+      expect(partial?.logMinLevel).toBe(useSettingsStore.getState().logMinLevel);
+      expect(partial?.logMaxEntries).toBe(useSettingsStore.getState().logMaxEntries);
+      expect(partial?.logConsoleOutput).toBe(useSettingsStore.getState().logConsoleOutput);
+      expect(partial?.logPersistEnabled).toBe(useSettingsStore.getState().logPersistEnabled);
     });
 
     it("applySettingsPatch sanitizes out-of-range values", () => {
@@ -256,12 +282,16 @@ describe("useSettingsStore — orientationLock", () => {
         hapticsEnabled: "yes",
         confirmDestructiveActions: 1,
         autoCheckUpdates: "no",
+        logConsoleOutput: "false",
+        logPersistEnabled: 0,
       } as unknown as Record<string, unknown>);
 
       const s = useSettingsStore.getState();
       expect(s.hapticsEnabled).toBe(true);
       expect(s.confirmDestructiveActions).toBe(true);
       expect(s.autoCheckUpdates).toBe(true);
+      expect(s.logConsoleOutput).toBe(true);
+      expect(s.logPersistEnabled).toBe(true);
     });
 
     it("applySettingsPatch keeps black/white points valid for one-sided updates", () => {
@@ -383,6 +413,9 @@ describe("useSettingsStore — orientationLock", () => {
       store.setAutoGroupByObject(false);
       store.setAutoDetectDuplicates(false);
       store.setAutoTagLocation(true);
+      store.setLogMinLevel("warn");
+      store.setLogConsoleOutput(false);
+      store.setLogPersistEnabled(false);
       store.setSessionGapMinutes(90);
       store.setCalendarSyncEnabled(true);
       store.setDefaultReminderMinutes(10);
@@ -424,6 +457,9 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.autoGroupByObject).toBe(false);
       expect(s.autoDetectDuplicates).toBe(false);
       expect(s.autoTagLocation).toBe(true);
+      expect(s.logMinLevel).toBe("warn");
+      expect(s.logConsoleOutput).toBe(false);
+      expect(s.logPersistEnabled).toBe(false);
       expect(s.sessionGapMinutes).toBe(90);
       expect(s.calendarSyncEnabled).toBe(true);
       expect(s.defaultReminderMinutes).toBe(10);
@@ -461,6 +497,7 @@ describe("useSettingsStore — orientationLock", () => {
     it("covers remaining patch-backed numeric setters", () => {
       const store = useSettingsStore.getState();
       store.setThumbnailQuality(91);
+      store.setLogMaxEntries(3333);
       store.setThumbnailSize(320);
       store.setDefaultBlackPoint(0.2);
       store.setDefaultWhitePoint(0.8);
@@ -485,6 +522,7 @@ describe("useSettingsStore — orientationLock", () => {
 
       const s = useSettingsStore.getState();
       expect(s.thumbnailQuality).toBe(91);
+      expect(s.logMaxEntries).toBe(3333);
       expect(s.thumbnailSize).toBe(320);
       expect(s.defaultBlackPoint).toBe(0.2);
       expect(s.defaultWhitePoint).toBe(0.8);
@@ -562,7 +600,7 @@ describe("useSettingsStore — orientationLock", () => {
 
     it("onRehydrateStorage syncs runtime theme from hydrated state", () => {
       const onRehydrate = useSettingsStore.persist.getOptions().onRehydrateStorage;
-      const callback = onRehydrate?.();
+      const callback = onRehydrate?.(useSettingsStore.getState());
       callback?.({
         ...useSettingsStore.getState(),
         theme: "light",

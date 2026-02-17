@@ -4,6 +4,7 @@
  */
 
 import { View, Text } from "react-native";
+import { useRouter } from "expo-router";
 import { Button, Card, Separator, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -13,6 +14,7 @@ import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 
 export function UpdateChecker() {
   const { t } = useI18n();
+  const router = useRouter();
   const haptics = useHapticFeedback();
   const successColor = useThemeColor("success");
   const dangerColor = useThemeColor("danger");
@@ -190,7 +192,7 @@ export function UpdateChecker() {
         <Button
           variant="ghost"
           className="w-full justify-between px-0"
-          onPress={() => {}}
+          onPress={() => router.push("/settings/licenses")}
           accessibilityRole="button"
           accessibilityLabel={t("settings.licenses")}
         >

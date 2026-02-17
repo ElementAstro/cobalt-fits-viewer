@@ -42,6 +42,7 @@ export default function SessionsScreen() {
   const { sessions, autoDetectSessions, getObservationDates, getSessionStats, getMonthlyData } =
     useSessions();
   const {
+    calendarSyncEnabled,
     syncSession,
     syncAllSessions,
     syncAllObservationPlans,
@@ -215,6 +216,7 @@ export default function SessionsScreen() {
   );
 
   const handleSyncAll = useCallback(async () => {
+    if (!calendarSyncEnabled) return;
     const unsyncedCount = sessions.filter((s) => !s.calendarEventId).length;
     if (unsyncedCount === 0) {
       Alert.alert(t("common.success"), t("sessions.synced"));
@@ -224,9 +226,10 @@ export default function SessionsScreen() {
     if (count > 0) {
       Alert.alert(t("common.success"), `${t("sessions.syncSuccess")} (${count})`);
     }
-  }, [sessions, syncAllSessions, t]);
+  }, [calendarSyncEnabled, sessions, syncAllSessions, t]);
 
   const handleSyncAllPlans = useCallback(async () => {
+    if (!calendarSyncEnabled) return;
     const unsyncedCount = plans.filter((p) => !p.calendarEventId).length;
     if (unsyncedCount === 0) {
       Alert.alert(t("common.success"), t("sessions.noUnsyncedPlans"));
@@ -236,17 +239,19 @@ export default function SessionsScreen() {
     if (count > 0) {
       Alert.alert(t("common.success"), `${t("sessions.syncPlansSuccess")} (${count})`);
     }
-  }, [plans, syncAllObservationPlans, t]);
+  }, [calendarSyncEnabled, plans, syncAllObservationPlans, t]);
 
   const handleCleanupCalendarLinks = useCallback(async () => {
+    if (!calendarSyncEnabled) return;
     const result = await cleanupMissingCalendarLinks(sessions, plans);
     Alert.alert(
       t("common.success"),
       `${t("sessions.cleanupCalendarLinksDone")} (${result.sessionsCleared + result.plansCleared})`,
     );
-  }, [cleanupMissingCalendarLinks, sessions, plans, t]);
+  }, [calendarSyncEnabled, cleanupMissingCalendarLinks, sessions, plans, t]);
 
   const handleRefreshFromCalendar = useCallback(async () => {
+    if (!calendarSyncEnabled) return;
     const linkedCount =
       sessions.filter((s) => !!s.calendarEventId).length +
       plans.filter((p) => !!p.calendarEventId).length;
@@ -272,7 +277,7 @@ export default function SessionsScreen() {
       t("common.success"),
       `${t("sessions.refreshFromCalendarDone")} (${affected}${suffix})`,
     );
-  }, [plans, refreshAllFromCalendar, sessions, t]);
+  }, [calendarSyncEnabled, plans, refreshAllFromCalendar, sessions, t]);
 
   const handleDatePress = useCallback(
     (day: number) => {
@@ -341,17 +346,26 @@ export default function SessionsScreen() {
               router.push(`/session/${session.id}`);
             }
           }}
-          onSyncToCalendar={isSelectionMode ? undefined : syncSession}
-          onOpenInCalendar={isSelectionMode ? undefined : openSessionInCalendar}
-          onRefreshFromCalendar={isSelectionMode ? undefined : refreshSessionFromCalendar}
-          onEditInCalendar={isSelectionMode ? undefined : editSessionInCalendar}
-          onCreateViaSystemCalendar={isSelectionMode ? undefined : createSessionViaSystemCalendar}
+          onSyncToCalendar={isSelectionMode || !calendarSyncEnabled ? undefined : syncSession}
+          onOpenInCalendar={
+            isSelectionMode || !calendarSyncEnabled ? undefined : openSessionInCalendar
+          }
+          onRefreshFromCalendar={
+            isSelectionMode || !calendarSyncEnabled ? undefined : refreshSessionFromCalendar
+          }
+          onEditInCalendar={
+            isSelectionMode || !calendarSyncEnabled ? undefined : editSessionInCalendar
+          }
+          onCreateViaSystemCalendar={
+            isSelectionMode || !calendarSyncEnabled ? undefined : createSessionViaSystemCalendar
+          }
           onDelete={isSelectionMode ? undefined : handleDeleteSession}
         />
       </View>
     ),
     [
       isSelectionMode,
+      calendarSyncEnabled,
       selectedIds,
       mutedColor,
       toggleSelect,
@@ -534,7 +548,12 @@ export default function SessionsScreen() {
           {t("sessions.planObservation")} ({sortedPlans.length}/{plans.length})
         </Text>
         <View className="flex-row flex-wrap justify-end gap-2">
-          <Button size="sm" variant="outline" onPress={handleSyncAllPlans} isDisabled={syncing}>
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={handleSyncAllPlans}
+            isDisabled={syncing || !calendarSyncEnabled}
+          >
             <Ionicons name="sync-outline" size={12} color={mutedColor} />
             <Button.Label className="text-[10px]">{t("sessions.syncAllPlans")}</Button.Label>
           </Button>
@@ -542,7 +561,7 @@ export default function SessionsScreen() {
             size="sm"
             variant="outline"
             onPress={handleRefreshFromCalendar}
-            isDisabled={syncing}
+            isDisabled={syncing || !calendarSyncEnabled}
           >
             <Ionicons name="refresh-outline" size={12} color={mutedColor} />
             <Button.Label className="text-[10px]">{t("sessions.refreshFromCalendar")}</Button.Label>
@@ -551,7 +570,7 @@ export default function SessionsScreen() {
             size="sm"
             variant="outline"
             onPress={handleCleanupCalendarLinks}
-            isDisabled={syncing}
+            isDisabled={syncing || !calendarSyncEnabled}
           >
             <Ionicons name="link-outline" size={12} color={mutedColor} />
             <Button.Label className="text-[10px]">
@@ -582,11 +601,13 @@ export default function SessionsScreen() {
             <PlanCard
               key={plan.id}
               plan={plan}
-              onSyncToCalendar={(p) => syncObservationPlan(p.id)}
-              onOpenInCalendar={openPlanInCalendar}
-              onRefreshFromCalendar={refreshPlanFromCalendar}
-              onEditInCalendar={editPlanInCalendar}
-              onCreateViaSystemCalendar={createPlanViaSystemCalendar}
+              onSyncToCalendar={calendarSyncEnabled ? (p) => syncObservationPlan(p.id) : undefined}
+              onOpenInCalendar={calendarSyncEnabled ? openPlanInCalendar : undefined}
+              onRefreshFromCalendar={calendarSyncEnabled ? refreshPlanFromCalendar : undefined}
+              onEditInCalendar={calendarSyncEnabled ? editPlanInCalendar : undefined}
+              onCreateViaSystemCalendar={
+                calendarSyncEnabled ? createPlanViaSystemCalendar : undefined
+              }
               onCreateSession={handleCreateSessionFromPlan}
               onStatusChange={(p, status) => updateObservationPlan(p.id, { status })}
               onEdit={(p) => {
@@ -701,7 +722,12 @@ export default function SessionsScreen() {
             </Button>
           )}
           {sessions.length > 0 && (
-            <Button size="sm" variant="outline" onPress={handleSyncAll} isDisabled={syncing}>
+            <Button
+              size="sm"
+              variant="outline"
+              onPress={handleSyncAll}
+              isDisabled={syncing || !calendarSyncEnabled}
+            >
               <Ionicons name="sync-outline" size={14} color={mutedColor} />
             </Button>
           )}
@@ -861,7 +887,12 @@ export default function SessionsScreen() {
                 <Button size="sm" variant="outline" onPress={() => setShowPlanSheet(true)}>
                   <Ionicons name="calendar-outline" size={14} color={mutedColor} />
                 </Button>
-                <Button size="sm" variant="outline" onPress={handleSyncAll} isDisabled={syncing}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onPress={handleSyncAll}
+                  isDisabled={syncing || !calendarSyncEnabled}
+                >
                   <Ionicons name="sync-outline" size={14} color={mutedColor} />
                 </Button>
                 <Button

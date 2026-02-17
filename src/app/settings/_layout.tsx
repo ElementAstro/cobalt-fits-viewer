@@ -16,6 +16,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="appearance" />
       <Stack.Screen name="storage" />
       <Stack.Screen name="about" />
+      <Stack.Screen name="licenses" />
     </Stack>
   );
 }

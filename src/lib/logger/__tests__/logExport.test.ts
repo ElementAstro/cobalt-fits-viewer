@@ -132,14 +132,42 @@ describe("logExport", () => {
     };
     const fileText = fsMock.__mock.getWrite(uri as string) as string;
     const parsed = JSON.parse(fileText) as {
+      schemaVersion?: number;
+      format?: string;
       appVersion: string;
       systemInfo?: unknown;
       entries: Array<{ data: { apiKey: string } }>;
     };
 
+    expect(parsed.schemaVersion).toBe(2);
+    expect(parsed.format).toBe("json");
     expect(parsed.appVersion).toBe("9.9.9");
     expect(parsed.systemInfo).toBeTruthy();
     expect(parsed.entries[0].data.apiKey).toBe("[REDACTED]");
+  });
+
+  it("exports only filtered entries when query is provided", async () => {
+    Logger.info("LogExportTest", "keep me");
+    Logger.warn("AnotherTag", "drop me");
+
+    const uri = await exportLogsToFile({
+      format: "json",
+      query: { tag: "logexporttest" },
+    });
+    expect(uri).toBeTruthy();
+
+    const fsMock = require("expo-file-system") as {
+      __mock: { getWrite: (path: string) => string | Uint8Array | undefined };
+    };
+    const fileText = fsMock.__mock.getWrite(uri as string) as string;
+    const parsed = JSON.parse(fileText) as {
+      query?: { tag?: string };
+      entries: Array<{ tag: string; message: string }>;
+    };
+
+    expect(parsed.query).toEqual({ tag: "logexporttest" });
+    expect(parsed.entries).toHaveLength(1);
+    expect(parsed.entries[0].tag).toBe("LogExportTest");
   });
 
   it("exports text without collecting system info when disabled", async () => {

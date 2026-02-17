@@ -10,7 +10,7 @@ import * as DocumentPicker from "expo-document-picker";
 import * as Clipboard from "expo-clipboard";
 import { File, Directory, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useAlbumStore } from "../stores/useAlbumStore";
@@ -387,7 +387,7 @@ export function useFileManager() {
           );
         } catch (error) {
           Logger.warn(
-            "FileManager",
+            LOG_TAGS.FileManager,
             `Target relink failed for restored file ${file.filename}`,
             error,
           );
@@ -420,7 +420,7 @@ export function useFileManager() {
           payload: buffer,
         });
         if (!detectedFormat) {
-          Logger.info("FileManager", `Skipping unsupported file: ${name}`);
+          Logger.info(LOG_TAGS.FileManager, `Skipping unsupported file: ${name}`);
           if (importedFile.exists) {
             importedFile.delete();
           }
@@ -447,7 +447,7 @@ export function useFileManager() {
           const duplicate = findDuplicateOnImport(hash, currentFiles);
           if (duplicate) {
             Logger.info(
-              "FileManager",
+              LOG_TAGS.FileManager,
               `Skipping duplicate: ${finalName} (matches ${duplicate.filename})`,
             );
             if (importedFile.exists) {
@@ -606,7 +606,7 @@ export function useFileManager() {
               "import",
             );
           } catch (e) {
-            Logger.warn("FileManager", `Auto target detection failed for ${finalName}`, e);
+            Logger.warn(LOG_TAGS.FileManager, `Auto target detection failed for ${finalName}`, e);
           }
         }
 
@@ -615,7 +615,7 @@ export function useFileManager() {
         if (importedFile?.exists) {
           importedFile.delete();
         }
-        Logger.warn("FileManager", `Failed to import ${name}`, err);
+        Logger.warn(LOG_TAGS.FileManager, `Failed to import ${name}`, err);
         return {
           status: "failed",
           reason: err instanceof Error ? err.message : "unknown_error",
@@ -924,7 +924,7 @@ export function useFileManager() {
       try {
         hasImage = await Clipboard.hasImageAsync();
       } catch (error) {
-        Logger.warn("FileManager", "Clipboard image availability check failed", error);
+        Logger.warn(LOG_TAGS.FileManager, "Clipboard image availability check failed", error);
       }
 
       if (hasImage) {
@@ -958,7 +958,11 @@ export function useFileManager() {
             return;
           }
         } catch (error) {
-          Logger.warn("FileManager", "Clipboard image import failed, fallback to text", error);
+          Logger.warn(
+            LOG_TAGS.FileManager,
+            "Clipboard image import failed, fallback to text",
+            error,
+          );
         }
       }
 

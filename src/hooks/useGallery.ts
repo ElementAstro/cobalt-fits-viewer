@@ -5,6 +5,7 @@
 import { useCallback, useMemo } from "react";
 import { useGalleryStore } from "../stores/useGalleryStore";
 import { useFitsStore } from "../stores/useFitsStore";
+import { useSettingsStore } from "../stores/useSettingsStore";
 import {
   buildMetadataIndex,
   searchFiles,
@@ -15,6 +16,8 @@ import {
 
 export function useGallery() {
   const files = useFitsStore((s) => s.files);
+  const defaultSortBy = useSettingsStore((s) => s.defaultGallerySortBy);
+  const defaultSortOrder = useSettingsStore((s) => s.defaultGallerySortOrder);
 
   const viewMode = useGalleryStore((s) => s.viewMode);
   const gridColumns = useGalleryStore((s) => s.gridColumns);
@@ -69,16 +72,57 @@ export function useGallery() {
     filterTargetId,
   ]);
 
-  const groupedByDate = useMemo(() => groupByDate(filteredFiles), [filteredFiles]);
-  const groupedByObject = useMemo(() => groupByObject(filteredFiles), [filteredFiles]);
-  const groupedByLocation = useMemo(() => groupByLocation(filteredFiles), [filteredFiles]);
+  const sortedFiles = useMemo(() => {
+    const sorted = [...filteredFiles];
+    const direction = defaultSortOrder === "asc" ? 1 : -1;
 
-  const search = useCallback((query: string) => searchFiles(filteredFiles, query), [filteredFiles]);
+    sorted.sort((a, b) => {
+      if (defaultSortBy === "name") {
+        return direction * a.filename.localeCompare(b.filename, undefined, { sensitivity: "base" });
+      }
+
+      if (defaultSortBy === "date") {
+        const aDate = new Date(a.dateObs ?? a.importDate).getTime();
+        const bDate = new Date(b.dateObs ?? b.importDate).getTime();
+        if (aDate === bDate) return 0;
+        return direction * (aDate < bDate ? -1 : 1);
+      }
+
+      if (defaultSortBy === "size") {
+        if (a.fileSize === b.fileSize) return 0;
+        return direction * (a.fileSize < b.fileSize ? -1 : 1);
+      }
+
+      if (defaultSortBy === "object") {
+        return (
+          direction *
+          (a.object ?? "").localeCompare(b.object ?? "", undefined, {
+            sensitivity: "base",
+          })
+        );
+      }
+
+      return (
+        direction *
+        (a.filter ?? "").localeCompare(b.filter ?? "", undefined, {
+          sensitivity: "base",
+        })
+      );
+    });
+
+    return sorted;
+  }, [filteredFiles, defaultSortBy, defaultSortOrder]);
+
+  const groupedByDate = useMemo(() => groupByDate(sortedFiles), [sortedFiles]);
+  const groupedByObject = useMemo(() => groupByObject(sortedFiles), [sortedFiles]);
+  const groupedByLocation = useMemo(() => groupByLocation(sortedFiles), [sortedFiles]);
+
+  const search = useCallback((query: string) => searchFiles(sortedFiles, query), [sortedFiles]);
 
   return {
-    files: filteredFiles,
+    files: sortedFiles,
     totalCount: files.length,
-    filteredCount: filteredFiles.length,
+    filteredCount: sortedFiles.length,
     viewMode,
     gridColumns,
     metadataIndex,

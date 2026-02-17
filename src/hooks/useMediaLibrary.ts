@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from "react";
 import * as MediaLibrary from "expo-media-library";
-import { Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../lib/logger";
 
 export function useMediaLibrary() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
@@ -31,7 +31,7 @@ export function useMediaLibrary() {
         const asset = await MediaLibrary.createAssetAsync(fileUri);
         return asset.uri;
       } catch (err) {
-        Logger.warn("MediaLibrary", "Failed to save to media library", err);
+        Logger.warn(LOG_TAGS.MediaLibrary, "Failed to save to media library", err);
         return null;
       } finally {
         setIsSaving(false);

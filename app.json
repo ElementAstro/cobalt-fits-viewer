@@ -1,6 +1,7 @@
 {
   "expo": {
     "scheme": "cobalt",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "orientation": "default",
     "ios": {
@@ -80,7 +81,11 @@
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.READ_CALENDAR",
         "android.permission.WRITE_CALENDAR"
-      ]
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/icon.png",
+        "backgroundColor": "#000000"
+      }
     }
   }
 }

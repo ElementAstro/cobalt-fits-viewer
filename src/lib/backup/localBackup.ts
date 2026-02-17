@@ -8,12 +8,12 @@ import { File, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import * as DocumentPicker from "expo-document-picker";
 import { createManifest, serializeManifest, parseManifest, getManifestSummary } from "./manifest";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 import type { BackupManifest, BackupOptions, BackupProgress } from "./types";
 import { DEFAULT_BACKUP_OPTIONS } from "./types";
 import type { BackupDataSource, RestoreTarget } from "./backupService";
 
-const TAG = "LocalBackup";
+const TAG = LOG_TAGS.LocalBackup;
 
 export interface LocalBackupPreview {
   fileName: string;

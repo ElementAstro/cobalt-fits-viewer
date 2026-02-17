@@ -7,11 +7,11 @@ import { File, Paths } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { BaseCloudProvider } from "../cloudProvider";
 import { parseManifest, serializeManifest } from "../manifest";
-import { Logger } from "../../logger";
+import { LOG_TAGS, Logger } from "../../logger";
 import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
 import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR } from "../types";
 
-const TAG = "WebDAVProvider";
+const TAG = LOG_TAGS.WebDAVProvider;
 const SECURE_STORE_KEY = "backup_webdav_config";
 
 export class WebDAVProvider extends BaseCloudProvider {

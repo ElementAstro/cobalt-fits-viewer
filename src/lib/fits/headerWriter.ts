@@ -9,9 +9,9 @@
  */
 
 import { File as FSFile, Paths } from "expo-file-system";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 
-const TAG = "FitsHeaderWriter";
+const TAG = LOG_TAGS.FitsHeaderWriter;
 const RECORD_LEN = 80;
 const BLOCK_SIZE = 2880;
 

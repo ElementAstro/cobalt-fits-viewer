@@ -1,6 +1,15 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useConverter } from "../useConverter";
 
+jest.mock("../../stores/useSettingsStore", () => ({
+  useSettingsStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      defaultConverterFormat: "png",
+      defaultConverterQuality: 90,
+      batchNamingRule: "original",
+    }),
+}));
+
 jest.mock("../../stores/useConverterStore", () => ({
   useConverterStore: jest.fn(),
 }));
@@ -24,6 +33,9 @@ jest.mock("../../lib/converter/convertPresets", () => ({
 }));
 
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    Converter: "Converter",
+  },
   Logger: {
     info: jest.fn(),
     debug: jest.fn(),
@@ -138,6 +150,7 @@ describe("useConverter", () => {
     expect(batchLib.createBatchTask).toHaveBeenCalled();
     expect(addBatchTask).toHaveBeenCalled();
     expect(batchLib.executeBatchConvert).toHaveBeenCalled();
+    expect(batchLib.executeBatchConvert.mock.calls[0][5]).toEqual({ rule: "original" });
 
     act(() => {
       result.current.cancelTask(taskId);
@@ -157,6 +170,7 @@ describe("useConverter", () => {
     });
 
     expect(result.current.getOutputFilename("a.fits")).toBe("out.png");
+    expect(batchLib.generateOutputFilename).toHaveBeenCalledWith("a.fits", "png", "original");
     expect(result.current.allPresets).toEqual(["p1"]);
     expect(result.current.supportsQuality("png")).toBe(true);
     expect(result.current.getSupportedBitDepths("png")).toEqual([8, 16]);

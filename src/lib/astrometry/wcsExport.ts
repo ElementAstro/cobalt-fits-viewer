@@ -6,11 +6,11 @@
 
 import { Paths, File as FSFile } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 import { writeHeaderKeywords } from "../fits/headerWriter";
 import type { AstrometryCalibration, AstrometryResult } from "./types";
 
-const TAG = "WCSExport";
+const TAG = LOG_TAGS.WCSExport;
 
 export interface WCSKeyword {
   key: string;

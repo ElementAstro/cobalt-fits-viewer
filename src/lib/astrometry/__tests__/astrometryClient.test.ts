@@ -24,9 +24,19 @@ jest.mock("expo-file-system", () => ({
 }));
 
 // Mock logger
-jest.mock("../../logger", () => ({
-  Logger: { info: jest.fn(), error: jest.fn(), warn: jest.fn(), debug: jest.fn() },
-}));
+jest.mock("../../logger", () => {
+  const actual = jest.requireActual("../../logger") as typeof import("../../logger");
+  return {
+    ...actual,
+    Logger: {
+      ...actual.Logger,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 // ===== classifyError =====
 

@@ -6,7 +6,7 @@ import * as FileSystem from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import type { FitsMetadata, Album } from "../fits/types";
 import { calculateAlbumStatistics, formatExposureTime, formatFileSize } from "./albumStatistics";
-import { Logger } from "../logger";
+import { LOG_TAGS, Logger } from "../logger";
 
 // Workaround for missing cacheDirectory type in expo-file-system
 const fs = FileSystem as unknown as {
@@ -84,7 +84,7 @@ export async function exportAlbum(
         });
       } catch {
         // Skip files that can't be copied
-        Logger.warn("AlbumExporter", `Failed to copy: ${file.filename}`);
+        Logger.warn(LOG_TAGS.AlbumExporter, `Failed to copy: ${file.filename}`);
       }
 
       onProgress?.({ current: i + 1, total, status: "copying" });

@@ -266,6 +266,49 @@ describe("useFitsStore", () => {
       expect(useFitsStore.getState().selectedIds).not.toContain("f1");
     });
 
+    it("setSelectedIds keeps order, deduplicates, and ignores missing ids", () => {
+      useFitsStore.setState({
+        files: [makeFile({ id: "f1" }), makeFile({ id: "f2" }), makeFile({ id: "f3" })],
+      });
+
+      useFitsStore.getState().setSelectedIds(["f3", "f2", "f3", "missing", "f1"]);
+
+      expect(useFitsStore.getState().selectedIds).toEqual(["f3", "f2", "f1"]);
+    });
+
+    it("toggleSelectionBatch flips selection membership for valid ids only", () => {
+      useFitsStore.setState({
+        files: [makeFile({ id: "f1" }), makeFile({ id: "f2" }), makeFile({ id: "f3" })],
+        selectedIds: ["f1"],
+      });
+
+      useFitsStore.getState().toggleSelectionBatch(["f1", "f2", "missing"]);
+
+      expect(useFitsStore.getState().selectedIds).toEqual(["f2"]);
+    });
+
+    it("toggleSelectionBatch handles empty input without changes", () => {
+      useFitsStore.setState({
+        files: [makeFile({ id: "f1" }), makeFile({ id: "f2" })],
+        selectedIds: ["f2"],
+      });
+
+      useFitsStore.getState().toggleSelectionBatch([]);
+
+      expect(useFitsStore.getState().selectedIds).toEqual(["f2"]);
+    });
+
+    it("toggleSelectionBatch can invert a fully selected visible set", () => {
+      useFitsStore.setState({
+        files: [makeFile({ id: "f1" }), makeFile({ id: "f2" }), makeFile({ id: "f3" })],
+        selectedIds: ["f1", "f2", "f3"],
+      });
+
+      useFitsStore.getState().toggleSelectionBatch(["f1", "f2", "f3"]);
+
+      expect(useFitsStore.getState().selectedIds).toEqual([]);
+    });
+
     it("selectAll selects all file ids", () => {
       useFitsStore.setState({
         files: [makeFile({ id: "f1" }), makeFile({ id: "f2" })],
@@ -290,6 +333,18 @@ describe("useFitsStore", () => {
       useFitsStore.getState().setSelectionMode(false);
       expect(useFitsStore.getState().isSelectionMode).toBe(false);
       expect(useFitsStore.getState().selectedIds).toEqual([]);
+    });
+
+    it("setSelectionMode(false) clears selections set by new atomic action", () => {
+      useFitsStore.setState({
+        files: [makeFile({ id: "f1" }), makeFile({ id: "f2" })],
+      });
+
+      useFitsStore.getState().setSelectedIds(["f1", "f2"]);
+      useFitsStore.getState().setSelectionMode(false);
+
+      expect(useFitsStore.getState().selectedIds).toEqual([]);
+      expect(useFitsStore.getState().isSelectionMode).toBe(false);
     });
   });
 

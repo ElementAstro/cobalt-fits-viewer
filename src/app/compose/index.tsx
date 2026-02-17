@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, Alert } from "react-native";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Button,
   Card,
@@ -17,6 +17,7 @@ import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useCompose } from "../../hooks/useCompose";
 import { useExport } from "../../hooks/useExport";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
 
@@ -94,14 +95,27 @@ export default function ComposeScreen() {
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
-  const composer = useCompose();
+  const defaultComposePreset = useSettingsStore((s) => s.defaultComposePreset);
+  const composeRedWeight = useSettingsStore((s) => s.composeRedWeight);
+  const composeGreenWeight = useSettingsStore((s) => s.composeGreenWeight);
+  const composeBlueWeight = useSettingsStore((s) => s.composeBlueWeight);
+  const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
+  const composer = useCompose({
+    initialPreset: defaultComposePreset,
+    initialWeights: {
+      red: composeRedWeight,
+      green: composeGreenWeight,
+      blue: composeBlueWeight,
+    },
+  });
   const exporter = useExport();
 
-  const [preset, setPreset] = useState<ComposePreset>("rgb");
+  const [preset, setPreset] = useState<ComposePreset>(defaultComposePreset);
   const [selectingChannel, setSelectingChannel] = useState<
     "red" | "green" | "blue" | "luminance" | null
   >(null);
   const [showWeights, setShowWeights] = useState(false);
+  const initializedPresetRef = useRef(false);
 
   const assignFile = useCallback(
     async (
@@ -140,6 +154,12 @@ export default function ComposeScreen() {
     },
     [files, composer],
   );
+
+  useEffect(() => {
+    if (initializedPresetRef.current) return;
+    initializedPresetRef.current = true;
+    void autoAssign(defaultComposePreset);
+  }, [autoAssign, defaultComposePreset]);
 
   const handleCompose = useCallback(() => {
     if (composer.assignedCount < 2) {
@@ -180,7 +200,7 @@ export default function ComposeScreen() {
                   composer.result.width,
                   composer.result.height,
                   `composed_${preset}`,
-                  "png",
+                  defaultExportFormat,
                 );
                 if (uri) {
                   Alert.alert(t("common.success"), t("compose.imageSaved"));
@@ -200,7 +220,7 @@ export default function ComposeScreen() {
                     composer.result.width,
                     composer.result.height,
                     `composed_${preset}`,
-                    "png",
+                    defaultExportFormat,
                   );
                 } catch {
                   Alert.alert(t("common.error"), t("share.failed"));
