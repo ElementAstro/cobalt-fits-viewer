@@ -22,6 +22,16 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
+    files: ["__mocks__/**/*.js", "scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        module: "readonly",
+        process: "readonly",
+        console: "readonly",
+      },
+    },
+  },
+  {
     files: ["**/*.{ts,tsx}"],
     plugins: {
       react: reactPlugin,

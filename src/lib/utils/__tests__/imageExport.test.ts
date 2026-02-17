@@ -1,3 +1,5 @@
+import type { ShareFileOptions } from "../imageExport";
+
 const mockSharing = {
   isAvailableAsync: jest.fn(),
   shareAsync: jest.fn(),
@@ -121,7 +123,7 @@ function loadImageExportModule() {
     MediaPermissionDeniedError: new () => Error;
     getExportDir: () => { uri: string };
     generateExportFilename: (originalName: string, format: string) => string;
-    shareFile: (fileUri: string, options?: any) => Promise<void>;
+    shareFile: (fileUri: string, options?: ShareFileOptions) => Promise<void>;
     saveToMediaLibrary: (fileUri: string) => Promise<string>;
     getMimeType: (format: string) => string;
     getExtension: (format: string) => string;

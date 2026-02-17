@@ -13,6 +13,23 @@ const mockLogger = {
 
 const mockFileStore = new Map<string, Uint8Array | string>();
 
+interface WebDAVProviderInstance {
+  connect: (config?: {
+    provider: "webdav";
+    webdavUrl?: string;
+    webdavUsername?: string;
+    webdavPassword?: string;
+    accessToken?: string;
+  }) => Promise<void>;
+  isConnected: () => boolean;
+  getServerUrl: () => string | null;
+  testConnection: () => Promise<boolean>;
+  uploadFile: (localPath: string, remotePath: string) => Promise<void>;
+  downloadFile: (remotePath: string, localPath: string) => Promise<void>;
+  getQuota: () => Promise<{ used: number; total: number } | null>;
+  getUserInfo: () => Promise<{ name: string; email?: string } | null>;
+}
+
 function loadWebDAVProvider() {
   jest.resetModules();
 
@@ -68,7 +85,7 @@ function loadWebDAVProvider() {
     Logger: mockLogger,
   }));
 
-  return require("../webdav") as { WebDAVProvider: new () => any };
+  return require("../webdav") as { WebDAVProvider: new () => WebDAVProviderInstance };
 }
 
 describe("backup WebDAVProvider", () => {

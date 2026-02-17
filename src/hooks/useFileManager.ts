@@ -282,12 +282,14 @@ export function useFileManager() {
   }, []);
 
   useEffect(() => {
+    const undoTimers = undoTimersRef.current;
+    const undoMap = undoMapRef.current;
     return () => {
-      for (const timer of undoTimersRef.current.values()) {
+      for (const timer of undoTimers.values()) {
         clearTimeout(timer);
       }
-      undoTimersRef.current.clear();
-      undoMapRef.current.clear();
+      undoTimers.clear();
+      undoMap.clear();
     };
   }, []);
 

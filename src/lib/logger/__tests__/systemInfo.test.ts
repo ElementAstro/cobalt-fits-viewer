@@ -1,3 +1,5 @@
+import type { SystemInfo } from "../types";
+
 const mockPlatform = { OS: "ios" };
 const mockDimensionsGet = jest.fn(() => ({ width: 390, height: 844 }));
 const mockPixelRatioGet = jest.fn(() => 3);
@@ -62,8 +64,8 @@ function loadSystemInfoModule() {
   }));
 
   return require("../systemInfo") as {
-    collectSystemInfo: () => Promise<any>;
-    formatSystemInfo: (info: any) => string;
+    collectSystemInfo: () => Promise<SystemInfo>;
+    formatSystemInfo: (info: SystemInfo) => string;
     formatBytes: (bytes: number) => string;
   };
 }

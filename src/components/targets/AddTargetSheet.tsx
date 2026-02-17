@@ -78,7 +78,18 @@ export function AddTargetSheet({
   const raValid = ra.trim() ? parseRA(ra.trim()) !== null : true;
   const decValid = dec.trim() ? parseDec(dec.trim()) !== null : true;
 
-  const handleConfirm = () => {
+  const resetForm = useCallback(() => {
+    setName("");
+    setType("other");
+    setRa("");
+    setDec("");
+    setNotes("");
+    setCategory(undefined);
+    setTags([]);
+    setIsFavorite(false);
+  }, []);
+
+  const handleConfirm = useCallback(() => {
     const trimmed = name.trim();
     if (!trimmed) return;
     const parsedRA = ra.trim() ? parseRA(ra.trim()) : undefined;
@@ -94,7 +105,7 @@ export function AddTargetSheet({
       isFavorite,
     });
     resetForm();
-  };
+  }, [category, dec, isFavorite, name, notes, onConfirm, ra, resetForm, tags, type]);
 
   const handleRABlur = () => {
     const parsed = parseRA(ra.trim());
@@ -106,21 +117,10 @@ export function AddTargetSheet({
     if (parsed !== null) setDec(formatDec(parsed));
   };
 
-  const resetForm = () => {
-    setName("");
-    setType("other");
-    setRa("");
-    setDec("");
-    setNotes("");
-    setCategory(undefined);
-    setTags([]);
-    setIsFavorite(false);
-  };
-
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     resetForm();
     onClose();
-  };
+  }, [onClose, resetForm]);
 
   const renderFooter = useCallback(
     (props: BottomSheetFooterProps) => (
