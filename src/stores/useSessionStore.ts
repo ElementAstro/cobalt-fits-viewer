@@ -7,6 +7,12 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { useShallow } from "zustand/shallow";
 import { zustandMMKVStorage } from "../lib/storage";
 import type { ObservationSession, ObservationLogEntry, ObservationPlan } from "../lib/fits/types";
+import {
+  mergeSessionLike,
+  normalizeSessionLike,
+  type ObservationSessionWriteInput,
+  type SessionLikeInput,
+} from "../lib/sessions/sessionNormalization";
 
 interface ActiveSessionState {
   id: string;
@@ -31,11 +37,11 @@ interface SessionStoreState {
   addActiveNote: (text: string) => void;
 
   // Actions
-  addSession: (session: ObservationSession) => void;
+  addSession: (session: ObservationSessionWriteInput) => void;
   removeSession: (id: string) => void;
   removeMultipleSessions: (ids: string[]) => void;
   clearAllSessions: () => void;
-  updateSession: (id: string, updates: Partial<ObservationSession>) => void;
+  updateSession: (id: string, updates: SessionLikeInput) => void;
   mergeSessions: (ids: string[]) => void;
 
   addLogEntry: (entry: ObservationLogEntry) => void;
@@ -55,6 +61,28 @@ interface SessionStoreState {
   getLogEntriesBySession: (sessionId: string) => ObservationLogEntry[];
   getDatesWithSessions: () => string[];
   getPlannedDates: (year: number, month: number) => number[];
+}
+
+type LegacyObservationSession = SessionLikeInput;
+
+function migrateSession(session: LegacyObservationSession): ObservationSession {
+  const normalized = normalizeSessionLike(session, {
+    forceTargetRefs: true,
+    forceImageIds: true,
+  });
+  return {
+    ...(normalized as ObservationSession),
+    equipment: normalized.equipment ?? {},
+  };
+}
+
+function migratePlan(plan: ObservationPlan): ObservationPlan {
+  return {
+    ...plan,
+    targetName: plan.targetName?.trim() ?? "",
+    targetId: plan.targetId,
+    status: plan.status ?? "planned",
+  };
 }
 
 export const useSessionStore = create<SessionStoreState>()(
@@ -115,7 +143,7 @@ export const useSessionStore = create<SessionStoreState>()(
           startTime: active.startedAt,
           endTime: now,
           duration,
-          targets: [],
+          targetRefs: [],
           imageIds: [],
           equipment: {},
           createdAt: now,
@@ -142,7 +170,19 @@ export const useSessionStore = create<SessionStoreState>()(
             : null,
         })),
 
-      addSession: (session) => set((state) => ({ sessions: [...state.sessions, session] })),
+      addSession: (session) =>
+        set((state) => ({
+          sessions: [
+            ...state.sessions,
+            {
+              ...(normalizeSessionLike(session, {
+                forceTargetRefs: true,
+                forceImageIds: true,
+              }) as ObservationSession),
+              equipment: session.equipment ?? {},
+            },
+          ],
+        })),
 
       removeSession: (id) =>
         set((state) => ({
@@ -160,7 +200,18 @@ export const useSessionStore = create<SessionStoreState>()(
 
       updateSession: (id, updates) =>
         set((state) => ({
-          sessions: state.sessions.map((s) => (s.id === id ? { ...s, ...updates } : s)),
+          sessions: state.sessions.map((session) => {
+            if (session.id !== id) return session;
+            const normalizedUpdates = normalizeSessionLike(updates);
+            const merged = { ...session, ...normalizedUpdates };
+            return {
+              ...(normalizeSessionLike(merged, {
+                forceTargetRefs: true,
+                forceImageIds: true,
+              }) as ObservationSession),
+              equipment: merged.equipment ?? session.equipment ?? {},
+            };
+          }),
         })),
 
       mergeSessions: (ids) => {
@@ -169,20 +220,23 @@ export const useSessionStore = create<SessionStoreState>()(
         if (toMerge.length < 2) return;
 
         const sorted = [...toMerge].sort((a, b) => a.startTime - b.startTime);
+        const mergedBase = sorted
+          .slice(1)
+          .reduce<SessionLikeInput>((acc, session) => mergeSessionLike(acc, session), sorted[0]);
+        const normalizedMerged = normalizeSessionLike(mergedBase, {
+          forceTargetRefs: true,
+          forceImageIds: true,
+        });
+
         const merged: ObservationSession = {
+          ...(normalizedMerged as ObservationSession),
           id: sorted[0].id,
           date: sorted[0].date,
           startTime: sorted[0].startTime,
           endTime: sorted[sorted.length - 1].endTime,
           duration: sorted.reduce((sum, s) => sum + s.duration, 0),
-          targets: [...new Set(sorted.flatMap((s) => s.targets))],
-          imageIds: [...new Set(sorted.flatMap((s) => s.imageIds))],
-          equipment: sorted[0].equipment,
-          notes: sorted
-            .map((s) => s.notes)
-            .filter(Boolean)
-            .join("\n"),
           createdAt: sorted[0].createdAt,
+          equipment: normalizedMerged.equipment ?? sorted[0].equipment ?? {},
         };
 
         const otherIds = ids.filter((id) => id !== merged.id);
@@ -253,6 +307,22 @@ export const useSessionStore = create<SessionStoreState>()(
         activeSession: state.activeSession,
         plans: state.plans,
       }),
+      version: 2,
+      migrate: (persistedState, _version) => {
+        const state = persistedState as Partial<SessionStoreState> & {
+          sessions?: LegacyObservationSession[];
+          plans?: ObservationPlan[];
+          logEntries?: ObservationLogEntry[];
+        };
+        const sessions = (state.sessions ?? []).map(migrateSession);
+        const plans = (state.plans ?? []).map(migratePlan);
+        return {
+          sessions,
+          plans,
+          logEntries: state.logEntries ?? [],
+          activeSession: state.activeSession ?? null,
+        };
+      },
     },
   ),
 );

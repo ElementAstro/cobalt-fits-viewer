@@ -137,7 +137,7 @@ describe("planUtils", () => {
       const session = buildSessionFromPlan(plan, 12345);
 
       expect(session.id).toBe("from_plan_p-build_12345");
-      expect(session.targets).toEqual(["M45"]);
+      expect(session.targetRefs).toEqual([{ targetId: undefined, name: "M45" }]);
       expect(session.duration).toBeGreaterThan(0);
       expect(session.notes).toBe("windy");
     });

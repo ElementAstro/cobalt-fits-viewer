@@ -28,6 +28,9 @@ import {
 } from "../../lib/sessions/planUtils";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useTargetStore } from "../../stores/useTargetStore";
+import { resolveTargetName } from "../../lib/targets/targetRefs";
+import { resolveSessionTargetNames } from "../../lib/sessions/sessionLinking";
 
 const PLAN_STATUS_FILTERS: PlanStatusFilter[] = ["all", "planned", "completed", "cancelled"];
 const PLAN_SORT_OPTIONS: PlanSortBy[] = ["startAsc", "startDesc", "target", "status"];
@@ -68,6 +71,7 @@ export default function SessionsScreen() {
   const removeSession = useSessionStore((s) => s.removeSession);
   const removeMultipleSessions = useSessionStore((s) => s.removeMultipleSessions);
   const files = useFitsStore((s) => s.files);
+  const targetCatalog = useTargetStore((s) => s.targets);
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -87,6 +91,16 @@ export default function SessionsScreen() {
   const [editingPlan, setEditingPlan] = useState<ObservationPlan | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"date" | "duration" | "images">("date");
+
+  const getSessionTargetNames = useCallback(
+    (session: ObservationSession) => resolveSessionTargetNames(session, targetCatalog),
+    [targetCatalog],
+  );
+  const getPlanTargetName = useCallback(
+    (plan: ObservationPlan) =>
+      resolveTargetName({ targetId: plan.targetId, name: plan.targetName }, targetCatalog),
+    [targetCatalog],
+  );
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -149,7 +163,7 @@ export default function SessionsScreen() {
       result = result.filter(
         (s) =>
           s.date.includes(q) ||
-          s.targets.some((tgt) => tgt.toLowerCase().includes(q)) ||
+          getSessionTargetNames(s).some((tgt) => tgt.toLowerCase().includes(q)) ||
           s.equipment.telescope?.toLowerCase().includes(q) ||
           s.location?.placeName?.toLowerCase().includes(q) ||
           s.location?.city?.toLowerCase().includes(q) ||
@@ -158,7 +172,7 @@ export default function SessionsScreen() {
     }
 
     return result;
-  }, [sessions, searchQuery, selectedDate]);
+  }, [sessions, searchQuery, selectedDate, getSessionTargetNames]);
 
   const filteredPlans = useMemo(
     () =>
@@ -429,7 +443,7 @@ export default function SessionsScreen() {
                     minute: "2-digit",
                   })}
                   {" · "}
-                  {session.targets.join(", ") || t("sessions.session")}
+                  {getSessionTargetNames(session).join(", ") || t("sessions.session")}
                 </Button.Label>
               </Button>
             ))}
@@ -461,7 +475,7 @@ export default function SessionsScreen() {
                     minute: "2-digit",
                   })}
                   {" · "}
-                  {plan.targetName}
+                  {getPlanTargetName(plan)}
                 </Button.Label>
               </Button>
             ))}

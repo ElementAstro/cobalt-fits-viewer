@@ -30,7 +30,8 @@ import { AlbumExportSheet } from "../../components/gallery/AlbumExportSheet";
 import { DuplicateImagesSheet } from "../../components/gallery/DuplicateImagesSheet";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
-import type { GalleryViewMode, FitsMetadata, Album, FrameType } from "../../lib/fits/types";
+import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
+import type { GalleryViewMode, FitsMetadata, Album } from "../../lib/fits/types";
 import type { AlbumSortBy } from "../../stores/useAlbumStore";
 
 const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -41,28 +42,24 @@ const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }
 
 type TimelineSection = { date: string; files: FitsMetadata[] };
 
-const FRAME_TYPE_ICONS: Record<FrameType, keyof typeof Ionicons.glyphMap> = {
+const FRAME_TYPE_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   light: "sunny-outline",
   dark: "moon-outline",
   flat: "square-outline",
   bias: "pulse-outline",
+  darkflat: "layers-outline",
   unknown: "help-outline",
 };
+
+function getFrameTypeIcon(type: string): keyof typeof Ionicons.glyphMap {
+  return FRAME_TYPE_ICONS[type] ?? "pricetag-outline";
+}
 
 export default function GalleryScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const haptics = useHapticFeedback();
 
-  const FRAME_TYPES = useMemo(
-    () =>
-      (["light", "dark", "flat", "bias"] as FrameType[]).map((key) => ({
-        key,
-        label: t(`gallery.frameTypes.${key}`) ?? key,
-        icon: FRAME_TYPE_ICONS[key],
-      })),
-    [t],
-  );
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
 
   const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
@@ -112,6 +109,50 @@ export default function GalleryScreen() {
   const thumbShowObject = useSettingsStore((s) => s.thumbnailShowObject);
   const thumbShowFilter = useSettingsStore((s) => s.thumbnailShowFilter);
   const thumbShowExposure = useSettingsStore((s) => s.thumbnailShowExposure);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
+
+  const frameTypeDefinitions = useMemo(
+    () => getFrameTypeDefinitions(frameClassificationConfig),
+    [frameClassificationConfig],
+  );
+
+  const frameTypeLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const definition of frameTypeDefinitions) {
+      labels.set(
+        definition.key,
+        definition.builtin
+          ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
+          : definition.label || definition.key,
+      );
+    }
+    return labels;
+  }, [frameTypeDefinitions, t]);
+
+  const FRAME_TYPES = useMemo(() => {
+    const orderMap = new Map(
+      frameTypeDefinitions.map((definition, index) => [definition.key, index]),
+    );
+    const keys = new Set<string>(frameTypeDefinitions.map((definition) => definition.key));
+    for (const value of metadataIndex.frameTypes) {
+      keys.add(value);
+    }
+
+    return [...keys]
+      .map((key) => ({
+        key,
+        label: frameTypeLabels.get(key) ?? key,
+        icon: getFrameTypeIcon(key),
+      }))
+      .sort((a, b) => {
+        const ao = orderMap.get(a.key);
+        const bo = orderMap.get(b.key);
+        if (ao !== undefined && bo !== undefined) return ao - bo;
+        if (ao !== undefined) return -1;
+        if (bo !== undefined) return 1;
+        return a.label.localeCompare(b.label);
+      });
+  }, [frameTypeDefinitions, frameTypeLabels, metadataIndex.frameTypes]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateAlbum, setShowCreateAlbum] = useState(false);
@@ -165,7 +206,11 @@ export default function GalleryScreen() {
       if (isSelectionMode) {
         toggleSelection(file.id);
       } else {
-        router.push(`/viewer/${file.id}`);
+        const route =
+          file.mediaKind === "video" || file.sourceType === "video"
+            ? `/video/${file.id}`
+            : `/viewer/${file.id}`;
+        router.push(route);
       }
     },
     [isSelectionMode, toggleSelection, router],
@@ -897,7 +942,15 @@ export default function GalleryScreen() {
         duplicates={duplicateImages}
         files={files}
         onClose={() => setShowDuplicates(false)}
-        onImagePress={(imageId) => router.push(`/viewer/${imageId}`)}
+        onImagePress={(imageId) => {
+          const file = files.find((item) => item.id === imageId);
+          if (!file) return;
+          const route =
+            file.mediaKind === "video" || file.sourceType === "video"
+              ? `/video/${imageId}`
+              : `/viewer/${imageId}`;
+          router.push(route);
+        }}
       />
       <PromptDialog
         visible={showRenamePrompt}

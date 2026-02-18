@@ -20,7 +20,7 @@ const makeSession = (overrides: Partial<ObservationSession> = {}): ObservationSe
   startTime: Date.now() - 7200000,
   endTime: Date.now(),
   duration: 7200,
-  targets: ["M42"],
+  targetRefs: [{ name: "M42" }],
   imageIds: ["img-1", "img-2"],
   equipment: { telescope: "200P", camera: "ASI294" },
   createdAt: Date.now(),
@@ -69,6 +69,20 @@ describe("useSessionStore", () => {
       expect(useSessionStore.getState().sessions[0].id).toBe("s1");
     });
 
+    it("addSession supports legacy targets and normalizes imageIds", () => {
+      useSessionStore.getState().addSession({
+        ...makeSession({ id: "legacy-add" }),
+        targetRefs: undefined,
+        targets: ["M42", "M42", "M31"],
+        imageIds: ["img-1", "img-1", "img-2"],
+      } as unknown as ObservationSession);
+
+      const added = useSessionStore.getState().sessions[0];
+      expect(added.targetRefs).toEqual([{ name: "M42" }, { name: "M31" }]);
+      expect(added.imageIds).toEqual(["img-1", "img-2"]);
+      expect((added as unknown as { targets?: string[] }).targets).toBeUndefined();
+    });
+
     it("removes a session and its log entries", () => {
       useSessionStore.setState({
         sessions: [makeSession({ id: "s1" }), makeSession({ id: "s2" })],
@@ -94,6 +108,21 @@ describe("useSessionStore", () => {
       expect(s.notes).toBe("new note");
       expect(s.weather).toBe("clear");
       expect(s.id).toBe("s1");
+    });
+
+    it("updateSession supports legacy targets and normalization", () => {
+      useSessionStore.setState({
+        sessions: [makeSession({ id: "s1", targetRefs: [{ name: "M42" }], imageIds: ["img-1"] })],
+      });
+
+      useSessionStore.getState().updateSession("s1", {
+        targets: ["M42", "M31", "M31"],
+        imageIds: ["img-1", "img-2", "img-2"],
+      });
+      const updated = useSessionStore.getState().sessions[0];
+      expect(updated.targetRefs).toEqual([{ name: "M42" }, { name: "M31" }]);
+      expect(updated.imageIds).toEqual(["img-1", "img-2"]);
+      expect((updated as unknown as { targets?: string[] }).targets).toBeUndefined();
     });
 
     it("update on non-existent session is no-op", () => {
@@ -155,7 +184,7 @@ describe("useSessionStore", () => {
         startTime: 1000,
         endTime: 2000,
         duration: 1000,
-        targets: ["M42"],
+        targetRefs: [{ name: "M42" }],
         imageIds: ["img-1"],
       });
       const s2 = makeSession({
@@ -164,7 +193,7 @@ describe("useSessionStore", () => {
         startTime: 2500,
         endTime: 4000,
         duration: 1500,
-        targets: ["M42", "M31"],
+        targetRefs: [{ name: "M42" }, { name: "M31" }],
         imageIds: ["img-2"],
       });
       useSessionStore.setState({ sessions: [s1, s2] });
@@ -176,8 +205,35 @@ describe("useSessionStore", () => {
       expect(sessions[0].endTime).toBe(4000);
       expect(sessions[0].imageIds).toContain("img-1");
       expect(sessions[0].imageIds).toContain("img-2");
-      expect(sessions[0].targets).toContain("M42");
-      expect(sessions[0].targets).toContain("M31");
+      expect(sessions[0].targetRefs).toEqual(
+        expect.arrayContaining([{ name: "M42" }, { name: "M31" }]),
+      );
+    });
+
+    it("mergeSessions de-duplicates targetRefs and imageIds", () => {
+      const s1 = makeSession({
+        id: "s1",
+        startTime: 1000,
+        endTime: 2000,
+        duration: 1000,
+        targetRefs: [{ name: "M42" }, { name: "M42" }],
+        imageIds: ["img-1", "img-1"],
+      });
+      const s2 = makeSession({
+        id: "s2",
+        startTime: 2100,
+        endTime: 2600,
+        duration: 500,
+        targetRefs: [{ name: "M42" }, { name: "M31" }],
+        imageIds: ["img-1", "img-2"],
+      });
+
+      useSessionStore.setState({ sessions: [s1, s2] });
+      useSessionStore.getState().mergeSessions(["s1", "s2"]);
+
+      const merged = useSessionStore.getState().sessions[0];
+      expect(merged.targetRefs).toEqual([{ name: "M42" }, { name: "M31" }]);
+      expect(merged.imageIds).toEqual(["img-1", "img-2"]);
     });
 
     it("does nothing if less than 2 session IDs given", () => {

@@ -16,16 +16,18 @@ This module provides core functionality for working with FITS (Flexible Image Tr
 
 ## Entry & Startup
 
-| File              | Purpose                               |
-| ----------------- | ------------------------------------- |
-| `parser.ts`       | FITS file loading and data extraction |
-| `types.ts`        | Central type definitions for the app  |
-| `headerWriter.ts` | FITS header modification utilities    |
+| File             | Purpose                                                |
+| ---------------- | ------------------------------------------------------ |
+| `parser.ts`      | FITS loading/parsing (`.fits`, auto `.fits.gz`)        |
+| `writer.ts`      | FITS writer (header cards, END, 2880 padding, data BE) |
+| `compression.ts` | FITS gzip helpers (`gzip` / `gunzip`)                  |
+| `types.ts`       | Central types for FITS/converter/export pipelines      |
 
 **Initialization:**
 
 ```typescript
-import { loadFitsFromBuffer, extractMetadata, getImagePixels } from "./parser";
+import { loadFitsFromBufferAuto, extractMetadata, getImagePixels } from "./parser";
+import { writeFitsImage } from "./writer";
 import type { FitsMetadata, StretchType, ColormapType } from "./types";
 ```
 
@@ -36,6 +38,7 @@ import type { FitsMetadata, StretchType, ColormapType } from "./types";
 ```typescript
 // Load FITS from different sources
 loadFitsFromBuffer(buffer: ArrayBuffer): FITS
+loadFitsFromBufferAuto(buffer: ArrayBuffer): FITS
 loadFitsFromBlob(blob: Blob): Promise<FITS>
 loadFitsFromURL(url: string): Promise<FITS>
 
@@ -48,17 +51,25 @@ getHDUList(fits: FITS): Array<{ index: number; type: HDUDataType; hasData: boole
 // Image data
 getImagePixels(fits: FITS, hduIndex?: number, frame?: number): Promise<Float32Array>
 getImageDimensions(fits: FITS): { width: number; height: number; depth: number; isDataCube: boolean }
+isRgbCube(fits: FITS, hduIndex?: number): { isRgb: boolean; width: number; height: number }
+getImageChannels(fits: FITS, hduIndex?: number): Promise<{ r; g; b; width; height } | null>
 
 // Metadata
 extractMetadata(fits: FITS, file: { filename, filepath, fileSize }): Partial<FitsMetadata>
+getCommentsAndHistory(fits: FITS, hduIndex?: number): { comments: string[]; history: string[] }
 ```
 
-### Header Writer (headerWriter.ts)
+### Writer & Compression
 
 ```typescript
-// Modify FITS headers
-writeHeaderKeyword(fits: FITS, key: string, value: unknown, comment?: string): void
-updateHeaderKeywords(fits: FITS, keywords: HeaderKeyword[]): void
+// FITS writing
+writeFitsImage(options: FitsWriteOptions): Uint8Array
+
+// Compression helpers
+gzipFitsBytes(bytes: Uint8Array): Uint8Array
+gunzipFitsBytes(bytes: ArrayBuffer | Uint8Array): Uint8Array
+isGzipFitsBytes(bytes: ArrayBuffer | Uint8Array): boolean
+normalizeFitsCompression(source: ArrayBuffer | Uint8Array, target: "none" | "gzip"): Uint8Array
 ```
 
 ### Key Types (types.ts)
@@ -77,9 +88,10 @@ updateHeaderKeywords(fits: FITS, keywords: HeaderKeyword[]): void
 
 #### Frame Types
 
-| Type        | Values                                     |
-| ----------- | ------------------------------------------ |
-| `FrameType` | `light`, `dark`, `flat`, `bias`, `unknown` |
+| Type               | Values                                                 |
+| ------------------ | ------------------------------------------------------ |
+| `BuiltinFrameType` | `light`, `dark`, `flat`, `bias`, `darkflat`, `unknown` |
+| `FrameType`        | `string` (built-in + custom)                           |
 
 #### Core Data Models
 
@@ -102,6 +114,9 @@ interface FitsMetadata {
 
   // Frame classification
   frameType: FrameType;
+  frameTypeSource?: "header" | "filename" | "rule" | "manual" | "fallback";
+  imageTypeRaw?: string;
+  frameHeaderRaw?: string;
 
   // Observation info from header
   object?: string;
@@ -233,10 +248,11 @@ Headers are organized into logical groups for display:
 
 ```typescript
 interface ConvertOptions {
-  format: ExportFormat; // png, jpeg, webp, tiff, bmp
+  format: ExportFormat; // png, jpeg, webp, tiff, bmp, fits
   quality: number; // 1-100 for JPEG/WebP
   bitDepth: 8 | 16 | 32; // for TIFF
   dpi: number;
+  fits: FitsTargetOptions; // mode/compression/bitpix/color layout
   stretch: StretchType;
   colormap: ColormapType;
   blackPoint: number;
@@ -259,19 +275,19 @@ interface ConvertOptions {
 
 ## Testing & Quality
 
-| Aspect     | Status  | Files                            |
-| ---------- | ------- | -------------------------------- |
-| Unit Tests | Partial | `__tests__/headerWriter.test.ts` |
+| Aspect     | Status   | Files                                                                                   |
+| ---------- | -------- | --------------------------------------------------------------------------------------- |
+| Unit Tests | Expanded | `__tests__/parser.test.ts`, `__tests__/writer.test.ts`, `__tests__/compression.test.ts` |
 
 ## FAQ
 
 **Q: How do I load a FITS file?**
 
 ```typescript
-import { loadFitsFromBuffer, extractMetadata, getImagePixels } from "./parser";
+import { loadFitsFromBufferAuto, extractMetadata, getImagePixels } from "./parser";
 
 const buffer = await readFileAsArrayBuffer(filepath);
-const fits = loadFitsFromBuffer(buffer);
+const fits = loadFitsFromBufferAuto(buffer); // supports .fits.gz transparently
 const metadata = extractMetadata(fits, { filename, filepath, fileSize });
 const pixels = await getImagePixels(fits);
 ```
@@ -295,10 +311,13 @@ Add the type definition to `types.ts` and ensure it's exported. Most application
 ```
 src/lib/fits/
 |-- parser.ts           # FITS loading and parsing
+|-- writer.ts           # FITS writing
+|-- compression.ts      # .fits.gz helpers
 |-- types.ts            # Type definitions (also used by other modules)
-|-- headerWriter.ts     # Header modification utilities
 `-- __tests__/
-    `-- headerWriter.test.ts
+    |-- parser.test.ts
+    |-- writer.test.ts
+    `-- compression.test.ts
 ```
 
 ## Changelog

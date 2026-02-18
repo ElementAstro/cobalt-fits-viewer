@@ -4,6 +4,8 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ObservationPlan } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
 import { normalizePlanStatus } from "../../lib/sessions/planUtils";
+import { useTargetStore } from "../../stores/useTargetStore";
+import { resolveTargetName } from "../../lib/targets/targetRefs";
 
 interface PlanCardProps {
   plan: ObservationPlan;
@@ -38,10 +40,15 @@ export function PlanCard({
 }: PlanCardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const targets = useTargetStore((s) => s.targets);
 
   const startDate = new Date(plan.startDate);
   const endDate = new Date(plan.endDate);
   const status = normalizePlanStatus(plan.status);
+  const displayTargetName = resolveTargetName(
+    { targetId: plan.targetId, name: plan.targetName },
+    targets,
+  );
 
   const formatDate = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -62,7 +69,7 @@ export function PlanCard({
               color={mutedColor}
             />
             <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
-              {plan.title || plan.targetName}
+              {plan.title || displayTargetName}
             </Text>
           </View>
           <View className="flex-row items-center gap-2">
@@ -150,7 +157,7 @@ export function PlanCard({
         <View className="flex-row items-center gap-3">
           <View className="flex-row items-center gap-1">
             <Ionicons name="telescope-outline" size={11} color={mutedColor} />
-            <Text className="text-[10px] text-muted">{plan.targetName}</Text>
+            <Text className="text-[10px] text-muted">{displayTargetName}</Text>
           </View>
           <View className="flex-row items-center gap-1">
             <Ionicons name="time-outline" size={11} color={mutedColor} />

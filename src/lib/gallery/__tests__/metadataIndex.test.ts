@@ -38,6 +38,7 @@ describe("metadataIndex", () => {
       }),
       makeFile({
         id: "b",
+        frameType: "dark",
         object: "M31",
         filter: "OIII",
         sourceFormat: "png",
@@ -53,6 +54,7 @@ describe("metadataIndex", () => {
     const index = buildMetadataIndex(files);
     expect(index.objects).toEqual(["M31", "M42"]);
     expect(index.filters).toEqual(["Ha", "OIII"]);
+    expect(index.frameTypes).toEqual(["dark", "light"]);
     expect(index.sourceFormats).toEqual(["fits", "png"]);
     expect(index.locations).toEqual(["Mountain Site", "Shanghai"]);
     expect(index.dateRange).toEqual(["2024-01-01T01:00:00Z", "2024-01-03T01:00:00Z"]);

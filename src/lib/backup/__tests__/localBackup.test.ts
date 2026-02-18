@@ -84,7 +84,10 @@ describe("localBackup", () => {
         ] as never[],
       getAlbums: () => [],
       getTargets: () => [],
+      getTargetGroups: () => [],
       getSessions: () => [],
+      getPlans: () => [],
+      getLogEntries: () => [],
       getSettings: () => ({}),
     };
 
@@ -115,7 +118,10 @@ describe("localBackup", () => {
       files: [{ id: "f1", filename: "a.fits", filepath: "/mock/a.fits", fileSize: 1 }] as never[],
       albums: [{ id: "a1", name: "Album", imageIds: [] }] as never[],
       targets: [],
+      targetGroups: [],
       sessions: [],
+      plans: [],
+      logEntries: [],
       settings: {},
     };
 
@@ -145,7 +151,10 @@ describe("localBackup", () => {
       files: [{ id: "f1", filename: "a.fits", filepath: "/mock/a.fits", fileSize: 1 }] as never[],
       albums: [{ id: "a1", name: "Album", imageIds: [] }] as never[],
       targets: [{ id: "t1", name: "M31" }] as never[],
+      targetGroups: [{ id: "g1", name: "Group", targetIds: ["t1"] }] as never[],
       sessions: [{ id: "s1", startTime: 123 }] as never[],
+      plans: [{ id: "p1", title: "Plan", targetName: "M31" }] as never[],
+      logEntries: [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
       settings: { theme: "dark" },
     };
 
@@ -153,7 +162,10 @@ describe("localBackup", () => {
       setFiles: jest.fn(),
       setAlbums: jest.fn(),
       setTargets: jest.fn(),
+      setTargetGroups: jest.fn(),
       setSessions: jest.fn(),
+      setPlans: jest.fn(),
+      setLogEntries: jest.fn(),
       setSettings: jest.fn(),
     };
 
@@ -168,7 +180,10 @@ describe("localBackup", () => {
           fileCount: 1,
           albumCount: 1,
           targetCount: 1,
+          targetGroupCount: 1,
           sessionCount: 1,
+          planCount: 1,
+          logEntryCount: 1,
           hasSettings: true,
           createdAt: manifest.createdAt,
           deviceName: manifest.deviceName,
@@ -181,7 +196,10 @@ describe("localBackup", () => {
     expect(picker.getDocumentAsync).not.toHaveBeenCalled();
     expect(restoreTarget.setAlbums).toHaveBeenCalledWith(manifest.albums, "merge");
     expect(restoreTarget.setTargets).toHaveBeenCalledWith(manifest.targets, "merge");
+    expect(restoreTarget.setTargetGroups).toHaveBeenCalledWith(manifest.targetGroups, "merge");
     expect(restoreTarget.setSessions).toHaveBeenCalledWith(manifest.sessions, "merge");
+    expect(restoreTarget.setPlans).toHaveBeenCalledWith(manifest.plans, "merge");
+    expect(restoreTarget.setLogEntries).toHaveBeenCalledWith(manifest.logEntries, "merge");
     expect(restoreTarget.setFiles).toHaveBeenCalledWith(manifest.files, "merge");
   });
 });

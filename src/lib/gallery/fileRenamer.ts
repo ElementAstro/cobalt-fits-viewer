@@ -12,7 +12,7 @@ import type { FitsMetadata } from "../fits/types";
  * {time}      - 观测时间 HH-MM-SS
  * {filter}    - 滤镜 (e.g. Ha, OIII)
  * {exptime}   - 曝光时间秒数
- * {frameType} - 帧类型 (light/dark/flat/bias)
+ * {frameType} - 帧类型 (如 light/dark/flat/bias/darkflat/自定义)
  * {telescope} - 望远镜
  * {camera}    - 相机/仪器
  * {gain}      - 增益

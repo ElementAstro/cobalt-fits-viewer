@@ -1,10 +1,35 @@
 const mockApplyStretch = jest.fn(
-  (pixels: Float32Array) =>
+  (pixels: Float32Array, ..._rest: unknown[]) =>
     new Float32Array(Array.from(pixels, (v) => Math.max(0, Math.min(1, v)))),
 );
 
 jest.mock("../../converter/formatConverter", () => ({
-  applyStretch: (...args: unknown[]) => mockApplyStretch(...args),
+  applyStretch: (
+    pixels: Float32Array,
+    type: string,
+    blackPoint?: number,
+    whitePoint?: number,
+    gamma?: number,
+    outputBlack?: number,
+    outputWhite?: number,
+    brightness?: number,
+    contrast?: number,
+    mtfMidtone?: number,
+    curvePreset?: string,
+  ) =>
+    mockApplyStretch(
+      pixels,
+      type,
+      blackPoint,
+      whitePoint,
+      gamma,
+      outputBlack,
+      outputWhite,
+      brightness,
+      contrast,
+      mtfMidtone,
+      curvePreset,
+    ),
 }));
 
 import {

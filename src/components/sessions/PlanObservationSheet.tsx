@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { View, Text, Alert } from "react-native";
 import {
   BottomSheet,
@@ -16,7 +16,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useCalendar } from "../../hooks/useCalendar";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useTargetStore } from "../../stores/useTargetStore";
 import type { ObservationPlan } from "../../lib/fits/types";
+import { resolveTargetId, resolveTargetName } from "../../lib/targets/targetRefs";
 
 interface PlanObservationSheetProps {
   visible: boolean;
@@ -45,6 +47,7 @@ export function PlanObservationSheet({
   const mutedColor = useThemeColor("muted");
   const { createObservationPlan, updateObservationPlan, syncing } = useCalendar();
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
+  const targetCatalog = useTargetStore((s) => s.targets);
   const isEditMode = !!existingPlan;
 
   const makeDefaultStart = useCallback((base?: Date) => {
@@ -60,6 +63,9 @@ export function PlanObservationSheet({
   }, []);
 
   const [targetName, setTargetName] = useState(existingPlan?.targetName ?? initialTargetName ?? "");
+  const [selectedTargetId, setSelectedTargetId] = useState<string | undefined>(
+    existingPlan?.targetId,
+  );
   const [title, setTitle] = useState(existingPlan?.title ?? "");
   const [notes, setNotes] = useState(existingPlan?.notes ?? "");
   const [status, setStatus] = useState<"planned" | "completed" | "cancelled">(
@@ -78,6 +84,7 @@ export function PlanObservationSheet({
   useEffect(() => {
     if (existingPlan) {
       setTargetName(existingPlan.targetName);
+      setSelectedTargetId(existingPlan.targetId);
       setTitle(existingPlan.title);
       setNotes(existingPlan.notes ?? "");
       setStatus(existingPlan.status ?? "planned");
@@ -87,6 +94,7 @@ export function PlanObservationSheet({
     } else {
       const s = makeDefaultStart(initialDate);
       setTargetName(initialTargetName ?? "");
+      setSelectedTargetId(undefined);
       setTitle("");
       setNotes("");
       setStatus("planned");
@@ -118,6 +126,7 @@ export function PlanObservationSheet({
 
   const resetForm = () => {
     setTargetName("");
+    setSelectedTargetId(undefined);
     setTitle("");
     setNotes("");
     setStatus("planned");
@@ -137,10 +146,24 @@ export function PlanObservationSheet({
       return;
     }
 
+    const resolvedTargetId =
+      selectedTargetId ??
+      resolveTargetId(
+        {
+          name: targetName.trim(),
+        },
+        targetCatalog,
+      );
+    const resolvedTargetName = resolveTargetName(
+      { targetId: resolvedTargetId, name: targetName.trim() },
+      targetCatalog,
+    );
+
     if (isEditMode && existingPlan) {
       const success = await updateObservationPlan(existingPlan.id, {
-        title: title.trim() || targetName.trim(),
-        targetName: targetName.trim(),
+        title: title.trim() || resolvedTargetName,
+        targetId: resolvedTargetId,
+        targetName: resolvedTargetName,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
         notes: notes.trim() || undefined,
@@ -155,8 +178,9 @@ export function PlanObservationSheet({
     }
 
     const success = await createObservationPlan({
-      title: title.trim() || targetName.trim(),
-      targetName: targetName.trim(),
+      title: title.trim() || resolvedTargetName,
+      targetId: resolvedTargetId,
+      targetName: resolvedTargetName,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
       notes: notes.trim() || undefined,
@@ -176,6 +200,22 @@ export function PlanObservationSheet({
 
   const formatTime = (date: Date) =>
     `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
+  const targetSuggestions = useMemo(() => {
+    const q = targetName.trim().toLowerCase();
+    if (!q) return targetCatalog.slice(0, 5);
+    return targetCatalog
+      .filter(
+        (target) =>
+          target.name.toLowerCase().includes(q) ||
+          target.aliases.some((alias) => alias.toLowerCase().includes(q)),
+      )
+      .slice(0, 5);
+  }, [targetCatalog, targetName]);
+
+  const selectedTargetName = selectedTargetId
+    ? targetCatalog.find((target) => target.id === selectedTargetId)?.name
+    : undefined;
 
   return (
     <BottomSheet
@@ -200,10 +240,36 @@ export function PlanObservationSheet({
             <Label>{t("sessions.targetName")}</Label>
             <Input
               value={targetName}
-              onChangeText={setTargetName}
+              onChangeText={(value) => {
+                setTargetName(value);
+                if (
+                  selectedTargetId &&
+                  selectedTargetName &&
+                  selectedTargetName.toLowerCase() !== value.trim().toLowerCase()
+                ) {
+                  setSelectedTargetId(undefined);
+                }
+              }}
               placeholder="e.g. M42, NGC 7000..."
             />
           </TextField>
+          {targetSuggestions.length > 0 && (
+            <View className="mb-3 flex-row flex-wrap gap-2">
+              {targetSuggestions.map((target) => (
+                <Chip
+                  key={target.id}
+                  size="sm"
+                  variant={selectedTargetId === target.id ? "primary" : "secondary"}
+                  onPress={() => {
+                    setSelectedTargetId(target.id);
+                    setTargetName(target.name);
+                  }}
+                >
+                  <Chip.Label className="text-[9px]">{target.name}</Chip.Label>
+                </Chip>
+              ))}
+            </View>
+          )}
 
           {/* Title (optional) */}
           <TextField className="mb-3">

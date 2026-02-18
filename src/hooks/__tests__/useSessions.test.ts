@@ -10,6 +10,9 @@ jest.mock("../../stores/useFitsStore", () => ({
 jest.mock("../../stores/useSettingsStore", () => ({
   useSettingsStore: jest.fn(),
 }));
+jest.mock("../../stores/useTargetStore", () => ({
+  useTargetStore: jest.fn(),
+}));
 jest.mock("../../lib/sessions/sessionDetector", () => ({
   detectSessions: jest.fn(),
   getDatesWithObservations: jest.fn(),
@@ -25,6 +28,13 @@ jest.mock("../../lib/sessions/observationLog", () => ({
 jest.mock("../../lib/sessions/statsCalculator", () => ({
   calculateObservationStats: jest.fn(() => ({ total: 1 })),
   getMonthlyTrend: jest.fn(() => [{ month: "2025-01" }]),
+}));
+jest.mock("../../lib/sessions/sessionLinking", () => ({
+  deriveSessionMetadataFromFiles: jest.fn(),
+  buildMissingLogEntries: jest.fn(),
+}));
+jest.mock("../../lib/sessions/sessionNormalization", () => ({
+  mergeSessionLike: jest.fn((base: object, incoming: object) => ({ ...base, ...incoming })),
 }));
 jest.mock("../../lib/logger", () => ({
   LOG_TAGS: {
@@ -47,6 +57,9 @@ const { useFitsStore } = jest.requireMock("../../stores/useFitsStore") as {
 const { useSettingsStore } = jest.requireMock("../../stores/useSettingsStore") as {
   useSettingsStore: jest.Mock;
 };
+const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
+  useTargetStore: jest.Mock;
+};
 const detectorLib = jest.requireMock("../../lib/sessions/sessionDetector") as {
   detectSessions: jest.Mock;
   getDatesWithObservations: jest.Mock;
@@ -63,6 +76,10 @@ const statsLib = jest.requireMock("../../lib/sessions/statsCalculator") as {
   calculateObservationStats: jest.Mock;
   getMonthlyTrend: jest.Mock;
 };
+const linkingLib = jest.requireMock("../../lib/sessions/sessionLinking") as {
+  deriveSessionMetadataFromFiles: jest.Mock;
+  buildMissingLogEntries: jest.Mock;
+};
 
 describe("useSessions", () => {
   const addSession = jest.fn();
@@ -70,6 +87,7 @@ describe("useSessions", () => {
   const updateSession = jest.fn();
   const removeSession = jest.fn();
   const mergeSessions = jest.fn();
+  const endLiveSession = jest.fn();
   const getDatesWithSessions = jest.fn(() => ["2025-01-01"]);
   const batchSetSessionId = jest.fn();
 
@@ -78,8 +96,8 @@ describe("useSessions", () => {
     const sessions = [{ id: "s-old" }];
     const logEntries = [{ id: "l1", sessionId: "s-old" }];
     const files = [
-      { id: "f1", location: { city: "A", latitude: 1, longitude: 2 } },
-      { id: "f2", location: { city: "A", latitude: 1, longitude: 2 } },
+      { id: "f1", sessionId: "live-1", location: { city: "A", latitude: 1, longitude: 2 } },
+      { id: "f2", sessionId: "live-1", location: { city: "A", latitude: 1, longitude: 2 } },
       { id: "f3", location: { city: "B", latitude: 3, longitude: 4 } },
     ];
     useSessionStore.mockImplementation((selector: (s: unknown) => unknown) =>
@@ -91,6 +109,7 @@ describe("useSessions", () => {
         updateSession,
         removeSession,
         mergeSessions,
+        endLiveSession,
         getDatesWithSessions,
       }),
     );
@@ -100,10 +119,20 @@ describe("useSessions", () => {
     useSettingsStore.mockImplementation((selector: (s: unknown) => unknown) =>
       selector({ sessionGapMinutes: 120 }),
     );
+    useTargetStore.mockImplementation((selector: (s: unknown) => unknown) =>
+      selector({ targets: [{ id: "t1", name: "M42", aliases: [] }] }),
+    );
     detectorLib.detectSessions.mockReturnValue([{ id: "s1", imageIds: ["f1", "f2"] }]);
     detectorLib.isSessionDuplicate.mockReturnValue(false);
     detectorLib.getDatesWithObservations.mockReturnValue([1, 2]);
     logLib.generateLogFromFiles.mockReturnValue([{ id: "l2" }]);
+    linkingLib.deriveSessionMetadataFromFiles.mockReturnValue({
+      targetRefs: [{ name: "M42", targetId: "t1" }],
+      imageIds: ["f1", "f2"],
+      equipment: { telescope: "RC8" },
+      location: { city: "A", latitude: 1, longitude: 2 },
+    });
+    linkingLib.buildMissingLogEntries.mockReturnValue([]);
   });
 
   it("auto detects sessions, links files and logs", () => {
@@ -150,5 +179,48 @@ describe("useSessions", () => {
     expect(result.current.exportSessionLog("s-old", "text")).toBe("text");
     expect(result.current.exportSessionLog("missing", "json")).toBe("");
     expect(result.current.exportAllSessions("json")).toBe("json-all");
+  });
+
+  it("ends live session and integrates linked files/logs", () => {
+    endLiveSession.mockReturnValue({
+      id: "live-1",
+      date: "2025-01-01",
+      startTime: 1000,
+      endTime: 2000,
+      duration: 1000,
+      targetRefs: [],
+      imageIds: [],
+      equipment: {},
+      createdAt: 1234,
+    });
+    linkingLib.buildMissingLogEntries.mockReturnValue([{ id: "l3", sessionId: "live-1" }]);
+
+    const { result } = renderHook(() => useSessions());
+    let out:
+      | {
+          session: unknown;
+          linkedFileCount: number;
+          linkedLogCount: number;
+        }
+      | undefined;
+
+    act(() => {
+      out = result.current.endLiveSessionWithIntegration();
+    });
+
+    expect(updateSession).toHaveBeenCalledWith(
+      "live-1",
+      expect.objectContaining({
+        imageIds: ["f1", "f2"],
+        targetRefs: [{ name: "M42", targetId: "t1" }],
+      }),
+    );
+    expect(addLogEntries).toHaveBeenCalledWith([{ id: "l3", sessionId: "live-1" }]);
+    expect(out).toEqual(
+      expect.objectContaining({
+        linkedFileCount: 2,
+        linkedLogCount: 1,
+      }),
+    );
   });
 });

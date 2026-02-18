@@ -7,8 +7,18 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { Uniwind } from "uniwind";
 import { zustandMMKVStorage } from "../lib/storage";
 import { setI18nLocale } from "../i18n";
-import type { StretchType, ColormapType, ExportFormat } from "../lib/fits/types";
+import type {
+  StretchType,
+  ColormapType,
+  ExportFormat,
+  FrameClassificationConfig,
+} from "../lib/fits/types";
 import type { LogLevel } from "../lib/logger";
+import {
+  DEFAULT_FRAME_CLASSIFICATION_CONFIG,
+  getFrameTypeDefinitions,
+  sanitizeFrameClassificationConfig,
+} from "../lib/gallery/frameClassifier";
 import {
   ACCENT_PRESETS,
   DEFAULT_CUSTOM_THEME_COLORS,
@@ -111,6 +121,20 @@ interface SettingsStoreState {
   defaultSigmaValue: number;
   defaultAlignmentMode: "none" | "translation" | "full";
   defaultEnableQuality: boolean;
+  stackingDetectionProfile: "fast" | "balanced" | "accurate";
+  stackingDetectSigmaThreshold: number;
+  stackingDetectMaxStars: number;
+  stackingDetectMinArea: number;
+  stackingDetectMaxArea: number;
+  stackingDetectBorderMargin: number;
+  stackingBackgroundMeshSize: number;
+  stackingDeblendNLevels: number;
+  stackingDeblendMinContrast: number;
+  stackingFilterFwhm: number;
+  stackingMaxFwhm: number;
+  stackingMaxEllipticity: number;
+  stackingRansacMaxIterations: number;
+  stackingAlignmentInlierThreshold: number;
 
   // 网格/十字线样式
   gridColor: string;
@@ -133,7 +157,7 @@ interface SettingsStoreState {
   fileListStyle: "grid" | "list" | "compact";
 
   // 转换器默认设置
-  defaultConverterFormat: "png" | "jpeg" | "tiff" | "webp";
+  defaultConverterFormat: ExportFormat;
   defaultConverterQuality: number;
   batchNamingRule: "original" | "prefix" | "suffix" | "sequence";
 
@@ -164,6 +188,19 @@ interface SettingsStoreState {
   // 性能配置
   imageProcessingDebounce: number;
   useHighQualityPreview: boolean;
+  videoAutoplay: boolean;
+  videoLoopByDefault: boolean;
+  videoMutedByDefault: boolean;
+  videoThumbnailTimeMs: number;
+  videoProcessingConcurrency: number;
+  defaultVideoProfile: "compatibility" | "balanced" | "quality";
+  defaultVideoTargetPreset: "1080p" | "720p" | "custom";
+  videoCoreEnabled: boolean;
+  videoProcessingEnabled: boolean;
+
+  // 帧分类规则
+  frameClassificationConfig: FrameClassificationConfig;
+  reportFrameTypes: string[];
 
   // Actions
   setDefaultStretch: (stretch: StretchType) => void;
@@ -217,8 +254,34 @@ interface SettingsStoreState {
   setDefaultSigmaValue: (value: number) => void;
   setDefaultAlignmentMode: (mode: "none" | "translation" | "full") => void;
   setDefaultEnableQuality: (value: boolean) => void;
+  setStackingDetectionProfile: (value: "fast" | "balanced" | "accurate") => void;
+  setStackingDetectSigmaThreshold: (value: number) => void;
+  setStackingDetectMaxStars: (value: number) => void;
+  setStackingDetectMinArea: (value: number) => void;
+  setStackingDetectMaxArea: (value: number) => void;
+  setStackingDetectBorderMargin: (value: number) => void;
+  setStackingBackgroundMeshSize: (value: number) => void;
+  setStackingDeblendNLevels: (value: number) => void;
+  setStackingDeblendMinContrast: (value: number) => void;
+  setStackingFilterFwhm: (value: number) => void;
+  setStackingMaxFwhm: (value: number) => void;
+  setStackingMaxEllipticity: (value: number) => void;
+  setStackingRansacMaxIterations: (value: number) => void;
+  setStackingAlignmentInlierThreshold: (value: number) => void;
   setImageProcessingDebounce: (ms: number) => void;
   setUseHighQualityPreview: (value: boolean) => void;
+  setVideoAutoplay: (value: boolean) => void;
+  setVideoLoopByDefault: (value: boolean) => void;
+  setVideoMutedByDefault: (value: boolean) => void;
+  setVideoThumbnailTimeMs: (value: number) => void;
+  setVideoProcessingConcurrency: (value: number) => void;
+  setDefaultVideoProfile: (value: "compatibility" | "balanced" | "quality") => void;
+  setDefaultVideoTargetPreset: (value: "1080p" | "720p" | "custom") => void;
+  setVideoCoreEnabled: (value: boolean) => void;
+  setVideoProcessingEnabled: (value: boolean) => void;
+  setFrameClassificationConfig: (config: FrameClassificationConfig) => void;
+  setReportFrameTypes: (values: string[]) => void;
+  resetFrameClassificationConfig: () => void;
   setGridColor: (color: string) => void;
   setGridOpacity: (opacity: number) => void;
   setCrosshairColor: (color: string) => void;
@@ -231,7 +294,7 @@ interface SettingsStoreState {
   setThumbnailShowFilter: (v: boolean) => void;
   setThumbnailShowExposure: (v: boolean) => void;
   setFileListStyle: (style: "grid" | "list" | "compact") => void;
-  setDefaultConverterFormat: (fmt: "png" | "jpeg" | "tiff" | "webp") => void;
+  setDefaultConverterFormat: (fmt: ExportFormat) => void;
   setDefaultConverterQuality: (q: number) => void;
   setBatchNamingRule: (rule: "original" | "prefix" | "suffix" | "sequence") => void;
   setDefaultBlurSigma: (v: number) => void;
@@ -330,6 +393,20 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   defaultSigmaValue: 2.5,
   defaultAlignmentMode: "none",
   defaultEnableQuality: false,
+  stackingDetectionProfile: "balanced",
+  stackingDetectSigmaThreshold: 5,
+  stackingDetectMaxStars: 220,
+  stackingDetectMinArea: 3,
+  stackingDetectMaxArea: 600,
+  stackingDetectBorderMargin: 10,
+  stackingBackgroundMeshSize: 64,
+  stackingDeblendNLevels: 16,
+  stackingDeblendMinContrast: 0.08,
+  stackingFilterFwhm: 2.2,
+  stackingMaxFwhm: 11,
+  stackingMaxEllipticity: 0.65,
+  stackingRansacMaxIterations: 100,
+  stackingAlignmentInlierThreshold: 3,
   gridColor: "#64c8ff",
   gridOpacity: 0.3,
   crosshairColor: "#ff5050",
@@ -361,6 +438,20 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   composeBlueWeight: 1.0,
   imageProcessingDebounce: 150,
   useHighQualityPreview: true,
+  videoAutoplay: false,
+  videoLoopByDefault: false,
+  videoMutedByDefault: false,
+  videoThumbnailTimeMs: 1000,
+  videoProcessingConcurrency: 2,
+  defaultVideoProfile: "compatibility",
+  defaultVideoTargetPreset: "1080p",
+  videoCoreEnabled: true,
+  videoProcessingEnabled: true,
+  frameClassificationConfig: sanitizeFrameClassificationConfig(
+    DEFAULT_FRAME_CLASSIFICATION_CONFIG,
+    DEFAULT_FRAME_CLASSIFICATION_CONFIG,
+  ),
+  reportFrameTypes: ["light"],
 };
 
 const SETTINGS_DATA_KEYS = Object.keys(DEFAULT_SETTINGS) as Array<keyof SettingsDataState>;
@@ -426,6 +517,20 @@ function inferThemeColorMode(
   return fallback;
 }
 
+function sanitizeReportFrameTypes(values: unknown, config: FrameClassificationConfig): string[] {
+  if (!Array.isArray(values)) return ["light"];
+  const allowed = new Set(getFrameTypeDefinitions(config).map((item) => item.key));
+  const next: string[] = [];
+  for (const item of values) {
+    const key = String(item ?? "")
+      .trim()
+      .toLowerCase();
+    if (!key || !allowed.has(key) || next.includes(key)) continue;
+    next.push(key);
+  }
+  return next.length > 0 ? next : ["light"];
+}
+
 function sanitizeSettingsPatch(
   patch: Record<string, unknown>,
   current: SettingsDataState,
@@ -454,6 +559,19 @@ function sanitizeSettingsPatch(
     { key: "histogramHeight", min: 60, max: 300, integer: true },
     { key: "pixelInfoDecimalPlaces", min: 0, max: 8, integer: true },
     { key: "defaultSigmaValue", min: 0.1, max: 10 },
+    { key: "stackingDetectSigmaThreshold", min: 1, max: 20 },
+    { key: "stackingDetectMaxStars", min: 10, max: 2000, integer: true },
+    { key: "stackingDetectMinArea", min: 1, max: 100, integer: true },
+    { key: "stackingDetectMaxArea", min: 10, max: 10000, integer: true },
+    { key: "stackingDetectBorderMargin", min: 0, max: 200, integer: true },
+    { key: "stackingBackgroundMeshSize", min: 8, max: 512, integer: true },
+    { key: "stackingDeblendNLevels", min: 1, max: 64, integer: true },
+    { key: "stackingDeblendMinContrast", min: 0, max: 1 },
+    { key: "stackingFilterFwhm", min: 0.3, max: 15 },
+    { key: "stackingMaxFwhm", min: 0.5, max: 30 },
+    { key: "stackingMaxEllipticity", min: 0, max: 1 },
+    { key: "stackingRansacMaxIterations", min: 10, max: 1000, integer: true },
+    { key: "stackingAlignmentInlierThreshold", min: 0.5, max: 20 },
     { key: "gridOpacity", min: 0, max: 1 },
     { key: "crosshairOpacity", min: 0, max: 1 },
     { key: "canvasMinScale", min: 0.1, max: 10 },
@@ -468,6 +586,8 @@ function sanitizeSettingsPatch(
     { key: "composeGreenWeight", min: 0, max: 4 },
     { key: "composeBlueWeight", min: 0, max: 4 },
     { key: "imageProcessingDebounce", min: 0, max: 2000, integer: true },
+    { key: "videoThumbnailTimeMs", min: 0, max: 300000, integer: true },
+    { key: "videoProcessingConcurrency", min: 1, max: 6, integer: true },
     { key: "logMaxEntries", min: 100, max: 10000, integer: true },
   ];
 
@@ -495,13 +615,17 @@ function sanitizeSettingsPatch(
     defaultGallerySortOrder: ["asc", "desc"],
     defaultStackMethod: ["average", "median", "sigma", "min", "max", "winsorized", "weighted"],
     defaultAlignmentMode: ["none", "translation", "full"],
+    stackingDetectionProfile: ["fast", "balanced", "accurate"],
     fileListStyle: ["grid", "list", "compact"],
-    defaultConverterFormat: ["png", "jpeg", "tiff", "webp"],
+    defaultExportFormat: ["png", "jpeg", "webp", "tiff", "bmp", "fits"],
+    defaultConverterFormat: ["png", "jpeg", "tiff", "webp", "bmp", "fits"],
     batchNamingRule: ["original", "prefix", "suffix", "sequence"],
     timelineGrouping: ["day", "week", "month"],
     targetSortBy: ["name", "date", "frames", "exposure", "favorite"],
     targetSortOrder: ["asc", "desc"],
     defaultComposePreset: ["rgb", "sho", "hoo", "lrgb", "custom"],
+    defaultVideoProfile: ["compatibility", "balanced", "quality"],
+    defaultVideoTargetPreset: ["1080p", "720p", "custom"],
     logMinLevel: ["debug", "info", "warn", "error"],
   };
 
@@ -546,6 +670,24 @@ function sanitizeSettingsPatch(
     } else {
       delete sanitized.customThemeColors;
     }
+  }
+
+  if (sanitized.frameClassificationConfig !== undefined) {
+    sanitized.frameClassificationConfig = sanitizeFrameClassificationConfig(
+      sanitized.frameClassificationConfig,
+      current.frameClassificationConfig,
+    );
+  }
+
+  if (sanitized.reportFrameTypes !== undefined) {
+    const nextConfig = (sanitized.frameClassificationConfig ??
+      current.frameClassificationConfig) as FrameClassificationConfig;
+    sanitized.reportFrameTypes = sanitizeReportFrameTypes(sanitized.reportFrameTypes, nextConfig);
+  } else if (sanitized.frameClassificationConfig !== undefined) {
+    sanitized.reportFrameTypes = sanitizeReportFrameTypes(
+      current.reportFrameTypes,
+      sanitized.frameClassificationConfig as FrameClassificationConfig,
+    );
   }
 
   for (const key of SETTINGS_DATA_KEYS) {
@@ -610,6 +752,26 @@ function sanitizeSettingsPatch(
         : current.canvasMaxScale;
     if (typeof sanitized.canvasDoubleTapScale === "number") {
       sanitized.canvasDoubleTapScale = clamp(sanitized.canvasDoubleTapScale, minScale, maxScale);
+    }
+  }
+
+  const hasDetectMinArea = typeof sanitized.stackingDetectMinArea === "number";
+  const hasDetectMaxArea = typeof sanitized.stackingDetectMaxArea === "number";
+  if (hasDetectMinArea || hasDetectMaxArea) {
+    const minArea = hasDetectMinArea
+      ? sanitized.stackingDetectMinArea
+      : current.stackingDetectMinArea;
+    const maxArea = hasDetectMaxArea
+      ? sanitized.stackingDetectMaxArea
+      : current.stackingDetectMaxArea;
+    if (typeof minArea === "number" && typeof maxArea === "number" && minArea > maxArea) {
+      if (hasDetectMinArea && !hasDetectMaxArea) {
+        sanitized.stackingDetectMaxArea = minArea;
+      } else if (!hasDetectMinArea && hasDetectMaxArea) {
+        sanitized.stackingDetectMinArea = maxArea;
+      } else {
+        sanitized.stackingDetectMaxArea = minArea;
+      }
     }
   }
 
@@ -806,8 +968,51 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setDefaultSigmaValue: (value) => get().applySettingsPatch({ defaultSigmaValue: value }),
       setDefaultAlignmentMode: (mode) => set({ defaultAlignmentMode: mode }),
       setDefaultEnableQuality: (value) => set({ defaultEnableQuality: value }),
+      setStackingDetectionProfile: (value) => set({ stackingDetectionProfile: value }),
+      setStackingDetectSigmaThreshold: (value) =>
+        get().applySettingsPatch({ stackingDetectSigmaThreshold: value }),
+      setStackingDetectMaxStars: (value) =>
+        get().applySettingsPatch({ stackingDetectMaxStars: value }),
+      setStackingDetectMinArea: (value) =>
+        get().applySettingsPatch({ stackingDetectMinArea: value }),
+      setStackingDetectMaxArea: (value) =>
+        get().applySettingsPatch({ stackingDetectMaxArea: value }),
+      setStackingDetectBorderMargin: (value) =>
+        get().applySettingsPatch({ stackingDetectBorderMargin: value }),
+      setStackingBackgroundMeshSize: (value) =>
+        get().applySettingsPatch({ stackingBackgroundMeshSize: value }),
+      setStackingDeblendNLevels: (value) =>
+        get().applySettingsPatch({ stackingDeblendNLevels: value }),
+      setStackingDeblendMinContrast: (value) =>
+        get().applySettingsPatch({ stackingDeblendMinContrast: value }),
+      setStackingFilterFwhm: (value) => get().applySettingsPatch({ stackingFilterFwhm: value }),
+      setStackingMaxFwhm: (value) => get().applySettingsPatch({ stackingMaxFwhm: value }),
+      setStackingMaxEllipticity: (value) =>
+        get().applySettingsPatch({ stackingMaxEllipticity: value }),
+      setStackingRansacMaxIterations: (value) =>
+        get().applySettingsPatch({ stackingRansacMaxIterations: value }),
+      setStackingAlignmentInlierThreshold: (value) =>
+        get().applySettingsPatch({ stackingAlignmentInlierThreshold: value }),
       setImageProcessingDebounce: (ms) => get().applySettingsPatch({ imageProcessingDebounce: ms }),
       setUseHighQualityPreview: (value) => set({ useHighQualityPreview: value }),
+      setVideoAutoplay: (value) => set({ videoAutoplay: value }),
+      setVideoLoopByDefault: (value) => set({ videoLoopByDefault: value }),
+      setVideoMutedByDefault: (value) => set({ videoMutedByDefault: value }),
+      setVideoThumbnailTimeMs: (value) => get().applySettingsPatch({ videoThumbnailTimeMs: value }),
+      setVideoProcessingConcurrency: (value) =>
+        get().applySettingsPatch({ videoProcessingConcurrency: value }),
+      setDefaultVideoProfile: (value) => set({ defaultVideoProfile: value }),
+      setDefaultVideoTargetPreset: (value) => set({ defaultVideoTargetPreset: value }),
+      setVideoCoreEnabled: (value) => set({ videoCoreEnabled: value }),
+      setVideoProcessingEnabled: (value) => set({ videoProcessingEnabled: value }),
+      setFrameClassificationConfig: (config) =>
+        get().applySettingsPatch({ frameClassificationConfig: config }),
+      setReportFrameTypes: (values) => get().applySettingsPatch({ reportFrameTypes: values }),
+      resetFrameClassificationConfig: () =>
+        get().applySettingsPatch({
+          frameClassificationConfig: DEFAULT_FRAME_CLASSIFICATION_CONFIG,
+          reportFrameTypes: ["light"],
+        }),
       setGridColor: (color) => set({ gridColor: color }),
       setGridOpacity: (opacity) => get().applySettingsPatch({ gridOpacity: opacity }),
       setCrosshairColor: (color) => set({ crosshairColor: color }),
@@ -855,6 +1060,11 @@ export const useSettingsStore = create<SettingsStoreState>()(
         const nextDefaults: SettingsDataState = {
           ...DEFAULT_SETTINGS,
           customThemeColors: cloneCustomThemeColors(DEFAULT_SETTINGS.customThemeColors),
+          frameClassificationConfig: sanitizeFrameClassificationConfig(
+            DEFAULT_SETTINGS.frameClassificationConfig,
+            DEFAULT_SETTINGS.frameClassificationConfig,
+          ),
+          reportFrameTypes: [...DEFAULT_SETTINGS.reportFrameTypes],
         };
         set(nextDefaults);
         setI18nLocale(nextDefaults.language);
@@ -888,6 +1098,14 @@ export const useSettingsStore = create<SettingsStoreState>()(
         }
         merged.customThemeColors = cloneCustomThemeColors(
           merged.customThemeColors ?? DEFAULT_CUSTOM_THEME_COLORS,
+        );
+        merged.frameClassificationConfig = sanitizeFrameClassificationConfig(
+          merged.frameClassificationConfig,
+          DEFAULT_SETTINGS.frameClassificationConfig,
+        );
+        merged.reportFrameTypes = sanitizeReportFrameTypes(
+          merged.reportFrameTypes,
+          merged.frameClassificationConfig,
         );
         return merged;
       },

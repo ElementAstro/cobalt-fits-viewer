@@ -3,6 +3,7 @@
  */
 
 import type { FitsMetadata, ObservationLogEntry } from "../fits/types";
+import { normalizeSessionTargetRefs } from "../targets/targetRefs";
 
 /**
  * 从单个文件生成日志条目
@@ -106,6 +107,8 @@ export function exportSessionToJSON(
   session: import("../fits/types").ObservationSession,
   entries: ObservationLogEntry[],
 ): string {
+  const targetRefs = normalizeSessionTargetRefs(session);
+  const targetNames = targetRefs.map((ref) => ref.name);
   return JSON.stringify(
     {
       session: {
@@ -114,7 +117,8 @@ export function exportSessionToJSON(
         startTime: new Date(session.startTime).toISOString(),
         endTime: new Date(session.endTime).toISOString(),
         duration: session.duration,
-        targets: session.targets,
+        targetRefs,
+        targets: targetNames,
         imageCount: session.imageIds.length,
         equipment: session.equipment,
         location: session.location,
@@ -143,6 +147,27 @@ export function exportSessionToJSON(
   );
 }
 
+function serializeSessionSummary(session: import("../fits/types").ObservationSession) {
+  const targetRefs = normalizeSessionTargetRefs(session);
+  return {
+    id: session.id,
+    date: session.date,
+    startTime: new Date(session.startTime).toISOString(),
+    endTime: new Date(session.endTime).toISOString(),
+    duration: session.duration,
+    targetRefs,
+    targets: targetRefs.map((ref) => ref.name),
+    imageCount: session.imageIds.length,
+    equipment: session.equipment,
+    weather: session.weather,
+    seeing: session.seeing,
+    notes: session.notes,
+    rating: session.rating,
+    bortle: session.bortle,
+    tags: session.tags,
+  };
+}
+
 /**
  * 导出所有会话汇总为 JSON
  */
@@ -151,22 +176,7 @@ export function exportAllSessionsToJSON(
 ): string {
   return JSON.stringify(
     {
-      sessions: sessions.map((s) => ({
-        id: s.id,
-        date: s.date,
-        startTime: new Date(s.startTime).toISOString(),
-        endTime: new Date(s.endTime).toISOString(),
-        duration: s.duration,
-        targets: s.targets,
-        imageCount: s.imageIds.length,
-        equipment: s.equipment,
-        weather: s.weather,
-        seeing: s.seeing,
-        notes: s.notes,
-        rating: s.rating,
-        bortle: s.bortle,
-        tags: s.tags,
-      })),
+      sessions: sessions.map((session) => serializeSessionSummary(session)),
       totalSessions: sessions.length,
       totalDuration: sessions.reduce((sum, s) => sum + s.duration, 0),
       exportedAt: new Date().toISOString(),

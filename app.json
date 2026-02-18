@@ -8,7 +8,11 @@
       "requireFullScreen": true,
       "bundleIdentifier": "com.maxqian888sorganization.cobaltfitsviewer",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to record observation videos.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to record audio with observation videos.",
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to import photos and videos from your library.",
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save processed photos and videos to your library."
       }
     },
     "web": {
@@ -56,6 +60,13 @@
           "calendarPermission": "Allow $(PRODUCT_NAME) to access your calendar for syncing observation sessions.",
           "remindersPermission": "Allow $(PRODUCT_NAME) to access your reminders for observation planning."
         }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsPictureInPicture": true,
+          "supportsBackgroundPlayback": false
+        }
       ]
     ],
     "name": "Cobalt FITS Viewer",
@@ -80,7 +91,11 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.READ_CALENDAR",
-        "android.permission.WRITE_CALENDAR"
+        "android.permission.WRITE_CALENDAR",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",

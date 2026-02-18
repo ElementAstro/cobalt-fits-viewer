@@ -217,6 +217,10 @@ export function getExportSummary(
   files: FitsMetadata[],
   stats: ReturnType<typeof calculateAlbumStatistics>,
 ): string {
+  const frameLines = Object.entries(stats.frameBreakdown)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([type, count]) => `  ${type}: ${count}`);
+
   const lines = [
     `Album: ${album.name}`,
     album.description ? `Description: ${album.description}` : null,
@@ -225,10 +229,7 @@ export function getExportSummary(
     `Total Size: ${formatFileSize(stats.totalFileSize)}`,
     "",
     "Frame Breakdown:",
-    `  Light: ${stats.frameBreakdown.light}`,
-    `  Dark: ${stats.frameBreakdown.dark}`,
-    `  Flat: ${stats.frameBreakdown.flat}`,
-    `  Bias: ${stats.frameBreakdown.bias}`,
+    ...frameLines,
     stats.dateRange ? `Date Range: ${stats.dateRange[0]} to ${stats.dateRange[1]}` : null,
   ].filter(Boolean);
 

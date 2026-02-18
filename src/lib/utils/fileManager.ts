@@ -5,9 +5,9 @@
 
 import { Paths, File, Directory } from "expo-file-system";
 import {
-  detectSupportedImageFormat,
+  detectSupportedMediaFormat,
   isFitsFamilyFilename,
-  isSupportedImageFilename,
+  isSupportedMediaFilename,
   splitFilenameExtension,
 } from "../import/fileFormat";
 
@@ -97,19 +97,26 @@ export async function readFileAsArrayBuffer(filepath: string): Promise<ArrayBuff
  * 列出所有已导入的 FITS 文件
  */
 export function listFitsFiles(): File[] {
-  return listImportedImageFiles().filter((file) => isFitsFile(file.name));
+  return listImportedMediaFiles().filter((file) => isFitsFile(file.name));
 }
 
 /**
- * 列出所有已导入的受支持图像文件
+ * 列出所有已导入的受支持媒体文件
  */
-export function listImportedImageFiles(): File[] {
+export function listImportedMediaFiles(): File[] {
   const dir = getFitsDir();
   if (!dir.exists) return [];
 
   return dir
     .list()
-    .filter((item): item is File => item instanceof File && isSupportedImageFile(item.name));
+    .filter((item): item is File => item instanceof File && isSupportedMediaFile(item.name));
+}
+
+/**
+ * 列出所有已导入的受支持图像/视频文件（兼容旧命名）
+ */
+export function listImportedImageFiles(): File[] {
+  return listImportedMediaFiles();
 }
 
 /**
@@ -127,7 +134,7 @@ export function getStorageStats(): {
   fitsCount: number;
   fitsSize: number;
 } {
-  const files = listImportedImageFiles();
+  const files = listImportedMediaFiles();
   let totalSize = 0;
 
   for (const file of files) {
@@ -168,32 +175,46 @@ export function isFitsFile(filename: string): boolean {
  * 判断文件名是否为支持的图像格式
  */
 export function isSupportedImageFile(filename: string): boolean {
-  return isSupportedImageFilename(filename);
+  return isSupportedMediaFilename(filename);
+}
+
+/**
+ * 判断文件名是否为支持的媒体格式
+ */
+export function isSupportedMediaFile(filename: string): boolean {
+  return isSupportedMediaFilename(filename);
 }
 
 /**
  * 递归扫描目录中的 FITS 文件
  */
 export function scanDirectoryForFits(dir: Directory): File[] {
-  return scanDirectoryForSupportedImages(dir).filter((file) => isFitsFile(file.name));
+  return scanDirectoryForSupportedMedia(dir).filter((file) => isFitsFile(file.name));
 }
 
 /**
- * 递归扫描目录中的受支持图像文件
+ * 递归扫描目录中的受支持媒体文件
  */
-export function scanDirectoryForSupportedImages(dir: Directory): File[] {
+export function scanDirectoryForSupportedMedia(dir: Directory): File[] {
   const results: File[] = [];
   if (!dir.exists) return results;
 
   const items = dir.list();
   for (const item of items) {
     if (item instanceof Directory) {
-      results.push(...scanDirectoryForSupportedImages(item));
-    } else if (item instanceof File && detectSupportedImageFormat(item.name)) {
+      results.push(...scanDirectoryForSupportedMedia(item));
+    } else if (item instanceof File && detectSupportedMediaFormat(item.name)) {
       results.push(item);
     }
   }
   return results;
+}
+
+/**
+ * 递归扫描目录中的受支持媒体文件（兼容旧命名）
+ */
+export function scanDirectoryForSupportedImages(dir: Directory): File[] {
+  return scanDirectoryForSupportedMedia(dir);
 }
 
 /**

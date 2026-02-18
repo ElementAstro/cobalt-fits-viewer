@@ -110,7 +110,7 @@ export default function TargetsScreen() {
       if (filterCategory && target.category !== filterCategory) return false;
       if (filterTag && !target.tags.includes(filterTag)) return false;
       if (filterGroupId) {
-        const inGroup = target.groupId === filterGroupId || selectedGroupTargets?.has(target.id);
+        const inGroup = Boolean(selectedGroupTargets?.has(target.id));
         if (!inGroup) return false;
       }
       return true;

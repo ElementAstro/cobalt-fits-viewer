@@ -3,7 +3,7 @@
  */
 
 import type { Target, FitsMetadata } from "../fits/types";
-import { calculateExposureStats } from "./exposureStats";
+import { buildTargetIndexes, type TargetIndexes } from "./targetIndexes";
 
 export interface TargetStatistics {
   totalTargets: number;
@@ -40,6 +40,7 @@ export interface MonthlyStats {
 export function calculateTargetStatistics(
   targets: Target[],
   files: FitsMetadata[],
+  indexes: TargetIndexes = buildTargetIndexes(targets, files),
 ): TargetStatistics {
   const byStatus: Record<string, number> = {};
   const byType: Record<string, number> = {};
@@ -59,10 +60,12 @@ export function calculateTargetStatistics(
 
   for (const target of targets) {
     // 状态统计
-    byStatus[target.status] = (byStatus[target.status] ?? 0) + 1;
+    const status = target.status ?? "unknown";
+    byStatus[status] = (byStatus[status] ?? 0) + 1;
 
     // 类型统计
-    byType[target.type] = (byType[target.type] ?? 0) + 1;
+    const type = target.type ?? "unknown";
+    byType[type] = (byType[type] ?? 0) + 1;
 
     // 分类统计
     if (target.category) {
@@ -70,7 +73,7 @@ export function calculateTargetStatistics(
     }
 
     // 标签统计
-    for (const tag of target.tags) {
+    for (const tag of target.tags ?? []) {
       tagBreakdown[tag] = (tagBreakdown[tag] ?? 0) + 1;
     }
 
@@ -84,20 +87,21 @@ export function calculateTargetStatistics(
     }
 
     // 图片
-    if (target.imageIds.length > 0) {
+    const imageCount = target.imageIds?.length ?? 0;
+    if (imageCount > 0) {
       withImages++;
-      totalFrames += target.imageIds.length;
+      totalFrames += imageCount;
     }
 
     // 曝光计算
-    const targetFiles = files.filter((f) => target.imageIds.includes(f.id));
-    const exposureStats = calculateExposureStats(targetFiles);
-    totalExposureSeconds += exposureStats.totalExposure;
+    const cachedStats = indexes.targetStatsCache.get(target.id);
+    const totalExposure = cachedStats?.totalExposureSeconds ?? 0;
+    totalExposureSeconds += totalExposure;
 
     exposureList.push({
       target,
-      totalSeconds: exposureStats.totalExposure,
-      frameCount: target.imageIds.length,
+      totalSeconds: totalExposure,
+      frameCount: cachedStats?.frameCount ?? imageCount,
     });
 
     // 月度活动（首次创建目标）
@@ -134,33 +138,35 @@ export function getMonthlyStatistics(
   targets: Target[],
   files: FitsMetadata[],
   months: number = 12,
+  indexes: TargetIndexes = buildTargetIndexes(targets, files),
 ): MonthlyStats[] {
   const result: MonthlyStats[] = [];
   const now = new Date();
+  const monthToStats = new Map<
+    string,
+    { targetsCount: number; framesCount: number; exposure: number }
+  >();
+
+  for (const target of targets) {
+    const month = new Date(target.createdAt).toISOString().slice(0, 7);
+    const entry = monthToStats.get(month) ?? { targetsCount: 0, framesCount: 0, exposure: 0 };
+    const cachedStats = indexes.targetStatsCache.get(target.id);
+    entry.targetsCount += 1;
+    entry.framesCount += cachedStats?.frameCount ?? target.imageIds.length;
+    entry.exposure += cachedStats?.totalExposureSeconds ?? 0;
+    monthToStats.set(month, entry);
+  }
 
   for (let i = 0; i < months; i++) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const month = date.toISOString().slice(0, 7);
-
-    let framesCount = 0;
-    let exposureSeconds = 0;
-
-    for (const target of targets) {
-      // 检查目标是否在该月首次创建
-      const targetMonth = new Date(target.createdAt).toISOString().slice(0, 7);
-      if (targetMonth === month) {
-        const targetFiles = files.filter((f) => target.imageIds.includes(f.id));
-        framesCount += target.imageIds.length;
-        exposureSeconds += targetFiles.reduce((sum, f) => sum + (f.exptime ?? 0), 0);
-      }
-    }
+    const stats = monthToStats.get(month);
 
     result.push({
       month,
-      targetsCount: targets.filter((t) => new Date(t.createdAt).toISOString().slice(0, 7) === month)
-        .length,
-      framesCount,
-      exposureSeconds,
+      targetsCount: stats?.targetsCount ?? 0,
+      framesCount: stats?.framesCount ?? 0,
+      exposureSeconds: stats?.exposure ?? 0,
     });
   }
 

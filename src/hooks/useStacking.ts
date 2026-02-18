@@ -5,7 +5,7 @@
 
 import { useState, useCallback, useRef } from "react";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import { loadFitsFromBuffer, getImagePixels, getImageDimensions } from "../lib/fits/parser";
+import { loadFitsFromBufferAuto, getImagePixels, getImageDimensions } from "../lib/fits/parser";
 import {
   stackAverage,
   stackMedian,
@@ -18,12 +18,18 @@ import {
 import { fitsToRGBA } from "../lib/converter/formatConverter";
 import { computeAutoStretch } from "../lib/utils/pixelMath";
 import { calibrateFrame, createMasterDark, createMasterFlat } from "../lib/stacking/calibration";
-import { alignFrame, type AlignmentMode } from "../lib/stacking/alignment";
 import {
-  evaluateFrameQuality,
+  alignFrameAsync,
+  type AlignmentMode,
+  type AlignmentOptions,
+} from "../lib/stacking/alignment";
+import {
+  evaluateFrameQualityAsync,
   qualityToWeights,
   type FrameQualityMetrics,
+  type FrameQualityOptions,
 } from "../lib/stacking/frameQuality";
+import type { StarDetectionOptions } from "../lib/stacking/starDetection";
 import { LOG_TAGS, Logger } from "../lib/logger";
 
 export type StackMethod =
@@ -46,6 +52,22 @@ export interface CalibrationFrames {
   flatFilepaths?: string[];
 }
 
+export interface StackingAdvancedOptions {
+  detection?: StarDetectionOptions;
+  alignment?: Omit<AlignmentOptions, "detectionOptions" | "detectionRuntime">;
+  quality?: FrameQualityOptions;
+}
+
+export interface StackFilesRequest {
+  files: Array<{ filepath: string; filename: string }>;
+  method: StackMethod;
+  sigma?: number;
+  calibration?: CalibrationFrames;
+  alignmentMode?: AlignmentMode;
+  enableQualityEval?: boolean;
+  advanced?: StackingAdvancedOptions;
+}
+
 export interface StackResult {
   pixels: Float32Array;
   rgbaData: Uint8ClampedArray;
@@ -59,6 +81,9 @@ export interface StackResult {
     filename: string;
     matchedStars: number;
     rmsError: number;
+    detectedRefStars?: number;
+    detectedTargetStars?: number;
+    fallbackUsed?: "none" | "translation" | "identity";
   }>;
   qualityMetrics?: FrameQualityMetrics[];
 }
@@ -70,23 +95,20 @@ export interface StackProgress {
   message: string;
 }
 
-/**
- * Yield to the UI thread so React can flush state updates (progress bar, etc.)
- */
 function yieldToUI(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/**
- * Load pixel data from a single FITS file path.
- * Returns null if the file cannot be read.
- */
+function isAbortError(error: unknown) {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 async function loadPixelsFromPath(
   filepath: string,
 ): Promise<{ pixels: Float32Array; width: number; height: number } | null> {
   try {
     const buffer = await readFileAsArrayBuffer(filepath);
-    const fits = loadFitsFromBuffer(buffer);
+    const fits = loadFitsFromBufferAuto(buffer);
     const dims = getImageDimensions(fits);
     const pixels = await getImagePixels(fits);
     if (!dims || !pixels) return null;
@@ -96,31 +118,82 @@ async function loadPixelsFromPath(
   }
 }
 
+function normalizeRequest(
+  filesOrRequest: StackFilesRequest | Array<{ filepath: string; filename: string }>,
+  method?: StackMethod,
+  sigma: number = 2.5,
+  calibration?: CalibrationFrames,
+  alignmentMode: AlignmentMode = "none",
+  enableQualityEval: boolean = false,
+  advanced?: StackingAdvancedOptions,
+): StackFilesRequest {
+  if (Array.isArray(filesOrRequest)) {
+    return {
+      files: filesOrRequest,
+      method: method ?? "average",
+      sigma,
+      calibration,
+      alignmentMode,
+      enableQualityEval,
+      advanced,
+    };
+  }
+  return {
+    sigma: 2.5,
+    alignmentMode: "none",
+    enableQualityEval: false,
+    ...filesOrRequest,
+  };
+}
+
 export function useStacking() {
   const [isStacking, setIsStacking] = useState(false);
   const [progress, setProgress] = useState<StackProgress | null>(null);
   const [result, setResult] = useState<StackResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const cancelledRef = useRef(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const isCancelled = useCallback(
+    () => cancelledRef.current || abortRef.current?.signal.aborted === true,
+    [],
+  );
 
   const stackFiles = useCallback(
     async (
-      files: Array<{ filepath: string; filename: string }>,
-      method: StackMethod,
+      filesOrRequest: StackFilesRequest | Array<{ filepath: string; filename: string }>,
+      method?: StackMethod,
       sigma: number = 2.5,
       calibration?: CalibrationFrames,
       alignmentMode: AlignmentMode = "none",
       enableQualityEval: boolean = false,
+      advanced?: StackingAdvancedOptions,
     ) => {
-      if (files.length < 2) {
+      const request = normalizeRequest(
+        filesOrRequest,
+        method,
+        sigma,
+        calibration,
+        alignmentMode,
+        enableQualityEval,
+        advanced,
+      );
+
+      if (request.files.length < 2) {
         setError("At least 2 frames are required for stacking");
-        Logger.warn(LOG_TAGS.Stacking, "Insufficient frames for stacking", { count: files.length });
+        Logger.warn(LOG_TAGS.Stacking, "Insufficient frames for stacking", {
+          count: request.files.length,
+        });
         return;
       }
 
+      abortRef.current?.abort();
+      abortRef.current = new AbortController();
+      const signal = abortRef.current.signal;
+
       Logger.info(
-        "Stacking",
-        `Starting: ${files.length} frames, method=${method}, align=${alignmentMode}`,
+        LOG_TAGS.Stacking,
+        `Starting: ${request.files.length} frames, method=${request.method}, align=${request.alignmentMode}`,
       );
 
       cancelledRef.current = false;
@@ -131,27 +204,26 @@ export function useStacking() {
       const startTime = Date.now();
 
       try {
-        // Phase 0: Load calibration frames (if provided)
         let darkPixels: Float32Array | null = null;
         let flatPixels: Float32Array | null = null;
         let biasPixels: Float32Array | null = null;
 
-        // Master dark from multiple files
-        if (calibration?.darkFilepaths && calibration.darkFilepaths.length > 0) {
+        if (request.calibration?.darkFilepaths && request.calibration.darkFilepaths.length > 0) {
           setProgress({
             stage: "calibrating",
             current: 0,
             total: 3,
-            message: `Building master dark from ${calibration.darkFilepaths.length} frames...`,
+            message: `Building master dark from ${request.calibration.darkFilepaths.length} frames...`,
           });
           await yieldToUI();
           const darkFrames: Float32Array[] = [];
-          for (const fp of calibration.darkFilepaths) {
+          for (const fp of request.calibration.darkFilepaths) {
+            if (isCancelled()) return;
             const d = await loadPixelsFromPath(fp);
             if (d) darkFrames.push(d.pixels);
           }
           if (darkFrames.length > 0) darkPixels = createMasterDark(darkFrames);
-        } else if (calibration?.darkFilepath) {
+        } else if (request.calibration?.darkFilepath) {
           setProgress({
             stage: "calibrating",
             current: 0,
@@ -159,26 +231,26 @@ export function useStacking() {
             message: "Loading dark frame...",
           });
           await yieldToUI();
-          const dark = await loadPixelsFromPath(calibration.darkFilepath);
+          const dark = await loadPixelsFromPath(request.calibration.darkFilepath);
           if (dark) darkPixels = dark.pixels;
         }
 
-        // Master flat from multiple files
-        if (calibration?.flatFilepaths && calibration.flatFilepaths.length > 0) {
+        if (request.calibration?.flatFilepaths && request.calibration.flatFilepaths.length > 0) {
           setProgress({
             stage: "calibrating",
             current: 1,
             total: 3,
-            message: `Building master flat from ${calibration.flatFilepaths.length} frames...`,
+            message: `Building master flat from ${request.calibration.flatFilepaths.length} frames...`,
           });
           await yieldToUI();
           const flatFrames: Float32Array[] = [];
-          for (const fp of calibration.flatFilepaths) {
+          for (const fp of request.calibration.flatFilepaths) {
+            if (isCancelled()) return;
             const f = await loadPixelsFromPath(fp);
             if (f) flatFrames.push(f.pixels);
           }
           if (flatFrames.length > 0) flatPixels = createMasterFlat(flatFrames);
-        } else if (calibration?.flatFilepath) {
+        } else if (request.calibration?.flatFilepath) {
           setProgress({
             stage: "calibrating",
             current: 1,
@@ -186,11 +258,11 @@ export function useStacking() {
             message: "Loading flat frame...",
           });
           await yieldToUI();
-          const flat = await loadPixelsFromPath(calibration.flatFilepath);
+          const flat = await loadPixelsFromPath(request.calibration.flatFilepath);
           if (flat) flatPixels = flat.pixels;
         }
 
-        if (calibration?.biasFilepath) {
+        if (request.calibration?.biasFilepath) {
           setProgress({
             stage: "calibrating",
             current: 2,
@@ -198,48 +270,45 @@ export function useStacking() {
             message: "Loading bias frame...",
           });
           await yieldToUI();
-          const bias = await loadPixelsFromPath(calibration.biasFilepath);
+          const bias = await loadPixelsFromPath(request.calibration.biasFilepath);
           if (bias) biasPixels = bias.pixels;
         }
 
-        if (cancelledRef.current) return;
+        if (isCancelled()) return;
 
-        // Phase 1: Load all light frames
         const frames: Float32Array[] = [];
         let refWidth = 0;
         let refHeight = 0;
 
-        for (let i = 0; i < files.length; i++) {
-          if (cancelledRef.current) return;
+        for (let i = 0; i < request.files.length; i++) {
+          if (isCancelled()) return;
 
           setProgress({
             stage: "loading",
             current: i + 1,
-            total: files.length,
-            message: `Loading frame ${i + 1}/${files.length}: ${files[i].filename}`,
+            total: request.files.length,
+            message: `Loading frame ${i + 1}/${request.files.length}: ${request.files[i].filename}`,
           });
           await yieldToUI();
 
-          const buffer = await readFileAsArrayBuffer(files[i].filepath);
-          const fits = loadFitsFromBuffer(buffer);
+          const buffer = await readFileAsArrayBuffer(request.files[i].filepath);
+          const fits = loadFitsFromBufferAuto(buffer);
           const dims = getImageDimensions(fits);
           let pixels = await getImagePixels(fits);
 
           if (!dims || !pixels) {
-            throw new Error(`Failed to read image data from ${files[i].filename}`);
+            throw new Error(`Failed to read image data from ${request.files[i].filename}`);
           }
 
-          // Validate dimensions match
           if (i === 0) {
             refWidth = dims.width;
             refHeight = dims.height;
           } else if (dims.width !== refWidth || dims.height !== refHeight) {
             throw new Error(
-              `Dimension mismatch: ${files[i].filename} is ${dims.width}×${dims.height}, expected ${refWidth}×${refHeight}`,
+              `Dimension mismatch: ${request.files[i].filename} is ${dims.width}×${dims.height}, expected ${refWidth}×${refHeight}`,
             );
           }
 
-          // Apply calibration
           if (darkPixels || flatPixels || biasPixels) {
             const pixelCount = refWidth * refHeight;
             if (darkPixels && darkPixels.length !== pixelCount) {
@@ -263,83 +332,133 @@ export function useStacking() {
           frames.push(pixels);
         }
 
-        if (cancelledRef.current) return;
+        if (isCancelled()) return;
 
-        // Phase 1.5: Quality evaluation (optional)
         let qualityMetrics: FrameQualityMetrics[] | undefined;
         let weights: number[] | undefined;
 
-        if (enableQualityEval || method === "weighted") {
+        if (request.enableQualityEval || request.method === "weighted") {
           qualityMetrics = [];
           for (let i = 0; i < frames.length; i++) {
-            if (cancelledRef.current) return;
+            if (isCancelled()) return;
+
             setProgress({
               stage: "evaluating",
               current: i + 1,
               total: frames.length,
-              message: `Evaluating frame ${i + 1}/${frames.length}: ${files[i].filename}`,
+              message: `Evaluating frame ${i + 1}/${frames.length}: ${request.files[i].filename}`,
             });
             await yieldToUI();
-            qualityMetrics.push(evaluateFrameQuality(frames[i], refWidth, refHeight));
+
+            const metrics = await evaluateFrameQualityAsync(
+              frames[i],
+              refWidth,
+              refHeight,
+              {
+                ...(request.advanced?.quality ?? {}),
+                detectionOptions: {
+                  profile: "balanced",
+                  ...(request.advanced?.quality?.detectionOptions ?? {}),
+                  ...(request.advanced?.detection ?? {}),
+                },
+              },
+              {
+                signal,
+                detectionRuntime: {
+                  signal,
+                  onProgress: (p) => {
+                    if (!isCancelled()) {
+                      setProgress({
+                        stage: "evaluating",
+                        current: i + p,
+                        total: frames.length,
+                        message: `Evaluating frame ${i + 1}/${frames.length}: ${request.files[i].filename}`,
+                      });
+                    }
+                  },
+                },
+              },
+            );
+            qualityMetrics.push(metrics);
           }
           weights = qualityToWeights(qualityMetrics);
         }
 
-        if (cancelledRef.current) return;
+        if (isCancelled()) return;
 
-        // Phase 2: Alignment
         const alignmentResults: StackResult["alignmentResults"] = [];
 
-        if (alignmentMode !== "none" && frames.length >= 2) {
+        if (request.alignmentMode !== "none" && frames.length >= 2) {
           const refPixels = frames[0];
-
           for (let i = 1; i < frames.length; i++) {
-            if (cancelledRef.current) return;
+            if (isCancelled()) return;
             setProgress({
               stage: "aligning",
               current: i,
               total: frames.length - 1,
-              message: `Aligning frame ${i + 1}/${frames.length}: ${files[i].filename}`,
+              message: `Aligning frame ${i + 1}/${frames.length}: ${request.files[i].filename}`,
             });
             await yieldToUI();
 
-            const { aligned, transform } = alignFrame(
+            const { aligned, transform } = await alignFrameAsync(
               refPixels,
               frames[i],
               refWidth,
               refHeight,
-              alignmentMode,
+              request.alignmentMode ?? "none",
+              {
+                ...(request.advanced?.alignment ?? {}),
+                detectionOptions: {
+                  profile: "balanced",
+                  ...(request.advanced?.detection ?? {}),
+                },
+                detectionRuntime: {
+                  signal,
+                  onProgress: (p, stage) => {
+                    if (!isCancelled()) {
+                      setProgress({
+                        stage: "aligning",
+                        current: i - 1 + p,
+                        total: frames.length - 1,
+                        message: `Aligning frame ${i + 1}/${frames.length}: ${stage}`,
+                      });
+                    }
+                  },
+                },
+              },
             );
 
             frames[i] = aligned;
             alignmentResults.push({
-              filename: files[i].filename,
+              filename: request.files[i].filename,
               matchedStars: transform.matchedStars,
               rmsError: transform.rmsError,
+              detectedRefStars: transform.detectionCounts?.ref,
+              detectedTargetStars: transform.detectionCounts?.target,
+              fallbackUsed: transform.fallbackUsed,
             });
           }
 
-          // Reference frame: no alignment needed
           alignmentResults.unshift({
-            filename: files[0].filename,
-            matchedStars: -1, // reference
+            filename: request.files[0].filename,
+            matchedStars: -1,
             rmsError: 0,
+            fallbackUsed: "none",
           });
         }
 
-        if (cancelledRef.current) return;
+        if (isCancelled()) return;
 
-        // Phase 3: Stack frames
         setProgress({
           stage: "stacking",
           current: 0,
           total: 1,
-          message: `Stacking ${frames.length} frames (${method})...`,
+          message: `Stacking ${frames.length} frames (${request.method})...`,
         });
         await yieldToUI();
 
         let stacked: Float32Array;
-        switch (method) {
+        switch (request.method) {
           case "average":
             stacked = stackAverage(frames);
             break;
@@ -347,7 +466,7 @@ export function useStacking() {
             stacked = stackMedian(frames);
             break;
           case "sigma":
-            stacked = stackSigmaClip(frames, sigma);
+            stacked = stackSigmaClip(frames, request.sigma ?? 2.5);
             break;
           case "min":
             stacked = stackMin(frames);
@@ -356,19 +475,20 @@ export function useStacking() {
             stacked = stackMax(frames);
             break;
           case "winsorized":
-            stacked = stackWinsorizedSigmaClip(frames, sigma);
+            stacked = stackWinsorizedSigmaClip(frames, request.sigma ?? 2.5);
             break;
           case "weighted":
             stacked = stackWeightedAverage(frames, weights ?? frames.map(() => 1));
             break;
+          default:
+            stacked = stackAverage(frames);
+            break;
         }
 
-        // Release frame memory as soon as stacking is done
         frames.length = 0;
 
-        if (cancelledRef.current) return;
+        if (isCancelled()) return;
 
-        // Phase 4: Render preview with auto-stretch
         setProgress({
           stage: "rendering",
           current: 0,
@@ -394,33 +514,33 @@ export function useStacking() {
           rgbaData,
           width: refWidth,
           height: refHeight,
-          frameCount: files.length,
-          method,
+          frameCount: request.files.length,
+          method: request.method,
           duration,
-          alignmentMode,
+          alignmentMode: request.alignmentMode ?? "none",
           alignmentResults: alignmentResults.length > 0 ? alignmentResults : undefined,
           qualityMetrics,
         };
 
         setResult(stackResult);
         Logger.info(
-          "Stacking",
-          `Completed: ${files.length} frames in ${(duration / 1000).toFixed(1)}s`,
+          LOG_TAGS.Stacking,
+          `Completed: ${request.files.length} frames in ${(duration / 1000).toFixed(1)}s`,
           {
-            method,
-            alignmentMode,
+            method: request.method,
+            alignmentMode: request.alignmentMode,
             width: refWidth,
             height: refHeight,
           },
         );
         setProgress({
           stage: "done",
-          current: files.length,
-          total: files.length,
-          message: `Done — ${files.length} frames in ${(duration / 1000).toFixed(1)}s`,
+          current: request.files.length,
+          total: request.files.length,
+          message: `Done - ${request.files.length} frames in ${(duration / 1000).toFixed(1)}s`,
         });
       } catch (e) {
-        if (!cancelledRef.current) {
+        if (!isCancelled() && !isAbortError(e)) {
           const msg = e instanceof Error ? e.message : "Stacking failed";
           Logger.error(LOG_TAGS.Stacking, `Failed: ${msg}`, e);
           setError(msg);
@@ -429,11 +549,12 @@ export function useStacking() {
         setIsStacking(false);
       }
     },
-    [],
+    [isCancelled],
   );
 
   const cancel = useCallback(() => {
     cancelledRef.current = true;
+    abortRef.current?.abort();
     setIsStacking(false);
     setProgress(null);
     Logger.info(LOG_TAGS.Stacking, "Cancelled by user");

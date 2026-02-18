@@ -21,8 +21,9 @@ View, analyze, stack, and convert astronomical FITS images on **iOS**, **Android
 
 - **FITS File Management** — Import, browse, search, tag, and organize FITS files
 - **FITS Image Viewer** — Stretch, colormap, histogram, pixel info, HDU selection, grid overlay, crosshair, mini map
+- **Frame Classification Engine** — Built-in `light/dark/flat/bias/darkflat/unknown` + custom frame types/rules (`header`/`filename`, `exact/contains/regex`, priority), report scope control, and one-click historical reclassification
 - **Image Stacking** — Average, median, sigma clipping, min/max, winsorized, weighted stacking with alignment
-- **Format Converter** — Convert FITS to PNG / JPEG / WebP with presets (web, print, astrophotography)
+- **Bidirectional Converter** — Full `FITS ↔ PNG/JPEG/WebP/TIFF/BMP`, plus FITS export (`.fits` / `.fits.gz`) with scientific/rendered modes
 - **RGB Compose** — Combine mono FITS into color images
 - **Observation Targets** — Track galaxies, nebulae, clusters with exposure progress and filter planning
 - **Observation Sessions** — Calendar view, timeline, session log, statistics, calendar sync

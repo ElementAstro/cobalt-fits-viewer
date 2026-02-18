@@ -129,6 +129,7 @@ function loadThumbnailCacheModule() {
     ensureThumbnailDir: () => void;
     getThumbnailPath: (id: string) => string;
     hasThumbnail: (id: string) => boolean;
+    resolveThumbnailUri: (fileId: string, thumbnailUri?: string) => string | null;
     clearThumbnailCache: () => void;
     getThumbnailCacheSize: () => number;
     deleteThumbnail: (id: string) => void;
@@ -177,6 +178,22 @@ describe("thumbnailCache", () => {
     mockFiles.set("/cache/thumbnails/b.jpg", new Uint8Array([2]));
     mod.deleteThumbnails(["a", "b"]);
     expect(mockFiles.size).toBe(0);
+  });
+
+  it("resolves thumbnail uri from persisted uri or shared cache path", () => {
+    const mod = loadThumbnailCacheModule();
+
+    mockFiles.set("/cache/custom/persisted.jpg", new Uint8Array([1]));
+    expect(mod.resolveThumbnailUri("f1", "/cache/custom/persisted.jpg")).toBe(
+      "/cache/custom/persisted.jpg",
+    );
+
+    mockFiles.set("/cache/thumbnails/f2.jpg", new Uint8Array([2]));
+    expect(mod.resolveThumbnailUri("f2", "/cache/missing/old.jpg")).toBe(
+      "/cache/thumbnails/f2.jpg",
+    );
+
+    expect(mod.resolveThumbnailUri("f3")).toBeNull();
   });
 
   it("computes cache size and clears directory", () => {

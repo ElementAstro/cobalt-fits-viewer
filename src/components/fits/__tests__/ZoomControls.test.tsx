@@ -19,8 +19,8 @@ describe("ZoomControls", () => {
     );
 
     fireEvent.press(getByText("Fit"));
-    fireEvent.press(getByText("+"));
-    fireEvent.press(getByText("−"));
+    fireEvent.press(getByText("add"));
+    fireEvent.press(getByText("remove"));
 
     expect(onSetTransform).toHaveBeenNthCalledWith(1, 0, 0, 1);
     expect(onSetTransform).toHaveBeenNthCalledWith(2, 30, -20, 3);

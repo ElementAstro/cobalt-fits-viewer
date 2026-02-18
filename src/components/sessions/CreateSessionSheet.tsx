@@ -14,7 +14,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useTargetStore } from "../../stores/useTargetStore";
 import type { ObservationSession } from "../../lib/fits/types";
+import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
 
 interface CreateSessionSheetProps {
   visible: boolean;
@@ -29,6 +31,7 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const addSession = useSessionStore((s) => s.addSession);
+  const targetCatalog = useTargetStore((s) => s.targets);
 
   const defaultDate = initialDate ?? new Date();
 
@@ -138,7 +141,10 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
       startTime,
       endTime,
       duration,
-      targets,
+      targetRefs: dedupeTargetRefs(
+        targets.map((name) => toTargetRef(name, targetCatalog)),
+        targetCatalog,
+      ),
       imageIds: [],
       equipment: {
         telescope: telescope.trim() || undefined,

@@ -16,6 +16,21 @@ jest.mock("expo-document-picker", () => ({
   getDocumentAsync: jest.fn(),
 }));
 
+jest.mock("expo-image-picker", () => ({
+  requestMediaLibraryPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  requestCameraPermissionsAsync: jest.fn().mockResolvedValue({ granted: true }),
+  launchImageLibraryAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+  launchCameraAsync: jest.fn().mockResolvedValue({ canceled: true, assets: [] }),
+}));
+
+jest.mock("expo-video", () => ({
+  createVideoPlayer: jest.fn(() => ({
+    addListener: jest.fn(),
+    remove: jest.fn(),
+    release: jest.fn(),
+  })),
+}));
+
 jest.mock("expo-clipboard", () => ({
   hasImageAsync: jest.fn().mockResolvedValue(false),
   getImageAsync: jest.fn().mockResolvedValue(null),
@@ -155,7 +170,7 @@ jest.mock("../../lib/gallery/thumbnailCache", () => ({
 }));
 
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBuffer: jest.fn(),
+  loadFitsFromBufferAuto: jest.fn(),
   extractMetadata: jest.fn(),
   getImagePixels: jest.fn(),
   getImageDimensions: jest.fn(),
@@ -183,6 +198,7 @@ jest.mock("../../lib/utils/fileManager", () => ({
   importFile: jest.fn(),
   deleteFilesPermanently: jest.fn().mockReturnValue(0),
   moveFileToTrash: jest.fn(),
+  readFileAsArrayBuffer: jest.fn(),
   renameFitsFile: jest.fn(),
   restoreFileFromTrash: jest.fn(),
   generateFileId: jest.fn(() => "generated"),
@@ -236,6 +252,19 @@ describe("useFileManager", () => {
   const zipMock = require("react-native-zip-archive") as {
     zip: jest.Mock;
   };
+  const parserMock = require("../../lib/fits/parser") as {
+    loadFitsFromBufferAuto: jest.Mock;
+    extractMetadata: jest.Mock;
+  };
+  const fileManagerMock = require("../../lib/utils/fileManager") as {
+    readFileAsArrayBuffer: jest.Mock;
+  };
+  const imagePickerMock = require("expo-image-picker") as {
+    requestMediaLibraryPermissionsAsync: jest.Mock;
+    requestCameraPermissionsAsync: jest.Mock;
+    launchImageLibraryAsync: jest.Mock;
+    launchCameraAsync: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -251,6 +280,18 @@ describe("useFileManager", () => {
       filterTags: [],
     });
     sharingMock.isAvailableAsync.mockResolvedValue(true);
+    imagePickerMock.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: true });
+    imagePickerMock.requestCameraPermissionsAsync.mockResolvedValue({ granted: true });
+    imagePickerMock.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: [] });
+    imagePickerMock.launchCameraAsync.mockResolvedValue({ canceled: true, assets: [] });
+    fileManagerMock.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
+    parserMock.loadFitsFromBufferAuto.mockReturnValue({ fits: true });
+    parserMock.extractMetadata.mockReturnValue({
+      frameType: "darkflat",
+      frameTypeSource: "header",
+      imageTypeRaw: "DarkFlat",
+      frameHeaderRaw: "DarkFlat",
+    });
   });
 
   it("keeps undeleted trash entries when emptying partially fails", () => {
@@ -352,5 +393,123 @@ describe("useFileManager", () => {
       shared: false,
       error: "shareUnavailable",
     });
+  });
+
+  it("sets import error when media library permission is denied", async () => {
+    imagePickerMock.requestMediaLibraryPermissionsAsync.mockResolvedValueOnce({ granted: false });
+
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.pickAndImportFromMediaLibrary();
+    });
+
+    expect(result.current.importError).toBe("mediaLibraryPermissionDenied");
+  });
+
+  it("sets import error when camera permission is denied", async () => {
+    imagePickerMock.requestCameraPermissionsAsync.mockResolvedValueOnce({ granted: false });
+
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.recordAndImportVideo();
+    });
+
+    expect(result.current.importError).toBe("cameraPermissionDenied");
+  });
+
+  it("reclassifies existing files with current rules", async () => {
+    useFitsStore.setState({
+      files: [
+        makeFile("fits-1", "file:///document/fits_files/fits-1.fits"),
+        makeFile("raster-1", "file:///document/fits_files/darkflat_image.png"),
+      ].map((file, index) =>
+        index === 0
+          ? { ...file, sourceType: "fits", frameType: "unknown" as const }
+          : {
+              ...file,
+              sourceType: "raster",
+              filename: "darkflat_image.png",
+              frameType: "unknown" as const,
+            },
+      ),
+    });
+
+    const { result } = renderHook(() => useFileManager());
+    let summary:
+      | {
+          total: number;
+          success: number;
+          failed: number;
+          updated: number;
+          failedEntries: Array<{ id: string; filename: string; reason: string }>;
+        }
+      | undefined;
+
+    await act(async () => {
+      summary = await result.current.reclassifyAllFrames();
+    });
+
+    expect(summary).toBeDefined();
+    expect(summary?.total).toBe(2);
+    expect(summary?.failed).toBe(0);
+    expect(summary?.updated).toBeGreaterThanOrEqual(1);
+    const [fitsFile, rasterFile] = useFitsStore.getState().files;
+    expect(fitsFile.frameType).toBe("darkflat");
+    expect(fitsFile.frameTypeSource).toBe("header");
+    expect(rasterFile.frameType).toBe("darkflat");
+    expect(rasterFile.frameTypeSource).toBe("filename");
+  });
+
+  it("returns failed entries when reclassification throws", async () => {
+    useFitsStore.setState({
+      files: [
+        {
+          ...makeFile("fits-fail", "file:///document/fits_files/fits-fail.fits"),
+          sourceType: "fits",
+        },
+        {
+          ...makeFile("raster-ok", "file:///document/fits_files/darkflat_ok.png"),
+          sourceType: "raster",
+          filename: "darkflat_ok.png",
+          frameType: "unknown" as const,
+        },
+      ],
+    });
+    fileManagerMock.readFileAsArrayBuffer.mockImplementation(async (filepath: string) => {
+      if (filepath.includes("fits-fail")) {
+        throw new Error("read failed");
+      }
+      return new ArrayBuffer(8);
+    });
+
+    const { result } = renderHook(() => useFileManager());
+    let summary:
+      | {
+          total: number;
+          success: number;
+          failed: number;
+          updated: number;
+          failedEntries: Array<{ id: string; filename: string; reason: string }>;
+        }
+      | undefined;
+
+    await act(async () => {
+      summary = await result.current.reclassifyAllFrames();
+    });
+
+    expect(summary).toBeDefined();
+    expect(summary?.total).toBe(2);
+    expect(summary?.failed).toBe(1);
+    expect(summary?.success).toBe(1);
+    expect(summary?.failedEntries).toEqual([
+      expect.objectContaining({
+        id: "fits-fail",
+        filename: "fits-fail.fits",
+        reason: "read failed",
+      }),
+    ]);
+    const [, rasterFile] = useFitsStore.getState().files;
+    expect(rasterFile.frameType).toBe("darkflat");
+    expect(rasterFile.frameTypeSource).toBe("filename");
   });
 });

@@ -46,7 +46,7 @@ interface TargetStoreState {
   // Category Actions
   setCategory: (targetId: string, category: string | undefined) => void;
 
-  // Group Actions
+  // Group Actions (deprecated compatibility)
   setGroup: (targetId: string, groupId: string | undefined) => void;
 
   // Equipment Actions
@@ -416,7 +416,7 @@ export const useTargetStore = create<TargetStoreState>()(
 
         return { targets: migratedTargets };
       },
-      version: 2,
+      version: 3,
     },
   ),
 );

@@ -23,6 +23,7 @@ import { calculateStats } from "../../lib/utils/pixelMath";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { EmptyState } from "../../components/common/EmptyState";
 import { FitsCanvas } from "../../components/fits/FitsCanvas";
+import { SimpleSlider } from "../../components/common/SimpleSlider";
 import {
   useStacking,
   type StackMethod,
@@ -50,6 +51,17 @@ const ALIGNMENT_MODES: {
   { key: "none", icon: "close-outline", labelKey: "editor.alignNone" },
   { key: "translation", icon: "move-outline", labelKey: "editor.alignTranslation" },
   { key: "full", icon: "sync-outline", labelKey: "editor.alignFull" },
+];
+
+type DetectionProfile = "fast" | "balanced" | "accurate";
+
+const DETECTION_PROFILES: {
+  key: DetectionProfile;
+  labelKey: string;
+}[] = [
+  { key: "fast", labelKey: "settings.stackingProfileFast" },
+  { key: "balanced", labelKey: "settings.stackingProfileBalanced" },
+  { key: "accurate", labelKey: "settings.stackingProfileAccurate" },
 ];
 
 export default function StackingScreen() {
@@ -80,12 +92,45 @@ export default function StackingScreen() {
   const settingsSigma = useSettingsStore((s) => s.defaultSigmaValue);
   const settingsAlignment = useSettingsStore((s) => s.defaultAlignmentMode) as AlignmentMode;
   const settingsQuality = useSettingsStore((s) => s.defaultEnableQuality);
+  const settingsDetectionProfile = useSettingsStore((s) => s.stackingDetectionProfile);
+  const settingsDetectSigmaThreshold = useSettingsStore((s) => s.stackingDetectSigmaThreshold);
+  const settingsDetectMaxStars = useSettingsStore((s) => s.stackingDetectMaxStars);
+  const settingsDetectMinArea = useSettingsStore((s) => s.stackingDetectMinArea);
+  const settingsDetectMaxArea = useSettingsStore((s) => s.stackingDetectMaxArea);
+  const settingsDetectBorderMargin = useSettingsStore((s) => s.stackingDetectBorderMargin);
+  const settingsBackgroundMeshSize = useSettingsStore((s) => s.stackingBackgroundMeshSize);
+  const settingsDeblendNLevels = useSettingsStore((s) => s.stackingDeblendNLevels);
+  const settingsDeblendMinContrast = useSettingsStore((s) => s.stackingDeblendMinContrast);
+  const settingsFilterFwhm = useSettingsStore((s) => s.stackingFilterFwhm);
+  const settingsMaxFwhm = useSettingsStore((s) => s.stackingMaxFwhm);
+  const settingsMaxEllipticity = useSettingsStore((s) => s.stackingMaxEllipticity);
+  const settingsRansacMaxIterations = useSettingsStore((s) => s.stackingRansacMaxIterations);
+  const settingsAlignmentInlierThreshold = useSettingsStore(
+    (s) => s.stackingAlignmentInlierThreshold,
+  );
 
   const [method, setMethod] = useState<StackMethod>(settingsStackMethod);
   const [sigmaValue, setSigmaValue] = useState(settingsSigma);
   const [calibration, setCalibration] = useState<CalibrationFrames>({});
   const [alignmentMode, setAlignmentMode] = useState<AlignmentMode>(settingsAlignment);
   const [enableQuality, setEnableQuality] = useState(settingsQuality);
+  const [detectionProfile, setDetectionProfile] =
+    useState<DetectionProfile>(settingsDetectionProfile);
+  const [detectSigmaThreshold, setDetectSigmaThreshold] = useState(settingsDetectSigmaThreshold);
+  const [detectMaxStars, setDetectMaxStars] = useState(settingsDetectMaxStars);
+  const [detectMinArea, setDetectMinArea] = useState(settingsDetectMinArea);
+  const [detectMaxArea, setDetectMaxArea] = useState(settingsDetectMaxArea);
+  const [detectBorderMargin, setDetectBorderMargin] = useState(settingsDetectBorderMargin);
+  const [backgroundMeshSize, setBackgroundMeshSize] = useState(settingsBackgroundMeshSize);
+  const [deblendNLevels, setDeblendNLevels] = useState(settingsDeblendNLevels);
+  const [deblendMinContrast, setDeblendMinContrast] = useState(settingsDeblendMinContrast);
+  const [filterFwhm, setFilterFwhm] = useState(settingsFilterFwhm);
+  const [maxFwhm, setMaxFwhm] = useState(settingsMaxFwhm);
+  const [maxEllipticity, setMaxEllipticity] = useState(settingsMaxEllipticity);
+  const [ransacMaxIterations, setRansacMaxIterations] = useState(settingsRansacMaxIterations);
+  const [alignmentInlierThreshold, setAlignmentInlierThreshold] = useState(
+    settingsAlignmentInlierThreshold,
+  );
   const [exportFormat, setExportFormat] = useState<ExportFormat>("png");
   const [filterGroup, setFilterGroup] = useState<string | null>(null);
 
@@ -128,15 +173,75 @@ export default function StackingScreen() {
       (calibration.darkFilepaths && calibration.darkFilepaths.length > 0) ||
       (calibration.flatFilepaths && calibration.flatFilepaths.length > 0);
 
-    await stacking.stackFiles(
-      fileInfos,
+    await stacking.stackFiles({
+      files: fileInfos,
       method,
-      sigmaValue,
-      hasCalibration ? calibration : undefined,
+      sigma: sigmaValue,
+      calibration: hasCalibration ? calibration : undefined,
       alignmentMode,
-      enableQuality || method === "weighted",
-    );
-  }, [selectedFiles, method, sigmaValue, calibration, alignmentMode, enableQuality, t, stacking]);
+      enableQualityEval: enableQuality || method === "weighted",
+      advanced: {
+        detection: {
+          profile: detectionProfile,
+          sigmaThreshold: detectSigmaThreshold,
+          maxStars: detectMaxStars,
+          minArea: detectMinArea,
+          maxArea: detectMaxArea,
+          borderMargin: detectBorderMargin,
+          meshSize: backgroundMeshSize,
+          deblendNLevels,
+          deblendMinContrast,
+          filterFwhm,
+          maxFwhm,
+          maxEllipticity,
+        },
+        alignment: {
+          maxRansacIterations: ransacMaxIterations,
+          inlierThreshold: alignmentInlierThreshold,
+          fallbackToTranslation: true,
+        },
+        quality: {
+          detectionOptions: {
+            profile: detectionProfile,
+            sigmaThreshold: detectSigmaThreshold,
+            maxStars: detectMaxStars,
+            minArea: detectMinArea,
+            maxArea: detectMaxArea,
+            borderMargin: detectBorderMargin,
+            meshSize: backgroundMeshSize,
+            deblendNLevels,
+            deblendMinContrast,
+            filterFwhm,
+            maxFwhm,
+            maxEllipticity,
+          },
+        },
+      },
+    });
+  }, [
+    selectedFiles,
+    method,
+    sigmaValue,
+    calibration,
+    alignmentMode,
+    enableQuality,
+    t,
+    stacking,
+    detectionProfile,
+    detectSigmaThreshold,
+    detectMaxStars,
+    detectMinArea,
+    detectMaxArea,
+    detectBorderMargin,
+    backgroundMeshSize,
+    deblendNLevels,
+    deblendMinContrast,
+    filterFwhm,
+    maxFwhm,
+    maxEllipticity,
+    ransacMaxIterations,
+    alignmentInlierThreshold,
+  ]);
 
   const handleExport = useCallback(async () => {
     if (!stacking.result) return;
@@ -341,6 +446,23 @@ export default function StackingScreen() {
           ))}
         </View>
 
+        {/* Detection Profile */}
+        <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+          {t("settings.stackingDetectionProfile")}
+        </Text>
+        <View className="flex-row gap-2 mb-4">
+          {DETECTION_PROFILES.map((profile) => (
+            <Chip
+              key={profile.key}
+              size="sm"
+              variant={detectionProfile === profile.key ? "primary" : "secondary"}
+              onPress={() => setDetectionProfile(profile.key)}
+            >
+              <Chip.Label className="text-[9px]">{t(profile.labelKey)}</Chip.Label>
+            </Chip>
+          ))}
+        </View>
+
         {/* Advanced Options */}
         <Accordion variant="surface" className="mb-4">
           <Accordion.Item value="advanced">
@@ -361,7 +483,7 @@ export default function StackingScreen() {
                 {/* Export Format */}
                 <View className="flex-row items-center gap-2">
                   <Text className="text-[10px] text-muted">{t("editor.exportFormat")}:</Text>
-                  {(["png", "jpeg", "tiff"] as ExportFormat[]).map((fmt) => (
+                  {(["png", "jpeg", "webp", "tiff", "bmp", "fits"] as ExportFormat[]).map((fmt) => (
                     <Chip
                       key={fmt}
                       size="sm"
@@ -372,6 +494,122 @@ export default function StackingScreen() {
                     </Chip>
                   ))}
                 </View>
+
+                <Separator className="my-1" />
+                <Text className="text-[10px] font-semibold uppercase text-muted">
+                  {t("settings.stackingDetectionProfile")} · {t("editor.alignment")}
+                </Text>
+
+                <SimpleSlider
+                  label={t("settings.stackingDetectSigmaThreshold")}
+                  value={detectSigmaThreshold}
+                  min={1}
+                  max={10}
+                  step={0.1}
+                  onValueChange={setDetectSigmaThreshold}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectMaxStars")}
+                  value={detectMaxStars}
+                  min={50}
+                  max={800}
+                  step={10}
+                  onValueChange={setDetectMaxStars}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectMinArea")}
+                  value={detectMinArea}
+                  min={1}
+                  max={20}
+                  step={1}
+                  onValueChange={(v) => {
+                    setDetectMinArea(v);
+                    if (v > detectMaxArea) setDetectMaxArea(v);
+                  }}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectMaxArea")}
+                  value={detectMaxArea}
+                  min={20}
+                  max={3000}
+                  step={10}
+                  onValueChange={(v) => {
+                    setDetectMaxArea(v);
+                    if (v < detectMinArea) setDetectMinArea(v);
+                  }}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectBorderMargin")}
+                  value={detectBorderMargin}
+                  min={0}
+                  max={64}
+                  step={1}
+                  onValueChange={setDetectBorderMargin}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingBackgroundMeshSize")}
+                  value={backgroundMeshSize}
+                  min={16}
+                  max={256}
+                  step={8}
+                  onValueChange={setBackgroundMeshSize}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDeblendNLevels")}
+                  value={deblendNLevels}
+                  min={1}
+                  max={32}
+                  step={1}
+                  onValueChange={setDeblendNLevels}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDeblendMinContrast")}
+                  value={deblendMinContrast}
+                  min={0.01}
+                  max={0.5}
+                  step={0.01}
+                  onValueChange={setDeblendMinContrast}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingFilterFwhm")}
+                  value={filterFwhm}
+                  min={0.5}
+                  max={8}
+                  step={0.1}
+                  onValueChange={setFilterFwhm}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingMaxFwhm")}
+                  value={maxFwhm}
+                  min={1}
+                  max={20}
+                  step={0.1}
+                  onValueChange={setMaxFwhm}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingMaxEllipticity")}
+                  value={maxEllipticity}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onValueChange={setMaxEllipticity}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingRansacMaxIterations")}
+                  value={ransacMaxIterations}
+                  min={20}
+                  max={400}
+                  step={10}
+                  onValueChange={setRansacMaxIterations}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingAlignmentInlierThreshold")}
+                  value={alignmentInlierThreshold}
+                  min={0.5}
+                  max={10}
+                  step={0.1}
+                  onValueChange={setAlignmentInlierThreshold}
+                />
               </View>
             </Accordion.Content>
           </Accordion.Item>
@@ -484,6 +722,7 @@ export default function StackingScreen() {
                 showCrosshair={false}
                 cursorX={-1}
                 cursorY={-1}
+                interactionEnabled={false}
               />
             </View>
 
@@ -529,7 +768,7 @@ export default function StackingScreen() {
                       <Text className="text-[9px] text-muted">
                         {ar.matchedStars === -1
                           ? t("editor.referenceFrame")
-                          : `${ar.matchedStars} ${t("editor.stars")} · RMS ${ar.rmsError.toFixed(2)}px`}
+                          : `${ar.matchedStars} ${t("editor.stars")} · RMS ${ar.rmsError.toFixed(2)}px · Ref ${ar.detectedRefStars ?? "-"} / Cur ${ar.detectedTargetStars ?? "-"}${ar.fallbackUsed && ar.fallbackUsed !== "none" ? ` · Fallback ${ar.fallbackUsed}` : ""}`}
                       </Text>
                     </View>
                   ))}

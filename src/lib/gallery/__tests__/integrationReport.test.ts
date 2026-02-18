@@ -45,6 +45,31 @@ describe("integrationReport", () => {
       expect(report.totalExposure).toBe(300);
     });
 
+    it("supports configurable frame scope", () => {
+      const files = [
+        makeFile({ frameType: "light", exptime: 300 }),
+        makeFile({ frameType: "darkflat", exptime: 2 }),
+      ];
+      const report = generateIntegrationReport(files, {
+        includedFrameTypes: ["light", "darkflat"],
+      });
+      expect(report.totalFrames).toBe(2);
+      expect(report.totalExposure).toBe(302);
+      expect(report.includedFrameTypes).toEqual(["light", "darkflat"]);
+    });
+
+    it("normalizes frame scope by dropping blanks and deduping", () => {
+      const files = [
+        makeFile({ frameType: "light", exptime: 100 }),
+        makeFile({ frameType: "darkflat", exptime: 10 }),
+      ];
+      const report = generateIntegrationReport(files, {
+        includedFrameTypes: ["light", "", "darkflat", "light"],
+      });
+      expect(report.includedFrameTypes).toEqual(["light", "darkflat"]);
+      expect(report.totalFrames).toBe(2);
+    });
+
     it("groups by target", () => {
       const files = [
         makeFile({ object: "M42", filter: "Ha", exptime: 300 }),
@@ -188,7 +213,7 @@ describe("integrationReport", () => {
       const report = generateIntegrationReport([]);
       const md = exportReportAsMarkdown(report);
       expect(md).toContain("# Integration Report");
-      expect(md).toContain("Total lights:** 0");
+      expect(md).toContain("Total frames:** 0");
     });
   });
 });

@@ -2,10 +2,10 @@ const mockFormatCoordinates = jest.fn();
 const mockFormatExposureTime = jest.fn((seconds: number) => `${seconds}s`);
 
 jest.mock("../coordinates", () => ({
-  formatCoordinates: (...args: unknown[]) => mockFormatCoordinates(...args),
+  formatCoordinates: (ra?: number, dec?: number) => mockFormatCoordinates(ra, dec),
 }));
 jest.mock("../exposureStats", () => ({
-  formatExposureTime: (...args: unknown[]) => mockFormatExposureTime(...args),
+  formatExposureTime: (seconds: number) => mockFormatExposureTime(seconds),
 }));
 
 import { Share } from "react-native";

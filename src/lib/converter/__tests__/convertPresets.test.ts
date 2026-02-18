@@ -1,4 +1,4 @@
-import { DEFAULT_CONVERT_PRESETS } from "../../fits/types";
+import { DEFAULT_CONVERT_PRESETS, DEFAULT_FITS_TARGET_OPTIONS } from "../../fits/types";
 import {
   createPreset,
   getAllPresets,
@@ -37,16 +37,35 @@ describe("convertPresets", () => {
   });
 
   it("returns default options for formats and fallback", () => {
-    expect(getDefaultOptionsForFormat("png")).toEqual({ quality: 100, bitDepth: 8, dpi: 72 });
-    expect(getDefaultOptionsForFormat("jpeg")).toEqual({ quality: 85, bitDepth: 8, dpi: 72 });
-    expect(getDefaultOptionsForFormat("webp")).toEqual({ quality: 80, bitDepth: 8, dpi: 72 });
-    expect(getDefaultOptionsForFormat("tiff")).toEqual({ quality: 100, bitDepth: 16, dpi: 72 });
-    expect(getDefaultOptionsForFormat("bmp")).toEqual({ quality: 100, bitDepth: 8, dpi: 72 });
+    expect(getDefaultOptionsForFormat("png")).toEqual(
+      expect.objectContaining({ quality: 100, bitDepth: 8, dpi: 72 }),
+    );
+    expect(getDefaultOptionsForFormat("jpeg")).toEqual(
+      expect.objectContaining({ quality: 85, bitDepth: 8, dpi: 72 }),
+    );
+    expect(getDefaultOptionsForFormat("webp")).toEqual(
+      expect.objectContaining({ quality: 80, bitDepth: 8, dpi: 72 }),
+    );
+    expect(getDefaultOptionsForFormat("tiff")).toEqual(
+      expect.objectContaining({ quality: 100, bitDepth: 16, dpi: 72 }),
+    );
+    expect(getDefaultOptionsForFormat("bmp")).toEqual(
+      expect.objectContaining({ quality: 100, bitDepth: 8, dpi: 72 }),
+    );
+    expect(getDefaultOptionsForFormat("fits")).toEqual(
+      expect.objectContaining({
+        quality: 100,
+        bitDepth: 32,
+        dpi: 72,
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      }),
+    );
   });
 
   it("returns supported bit depths by format", () => {
     expect(getSupportedBitDepths("tiff")).toEqual([8, 16, 32]);
     expect(getSupportedBitDepths("png")).toEqual([8, 16]);
+    expect(getSupportedBitDepths("fits")).toEqual([8, 16, 32]);
     expect(getSupportedBitDepths("jpeg")).toEqual([8]);
   });
 

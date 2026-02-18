@@ -7,7 +7,23 @@ import * as Application from "expo-application";
 import * as Device from "expo-device";
 import type { BackupManifest, BackupOptions } from "./types";
 import { MANIFEST_VERSION } from "./types";
-import type { FitsMetadata, Album, Target, ObservationSession } from "../fits/types";
+import type {
+  FitsMetadata,
+  Album,
+  Target,
+  ObservationSession,
+  TargetGroup,
+  ObservationPlan,
+  ObservationLogEntry,
+} from "../fits/types";
+
+function normalizeManifestFile(file: FitsMetadata): FitsMetadata {
+  if (file.mediaKind) return file;
+  return {
+    ...file,
+    mediaKind: file.sourceType === "video" ? "video" : "image",
+  };
+}
 
 /**
  * 生成备份 Manifest
@@ -17,7 +33,10 @@ export function createManifest(
     files: FitsMetadata[];
     albums: Album[];
     targets: Target[];
+    targetGroups: TargetGroup[];
     sessions: ObservationSession[];
+    plans: ObservationPlan[];
+    logEntries: ObservationLogEntry[];
     settings: Record<string, unknown>;
   },
   options: BackupOptions,
@@ -31,7 +50,10 @@ export function createManifest(
     files: options.includeFiles ? data.files : [],
     albums: options.includeAlbums ? data.albums : [],
     targets: options.includeTargets ? data.targets : [],
+    targetGroups: options.includeTargets ? data.targetGroups : [],
     sessions: options.includeSessions ? data.sessions : [],
+    plans: options.includeSessions ? data.plans : [],
+    logEntries: options.includeSessions ? data.logEntries : [],
     settings: options.includeSettings ? data.settings : {},
   };
 }
@@ -55,10 +77,13 @@ export function parseManifest(json: string): BackupManifest | null {
       createdAt: data.createdAt,
       deviceName: data.deviceName ?? "Unknown Device",
       platform: data.platform ?? "unknown",
-      files: Array.isArray(data.files) ? data.files : [],
+      files: Array.isArray(data.files) ? data.files.map((file) => normalizeManifestFile(file)) : [],
       albums: Array.isArray(data.albums) ? data.albums : [],
       targets: Array.isArray(data.targets) ? data.targets : [],
+      targetGroups: Array.isArray(data.targetGroups) ? data.targetGroups : [],
       sessions: Array.isArray(data.sessions) ? data.sessions : [],
+      plans: Array.isArray(data.plans) ? data.plans : [],
+      logEntries: Array.isArray(data.logEntries) ? data.logEntries : [],
       settings: data.settings && typeof data.settings === "object" ? data.settings : {},
     };
   } catch {
@@ -80,7 +105,10 @@ export function getManifestSummary(manifest: BackupManifest): {
   fileCount: number;
   albumCount: number;
   targetCount: number;
+  targetGroupCount: number;
   sessionCount: number;
+  planCount: number;
+  logEntryCount: number;
   hasSettings: boolean;
   createdAt: string;
   deviceName: string;
@@ -90,7 +118,10 @@ export function getManifestSummary(manifest: BackupManifest): {
     fileCount: manifest.files.length,
     albumCount: manifest.albums.length,
     targetCount: manifest.targets.length,
+    targetGroupCount: manifest.targetGroups.length,
     sessionCount: manifest.sessions.length,
+    planCount: manifest.plans.length,
+    logEntryCount: manifest.logEntries.length,
     hasSettings: Object.keys(manifest.settings).length > 0,
     createdAt: manifest.createdAt,
     deviceName: manifest.deviceName,

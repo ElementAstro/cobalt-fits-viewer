@@ -1,11 +1,14 @@
 const mockDetectStars = jest.fn();
+const mockDetectStarsAsync = jest.fn();
 
 jest.mock("../starDetection", () => ({
   detectStars: (...args: unknown[]) => mockDetectStars(...args),
+  detectStarsAsync: (...args: unknown[]) => mockDetectStarsAsync(...args),
 }));
 
 import {
   alignFrame,
+  alignFrameAsync,
   applyTransform,
   computeFullAlignment,
   computeTranslation,
@@ -25,6 +28,7 @@ const star = (cx: number, cy: number, flux: number = 100): DetectedStar => ({
 describe("stacking alignment", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDetectStarsAsync.mockReset();
   });
 
   it("computes translation and handles insufficient stars", () => {
@@ -118,5 +122,51 @@ describe("stacking alignment", () => {
     const success = alignFrame(refPixels, targetPixels, 200, 200, "full");
     expect(success.transform.matchedStars).toBeGreaterThanOrEqual(3);
     expect(success.aligned).toHaveLength(200 * 200);
+  });
+
+  it("alignFrameAsync supports full->translation fallback with diagnostics", async () => {
+    const refPixels = new Float32Array(200 * 200).fill(1);
+    const targetPixels = new Float32Array(200 * 200).fill(2);
+    const ref = [star(20, 20), star(60, 20), star(40, 70), star(100, 120), star(150, 80)];
+    const target = [star(23, 18), star(63, 18), star(43, 68), star(103, 118), star(153, 78)];
+
+    mockDetectStarsAsync.mockResolvedValueOnce(ref).mockResolvedValueOnce(target);
+
+    const { aligned, transform } = await alignFrameAsync(
+      refPixels,
+      targetPixels,
+      200,
+      200,
+      "full",
+      {
+        maxRansacIterations: 0,
+        fallbackToTranslation: true,
+        searchRadius: 12,
+      },
+    );
+
+    expect(aligned).toHaveLength(targetPixels.length);
+    expect(transform.matchedStars).toBeGreaterThanOrEqual(3);
+    expect(transform.fallbackUsed).toBe("translation");
+    expect(transform.detectionCounts).toEqual({ ref: ref.length, target: target.length });
+  });
+
+  it("alignFrameAsync returns identity when alignment cannot be solved", async () => {
+    const refPixels = new Float32Array(30 * 30).fill(1);
+    const targetPixels = new Float32Array(30 * 30).fill(2);
+
+    mockDetectStarsAsync
+      .mockResolvedValueOnce([star(3, 3), star(8, 8)])
+      .mockResolvedValueOnce([star(5, 5)]);
+
+    const { aligned, transform } = await alignFrameAsync(refPixels, targetPixels, 30, 30, "full", {
+      fallbackToTranslation: false,
+    });
+
+    expect(aligned).toBe(targetPixels);
+    expect(transform.matrix).toEqual([1, 0, 0, 0, 1, 0]);
+    expect(transform.fallbackUsed).toBe("none");
+    expect(transform.matchedStars).toBe(0);
+    expect(transform.detectionCounts).toEqual({ ref: 2, target: 1 });
   });
 });

@@ -17,7 +17,7 @@ import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { CropOverlay } from "../../components/fits/CropOverlay";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
 import { ExportDialog } from "../../components/common/ExportDialog";
-import type { ExportFormat } from "../../lib/fits/types";
+import type { ExportFormat, FitsTargetOptions } from "../../lib/fits/types";
 import type { ImageEditOperation } from "../../lib/utils/imageOperations";
 import { detectStars, type DetectedStar } from "../../lib/stacking/starDetection";
 
@@ -104,6 +104,7 @@ export default function EditorDetailScreen() {
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
+  const isVideoFile = file?.mediaKind === "video" || file?.sourceType === "video";
   const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
   const defaultBlurSigma = useSettingsStore((s) => s.defaultBlurSigma);
   const defaultSharpenAmount = useSettingsStore((s) => s.defaultSharpenAmount);
@@ -167,6 +168,11 @@ export default function EditorDetailScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file?.filepath]);
+
+  useEffect(() => {
+    if (!id || !isVideoFile) return;
+    router.replace(`/video/${id}`);
+  }, [id, isVideoFile, router]);
 
   // Initialize editor when pixels are ready
   useEffect(() => {
@@ -375,19 +381,20 @@ export default function EditorDetailScreen() {
   );
 
   const handleEditorExport = useCallback(
-    async (quality: number) => {
+    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
       if (!editor.rgbaData || !editor.current) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
-      const path = await exportImage(
-        editor.rgbaData,
-        editor.current.width,
-        editor.current.height,
-        file?.filename ?? "edited",
-        exportFormat,
+      const path = await exportImage({
+        rgbaData: editor.rgbaData,
+        width: editor.current.width,
+        height: editor.current.height,
+        filename: file?.filename ?? "edited",
+        format: exportFormat,
         quality,
-      );
+        fits: { ...fits, mode: "rendered" },
+      });
       if (path) {
         Alert.alert(t("common.success"), t("viewer.exportSuccess"));
       } else {
@@ -399,20 +406,21 @@ export default function EditorDetailScreen() {
   );
 
   const handleEditorShare = useCallback(
-    async (quality: number) => {
+    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
       if (!editor.rgbaData || !editor.current) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
       try {
-        await shareImage(
-          editor.rgbaData,
-          editor.current.width,
-          editor.current.height,
-          file?.filename ?? "edited",
-          exportFormat,
+        await shareImage({
+          rgbaData: editor.rgbaData,
+          width: editor.current.width,
+          height: editor.current.height,
+          filename: file?.filename ?? "edited",
+          format: exportFormat,
           quality,
-        );
+          fits: { ...fits, mode: "rendered" },
+        });
       } catch {
         Alert.alert(t("common.error"), t("share.failed"));
       }
@@ -422,19 +430,20 @@ export default function EditorDetailScreen() {
   );
 
   const handleEditorSave = useCallback(
-    async (quality: number) => {
+    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
       if (!editor.rgbaData || !editor.current) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
-      const uri = await saveImage(
-        editor.rgbaData,
-        editor.current.width,
-        editor.current.height,
-        file?.filename ?? "edited",
-        exportFormat,
+      const uri = await saveImage({
+        rgbaData: editor.rgbaData,
+        width: editor.current.width,
+        height: editor.current.height,
+        filename: file?.filename ?? "edited",
+        format: exportFormat,
         quality,
-      );
+        fits: { ...fits, mode: "rendered" },
+      });
       if (uri) {
         Alert.alert(t("common.success"), t("viewer.savedToDevice"));
       } else {
@@ -452,6 +461,20 @@ export default function EditorDetailScreen() {
         <Text className="mt-4 text-sm text-muted">{t("common.noData")}</Text>
         <Button variant="outline" className="mt-4" onPress={() => router.back()}>
           <Button.Label>{t("common.goHome")}</Button.Label>
+        </Button>
+      </View>
+    );
+  }
+
+  if (isVideoFile) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6">
+        <Ionicons name="videocam-outline" size={48} color={mutedColor} />
+        <Text className="mt-4 text-center text-sm text-muted">
+          Video files are edited in the video workspace.
+        </Text>
+        <Button variant="primary" className="mt-4" onPress={() => router.replace(`/video/${id}`)}>
+          <Button.Label>Open Video Workspace</Button.Label>
         </Button>
       </View>
     );
@@ -1132,6 +1155,7 @@ export default function EditorDetailScreen() {
         onExport={handleEditorExport}
         onShare={handleEditorShare}
         onSaveToDevice={handleEditorSave}
+        fitsScientificAvailable={false}
         onClose={() => setShowExport(false)}
       />
 

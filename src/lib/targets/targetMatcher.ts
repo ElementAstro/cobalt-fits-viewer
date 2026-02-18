@@ -81,7 +81,8 @@ const COMMON_ALIASES: Record<string, string[]> = {
 /**
  * 规范化目标名（去除空格、统一大小写等）
  */
-export function normalizeName(name: string): string {
+export function normalizeName(name: string | null | undefined): string {
+  if (typeof name !== "string") return "";
   return name
     .trim()
     .replace(/\s+/g, " ")
@@ -145,6 +146,9 @@ export function matchTargetByName(name: string, targets: Target[]): Target | nul
  * 合并两个目标（将 source 合并到 dest）
  */
 export function mergeTargets(dest: Target, source: Target): Target {
+  const mergedImageIds = [...new Set([...dest.imageIds, ...source.imageIds])];
+  const mergedImageIdSet = new Set(mergedImageIds);
+
   const allAliases = new Set([...dest.aliases, ...source.aliases, source.name]);
   allAliases.delete(dest.name);
 
@@ -153,12 +157,70 @@ export function mergeTargets(dest: Target, source: Target): Target {
     mergedExposure[filter] = Math.max(mergedExposure[filter] ?? 0, seconds);
   }
 
+  const mergedNotes = [dest.notes, source.notes]
+    .filter((value): value is string => Boolean(value && value.trim()))
+    .flatMap((value) =>
+      value
+        .split(/\r?\n/u)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    );
+  const dedupedNotes = mergedNotes.length > 0 ? [...new Set(mergedNotes)].join("\n") : undefined;
+
+  const mergedEquipment = {
+    telescope: dest.recommendedEquipment?.telescope ?? source.recommendedEquipment?.telescope,
+    camera: dest.recommendedEquipment?.camera ?? source.recommendedEquipment?.camera,
+    filters: [
+      ...new Set([
+        ...(dest.recommendedEquipment?.filters ?? []),
+        ...(source.recommendedEquipment?.filters ?? []),
+      ]),
+    ],
+    notes: [dest.recommendedEquipment?.notes, source.recommendedEquipment?.notes]
+      .filter((value): value is string => Boolean(value && value.trim()))
+      .join("\n"),
+  };
+  const nextRecommendedEquipment =
+    mergedEquipment.telescope ||
+    mergedEquipment.camera ||
+    mergedEquipment.filters.length > 0 ||
+    mergedEquipment.notes
+      ? {
+          telescope: mergedEquipment.telescope,
+          camera: mergedEquipment.camera,
+          filters: mergedEquipment.filters.length > 0 ? mergedEquipment.filters : undefined,
+          notes: mergedEquipment.notes || undefined,
+        }
+      : undefined;
+
+  const mergedImageRatings = {
+    ...(source.imageRatings ?? {}),
+    ...(dest.imageRatings ?? {}),
+  };
+  for (const imageId of Object.keys(mergedImageRatings)) {
+    if (!mergedImageIdSet.has(imageId)) {
+      delete mergedImageRatings[imageId];
+    }
+  }
+
+  const nextBestImageId =
+    dest.bestImageId && mergedImageIdSet.has(dest.bestImageId)
+      ? dest.bestImageId
+      : source.bestImageId && mergedImageIdSet.has(source.bestImageId)
+        ? source.bestImageId
+        : undefined;
+
   return {
     ...dest,
     aliases: [...allAliases],
-    imageIds: [...new Set([...dest.imageIds, ...source.imageIds])],
+    tags: [...new Set([...dest.tags, ...source.tags])],
+    imageIds: mergedImageIds,
     plannedFilters: [...new Set([...dest.plannedFilters, ...source.plannedFilters])],
     plannedExposure: mergedExposure,
+    notes: dedupedNotes,
+    recommendedEquipment: nextRecommendedEquipment,
+    imageRatings: mergedImageRatings,
+    bestImageId: nextBestImageId,
     updatedAt: Date.now(),
   };
 }

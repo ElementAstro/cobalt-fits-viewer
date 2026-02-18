@@ -15,7 +15,6 @@ import { useFontLoader } from "../hooks/useFontLoader";
 import { cleanOldExports } from "../lib/utils/imageExport";
 import { useAutoSolve } from "../hooks/useAutoSolve";
 import { useAutoBackup } from "../hooks/useAutoBackup";
-import { useTargets } from "../hooks/useTargets";
 import { Logger, cleanLogExports, initLoggerRuntime } from "../lib/logger";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useOnboardingStore } from "../stores/useOnboardingStore";
@@ -24,6 +23,7 @@ import { useFitsStore } from "../stores/useFitsStore";
 import { useTargetGroupStore } from "../stores/useTargetGroupStore";
 import { useSessionStore } from "../stores/useSessionStore";
 import { OnboardingScreen } from "../components/common/OnboardingScreen";
+import { reconcileAllStores } from "../lib/targets/targetIntegrity";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -38,8 +38,6 @@ function AutoBackupProvider({ children }: { children: React.ReactNode }) {
 }
 
 function TargetIntegrityProvider({ children }: { children: React.ReactNode }) {
-  const { reconcileTargetGraph } = useTargets();
-
   useEffect(() => {
     let hasReconciled = false;
     const storeHydrated = () =>
@@ -51,7 +49,18 @@ function TargetIntegrityProvider({ children }: { children: React.ReactNode }) {
     const tryReconcile = () => {
       if (hasReconciled || !storeHydrated()) return;
       hasReconciled = true;
-      reconcileTargetGraph();
+      const patch = reconcileAllStores();
+      if (!patch.valid) {
+        Logger.error(
+          "TargetIntegrity",
+          "Target graph validation failed after hydration",
+          patch.errors,
+        );
+        return;
+      }
+      if (patch.changed) {
+        Logger.info("TargetIntegrity", "Target graph reconciled", patch.report);
+      }
     };
 
     const unsubTarget = useTargetStore.persist.onFinishHydration(tryReconcile);
@@ -66,7 +75,7 @@ function TargetIntegrityProvider({ children }: { children: React.ReactNode }) {
       unsubGroup?.();
       unsubSession?.();
     };
-  }, [reconcileTargetGraph]);
+  }, []);
 
   return <>{children}</>;
 }

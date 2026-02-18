@@ -69,7 +69,10 @@ function createMockDataSource(): BackupDataSource {
     getAlbums: () =>
       [{ id: "a1", name: "TestAlbum", fileIds: [], createdAt: Date.now() }] as never[],
     getTargets: () => [{ id: "t1", name: "M31" }] as never[],
+    getTargetGroups: () => [{ id: "g1", name: "Group", targetIds: ["t1"] }] as never[],
     getSessions: () => [],
+    getPlans: () => [{ id: "p1", title: "Plan", targetName: "M31" }] as never[],
+    getLogEntries: () => [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
     getSettings: () => ({ language: "en", theme: "dark" }),
   };
 }
@@ -79,7 +82,10 @@ function createMockRestoreTarget() {
     setFiles: jest.fn(),
     setAlbums: jest.fn(),
     setTargets: jest.fn(),
+    setTargetGroups: jest.fn(),
     setSessions: jest.fn(),
+    setPlans: jest.fn(),
+    setLogEntries: jest.fn(),
     setSettings: jest.fn(),
   };
 }
@@ -98,6 +104,9 @@ describe("performBackup", () => {
     expect(uploadedManifest.version).toBe(MANIFEST_VERSION);
     expect(uploadedManifest.albums).toHaveLength(1);
     expect(uploadedManifest.targets).toHaveLength(1);
+    expect(uploadedManifest.targetGroups).toHaveLength(1);
+    expect(uploadedManifest.plans).toHaveLength(1);
+    expect(uploadedManifest.logEntries).toHaveLength(1);
   });
 
   it("should upload files with stable id-prefixed remote names", async () => {
@@ -192,7 +201,10 @@ describe("performRestore", () => {
     files: [],
     albums: [{ id: "a1", name: "RestoredAlbum", fileIds: [] }] as never[],
     targets: [{ id: "t1", name: "M42" }] as never[],
+    targetGroups: [{ id: "g1", name: "Group", targetIds: ["t1"] }] as never[],
     sessions: [{ id: "s1", startTime: 1000 }] as never[],
+    plans: [{ id: "p1", title: "Plan", targetName: "M42" }] as never[],
+    logEntries: [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
     settings: { language: "zh", theme: "light", gridColor: "#ff0000" },
   };
 
@@ -205,7 +217,10 @@ describe("performRestore", () => {
     expect(provider.downloadManifest).toHaveBeenCalled();
     expect(target.setAlbums).toHaveBeenCalledWith(testManifest.albums, "skip-existing");
     expect(target.setTargets).toHaveBeenCalledWith(testManifest.targets, "skip-existing");
+    expect(target.setTargetGroups).toHaveBeenCalledWith(testManifest.targetGroups, "skip-existing");
     expect(target.setSessions).toHaveBeenCalledWith(testManifest.sessions, "skip-existing");
+    expect(target.setPlans).toHaveBeenCalledWith(testManifest.plans, "skip-existing");
+    expect(target.setLogEntries).toHaveBeenCalledWith(testManifest.logEntries, "skip-existing");
     expect(target.setSettings).toHaveBeenCalledWith(testManifest.settings);
   });
 
@@ -248,6 +263,34 @@ describe("performRestore", () => {
     expect(restoredFilesArg[0].id).toBe("f2");
   });
 
+  it("normalizes restored legacy video metadata with mediaKind", async () => {
+    jest.requireMock("expo-file-system").File.mockImplementation((path: string) => ({
+      uri: path,
+      exists: false,
+    }));
+
+    const legacyManifest: BackupManifest = {
+      ...testManifest,
+      files: [
+        {
+          id: "video-1",
+          filename: "capture.mp4",
+          filepath: "/remote/capture.mp4",
+          fileSize: 1000,
+          sourceType: "video",
+        } as never,
+      ],
+    };
+    const provider = createMockProvider(legacyManifest);
+    const target = createMockRestoreTarget();
+
+    await performRestore(provider, target, DEFAULT_BACKUP_OPTIONS);
+
+    const restoredFilesArg = (target.setFiles as jest.Mock).mock.calls[0][0];
+    expect(restoredFilesArg[0].filename).toBe("capture.mp4");
+    expect(restoredFilesArg[0].mediaKind).toBe("video");
+  });
+
   it("should throw when no manifest found", async () => {
     const provider = createMockProvider(undefined);
     const target = createMockRestoreTarget();
@@ -285,7 +328,10 @@ describe("getBackupInfo", () => {
       ] as never[],
       albums: [],
       targets: [],
+      targetGroups: [],
       sessions: [],
+      plans: [],
+      logEntries: [],
       settings: {},
     };
 

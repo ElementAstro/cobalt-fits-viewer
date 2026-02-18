@@ -9,6 +9,7 @@ import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
 import { useSessionStore } from "../stores/useSessionStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
+import { useTargetStore } from "../stores/useTargetStore";
 import {
   isCalendarAvailable,
   requestCalendarPermission,
@@ -66,6 +67,7 @@ export function useCalendar() {
   const removePlan = useSessionStore((s) => s.removePlan);
   const getSessionById = useSessionStore((s) => s.getSessionById);
   const plans = useSessionStore((s) => s.plans);
+  const targets = useTargetStore((s) => s.targets);
 
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
   const calendarSyncEnabled = useSettingsStore((s) => s.calendarSyncEnabled);
@@ -141,7 +143,7 @@ export function useCalendar() {
 
       try {
         setSyncing(true);
-        const eventId = await syncSessionToCalendar(session, defaultReminderMinutes);
+        const eventId = await syncSessionToCalendar(session, defaultReminderMinutes, targets);
         updateSession(session.id, { calendarEventId: eventId });
         notifyHaptic(Haptics.NotificationFeedbackType.Success);
         Logger.info(LOG_TAGS.Calendar, `Session synced: ${session.id}`);
@@ -154,7 +156,7 @@ export function useCalendar() {
         setSyncing(false);
       }
     },
-    [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession],
+    [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession, targets],
   );
 
   const syncAllSessions = useCallback(
@@ -168,7 +170,7 @@ export function useCalendar() {
         for (const session of sessions) {
           if (session.calendarEventId) continue;
           try {
-            const eventId = await syncSessionToCalendar(session, defaultReminderMinutes);
+            const eventId = await syncSessionToCalendar(session, defaultReminderMinutes, targets);
             updateSession(session.id, { calendarEventId: eventId });
             count++;
           } catch {
@@ -183,7 +185,7 @@ export function useCalendar() {
       }
       return count;
     },
-    [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession],
+    [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession, targets],
   );
 
   const unsyncSession = useCallback(
@@ -222,7 +224,7 @@ export function useCalendar() {
 
       try {
         setSyncing(true);
-        const eventId = await createPlanEvent(fullPlan);
+        const eventId = await createPlanEvent(fullPlan, targets);
         fullPlan.calendarEventId = eventId;
         addPlan(fullPlan);
         notifyHaptic(Haptics.NotificationFeedbackType.Success);
@@ -238,7 +240,7 @@ export function useCalendar() {
         setSyncing(false);
       }
     },
-    [calendarSyncEnabled, ensurePermission, addPlan, notifyHaptic],
+    [calendarSyncEnabled, ensurePermission, addPlan, notifyHaptic, targets],
   );
 
   const updateObservationPlan = useCallback(
@@ -257,7 +259,7 @@ export function useCalendar() {
         setSyncing(true);
         if (existing.calendarEventId) {
           try {
-            await updatePlanEvent(existing.calendarEventId, mergedPlan);
+            await updatePlanEvent(existing.calendarEventId, mergedPlan, targets);
             updatePlan(planId, updates);
             notifyHaptic(Haptics.NotificationFeedbackType.Success);
             return true;
@@ -268,7 +270,7 @@ export function useCalendar() {
               e,
             );
             // 事件可能已被用户手动删除，改为创建新事件并回写 eventId
-            const eventId = await createPlanEvent(mergedPlan);
+            const eventId = await createPlanEvent(mergedPlan, targets);
             updatePlan(planId, { ...updates, calendarEventId: eventId });
             notifyHaptic(Haptics.NotificationFeedbackType.Warning);
             return true;
@@ -282,7 +284,7 @@ export function useCalendar() {
           return true;
         }
 
-        const eventId = await createPlanEvent(mergedPlan);
+        const eventId = await createPlanEvent(mergedPlan, targets);
         updatePlan(planId, { ...updates, calendarEventId: eventId });
         notifyHaptic(Haptics.NotificationFeedbackType.Success);
         return true;
@@ -296,7 +298,7 @@ export function useCalendar() {
         setSyncing(false);
       }
     },
-    [calendarSyncEnabled, plans, updatePlan, ensurePermission, notifyHaptic],
+    [calendarSyncEnabled, plans, updatePlan, ensurePermission, notifyHaptic, targets],
   );
 
   const syncObservationPlan = useCallback(
@@ -311,7 +313,7 @@ export function useCalendar() {
 
       try {
         setSyncing(true);
-        const eventId = await createPlanEvent(plan);
+        const eventId = await createPlanEvent(plan, targets);
         updatePlan(planId, { calendarEventId: eventId });
         notifyHaptic(Haptics.NotificationFeedbackType.Success);
         return true;
@@ -323,7 +325,7 @@ export function useCalendar() {
         setSyncing(false);
       }
     },
-    [calendarSyncEnabled, plans, updatePlan, ensurePermission, notifyHaptic],
+    [calendarSyncEnabled, plans, updatePlan, ensurePermission, notifyHaptic, targets],
   );
 
   const syncAllObservationPlans = useCallback(
@@ -338,7 +340,7 @@ export function useCalendar() {
         for (const plan of targetPlans) {
           if (plan.calendarEventId) continue;
           try {
-            const eventId = await createPlanEvent(plan);
+            const eventId = await createPlanEvent(plan, targets);
             updatePlan(plan.id, { calendarEventId: eventId });
             count++;
           } catch {
@@ -353,7 +355,7 @@ export function useCalendar() {
       }
       return count;
     },
-    [calendarSyncEnabled, plans, ensurePermission, updatePlan, notifyHaptic],
+    [calendarSyncEnabled, plans, ensurePermission, updatePlan, notifyHaptic, targets],
   );
 
   const refreshSessionFromCalendarCore = useCallback(
@@ -637,7 +639,7 @@ export function useCalendar() {
 
             setSyncing(true);
             try {
-              eventId = await syncSessionToCalendar(session, defaultReminderMinutes);
+              eventId = await syncSessionToCalendar(session, defaultReminderMinutes, targets);
               updateSession(session.id, { calendarEventId: eventId });
             } finally {
               setSyncing(false);
@@ -665,6 +667,7 @@ export function useCalendar() {
       getSessionById,
       updateSession,
       showCalendarSyncDisabledAlert,
+      targets,
     ],
   );
 
@@ -684,7 +687,7 @@ export function useCalendar() {
 
             setSyncing(true);
             try {
-              eventId = await createPlanEvent(plan);
+              eventId = await createPlanEvent(plan, targets);
               updatePlan(plan.id, { calendarEventId: eventId });
             } finally {
               setSyncing(false);
@@ -711,6 +714,7 @@ export function useCalendar() {
       plans,
       updatePlan,
       showCalendarSyncDisabledAlert,
+      targets,
     ],
   );
 
@@ -787,7 +791,7 @@ export function useCalendar() {
       }
       try {
         const result = await createEventViaSystemUI(
-          buildSessionEventDetails(session, defaultReminderMinutes),
+          buildSessionEventDetails(session, defaultReminderMinutes, targets),
           { startNewActivityTask: false },
         );
         if (result.id) {
@@ -799,7 +803,13 @@ export function useCalendar() {
         return false;
       }
     },
-    [calendarSyncEnabled, defaultReminderMinutes, updateSession, showCalendarSyncDisabledAlert],
+    [
+      calendarSyncEnabled,
+      defaultReminderMinutes,
+      updateSession,
+      showCalendarSyncDisabledAlert,
+      targets,
+    ],
   );
 
   const createPlanViaSystemCalendar = useCallback(
@@ -809,7 +819,7 @@ export function useCalendar() {
         return false;
       }
       try {
-        const result = await createEventViaSystemUI(buildPlanEventDetails(plan), {
+        const result = await createEventViaSystemUI(buildPlanEventDetails(plan, targets), {
           startNewActivityTask: false,
         });
         if (result.id) {
@@ -821,7 +831,7 @@ export function useCalendar() {
         return false;
       }
     },
-    [calendarSyncEnabled, updatePlan, showCalendarSyncDisabledAlert],
+    [calendarSyncEnabled, updatePlan, showCalendarSyncDisabledAlert, targets],
   );
 
   const deleteObservationPlan = useCallback(

@@ -1,5 +1,5 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 
 const mockUseLocalSearchParams = jest.fn();
 const mockUseImageComparison = jest.fn();
@@ -68,6 +68,9 @@ jest.mock("../../../stores/useSettingsStore", () => ({
       defaultShowPixelInfo: true,
       defaultShowMinimap: false,
       imageProcessingDebounce: 0,
+      canvasMinScale: 0.5,
+      canvasMaxScale: 10,
+      canvasDoubleTapScale: 3,
     }),
 }));
 
@@ -94,17 +97,23 @@ jest.mock("../../../hooks/useScreenOrientation", () => ({
 jest.mock("../../../components/fits/FitsCanvas", () => {
   const ReactLocal = require("react");
   const { View } = require("react-native");
+  const canvasEntries: Array<{ props: Record<string, unknown>; setTransform: jest.Mock }> = [];
+
   return {
-    FitsCanvas: ReactLocal.forwardRef(
-      (_props: Record<string, unknown>, ref: React.Ref<unknown>) => {
-        ReactLocal.useImperativeHandle(ref, () => ({
-          setTransform: jest.fn(),
-          resetView: jest.fn(),
-          getTransform: jest.fn(),
-        }));
-        return ReactLocal.createElement(View, { testID: "fits-canvas" });
-      },
-    ),
+    FitsCanvas: ReactLocal.forwardRef((props: Record<string, unknown>, ref: React.Ref<unknown>) => {
+      const setTransform = jest.fn();
+      canvasEntries.push({ props, setTransform });
+      ReactLocal.useImperativeHandle(ref, () => ({
+        setTransform,
+        resetView: jest.fn(),
+        getTransform: jest.fn(),
+      }));
+      return ReactLocal.createElement(View, { testID: "fits-canvas" });
+    }),
+    __getCanvasEntries: () => canvasEntries,
+    __resetCanvasEntries: () => {
+      canvasEntries.length = 0;
+    },
   };
 });
 
@@ -171,10 +180,22 @@ jest.mock("heroui-native", () => {
 
 const CompareScreen = require("../index").default as React.ComponentType;
 
+type FitsCanvasMockModule = {
+  __getCanvasEntries: () => Array<{
+    props: Record<string, unknown>;
+    setTransform: jest.Mock;
+  }>;
+  __resetCanvasEntries: () => void;
+};
+
 describe("CompareScreen", () => {
   let comparisonState: Record<string, unknown>;
+  const fitsCanvasMock = jest.requireMock(
+    "../../../components/fits/FitsCanvas",
+  ) as FitsCanvasMockModule;
 
   beforeEach(() => {
+    fitsCanvasMock.__resetCanvasEntries();
     mockUseLocalSearchParams.mockReturnValue({ ids: "a,b" });
     mockUseFitsFile.mockImplementation(() => ({
       pixels: new Float32Array([0, 1, 2, 3]),
@@ -234,5 +255,87 @@ describe("CompareScreen", () => {
     expect(screen.getByText("Linked")).toBeTruthy();
     fireEvent.press(screen.getByText("Linked"));
     expect(screen.getByText("Unlinked")).toBeTruthy();
+  });
+
+  it("syncs transform to paired canvas when linked", async () => {
+    comparisonState = { ...comparisonState, mode: "side-by-side" };
+    mockUseImageComparison.mockImplementation(() => comparisonState);
+    render(<CompareScreen />);
+    expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(2);
+
+    const entries = fitsCanvasMock.__getCanvasEntries();
+    const source = entries[entries.length - 2];
+    const target = entries[entries.length - 1];
+
+    act(() => {
+      (source.props.onTransformChange as ((value: Record<string, number>) => void) | undefined)?.({
+        scale: 2,
+        translateX: 42,
+        translateY: -24,
+        canvasWidth: 320,
+        canvasHeight: 200,
+      });
+    });
+
+    expect(target.setTransform).toHaveBeenCalledWith(42, -24, 2, { animated: false });
+  });
+
+  it("does not sync transform when unlinked", async () => {
+    comparisonState = { ...comparisonState, mode: "side-by-side" };
+    mockUseImageComparison.mockImplementation(() => comparisonState);
+    render(<CompareScreen />);
+    expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(2);
+
+    fireEvent.press(screen.getByText("Linked"));
+
+    const entries = fitsCanvasMock.__getCanvasEntries();
+    const source = entries[entries.length - 2];
+    const target = entries[entries.length - 1];
+    target.setTransform.mockClear();
+
+    act(() => {
+      (source.props.onTransformChange as ((value: Record<string, number>) => void) | undefined)?.({
+        scale: 1.6,
+        translateX: 20,
+        translateY: -10,
+        canvasWidth: 320,
+        canvasHeight: 200,
+      });
+    });
+
+    expect(target.setTransform).not.toHaveBeenCalled();
+  });
+
+  it("aligns B to A when linked is enabled again", async () => {
+    comparisonState = { ...comparisonState, mode: "side-by-side" };
+    mockUseImageComparison.mockImplementation(() => comparisonState);
+    render(<CompareScreen />);
+    expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(2);
+
+    fireEvent.press(screen.getByText("Linked"));
+
+    let entries = fitsCanvasMock.__getCanvasEntries();
+    const source = entries[entries.length - 2];
+    let target = entries[entries.length - 1];
+
+    target.setTransform.mockClear();
+    act(() => {
+      (source.props.onTransformChange as ((value: Record<string, number>) => void) | undefined)?.({
+        scale: 1.8,
+        translateX: 100,
+        translateY: -50,
+        canvasWidth: 320,
+        canvasHeight: 200,
+      });
+    });
+    expect(target.setTransform).not.toHaveBeenCalled();
+
+    fireEvent.press(screen.getByText("Unlinked"));
+
+    await waitFor(() => {
+      entries = fitsCanvasMock.__getCanvasEntries();
+      target = entries[entries.length - 1];
+      expect(target.setTransform).toHaveBeenCalledWith(100, -50, 1.8, { animated: false });
+    });
   });
 });

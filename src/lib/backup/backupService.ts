@@ -9,7 +9,15 @@ import { createManifest } from "./manifest";
 import { LOG_TAGS, Logger } from "../logger";
 import type { BackupOptions, BackupProgress, BackupInfo, RestoreConflictStrategy } from "./types";
 import { DEFAULT_BACKUP_OPTIONS, BACKUP_DIR, FITS_SUBDIR } from "./types";
-import type { FitsMetadata, Album, Target, ObservationSession } from "../fits/types";
+import type {
+  FitsMetadata,
+  Album,
+  Target,
+  ObservationSession,
+  TargetGroup,
+  ObservationPlan,
+  ObservationLogEntry,
+} from "../fits/types";
 import { getFitsDir } from "../utils/fileManager";
 
 const TAG = LOG_TAGS.BackupService;
@@ -18,7 +26,10 @@ export interface BackupDataSource {
   getFiles(): FitsMetadata[];
   getAlbums(): Album[];
   getTargets(): Target[];
+  getTargetGroups(): TargetGroup[];
   getSessions(): ObservationSession[];
+  getPlans(): ObservationPlan[];
+  getLogEntries(): ObservationLogEntry[];
   getSettings(): Record<string, unknown>;
 }
 
@@ -26,13 +37,24 @@ export interface RestoreTarget {
   setFiles(files: FitsMetadata[], strategy?: RestoreConflictStrategy): void;
   setAlbums(albums: Album[], strategy?: RestoreConflictStrategy): void;
   setTargets(targets: Target[], strategy?: RestoreConflictStrategy): void;
+  setTargetGroups(groups: TargetGroup[], strategy?: RestoreConflictStrategy): void;
   setSessions(sessions: ObservationSession[], strategy?: RestoreConflictStrategy): void;
+  setPlans(plans: ObservationPlan[], strategy?: RestoreConflictStrategy): void;
+  setLogEntries(entries: ObservationLogEntry[], strategy?: RestoreConflictStrategy): void;
   setSettings(settings: Record<string, unknown>): void;
 }
 
 function toSafeRemoteFilename(meta: FitsMetadata): string {
   const safeName = meta.filename.replace(/[^\w.-]/g, "_");
   return `${meta.id}_${safeName}`;
+}
+
+function normalizeRestoredMeta(meta: FitsMetadata, filepath: string): FitsMetadata {
+  return {
+    ...meta,
+    filepath,
+    mediaKind: meta.mediaKind ?? (meta.sourceType === "video" ? "video" : "image"),
+  };
 }
 
 /**
@@ -62,7 +84,10 @@ export async function performBackup(
       files: dataSource.getFiles(),
       albums: dataSource.getAlbums(),
       targets: dataSource.getTargets(),
+      targetGroups: dataSource.getTargetGroups(),
       sessions: dataSource.getSessions(),
+      plans: dataSource.getPlans(),
+      logEntries: dataSource.getLogEntries(),
       settings: dataSource.getSettings(),
     },
     options,
@@ -165,8 +190,17 @@ export async function performRestore(
   if (options.includeTargets && manifest.targets.length > 0) {
     restoreTarget.setTargets(manifest.targets, options.restoreConflictStrategy);
   }
+  if (options.includeTargets && manifest.targetGroups.length > 0) {
+    restoreTarget.setTargetGroups(manifest.targetGroups, options.restoreConflictStrategy);
+  }
   if (options.includeSessions && manifest.sessions.length > 0) {
     restoreTarget.setSessions(manifest.sessions, options.restoreConflictStrategy);
+  }
+  if (options.includeSessions && manifest.plans.length > 0) {
+    restoreTarget.setPlans(manifest.plans, options.restoreConflictStrategy);
+  }
+  if (options.includeSessions && manifest.logEntries.length > 0) {
+    restoreTarget.setLogEntries(manifest.logEntries, options.restoreConflictStrategy);
   }
   if (options.includeSettings && Object.keys(manifest.settings).length > 0) {
     restoreTarget.setSettings(manifest.settings);
@@ -198,10 +232,7 @@ export async function performRestore(
         // Skip if file already exists locally
         const localFile = new File(localPath);
         if (localFile.exists) {
-          restoredFiles.push({
-            ...meta,
-            filepath: localPath,
-          });
+          restoredFiles.push(normalizeRestoredMeta(meta, localPath));
           current++;
           onProgress?.({
             phase: "downloading",
@@ -218,10 +249,7 @@ export async function performRestore(
           // Compatibility: old backups used filename as remote key.
           await provider.downloadFile(legacyRemotePath, localPath);
         }
-        restoredFiles.push({
-          ...meta,
-          filepath: localPath,
-        });
+        restoredFiles.push(normalizeRestoredMeta(meta, localPath));
         current++;
 
         onProgress?.({

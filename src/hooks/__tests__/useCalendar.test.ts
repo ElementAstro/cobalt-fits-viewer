@@ -100,7 +100,7 @@ const makeSession = (overrides: Partial<ObservationSession> = {}): ObservationSe
   startTime: 1741636800000,
   endTime: 1741640400000,
   duration: 3600,
-  targets: ["M42"],
+  targetRefs: [{ name: "M42" }],
   imageIds: [],
   equipment: {},
   createdAt: 1,

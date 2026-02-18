@@ -5,6 +5,21 @@ import FilesScreen from "../index";
 import { useFitsStore } from "../../../stores/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
 
+const mockPush = jest.fn();
+
+jest.mock("expo-router", () => ({
+  useRouter: () => ({
+    push: mockPush,
+    replace: jest.fn(),
+    back: jest.fn(),
+  }),
+}));
+
+const mockResolveThumbnailUri = jest.fn(
+  (fileId: string, thumbnailUri?: string) =>
+    thumbnailUri ?? `file:///cache/thumbnails/${fileId}.jpg`,
+);
+
 const mockFileManager = {
   isImporting: false,
   importProgress: { phase: "picking", percent: 0, current: 0, total: 0 },
@@ -12,6 +27,8 @@ const mockFileManager = {
   lastImportResult: null,
   isZipImportAvailable: true,
   pickAndImportFile: jest.fn(),
+  pickAndImportFromMediaLibrary: jest.fn(),
+  recordAndImportVideo: jest.fn(),
   pickAndImportFolder: jest.fn(),
   pickAndImportZip: jest.fn(),
   importFromUrl: jest.fn(),
@@ -35,6 +52,17 @@ const mockSettingsStore = {
   thumbnailShowFilter: true,
   thumbnailShowExposure: false,
   confirmDestructiveActions: true,
+  frameClassificationConfig: {
+    frameTypes: [
+      { key: "light", label: "Light", builtin: true },
+      { key: "dark", label: "Dark", builtin: true },
+      { key: "flat", label: "Flat", builtin: true },
+      { key: "bias", label: "Bias", builtin: true },
+      { key: "darkflat", label: "Dark Flat", builtin: true },
+      { key: "unknown", label: "Unknown", builtin: true },
+    ],
+    rules: [],
+  },
 };
 
 const mockTrashStore = {
@@ -123,6 +151,15 @@ jest.mock("../../../components/gallery/FileGroupSheet", () => ({
   FileGroupSheet: () => null,
 }));
 
+jest.mock("../../../lib/gallery/thumbnailCache", () => {
+  const actual = jest.requireActual("../../../lib/gallery/thumbnailCache");
+  return {
+    ...actual,
+    resolveThumbnailUri: (fileId: string, thumbnailUri?: string) =>
+      mockResolveThumbnailUri(fileId, thumbnailUri),
+  };
+});
+
 // Mock expo-image
 jest.mock("expo-image", () => {
   const { View } = require("react-native");
@@ -166,6 +203,10 @@ describe("FilesScreen", () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    mockResolveThumbnailUri.mockImplementation(
+      (fileId: string, thumbnailUri?: string) =>
+        thumbnailUri ?? `file:///cache/thumbnails/${fileId}.jpg`,
+    );
 
     mockSettingsStore.confirmDestructiveActions = true;
     mockSettingsStore.fileListStyle = "list";
@@ -204,6 +245,24 @@ describe("FilesScreen", () => {
   it("should render the import button", () => {
     render(<FilesScreen />);
     expect(screen.getAllByText("Import Options").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("should render thumbnail from shared resolver when file thumbnailUri is missing", () => {
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-thumb", thumbnailUri: undefined })],
+      selectedIds: [],
+      isSelectionMode: false,
+    });
+    mockResolveThumbnailUri.mockImplementation(
+      (fileId: string, thumbnailUri?: string) =>
+        thumbnailUri ?? (fileId === "file-thumb" ? "file:///cache/thumbnails/file-thumb.jpg" : ""),
+    );
+
+    render(<FilesScreen />);
+
+    expect(mockResolveThumbnailUri).toHaveBeenCalledWith("file-thumb", undefined);
+    const thumbnail = screen.getByTestId("expo-image");
+    expect(thumbnail.props.source).toEqual({ uri: "file:///cache/thumbnails/file-thumb.jpg" });
   });
 
   it("should render quality sort and list style controls", () => {
@@ -345,5 +404,26 @@ describe("FilesScreen", () => {
     fireEvent.press(screen.getByTestId("trash-sheet-empty-button"));
 
     expect(mockFileManager.emptyTrash).toHaveBeenCalled();
+  });
+
+  it("routes video files to video detail page", () => {
+    useFitsStore.setState({
+      files: [
+        makeFile({
+          id: "video-1",
+          filename: "capture.mp4",
+          sourceType: "video",
+          mediaKind: "video",
+          sourceFormat: "mp4",
+          frameType: "unknown",
+        }),
+      ],
+      selectedIds: [],
+      isSelectionMode: false,
+    });
+
+    render(<FilesScreen />);
+    fireEvent.press(screen.getByText("capture.mp4"));
+    expect(mockPush).toHaveBeenCalledWith("/video/video-1");
   });
 });

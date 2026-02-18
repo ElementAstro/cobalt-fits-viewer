@@ -43,6 +43,7 @@ interface SmartAlbumModalProps {
   onClose: () => void;
   onConfirm: (name: string, rules: SmartAlbumRule[], description?: string) => void;
   suggestions?: Array<{ name: string; rules: SmartAlbumRule[] }>;
+  frameTypeOptions?: Array<{ key: string; label: string }>;
 }
 
 export function SmartAlbumModal({
@@ -50,6 +51,7 @@ export function SmartAlbumModal({
   onClose,
   onConfirm,
   suggestions = [],
+  frameTypeOptions = [],
 }: SmartAlbumModalProps) {
   const { t } = useI18n();
   const [successColor] = useThemeColor(["success"]);
@@ -184,16 +186,37 @@ export function SmartAlbumModal({
                       ))}
                     </View>
                   </ScrollView>
-                  <TextField className="flex-1">
-                    <Input
-                      className="text-xs"
-                      placeholder={t("album.ruleValue")}
-                      value={String(rule.value)}
-                      onChangeText={(v) => updateRule(index, { value: v })}
-                      autoCorrect={false}
-                    />
-                  </TextField>
                 </View>
+
+                {rule.field === "frameType" && frameTypeOptions.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-1.5">
+                    <View className="flex-row gap-1">
+                      {frameTypeOptions.map((option) => (
+                        <Pressable
+                          key={option.key}
+                          onPress={() => updateRule(index, { value: option.key })}
+                        >
+                          <Chip
+                            size="sm"
+                            variant={String(rule.value) === option.key ? "primary" : "secondary"}
+                          >
+                            <Chip.Label className="text-[9px]">{option.label}</Chip.Label>
+                          </Chip>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </ScrollView>
+                )}
+
+                <TextField className="flex-1 mt-1.5">
+                  <Input
+                    className="text-xs"
+                    placeholder={t("album.ruleValue")}
+                    value={rule.value == null ? "" : String(rule.value)}
+                    onChangeText={(v) => updateRule(index, { value: v })}
+                    autoCorrect={false}
+                  />
+                </TextField>
               </View>
             ))}
 

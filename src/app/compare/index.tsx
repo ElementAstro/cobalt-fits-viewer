@@ -87,6 +87,9 @@ export default function CompareScreen() {
   const defaultShowMinimap = useSettingsStore((s) => s.defaultShowMinimap);
   const debounceMs = useSettingsStore((s) => s.imageProcessingDebounce);
   const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
+  const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
+  const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
+  const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
 
   const defaultAdjustments = useMemo<ViewerAdjustments>(
     () => ({
@@ -173,6 +176,14 @@ export default function CompareScreen() {
   const canvasBRef = useRef<FitsCanvasHandle>(null);
   const prevPixelsA = useRef<Float32Array | null>(null);
   const prevPixelsB = useRef<Float32Array | null>(null);
+  const syncedTargetTransformRef = useRef<
+    Partial<Record<"A" | "B", { scale: number; translateX: number; translateY: number }>>
+  >({});
+  const syncMetaRef = useRef<{ linked: boolean; aId?: string; bId?: string }>({
+    linked: true,
+    aId: fileA?.id,
+    bId: fileB?.id,
+  });
 
   useEffect(() => {
     if (!imageIds.length && initialIds.length) {
@@ -407,12 +418,67 @@ export default function CompareScreen() {
       ? (activePixels[activeCursor.y * activeDims.width + activeCursor.x] ?? null)
       : null;
 
+  const handleCanvasTransformChange = useCallback(
+    (side: "A" | "B", transform: CanvasTransform) => {
+      if (side === "A") {
+        setCanvasA(transform);
+      } else {
+        setCanvasB(transform);
+      }
+
+      if (!linked) return;
+
+      const expected = syncedTargetTransformRef.current[side];
+      if (expected) {
+        const isSyncedUpdate =
+          Math.abs(expected.scale - transform.scale) < 0.02 &&
+          Math.abs(expected.translateX - transform.translateX) < 1.5 &&
+          Math.abs(expected.translateY - transform.translateY) < 1.5;
+        delete syncedTargetTransformRef.current[side];
+        if (isSyncedUpdate) return;
+      }
+
+      const targetSide = side === "A" ? "B" : "A";
+      const targetRef = targetSide === "A" ? canvasARef.current : canvasBRef.current;
+      if (!targetRef) return;
+      syncedTargetTransformRef.current[targetSide] = {
+        scale: transform.scale,
+        translateX: transform.translateX,
+        translateY: transform.translateY,
+      };
+      targetRef.setTransform(transform.translateX, transform.translateY, transform.scale, {
+        animated: false,
+      });
+    },
+    [linked],
+  );
+
+  useEffect(() => {
+    const prev = syncMetaRef.current;
+    const aId = fileA?.id;
+    const bId = fileB?.id;
+    const justEnabled = linked && !prev.linked;
+    const pairChanged = linked && prev.linked && (aId !== prev.aId || bId !== prev.bId);
+    syncMetaRef.current = { linked, aId, bId };
+
+    if ((!justEnabled && !pairChanged) || !linked || !aId || !bId) return;
+    const source = canvasA;
+    if (!canvasBRef.current) return;
+    syncedTargetTransformRef.current.B = {
+      scale: source.scale,
+      translateX: source.translateX,
+      translateY: source.translateY,
+    };
+    canvasBRef.current.setTransform(source.translateX, source.translateY, source.scale, {
+      animated: false,
+    });
+  }, [linked, fileA?.id, fileB?.id, canvasA]);
+
   const renderCanvas = useCallback(
     (side: "A" | "B", forceInteractive = false) => {
       const proc = side === "A" ? procA : procB;
       const fits = side === "A" ? fitsA : fitsB;
       const transform = side === "A" ? canvasA : canvasB;
-      const setTransform = side === "A" ? setCanvasA : setCanvasB;
       const ref = side === "A" ? canvasARef : canvasBRef;
       const cursor = side === "A" ? cursorA : cursorB;
       const setCursor = side === "A" ? setCursorA : setCursorB;
@@ -443,8 +509,13 @@ export default function CompareScreen() {
                 setActiveSide(side);
                 setCursor({ x, y });
               }}
-              onTransformChange={setTransform}
+              onTransformChange={(nextTransform) =>
+                handleCanvasTransformChange(side, nextTransform)
+              }
               interactionEnabled={interactive}
+              minScale={settingsMinScale}
+              maxScale={settingsMaxScale}
+              doubleTapScale={settingsDoubleTapScale}
               wheelZoomEnabled
             />
           </Pressable>
@@ -476,6 +547,10 @@ export default function CompareScreen() {
       showCrosshair,
       showMinimap,
       activeSide,
+      handleCanvasTransformChange,
+      settingsMinScale,
+      settingsMaxScale,
+      settingsDoubleTapScale,
     ],
   );
 

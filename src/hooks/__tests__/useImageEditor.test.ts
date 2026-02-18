@@ -26,14 +26,26 @@ const opLib = jest.requireMock("../../lib/utils/imageOperations") as {
 const converterLib = jest.requireMock("../../lib/converter/formatConverter") as {
   fitsToRGBA: jest.Mock;
 };
+type InteractionTask = Parameters<typeof InteractionManager.runAfterInteractions>[0];
+
+function createInteractionHandle(cancel: jest.Mock = jest.fn()) {
+  return {
+    then: (onfulfilled?: () => any) =>
+      Promise.resolve().then(() => (onfulfilled ? onfulfilled() : undefined)),
+    done: (...args: any[]) => (typeof args[0] === "function" ? args[0]() : undefined),
+    cancel,
+  } as ReturnType<typeof InteractionManager.runAfterInteractions>;
+}
 
 describe("useImageEditor", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(InteractionManager, "runAfterInteractions").mockImplementation((cb: () => void) => {
-      cb();
-      return { cancel: jest.fn() } as never;
-    });
+    jest
+      .spyOn(InteractionManager, "runAfterInteractions")
+      .mockImplementation((task?: InteractionTask) => {
+        if (typeof task === "function") task();
+        return createInteractionHandle();
+      });
     opLib.applyOperation.mockImplementation((pixels: Float32Array) => ({
       pixels: new Float32Array(pixels.length).fill(0.5),
       width: 2,

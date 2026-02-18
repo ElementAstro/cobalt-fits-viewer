@@ -6,7 +6,9 @@ import { View, Text, ScrollView } from "react-native";
 import { BottomSheet, Button, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import type { AlbumStatistics } from "../../lib/fits/types";
+import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { formatExposureTime, formatFileSize } from "../../lib/gallery/albumStatistics";
 
 interface AlbumStatisticsSheetProps {
@@ -26,11 +28,24 @@ export function AlbumStatisticsSheet({
 }: AlbumStatisticsSheetProps) {
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
 
   if (!statistics) return null;
 
   const hasFrames = Object.values(statistics.frameBreakdown).some((v) => v > 0);
   const hasFilters = Object.keys(statistics.filterBreakdown).length > 0;
+  const frameTypeLabelMap = new Map<string, string>();
+  for (const definition of getFrameTypeDefinitions(frameClassificationConfig)) {
+    frameTypeLabelMap.set(
+      definition.key,
+      definition.builtin
+        ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
+        : definition.label || definition.key,
+    );
+  }
+  const frameEntries = Object.entries(statistics.frameBreakdown).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
 
   return (
     <BottomSheet isOpen={visible} onOpenChange={(open) => !open && onClose()}>
@@ -102,10 +117,10 @@ export function AlbumStatisticsSheet({
                     {t("album.frameBreakdown")}
                   </Text>
                   <View className="flex-row flex-wrap gap-2">
-                    {Object.entries(statistics.frameBreakdown).map(([type, count]) => (
+                    {frameEntries.map(([type, count]) => (
                       <Chip key={type} size="sm" variant={count > 0 ? "primary" : "secondary"}>
                         <Chip.Label className="text-xs">
-                          {t(`gallery.frameTypes.${type}`)}: {count}
+                          {frameTypeLabelMap.get(type) ?? type}: {count}
                         </Chip.Label>
                       </Chip>
                     ))}

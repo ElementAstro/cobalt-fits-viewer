@@ -21,8 +21,9 @@
 
 - **FITS 文件管理** — 导入、浏览、搜索、标签和整理 FITS 文件
 - **FITS 图像查看器** — 拉伸、色彩映射、直方图、像素信息、HDU 选择、网格叠加、十字准线、小地图
+- **帧分类引擎** — 内置 `light/dark/flat/bias/darkflat/unknown`，并支持自定义类型与规则（`header`/`filename`、`exact/contains/regex`、优先级）、报表统计口径配置与一键历史重分类
 - **图像叠加** — 均值、中值、Sigma 裁剪、最小/最大、Winsorized、加权叠加，支持对齐
-- **格式转换器** — 将 FITS 转换为 PNG / JPEG / WebP，内置预设（网页、打印、天文后期处理）
+- **双向格式转换** — 完整支持 `FITS ↔ PNG/JPEG/WebP/TIFF/BMP`，并支持 FITS 导出（`.fits` / `.fits.gz`）与 scientific/rendered 两种模式
 - **RGB 合成** — 将单色 FITS 合成彩色图像
 - **观测目标** — 追踪星系、星云、星团，含曝光进度和滤镜计划
 - **观测记录** — 日历视图、时间线、观测日志、统计、日历同步

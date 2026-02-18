@@ -8,19 +8,19 @@ let mockImageFactoryResult: {
 
 const mockMakeFromEncoded = jest.fn(() => mockImageFactoryResult);
 const mockFromBytes = jest.fn((bytes: Uint8Array) => ({ bytes }));
-const mockClassifyFrameType = jest.fn(() => "light");
+const mockClassifyWithDetail = jest.fn(() => ({ type: "light", source: "filename" }));
 
 jest.mock("../../gallery/frameClassifier", () => ({
-  classifyFrameType: (...args: unknown[]) => mockClassifyFrameType(...args),
+  classifyWithDetail: (...args: any[]) => (mockClassifyWithDetail as any)(...args),
 }));
 
 jest.mock("@shopify/react-native-skia", () => ({
   Skia: {
     Data: {
-      fromBytes: (...args: unknown[]) => mockFromBytes(...args),
+      fromBytes: (...args: any[]) => (mockFromBytes as any)(...args),
     },
     Image: {
-      MakeImageFromEncoded: (...args: unknown[]) => mockMakeFromEncoded(...args),
+      MakeImageFromEncoded: (...args: any[]) => (mockMakeFromEncoded as any)(...args),
     },
   },
   AlphaType: { Unpremul: "Unpremul" },
@@ -92,6 +92,9 @@ describe("image rasterParser", () => {
     expect(result.rgba).toEqual(new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]));
     expect(result.pixels[0]).toBeCloseTo(0.2126, 4);
     expect(result.pixels[1]).toBeCloseTo(0.7152, 4);
+    expect(result.channels.r).toEqual(new Float32Array([1, 0]));
+    expect(result.channels.g).toEqual(new Float32Array([0, 1]));
+    expect(result.channels.b).toEqual(new Float32Array([0, 0]));
   });
 
   it("converts Float32 pixel buffer to bytes before luma conversion", () => {
@@ -129,7 +132,26 @@ describe("image rasterParser", () => {
       naxis2: 1080,
       naxis3: 1,
       frameType: "light",
+      frameTypeSource: "filename",
     });
-    expect(mockClassifyFrameType).toHaveBeenCalledWith(undefined, undefined, "M42.png");
+    expect(mockClassifyWithDetail).toHaveBeenCalledWith(undefined, undefined, "M42.png", undefined);
+  });
+
+  it("passes classification config through to classifier", () => {
+    const config = {
+      frameTypes: [{ key: "focus", label: "Focus", builtin: false }],
+      rules: [],
+    };
+    extractRasterMetadata(
+      { filename: "focus_001.png", filepath: "/tmp/focus_001.png", fileSize: 10 },
+      { width: 100, height: 100 },
+      config as any,
+    );
+    expect(mockClassifyWithDetail).toHaveBeenCalledWith(
+      undefined,
+      undefined,
+      "focus_001.png",
+      config,
+    );
   });
 });

@@ -5,7 +5,7 @@ jest.mock("../../lib/utils/fileManager", () => ({
   readFileAsArrayBuffer: jest.fn(),
 }));
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBuffer: jest.fn(),
+  loadFitsFromBufferAuto: jest.fn(),
   getImagePixels: jest.fn(),
   getImageDimensions: jest.fn(),
 }));
@@ -28,7 +28,7 @@ const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
   readFileAsArrayBuffer: jest.Mock;
 };
 const parserLib = jest.requireMock("../../lib/fits/parser") as {
-  loadFitsFromBuffer: jest.Mock;
+  loadFitsFromBufferAuto: jest.Mock;
   getImagePixels: jest.Mock;
   getImageDimensions: jest.Mock;
 };
@@ -40,7 +40,7 @@ describe("useCompose", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    parserLib.loadFitsFromBuffer.mockReturnValue({ id: "fits" });
+    parserLib.loadFitsFromBufferAuto.mockReturnValue({ id: "fits" });
     parserLib.getImageDimensions.mockReturnValue({ width: 2, height: 2 });
     parserLib.getImagePixels.mockResolvedValue(new Float32Array([0, 1, 2, 3]));
     rgbLib.composeRGB.mockReturnValue(new Uint8ClampedArray([255, 0, 0, 255]));

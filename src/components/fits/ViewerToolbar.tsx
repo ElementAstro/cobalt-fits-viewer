@@ -94,17 +94,22 @@ export function ViewerToolbar({
   return (
     <>
       <View
-        className="flex-row items-center justify-between px-3 pb-1.5"
-        style={{ paddingTop: isLandscape ? 6 : Math.max(insets.top, 12) }}
+        className="flex-row items-center justify-between pb-1.5"
+        style={{
+          paddingTop: isLandscape ? 6 : Math.max(insets.top, 12),
+          paddingLeft: Math.max(insets.left + 6, 12),
+          paddingRight: Math.max(insets.right + 6, 12),
+        }}
       >
         {/* Left: Back + Nav */}
-        <View className="flex-row items-center gap-0.5">
-          <Button size="sm" variant="ghost" onPress={onBack} className="h-8 w-8">
+        <View className="flex-row items-center gap-0.5 shrink-0">
+          <Button size="sm" variant="ghost" isIconOnly onPress={onBack} className="h-8 w-8">
             <Ionicons name="arrow-back" size={18} color={mutedColor} />
           </Button>
           <Button
             size="sm"
             variant="ghost"
+            isIconOnly
             isDisabled={!prevId}
             onPress={onPrev}
             className="h-8 w-8"
@@ -114,6 +119,7 @@ export function ViewerToolbar({
           <Button
             size="sm"
             variant="ghost"
+            isIconOnly
             isDisabled={!nextId}
             onPress={onNext}
             className="h-8 w-8"
@@ -123,19 +129,23 @@ export function ViewerToolbar({
         </View>
 
         {/* Center: Filename */}
-        <Text
-          className="flex-1 mx-2 text-xs font-semibold text-foreground text-center"
-          numberOfLines={1}
-        >
-          {filename}
-        </Text>
+        <View className="flex-1 min-w-0 mx-2">
+          <Text
+            className="text-xs font-semibold text-foreground text-center"
+            numberOfLines={1}
+            ellipsizeMode="middle"
+          >
+            {filename}
+          </Text>
+        </View>
 
         {/* Right: Key actions + More */}
-        <View className="flex-row items-center gap-0.5">
+        <View className="flex-row items-center gap-0.5 shrink-0">
           {/* Astrometry button (always visible due to importance) */}
           <Button
             size="sm"
             variant={isAstrometryActive ? "primary" : "ghost"}
+            isIconOnly
             onPress={onAstrometry}
             className="h-8 w-8"
           >
@@ -156,6 +166,7 @@ export function ViewerToolbar({
           <Button
             size="sm"
             variant="ghost"
+            isIconOnly
             onPress={() => {
               haptics.selection();
               onToggleControls();
@@ -173,6 +184,7 @@ export function ViewerToolbar({
           <Button
             size="sm"
             variant="ghost"
+            isIconOnly
             onPress={() => {
               haptics.selection();
               onToggleFullscreen();
@@ -186,6 +198,7 @@ export function ViewerToolbar({
           <Button
             size="sm"
             variant="ghost"
+            isIconOnly
             onPress={() => setShowMoreMenu(true)}
             className="h-8 w-8"
           >

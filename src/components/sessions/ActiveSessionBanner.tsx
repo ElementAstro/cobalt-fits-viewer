@@ -4,6 +4,7 @@ import { Button, Card, Input, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { useI18n } from "../../i18n/useI18n";
+import { useSessions } from "../../hooks/useSessions";
 
 export function ActiveSessionBanner() {
   const { t } = useI18n();
@@ -13,8 +14,8 @@ export function ActiveSessionBanner() {
   const startLiveSession = useSessionStore((s) => s.startLiveSession);
   const pauseLiveSession = useSessionStore((s) => s.pauseLiveSession);
   const resumeLiveSession = useSessionStore((s) => s.resumeLiveSession);
-  const endLiveSession = useSessionStore((s) => s.endLiveSession);
   const addActiveNote = useSessionStore((s) => s.addActiveNote);
+  const { endLiveSessionWithIntegration } = useSessions();
 
   const [elapsed, setElapsed] = useState(0);
   const [noteText, setNoteText] = useState("");
@@ -54,14 +55,17 @@ export function ActiveSessionBanner() {
       {
         text: t("common.confirm"),
         onPress: () => {
-          const session = endLiveSession();
+          const { session, linkedFileCount, linkedLogCount } = endLiveSessionWithIntegration();
           if (session) {
-            Alert.alert(t("common.success"), t("sessions.sessionSaved"));
+            Alert.alert(
+              t("common.success"),
+              `${t("sessions.sessionSaved")} (${linkedFileCount} ${t("sessions.frames")}, ${linkedLogCount} ${t("sessions.log")})`,
+            );
           }
         },
       },
     ]);
-  }, [t, endLiveSession]);
+  }, [endLiveSessionWithIntegration, t]);
 
   const handleAddNote = useCallback(() => {
     if (!noteText.trim()) return;

@@ -6,6 +6,8 @@ import { useState, useCallback } from "react";
 import * as MediaLibrary from "expo-media-library";
 import { LOG_TAGS, Logger } from "../lib/logger";
 
+export type MediaSaveIntent = "image" | "video" | "unknown";
+
 export function useMediaLibrary() {
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -18,7 +20,7 @@ export function useMediaLibrary() {
   }, []);
 
   const saveToDevice = useCallback(
-    async (fileUri: string): Promise<string | null> => {
+    async (fileUri: string, _intent: MediaSaveIntent = "unknown"): Promise<string | null> => {
       setIsSaving(true);
       try {
         if (hasPermission === null) {

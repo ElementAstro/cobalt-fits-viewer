@@ -17,7 +17,10 @@ const mockData = {
   ] as never[],
   albums: [{ id: "a1", name: "Album 1" }] as never[],
   targets: [{ id: "t1", name: "M31" }] as never[],
+  targetGroups: [{ id: "g1", name: "Group 1", targetIds: ["t1"] }] as never[],
   sessions: [{ id: "s1", date: "2025-01-01" }] as never[],
+  plans: [{ id: "p1", title: "Plan 1", targetName: "M31" }] as never[],
+  logEntries: [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
   settings: { language: "en", theme: "dark" },
 };
 
@@ -32,7 +35,10 @@ describe("createManifest", () => {
     expect(manifest.files).toHaveLength(1);
     expect(manifest.albums).toHaveLength(1);
     expect(manifest.targets).toHaveLength(1);
+    expect(manifest.targetGroups).toHaveLength(1);
     expect(manifest.sessions).toHaveLength(1);
+    expect(manifest.plans).toHaveLength(1);
+    expect(manifest.logEntries).toHaveLength(1);
     expect(manifest.settings).toEqual({ language: "en", theme: "dark" });
   });
 
@@ -48,7 +54,10 @@ describe("createManifest", () => {
     expect(manifest.files).toHaveLength(0);
     expect(manifest.albums).toHaveLength(0);
     expect(manifest.targets).toHaveLength(1);
+    expect(manifest.targetGroups).toHaveLength(1);
     expect(manifest.sessions).toHaveLength(1);
+    expect(manifest.plans).toHaveLength(1);
+    expect(manifest.logEntries).toHaveLength(1);
     expect(manifest.settings).toEqual({});
   });
 });
@@ -64,7 +73,10 @@ describe("parseManifest", () => {
       files: [],
       albums: [],
       targets: [],
+      targetGroups: [],
       sessions: [],
+      plans: [],
+      logEntries: [],
       settings: {},
     };
     const result = parseManifest(JSON.stringify(manifest));
@@ -98,10 +110,29 @@ describe("parseManifest", () => {
     expect(result!.files).toEqual([]);
     expect(result!.albums).toEqual([]);
     expect(result!.targets).toEqual([]);
+    expect(result!.targetGroups).toEqual([]);
     expect(result!.sessions).toEqual([]);
+    expect(result!.plans).toEqual([]);
+    expect(result!.logEntries).toEqual([]);
     expect(result!.settings).toEqual({});
     expect(result!.deviceName).toBe("Unknown Device");
     expect(result!.appVersion).toBe("unknown");
+  });
+
+  it("should normalize v2 file metadata without mediaKind to v3 shape", () => {
+    const legacyV2 = {
+      version: 2,
+      createdAt: "2025-01-01T00:00:00.000Z",
+      files: [
+        { id: "img", filename: "a.fits", filepath: "/a.fits", fileSize: 10, sourceType: "fits" },
+        { id: "vid", filename: "b.mp4", filepath: "/b.mp4", fileSize: 20, sourceType: "video" },
+      ],
+    };
+
+    const parsed = parseManifest(JSON.stringify(legacyV2));
+    expect(parsed).not.toBeNull();
+    expect(parsed?.files[0].mediaKind).toBe("image");
+    expect(parsed?.files[1].mediaKind).toBe("video");
   });
 });
 
@@ -130,7 +161,10 @@ describe("getManifestSummary", () => {
     expect(summary.fileCount).toBe(1);
     expect(summary.albumCount).toBe(1);
     expect(summary.targetCount).toBe(1);
+    expect(summary.targetGroupCount).toBe(1);
     expect(summary.sessionCount).toBe(1);
+    expect(summary.planCount).toBe(1);
+    expect(summary.logEntryCount).toBe(1);
     expect(summary.hasSettings).toBe(true);
     expect(summary.appVersion).toBe("1.0.0");
     expect(summary.deviceName).toBe("Test Device");

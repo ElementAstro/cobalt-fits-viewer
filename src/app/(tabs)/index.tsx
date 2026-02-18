@@ -33,11 +33,10 @@ import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { QuickLookModal } from "../../components/common/QuickLookModal";
 import { formatFileSize } from "../../lib/utils/fileManager";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
-import type { FitsMetadata, FrameType } from "../../lib/fits/types";
+import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
+import type { FitsMetadata } from "../../lib/fits/types";
 
 const ListItemSeparator = () => <View className="h-2" />;
-
-const FRAME_FILTERS: FrameType[] = ["light", "dark", "flat", "bias", "unknown"];
 
 export default function FilesScreen() {
   const router = useRouter();
@@ -73,6 +72,7 @@ export default function FilesScreen() {
   const thumbShowObject = useSettingsStore((s) => s.thumbnailShowObject);
   const thumbShowFilter = useSettingsStore((s) => s.thumbnailShowFilter);
   const thumbShowExposure = useSettingsStore((s) => s.thumbnailShowExposure);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
   const trashItems = useTrashStore((s) => s.items);
   const fileGroups = useFileGroupStore((s) => s.groups);
   const fileGroupMap = useFileGroupStore((s) => s.fileGroupMap);
@@ -86,6 +86,8 @@ export default function FilesScreen() {
     lastImportResult,
     isZipImportAvailable,
     pickAndImportFile,
+    pickAndImportFromMediaLibrary,
+    recordAndImportVideo,
     pickAndImportFolder,
     pickAndImportZip,
     importFromUrl,
@@ -115,7 +117,7 @@ export default function FilesScreen() {
   const [filterObject, setFilterObject] = useState("");
   const [filterFilter, setFilterFilter] = useState("");
   const [filterSourceFormat, setFilterSourceFormat] = useState("");
-  const [filterFrameType, setFilterFrameType] = useState<FrameType | "">("");
+  const [filterFrameType, setFilterFrameType] = useState<string | "">("");
   const [filterTag, setFilterTag] = useState("");
   const [filterGroupId, setFilterGroupId] = useState("");
   const [favoriteOnly, setFavoriteOnly] = useState(false);
@@ -131,6 +133,41 @@ export default function FilesScreen() {
   );
 
   const metadataIndex = useMemo(() => buildMetadataIndex(allFiles), [allFiles]);
+  const frameTypeDefinitions = useMemo(
+    () => getFrameTypeDefinitions(frameClassificationConfig),
+    [frameClassificationConfig],
+  );
+
+  const frameTypeLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const definition of frameTypeDefinitions) {
+      labels.set(
+        definition.key,
+        definition.builtin
+          ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
+          : definition.label || definition.key,
+      );
+    }
+    return labels;
+  }, [frameTypeDefinitions, t]);
+
+  const frameFilters = useMemo(() => {
+    const orderMap = new Map(
+      frameTypeDefinitions.map((definition, index) => [definition.key, index]),
+    );
+    const keys = new Set<string>(frameTypeDefinitions.map((definition) => definition.key));
+    for (const value of metadataIndex.frameTypes) {
+      keys.add(value);
+    }
+    return [...keys].sort((a, b) => {
+      const ao = orderMap.get(a);
+      const bo = orderMap.get(b);
+      if (ao !== undefined && bo !== undefined) return ao - bo;
+      if (ao !== undefined) return -1;
+      if (bo !== undefined) return 1;
+      return a.localeCompare(b);
+    });
+  }, [frameTypeDefinitions, metadataIndex.frameTypes]);
 
   const displayFiles = useMemo(() => {
     return files.filter((file) => {
@@ -230,7 +267,11 @@ export default function FilesScreen() {
               ? t("files.importZipUnavailable")
               : errorKey === "clipboardNoSupportedContent"
                 ? t("files.clipboardNoSupportedContent")
-                : importError;
+                : errorKey === "mediaLibraryPermissionDenied"
+                  ? t("files.mediaLibraryPermissionDenied")
+                  : errorKey === "cameraPermissionDenied"
+                    ? t("files.cameraPermissionDenied")
+                    : importError;
       Alert.alert(t("files.importFailed"), message);
     }
   }, [importError, isImporting, t]);
@@ -281,6 +322,16 @@ export default function FilesScreen() {
     closeImportSheet();
     importFromClipboard();
   }, [closeImportSheet, importFromClipboard]);
+
+  const handleImportMediaLibrary = useCallback(() => {
+    closeImportSheet();
+    pickAndImportFromMediaLibrary();
+  }, [closeImportSheet, pickAndImportFromMediaLibrary]);
+
+  const handleRecordVideo = useCallback(() => {
+    closeImportSheet();
+    recordAndImportVideo();
+  }, [closeImportSheet, recordAndImportVideo]);
 
   const confirmUrlImport = useCallback(() => {
     const url = urlInput.trim();
@@ -546,10 +597,20 @@ export default function FilesScreen() {
         return t("files.downloading");
       case "clipboard":
         return t("files.clipboardImporting");
+      case "mediaLibrary":
+        return t("files.mediaLibraryImporting");
+      case "recording":
+        return t("files.recordingImporting");
       default:
         return `${t("files.importing")}...`;
     }
   };
+
+  const routeForFile = useCallback((file: FitsMetadata) => {
+    return file.mediaKind === "video" || file.sourceType === "video"
+      ? `/video/${file.id}`
+      : `/viewer/${file.id}`;
+  }, []);
 
   const renderFileItem = useCallback(
     ({ item }: { item: FitsMetadata }) => {
@@ -566,7 +627,7 @@ export default function FilesScreen() {
             if (isSelectionMode) {
               toggleSelection(item.id);
             } else {
-              router.push(`/viewer/${item.id}`);
+              router.push(routeForFile(item));
             }
           }}
           onLongPress={() => {
@@ -594,6 +655,7 @@ export default function FilesScreen() {
       isSelectionMode,
       toggleSelection,
       router,
+      routeForFile,
       toggleFavorite,
       handleSingleDelete,
       isGridStyle,
@@ -918,14 +980,16 @@ export default function FilesScreen() {
                 <Chip.Label className="text-xs">{filterValue}</Chip.Label>
               </Chip>
             ))}
-            {FRAME_FILTERS.map((frameType) => (
+            {frameFilters.map((frameType) => (
               <Chip
                 key={`frame-${frameType}`}
                 size="sm"
                 variant={filterFrameType === frameType ? "primary" : "secondary"}
                 onPress={() => setFilterFrameType((prev) => (prev === frameType ? "" : frameType))}
               >
-                <Chip.Label className="text-xs">{t(`gallery.frameTypes.${frameType}`)}</Chip.Label>
+                <Chip.Label className="text-xs">
+                  {frameTypeLabels.get(frameType) ?? frameType}
+                </Chip.Label>
               </Chip>
             ))}
             {metadataIndex.tags.map((tagValue) => (
@@ -987,6 +1051,8 @@ export default function FilesScreen() {
       favoriteOnly,
       fileGroups,
       metadataIndex,
+      frameFilters,
+      frameTypeLabels,
       filterObject,
       filterFilter,
       filterSourceFormat,
@@ -1157,6 +1223,38 @@ export default function FilesScreen() {
               </View>
               <Ionicons name="chevron-forward" size={16} color={mutedColor} />
             </PressableFeedback>
+
+            <PressableFeedback
+              onPress={handleImportMediaLibrary}
+              className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
+                <Ionicons name="images-outline" size={20} color={successColor} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-foreground">
+                  {t("files.importFromMediaLibrary")}
+                </Text>
+                <Text className="text-xs text-muted">{t("files.mediaLibraryHint")}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={mutedColor} />
+            </PressableFeedback>
+
+            <PressableFeedback
+              onPress={handleRecordVideo}
+              className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
+            >
+              <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
+                <Ionicons name="videocam-outline" size={20} color={successColor} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-sm font-semibold text-foreground">
+                  {t("files.recordVideo")}
+                </Text>
+                <Text className="text-xs text-muted">{t("files.recordVideoHint")}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={mutedColor} />
+            </PressableFeedback>
           </View>
         </BottomSheetView>
       </BottomSheet>
@@ -1226,7 +1324,11 @@ export default function FilesScreen() {
         visible={!!quickLookFile}
         file={quickLookFile}
         onClose={() => setQuickLookFile(null)}
-        onOpenViewer={(id) => router.push(`/viewer/${id}`)}
+        onOpenViewer={(id) => {
+          const file = useFitsStore.getState().getFileById(id);
+          if (!file) return;
+          router.push(routeForFile(file));
+        }}
         onOpenEditor={(id) => router.push(`/editor/${id}`)}
       />
     </View>

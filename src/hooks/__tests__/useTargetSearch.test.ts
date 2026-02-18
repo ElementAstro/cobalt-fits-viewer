@@ -7,8 +7,6 @@ jest.mock("../../stores/useTargetStore", () => ({
 
 jest.mock("../../lib/targets/targetSearch", () => ({
   searchTargets: jest.fn(),
-  quickSearch: jest.fn(),
-  getSearchSuggestions: jest.fn(),
 }));
 
 const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
@@ -16,8 +14,6 @@ const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
 };
 const targetSearchLib = jest.requireMock("../../lib/targets/targetSearch") as {
   searchTargets: jest.Mock;
-  quickSearch: jest.Mock;
-  getSearchSuggestions: jest.Mock;
 };
 
 describe("useTargetSearch", () => {
@@ -25,19 +21,17 @@ describe("useTargetSearch", () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     const targets = [
-      { id: "t1", name: "M31", aliases: [] },
-      { id: "t2", name: "M42", aliases: [] },
+      { id: "t1", name: "M31", aliases: [], tags: ["andromeda"], imageIds: [] },
+      { id: "t2", name: "M42", aliases: [], tags: ["orion"], imageIds: [] },
     ];
     useTargetStore.mockImplementation((selector: (s: { targets: typeof targets }) => unknown) =>
       selector({ targets }),
     );
-    targetSearchLib.quickSearch.mockReturnValue([targets[0]]);
     targetSearchLib.searchTargets.mockReturnValue({
       targets: [targets[1]],
       matchCount: 1,
       conditions: { query: "m42" },
     });
-    targetSearchLib.getSearchSuggestions.mockReturnValue(["M31", "M42"]);
   });
 
   afterEach(() => {
@@ -55,8 +49,9 @@ describe("useTargetSearch", () => {
     });
 
     await waitFor(() => {
-      expect(targetSearchLib.quickSearch).toHaveBeenCalled();
-      expect(result.current.results).toEqual([{ id: "t1", name: "M31", aliases: [] }]);
+      expect(result.current.results).toEqual([
+        { id: "t1", name: "M31", aliases: [], tags: ["andromeda"], imageIds: [] },
+      ]);
       expect(result.current.matchCount).toBe(1);
     });
   });
@@ -110,8 +105,7 @@ describe("useTargetSearch", () => {
       jest.runOnlyPendingTimers();
     });
     await waitFor(() => {
-      expect(targetSearchLib.getSearchSuggestions).toHaveBeenCalled();
-      expect(result.current.suggestions).toEqual(["M31", "M42"]);
+      expect(result.current.suggestions).toContain("M31");
     });
   });
 });

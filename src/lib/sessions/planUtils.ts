@@ -103,7 +103,7 @@ export function buildSessionFromPlan(
     startTime,
     endTime,
     duration: Math.floor((endTime - startTime) / 1000),
-    targets: [plan.targetName],
+    targetRefs: [{ targetId: plan.targetId, name: plan.targetName }],
     imageIds: [],
     equipment: plan.equipment ?? {},
     location: plan.location,

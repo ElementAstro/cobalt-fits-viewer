@@ -63,6 +63,7 @@ export default function ViewerDetailScreen() {
       nextId: idx < allFiles.length - 1 ? allFiles[idx + 1].id : null,
     };
   }, [allFiles, id]);
+  const isVideoFile = file?.mediaKind === "video" || file?.sourceType === "video";
 
   // Display parameters — grouped to reduce re-renders
   const {
@@ -158,7 +159,13 @@ export default function ViewerDetailScreen() {
   const setCurrentHDU = useViewerStore((s) => s.setCurrentHDU);
 
   const {
+    metadata,
+    headers,
+    comments,
+    history,
     pixels,
+    rgbChannels,
+    sourceBuffer,
     dimensions,
     hduList,
     isLoading: isFitsLoading,
@@ -184,7 +191,7 @@ export default function ViewerDetailScreen() {
     processingError,
   } = useImageProcessing();
 
-  const { generateThumbnail } = useThumbnail();
+  const { generateThumbnailAsync } = useThumbnail();
 
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -208,6 +215,17 @@ export default function ViewerDetailScreen() {
     height: dimensions?.height,
     filename: file?.filename ?? "fits",
     format: exportFormat,
+    source: {
+      sourceType: metadata?.sourceType,
+      sourceFormat: metadata?.sourceFormat,
+      originalBuffer: sourceBuffer,
+      scientificPixels: pixels,
+      rgbChannels,
+      metadata: metadata ?? undefined,
+      headerKeywords: headers,
+      comments,
+      history,
+    },
     onDone: closeExportDialog,
   });
   const prevPixelsRef = useRef<Float32Array | null>(null);
@@ -441,6 +459,18 @@ export default function ViewerDetailScreen() {
     onToggleMinimap: toggleMinimap,
     onTogglePixelInfo: togglePixelInfo,
   });
+
+  const zoomControlsBottomOffset = useMemo(() => {
+    if (isFullscreen) return Math.max(insets.bottom + 12, 16);
+    if (isLandscape) return Math.max(insets.bottom + 12, 12);
+    if (showControls) return insets.bottom + 86;
+    return Math.max(insets.bottom + 14, 14);
+  }, [insets.bottom, isFullscreen, isLandscape, showControls]);
+
+  useEffect(() => {
+    if (!id || !isVideoFile) return;
+    router.replace(`/video/${id}`);
+  }, [id, isVideoFile, router]);
 
   // --- Pixel tap handler ---
   const handlePixelTap = useCallback(
@@ -708,12 +738,18 @@ export default function ViewerDetailScreen() {
   // Auto-generate thumbnail on first view if missing
   useEffect(() => {
     if (!file || file.thumbnailUri || !rgbaData || !dimensions) return;
-    const thumbUri = generateThumbnail(file.id, rgbaData, dimensions.width, dimensions.height);
-    if (thumbUri) {
-      updateFile(file.id, { thumbnailUri: thumbUri });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [file?.id, file?.thumbnailUri, rgbaData, dimensions]);
+    let cancelled = false;
+    void generateThumbnailAsync(file.id, rgbaData, dimensions.width, dimensions.height).then(
+      (thumbUri) => {
+        if (!cancelled && thumbUri) {
+          updateFile(file.id, { thumbnailUri: thumbUri });
+        }
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [file, rgbaData, dimensions, generateThumbnailAsync, updateFile]);
 
   const pixelValue =
     pixels && dimensions && cursorX >= 0 && cursorY >= 0
@@ -877,6 +913,18 @@ export default function ViewerDetailScreen() {
     );
   }
 
+  if (isVideoFile) {
+    return (
+      <View className="flex-1 items-center justify-center bg-background px-6">
+        <Ionicons name="videocam-outline" size={48} color={mutedColor} />
+        <Text className="mt-4 text-center text-sm text-muted">This file is a video.</Text>
+        <Button variant="primary" className="mt-4" onPress={() => router.replace(`/video/${id}`)}>
+          <Button.Label>Open Video Player</Button.Label>
+        </Button>
+      </View>
+    );
+  }
+
   const canvasArea = (
     <View className="flex-1 bg-black">
       {fitsError || processingError ? (
@@ -914,6 +962,7 @@ export default function ViewerDetailScreen() {
             onSwipeLeft={() => nextId && navigateTo(nextId)}
             onSwipeRight={() => prevId && navigateTo(prevId)}
             onLongPress={toggleFullscreen}
+            interactionEnabled={!isRegionSelectActive}
             wheelZoomEnabled
           />
 
@@ -1002,15 +1051,23 @@ export default function ViewerDetailScreen() {
             canvasHeight={canvasTransform.canvasHeight}
             imageWidth={displayWidth || dimensions.width}
             imageHeight={displayHeight || dimensions.height}
+            bottomOffset={zoomControlsBottomOffset}
             onSetTransform={(tx, ty, s) => canvasRef.current?.setTransform(tx, ty, s)}
           />
 
           {/* Exit fullscreen button */}
           {isFullscreen && (
-            <View className="absolute top-3 right-3">
+            <View
+              className="absolute"
+              style={{
+                top: Math.max(insets.top + 8, 12),
+                right: Math.max(insets.right + 8, 12),
+              }}
+            >
               <Button
                 size="sm"
                 variant="ghost"
+                isIconOnly
                 onPress={toggleFullscreen}
                 className="h-8 w-8 bg-black/50 rounded-full"
               >
@@ -1114,6 +1171,7 @@ export default function ViewerDetailScreen() {
         onExport={handleExport}
         onShare={handleShare}
         onSaveToDevice={handleSaveToDevice}
+        fitsScientificAvailable={metadata?.sourceType === "fits" && !!sourceBuffer}
         onPrint={handlePrint}
         onPrintToPdf={handlePrintToPdf}
         onClose={() => setShowExport(false)}

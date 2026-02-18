@@ -201,7 +201,7 @@ describe("useViewerStore — levels", () => {
       store.setBrightness(0.25);
       store.setContrast(1.6);
       store.setMtfMidtone(0.42);
-      store.setCurvePreset("s-curve");
+      store.setCurvePreset("sCurve");
 
       const s = useViewerStore.getState();
       expect(s.stretch).toBe("sqrt");
@@ -209,7 +209,7 @@ describe("useViewerStore — levels", () => {
       expect(s.brightness).toBe(0.25);
       expect(s.contrast).toBe(1.6);
       expect(s.mtfMidtone).toBe(0.42);
-      expect(s.curvePreset).toBe("s-curve");
+      expect(s.curvePreset).toBe("sCurve");
     });
 
     it("updates HDU/frame metadata", () => {

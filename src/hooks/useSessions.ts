@@ -6,6 +6,7 @@ import { useCallback, useMemo } from "react";
 import { useSessionStore } from "../stores/useSessionStore";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
+import { useTargetStore } from "../stores/useTargetStore";
 import {
   detectSessions,
   getDatesWithObservations,
@@ -20,6 +21,18 @@ import {
 } from "../lib/sessions/observationLog";
 import { calculateObservationStats, getMonthlyTrend } from "../lib/sessions/statsCalculator";
 import { LOG_TAGS, Logger } from "../lib/logger";
+import {
+  buildMissingLogEntries,
+  deriveSessionMetadataFromFiles,
+} from "../lib/sessions/sessionLinking";
+import { mergeSessionLike } from "../lib/sessions/sessionNormalization";
+import type { ObservationSession } from "../lib/fits/types";
+
+interface EndLiveSessionWithIntegrationResult {
+  session: ObservationSession | null;
+  linkedFileCount: number;
+  linkedLogCount: number;
+}
 
 export function useSessions() {
   const sessions = useSessionStore((s) => s.sessions);
@@ -30,10 +43,12 @@ export function useSessions() {
   const removeSession = useSessionStore((s) => s.removeSession);
   const mergeSessions = useSessionStore((s) => s.mergeSessions);
   const getDatesWithSessions = useSessionStore((s) => s.getDatesWithSessions);
+  const endLiveSession = useSessionStore((s) => s.endLiveSession);
 
   const files = useFitsStore((s) => s.files);
   const batchSetSessionId = useFitsStore((s) => s.batchSetSessionId);
   const sessionGapMinutes = useSettingsStore((s) => s.sessionGapMinutes);
+  const targetCatalog = useTargetStore((s) => s.targets);
 
   const autoDetectSessions = useCallback((): { newCount: number; totalDetected: number } => {
     const detected = detectSessions(files, sessionGapMinutes);
@@ -46,40 +61,74 @@ export function useSessions() {
     for (const session of detected) {
       if (isSessionDuplicate(session, sessions)) continue;
 
-      // 从 session 内文件中提取众数位置
       const sessionFiles = files.filter((f) => session.imageIds.includes(f.id));
-      const locationCounts = new Map<
-        string,
-        { count: number; location: typeof session.location }
-      >();
-      for (const f of sessionFiles) {
-        if (!f.location) continue;
-        const key =
-          f.location.city ??
-          f.location.placeName ??
-          `${f.location.latitude},${f.location.longitude}`;
-        const entry = locationCounts.get(key);
-        if (entry) {
-          entry.count++;
-        } else {
-          locationCounts.set(key, { count: 1, location: f.location });
-        }
-      }
-      if (locationCounts.size > 0) {
-        const top = [...locationCounts.values()].sort((a, b) => b.count - a.count)[0];
-        session.location = top.location;
-      }
+      const derived = deriveSessionMetadataFromFiles(sessionFiles, targetCatalog);
+      const integratedSession = mergeSessionLike(session, {
+        targetRefs: derived.targetRefs,
+        imageIds: derived.imageIds,
+        equipment: {
+          ...(session.equipment ?? {}),
+          ...(derived.equipment ?? {}),
+        },
+        location: derived.location ?? session.location,
+      }) as ObservationSession;
 
-      addSession(session);
-      batchSetSessionId(session.imageIds, session.id);
+      addSession(integratedSession);
+      batchSetSessionId(integratedSession.imageIds, integratedSession.id);
 
-      const entries = generateLogFromFiles(sessionFiles, session.id);
+      const entries = generateLogFromFiles(sessionFiles, integratedSession.id);
       addLogEntries(entries);
       newCount++;
     }
 
     return { newCount, totalDetected: detected.length };
-  }, [files, sessionGapMinutes, sessions, addSession, addLogEntries, batchSetSessionId]);
+  }, [
+    files,
+    sessionGapMinutes,
+    sessions,
+    addSession,
+    addLogEntries,
+    batchSetSessionId,
+    targetCatalog,
+  ]);
+
+  const endLiveSessionWithIntegration = useCallback((): EndLiveSessionWithIntegrationResult => {
+    const endedSession = endLiveSession();
+    if (!endedSession) {
+      return {
+        session: null,
+        linkedFileCount: 0,
+        linkedLogCount: 0,
+      };
+    }
+
+    const linkedFiles = files.filter((file) => file.sessionId === endedSession.id);
+    const derived = deriveSessionMetadataFromFiles(linkedFiles, targetCatalog);
+    const integrated = mergeSessionLike(endedSession, {
+      targetRefs: derived.targetRefs,
+      imageIds: derived.imageIds,
+      equipment: derived.equipment,
+      location: derived.location,
+    }) as ObservationSession;
+
+    updateSession(endedSession.id, {
+      targetRefs: integrated.targetRefs,
+      imageIds: integrated.imageIds,
+      equipment: integrated.equipment,
+      location: integrated.location,
+    });
+
+    const missingLogs = buildMissingLogEntries(linkedFiles, endedSession.id, logEntries);
+    if (missingLogs.length > 0) {
+      addLogEntries(missingLogs);
+    }
+
+    return {
+      session: integrated,
+      linkedFileCount: linkedFiles.length,
+      linkedLogCount: missingLogs.length,
+    };
+  }, [addLogEntries, endLiveSession, files, logEntries, targetCatalog, updateSession]);
 
   const getSessionStats = useCallback(() => {
     return calculateObservationStats(sessions, files);
@@ -128,6 +177,7 @@ export function useSessions() {
       updateSession,
       removeSession,
       mergeSessions,
+      endLiveSessionWithIntegration,
       autoDetectSessions,
       getSessionStats,
       getMonthlyData,
@@ -143,6 +193,7 @@ export function useSessions() {
       updateSession,
       removeSession,
       mergeSessions,
+      endLiveSessionWithIntegration,
       autoDetectSessions,
       getSessionStats,
       getMonthlyData,

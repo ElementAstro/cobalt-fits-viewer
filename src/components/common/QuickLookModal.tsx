@@ -2,11 +2,15 @@
  * 文件快速预览模态框 — 轻量级预览文件缩略图和元数据
  */
 
+import { useEffect, useMemo } from "react";
 import { View, Text, Image } from "react-native";
 import { Button, Dialog, Separator } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useVideoPlayer, VideoView } from "expo-video";
 import { useI18n } from "../../i18n/useI18n";
 import { formatBytes } from "../../lib/utils/format";
+import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
+import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 interface QuickLookModalProps {
@@ -25,7 +29,23 @@ export function QuickLookModal({
   onOpenEditor,
 }: QuickLookModalProps) {
   const { t } = useI18n();
-
+  const thumbnailUri = useMemo(
+    () => (file ? resolveThumbnailUri(file.id, file.thumbnailUri) : null),
+    [file],
+  );
+  const isVideo = file?.mediaKind === "video" || file?.sourceType === "video";
+  const player = useVideoPlayer(isVideo && file ? { uri: file.filepath } : null, (instance) => {
+    instance.muted = true;
+    instance.loop = true;
+  });
+  useEffect(() => {
+    if (!isVideo) return;
+    if (visible) {
+      player.play();
+      return;
+    }
+    player.pause();
+  }, [isVideo, player, visible]);
   if (!file) return null;
 
   return (
@@ -40,11 +60,21 @@ export function QuickLookModal({
         <Dialog.Content className="max-w-[340px]">
           <Dialog.Title>{file.filename}</Dialog.Title>
 
-          {/* Thumbnail Preview */}
-          {file.thumbnailUri ? (
+          {/* Thumbnail / Video Preview */}
+          {isVideo ? (
+            <View className="mt-3 h-48 overflow-hidden rounded-lg bg-black">
+              <VideoView
+                player={player}
+                className="h-full w-full"
+                nativeControls
+                contentFit="contain"
+                allowsPictureInPicture={false}
+              />
+            </View>
+          ) : thumbnailUri ? (
             <View className="mt-3 h-48 rounded-lg overflow-hidden bg-black items-center justify-center">
               <Image
-                source={{ uri: file.thumbnailUri }}
+                source={{ uri: thumbnailUri }}
                 className="w-full h-full"
                 resizeMode="contain"
               />
@@ -59,12 +89,24 @@ export function QuickLookModal({
           {/* File Info */}
           <View className="mt-3 gap-1.5">
             <InfoRow label={t("files.fileSize")} value={formatBytes(file.fileSize)} />
+            {isVideo && (
+              <>
+                <InfoRow
+                  label={t("common.duration")}
+                  value={formatVideoDuration(file.durationMs)}
+                />
+                <InfoRow
+                  label={t("viewer.dimensions")}
+                  value={formatVideoResolution(file.videoWidth, file.videoHeight) || "--"}
+                />
+              </>
+            )}
             {file.object && <InfoRow label={t("targets.object")} value={file.object} />}
             {file.filter && <InfoRow label={t("targets.filter")} value={file.filter} />}
-            {file.exptime != null && (
+            {!isVideo && file.exptime != null && (
               <InfoRow label={t("targets.exposure")} value={`${file.exptime}s`} />
             )}
-            {file.naxis1 != null && file.naxis2 != null && (
+            {!isVideo && file.naxis1 != null && file.naxis2 != null && (
               <InfoRow label={t("viewer.dimensions")} value={`${file.naxis1} × ${file.naxis2}`} />
             )}
           </View>
@@ -76,17 +118,19 @@ export function QuickLookModal({
             <Button variant="outline" size="sm" onPress={onClose}>
               <Button.Label>{t("common.cancel")}</Button.Label>
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onPress={() => {
-                onClose();
-                onOpenEditor(file.id);
-              }}
-            >
-              <Ionicons name="create-outline" size={12} color="#888" />
-              <Button.Label>{t("common.edit")}</Button.Label>
-            </Button>
+            {!isVideo && (
+              <Button
+                variant="outline"
+                size="sm"
+                onPress={() => {
+                  onClose();
+                  onOpenEditor(file.id);
+                }}
+              >
+                <Ionicons name="create-outline" size={12} color="#888" />
+                <Button.Label>{t("common.edit")}</Button.Label>
+              </Button>
+            )}
             <Button
               variant="primary"
               size="sm"

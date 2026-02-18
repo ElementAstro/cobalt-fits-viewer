@@ -621,7 +621,48 @@ export function generateStarMask(
   height: number,
   scale: number = 1.5,
 ): Float32Array {
-  const stars = detectStars(pixels, width, height);
+  let stars = detectStars(pixels, width, height).map((star) => ({
+    cx: star.cx,
+    cy: star.cy,
+    fwhm: star.fwhm,
+  }));
+  if (stars.length === 0) {
+    // Fallback to a more permissive profile for sparse/synthetic frames.
+    stars = detectStars(pixels, width, height, {
+      profile: "accurate",
+      sigmaThreshold: 3,
+      minArea: 2,
+      borderMargin: Math.max(2, Math.floor(Math.min(width, height) / 16)),
+    }).map((star) => ({
+      cx: star.cx,
+      cy: star.cy,
+      fwhm: star.fwhm,
+    }));
+  }
+  if (stars.length === 0) {
+    // Last resort: local-maximum peak picker from robust background stats.
+    const { median, mad } = computeMAD(pixels);
+    const sigma = mad > 0 ? mad / 0.6745 : 0;
+    const threshold = median + Math.max(1e-4, sigma * 2.5);
+    const peaks: Array<{ cx: number; cy: number; fwhm: number; value: number }> = [];
+    for (let y = 1; y < height - 1; y++) {
+      for (let x = 1; x < width - 1; x++) {
+        const idx = y * width + x;
+        const v = pixels[idx];
+        if (v < threshold) continue;
+        if (
+          v >= pixels[idx - 1] &&
+          v >= pixels[idx + 1] &&
+          v >= pixels[idx - width] &&
+          v >= pixels[idx + width]
+        ) {
+          peaks.push({ cx: x, cy: y, fwhm: 2, value: v });
+        }
+      }
+    }
+    peaks.sort((a, b) => b.value - a.value);
+    stars = peaks.slice(0, 256).map(({ cx, cy, fwhm }) => ({ cx, cy, fwhm }));
+  }
   const mask = new Float32Array(width * height);
 
   for (const star of stars) {
@@ -1726,6 +1767,201 @@ export function richardsonLucy(
   return result;
 }
 
+/**
+ * Dynamic Background Extraction (DBE)
+ * 在规则采样网格上做 sigma-clip，估计背景并减除
+ */
+export function dynamicBackgroundExtract(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  samplesX: number = 12,
+  samplesY: number = 8,
+  sigma: number = 2.5,
+): Float32Array {
+  const sx = Math.max(3, Math.min(64, Math.round(samplesX)));
+  const sy = Math.max(3, Math.min(64, Math.round(samplesY)));
+  const cellW = Math.max(1, Math.floor(width / sx));
+  const cellH = Math.max(1, Math.floor(height / sy));
+  const sampleGrid = new Float32Array(sx * sy);
+
+  for (let gy = 0; gy < sy; gy++) {
+    for (let gx = 0; gx < sx; gx++) {
+      const x0 = gx * cellW;
+      const y0 = gy * cellH;
+      const x1 = Math.min(width, x0 + cellW);
+      const y1 = Math.min(height, y0 + cellH);
+      const values = new Float32Array(Math.max(1, (x1 - x0) * (y1 - y0)));
+      let idx = 0;
+      for (let y = y0; y < y1; y++) {
+        for (let x = x0; x < x1; x++) {
+          values[idx++] = pixels[y * width + x];
+        }
+      }
+      if (idx === 0) {
+        sampleGrid[gy * sx + gx] = 0;
+        continue;
+      }
+      const clipped = values.slice(0, idx);
+      const center = quickSelect(clipped, 0, clipped.length - 1, Math.floor(clipped.length / 2));
+      let sumSq = 0;
+      for (let i = 0; i < clipped.length; i++) {
+        const d = clipped[i] - center;
+        sumSq += d * d;
+      }
+      const std = Math.sqrt(sumSq / Math.max(1, clipped.length));
+      let acc = 0;
+      let count = 0;
+      const threshold = std * Math.max(0.5, sigma);
+      for (let i = 0; i < clipped.length; i++) {
+        const v = clipped[i];
+        if (Math.abs(v - center) <= threshold) {
+          acc += v;
+          count++;
+        }
+      }
+      sampleGrid[gy * sx + gx] = count > 0 ? acc / count : center;
+    }
+  }
+
+  const background = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const fy = (y / Math.max(1, height - 1)) * (sy - 1);
+    const gy0 = Math.min(sy - 2, Math.max(0, Math.floor(fy)));
+    const gy1 = Math.min(sy - 1, gy0 + 1);
+    const wy = fy - gy0;
+    for (let x = 0; x < width; x++) {
+      const fx = (x / Math.max(1, width - 1)) * (sx - 1);
+      const gx0 = Math.min(sx - 2, Math.max(0, Math.floor(fx)));
+      const gx1 = Math.min(sx - 1, gx0 + 1);
+      const wx = fx - gx0;
+
+      const v00 = sampleGrid[gy0 * sx + gx0];
+      const v10 = sampleGrid[gy0 * sx + gx1];
+      const v01 = sampleGrid[gy1 * sx + gx0];
+      const v11 = sampleGrid[gy1 * sx + gx1];
+      background[y * width + x] =
+        v00 * (1 - wx) * (1 - wy) + v10 * wx * (1 - wy) + v01 * (1 - wx) * wy + v11 * wx * wy;
+    }
+  }
+
+  const out = new Float32Array(width * height);
+  for (let i = 0; i < out.length; i++) out[i] = pixels[i] - background[i];
+  return out;
+}
+
+/**
+ * Multiscale denoise (a trous wavelet thresholding)
+ */
+export function multiscaleDenoise(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  layers: number = 4,
+  threshold: number = 2.5,
+): Float32Array {
+  const n = width * height;
+  const lv = Math.max(1, Math.min(8, Math.round(layers)));
+  const k = Math.max(0.1, Math.min(10, threshold));
+  let current: Float32Array<ArrayBufferLike> = new Float32Array(pixels);
+  const details: Float32Array[] = [];
+
+  for (let s = 0; s < lv; s++) {
+    const smooth = atrousSmooth(current, width, height, s);
+    const detail = new Float32Array(n);
+    for (let i = 0; i < n; i++) detail[i] = current[i] - smooth[i];
+    details.push(detail);
+    current = smooth;
+  }
+
+  const out = new Float32Array(n);
+  out.set(current);
+  for (let s = 0; s < details.length; s++) {
+    const d = details[s];
+    const absVals = new Float32Array(n);
+    for (let i = 0; i < n; i++) absVals[i] = Math.abs(d[i]);
+    const noise = quickSelect(absVals, 0, n - 1, Math.floor(n / 2)) / 0.6745;
+    const th = noise * k;
+    for (let i = 0; i < n; i++) {
+      const v = d[i];
+      const a = Math.abs(v);
+      out[i] += a <= th ? 0 : Math.sign(v) * (a - th);
+    }
+  }
+
+  return out;
+}
+
+/**
+ * Local contrast enhancement (unsharp large-scale blend)
+ */
+export function localContrastEnhancement(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  sigma: number = 8,
+  amount: number = 0.35,
+): Float32Array {
+  const blur = gaussianBlur(pixels, width, height, Math.max(0.5, sigma));
+  const gain = Math.max(0, Math.min(2, amount));
+  const out = new Float32Array(pixels.length);
+  for (let i = 0; i < pixels.length; i++) {
+    out[i] = pixels[i] + (pixels[i] - blur[i]) * gain;
+  }
+  return out;
+}
+
+/**
+ * 基于星点检测估计用于去卷积的 PSF sigma
+ */
+export function estimatePSFSigma(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  maxSamples: number = 50,
+): number {
+  const stars = detectStars(pixels, width, height, { maxStars: maxSamples });
+  if (stars.length === 0) return 2;
+  const fwhms = stars.map((s) => s.fwhm).sort((a, b) => a - b);
+  const medianFwhm = fwhms[Math.floor(fwhms.length / 2)];
+  return Math.max(0.5, Math.min(8, medianFwhm / 2.3548));
+}
+
+/**
+ * 基于星点掩膜的缩星
+ */
+export function starReduction(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  scale: number = 1.2,
+  strength: number = 0.6,
+): Float32Array {
+  const mask = generateStarMask(pixels, width, height, Math.max(0.3, scale));
+  const reducedCore = morphErode(pixels, width, height, 1);
+  const out = new Float32Array(pixels.length);
+  const k = Math.max(0, Math.min(1, strength));
+  for (let i = 0; i < out.length; i++) {
+    const m = Math.max(0, Math.min(1, mask[i])) * k;
+    out[i] = pixels[i] * (1 - m) + reducedCore[i] * m;
+  }
+  return out;
+}
+
+/**
+ * 自动 PSF 估计 + Richardson-Lucy 去卷积
+ */
+export function deconvolutionAuto(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  iterations: number = 20,
+  regularization: number = 0.1,
+): Float32Array {
+  const psfSigma = estimatePSFSigma(pixels, width, height);
+  return richardsonLucy(pixels, width, height, psfSigma, iterations, regularization);
+}
+
 // ===== 操作类型定义 =====
 
 export type ImageEditOperation =
@@ -1763,7 +1999,12 @@ export type ImageEditOperation =
   | { type: "hdr"; layers: number; amount: number }
   | { type: "rangeMask"; low: number; high: number; fuzziness: number }
   | { type: "pixelMath"; expression: string }
-  | { type: "deconvolution"; psfSigma: number; iterations: number; regularization: number };
+  | { type: "deconvolution"; psfSigma: number; iterations: number; regularization: number }
+  | { type: "dbe"; samplesX: number; samplesY: number; sigma: number }
+  | { type: "multiscaleDenoise"; layers: number; threshold: number }
+  | { type: "localContrast"; sigma: number; amount: number }
+  | { type: "starReduction"; scale: number; strength: number }
+  | { type: "deconvolutionAuto"; iterations: number; regularization: number };
 
 /**
  * 应用编辑操作到像素数据
@@ -1862,6 +2103,36 @@ export function applyOperation(
           op.iterations,
           op.regularization,
         ),
+        width,
+        height,
+      };
+    case "dbe":
+      return {
+        pixels: dynamicBackgroundExtract(pixels, width, height, op.samplesX, op.samplesY, op.sigma),
+        width,
+        height,
+      };
+    case "multiscaleDenoise":
+      return {
+        pixels: multiscaleDenoise(pixels, width, height, op.layers, op.threshold),
+        width,
+        height,
+      };
+    case "localContrast":
+      return {
+        pixels: localContrastEnhancement(pixels, width, height, op.sigma, op.amount),
+        width,
+        height,
+      };
+    case "starReduction":
+      return {
+        pixels: starReduction(pixels, width, height, op.scale, op.strength),
+        width,
+        height,
+      };
+    case "deconvolutionAuto":
+      return {
+        pixels: deconvolutionAuto(pixels, width, height, op.iterations, op.regularization),
         width,
         height,
       };

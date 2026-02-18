@@ -1,11 +1,11 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { View, Text, Pressable, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { useMemo } from "react";
 import { Card, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
+import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import type { Album } from "../../lib/fits/types";
 
 interface AlbumCardProps {
@@ -34,7 +34,9 @@ export const AlbumCard = memo(function AlbumCard({
   const coverUri = useMemo(() => {
     const coverId = album.coverImageId ?? album.imageIds[0];
     if (!coverId) return undefined;
-    return getFileById(coverId)?.thumbnailUri;
+    const coverFile = getFileById(coverId);
+    if (!coverFile) return undefined;
+    return resolveThumbnailUri(coverFile.id, coverFile.thumbnailUri) ?? undefined;
   }, [album.coverImageId, album.imageIds, getFileById]);
 
   return (

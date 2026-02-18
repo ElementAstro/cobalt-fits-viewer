@@ -24,6 +24,16 @@ const pixelMathLib = jest.requireMock("../../lib/utils/pixelMath") as {
   calculateHistogram: jest.Mock;
   calculateRegionHistogram: jest.Mock;
 };
+type InteractionTask = Parameters<typeof InteractionManager.runAfterInteractions>[0];
+
+function createInteractionHandle(cancel: jest.Mock = jest.fn()) {
+  return {
+    then: (onfulfilled?: () => any) =>
+      Promise.resolve().then(() => (onfulfilled ? onfulfilled() : undefined)),
+    done: (...args: any[]) => (typeof args[0] === "function" ? args[0]() : undefined),
+    cancel,
+  } as ReturnType<typeof InteractionManager.runAfterInteractions>;
+}
 
 describe("useImageProcessing", () => {
   const tasks: Array<{ cb: () => void; cancel: jest.Mock }> = [];
@@ -31,11 +41,15 @@ describe("useImageProcessing", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     tasks.length = 0;
-    jest.spyOn(InteractionManager, "runAfterInteractions").mockImplementation((cb: () => void) => {
-      const task = { cb, cancel: jest.fn() };
-      tasks.push(task);
-      return { cancel: task.cancel } as never;
-    });
+    jest
+      .spyOn(InteractionManager, "runAfterInteractions")
+      .mockImplementation((task?: InteractionTask) => {
+        const handle = { cancel: jest.fn() };
+        if (typeof task === "function") {
+          tasks.push({ cb: task, cancel: handle.cancel });
+        }
+        return createInteractionHandle(handle.cancel);
+      });
     converterLib.fitsToRGBA.mockReturnValue(new Uint8ClampedArray([1, 2, 3, 4]));
     converterLib.downsamplePixels.mockReturnValue({
       pixels: new Float32Array([0, 1, 2, 3]),

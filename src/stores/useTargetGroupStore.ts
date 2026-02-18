@@ -14,6 +14,7 @@ interface TargetGroupStoreState {
 
   // Actions
   addGroup: (group: Omit<TargetGroup, "id" | "createdAt" | "updatedAt">) => string;
+  upsertGroup: (group: TargetGroup) => void;
   removeGroup: (id: string) => void;
   updateGroup: (id: string, updates: Partial<TargetGroup>) => void;
 
@@ -46,6 +47,26 @@ export const useTargetGroupStore = create<TargetGroupStoreState>()(
         set((state) => ({ groups: [...state.groups, group] }));
         return id;
       },
+
+      upsertGroup: (group) =>
+        set((state) => {
+          const existing = state.groups.find((item) => item.id === group.id);
+          if (!existing) {
+            return { groups: [...state.groups, group] };
+          }
+          return {
+            groups: state.groups.map((item) =>
+              item.id === group.id
+                ? {
+                    ...item,
+                    ...group,
+                    targetIds: [...new Set(group.targetIds ?? [])],
+                    updatedAt: Date.now(),
+                  }
+                : item,
+            ),
+          };
+        }),
 
       removeGroup: (id) => set((state) => ({ groups: state.groups.filter((g) => g.id !== id) })),
 
@@ -120,6 +141,17 @@ export const useTargetGroupStore = create<TargetGroupStoreState>()(
       name: "target-group-store",
       storage: createJSONStorage(() => zustandMMKVStorage),
       partialize: (state) => ({ groups: state.groups }),
+      version: 2,
+      migrate: (persistedState, _version) => {
+        const state = persistedState as { groups?: TargetGroup[] };
+        const groups = (state.groups ?? []).map((group) => ({
+          ...group,
+          targetIds: [...new Set(group.targetIds ?? [])],
+          updatedAt: group.updatedAt ?? Date.now(),
+          createdAt: group.createdAt ?? Date.now(),
+        }));
+        return { groups };
+      },
     },
   ),
 );

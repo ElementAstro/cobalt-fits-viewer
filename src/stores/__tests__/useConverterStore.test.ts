@@ -1,5 +1,10 @@
 import { useConverterStore } from "../useConverterStore";
-import { DEFAULT_CONVERT_PRESETS, type BatchTask, type ConvertPreset } from "../../lib/fits/types";
+import {
+  DEFAULT_CONVERT_PRESETS,
+  DEFAULT_FITS_TARGET_OPTIONS,
+  type BatchTask,
+  type ConvertPreset,
+} from "../../lib/fits/types";
 
 const makeTask = (overrides: Partial<BatchTask> = {}): BatchTask => ({
   id: `task-${Math.random().toString(36).slice(2, 8)}`,
@@ -22,6 +27,7 @@ const makePreset = (id: string): ConvertPreset => ({
     quality: 77,
     bitDepth: 16,
     dpi: 150,
+    fits: DEFAULT_FITS_TARGET_OPTIONS,
     stretch: "linear",
     colormap: "heat",
     blackPoint: 0.1,
@@ -42,6 +48,7 @@ describe("useConverterStore", () => {
         quality: 90,
         bitDepth: 8,
         dpi: 72,
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
         stretch: "asinh",
         colormap: "grayscale",
         blackPoint: 0,
@@ -72,7 +79,7 @@ describe("useConverterStore", () => {
     store.setBitDepth(16);
     store.setDpi(300);
     store.setOptions({
-      colormap: "blue-red",
+      colormap: "viridis",
       includeAnnotations: true,
       gamma: 1.8,
     });
@@ -82,7 +89,7 @@ describe("useConverterStore", () => {
     expect(options.quality).toBe(55);
     expect(options.bitDepth).toBe(16);
     expect(options.dpi).toBe(300);
-    expect(options.colormap).toBe("blue-red");
+    expect(options.colormap).toBe("viridis");
     expect(options.includeAnnotations).toBe(true);
     expect(options.gamma).toBe(1.8);
   });

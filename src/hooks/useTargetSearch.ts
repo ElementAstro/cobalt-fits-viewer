@@ -5,12 +5,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useTargetStore } from "../stores/useTargetStore";
 import { useTargets } from "./useTargets";
-import {
-  searchTargets,
-  quickSearch,
-  getSearchSuggestions,
-  type SearchConditions,
-} from "../lib/targets/targetSearch";
+import { searchTargets, type SearchConditions } from "../lib/targets/targetSearch";
 import {
   detectDuplicates,
   findDuplicatesOf,
@@ -20,8 +15,34 @@ import {
 
 const DEBOUNCE_MS = 300;
 
+interface SearchIndexItem {
+  targetId: string;
+  targetName: string;
+  searchBlob: string;
+  aliases: string[];
+  tags: string[];
+  category?: string;
+}
+
 export function useTargetSearch() {
   const targets = useTargetStore((s) => s.targets);
+  const searchIndex = useMemo<SearchIndexItem[]>(() => {
+    return targets.map((target) => ({
+      targetId: target.id,
+      targetName: target.name ?? "",
+      aliases: target.aliases ?? [],
+      tags: target.tags ?? [],
+      category: target.category,
+      searchBlob: [
+        target.name ?? "",
+        ...(target.aliases ?? []),
+        ...(target.tags ?? []),
+        target.notes ?? "",
+      ]
+        .join("|")
+        .toLowerCase(),
+    }));
+  }, [targets]);
 
   // 搜索状态
   const [query, setQuery] = useState("");
@@ -50,7 +71,11 @@ export function useTargetSearch() {
   // 执行搜索
   const searchResult = useMemo(() => {
     if (!isAdvancedMode && debouncedQuery) {
-      const results = quickSearch(targets, debouncedQuery);
+      const q = debouncedQuery.trim().toLowerCase();
+      const idSet = new Set(
+        searchIndex.filter((item) => item.searchBlob.includes(q)).map((item) => item.targetId),
+      );
+      const results = targets.filter((target) => idSet.has(target.id));
       return {
         targets: results,
         matchCount: results.length,
@@ -67,13 +92,34 @@ export function useTargetSearch() {
     }
 
     return searchTargets(targets, searchConditions);
-  }, [targets, debouncedQuery, conditions, isAdvancedMode]);
+  }, [targets, debouncedQuery, conditions, isAdvancedMode, searchIndex]);
 
   // 搜索建议
   const suggestions = useMemo(() => {
     if (!debouncedQuery || debouncedQuery.length < 2) return [];
-    return getSearchSuggestions(targets, debouncedQuery);
-  }, [targets, debouncedQuery]);
+    const q = debouncedQuery.trim().toLowerCase();
+    const suggestionSet = new Set<string>();
+    for (const item of searchIndex) {
+      if (item.targetName.toLowerCase().includes(q)) {
+        suggestionSet.add(item.targetName);
+      }
+      for (const alias of item.aliases) {
+        if (alias.toLowerCase().includes(q)) {
+          suggestionSet.add(alias);
+        }
+      }
+      for (const tag of item.tags) {
+        if (tag.toLowerCase().includes(q)) {
+          suggestionSet.add(tag);
+        }
+      }
+      if (item.category?.toLowerCase().includes(q)) {
+        suggestionSet.add(item.category);
+      }
+      if (suggestionSet.size >= 10) break;
+    }
+    return Array.from(suggestionSet).slice(0, 10);
+  }, [searchIndex, debouncedQuery]);
 
   // 更新搜索条件
   const updateCondition = useCallback(

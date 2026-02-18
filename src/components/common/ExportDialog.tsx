@@ -3,7 +3,13 @@ import { View, Text } from "react-native";
 import { Button, Chip, Dialog, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { ExportFormat } from "../../lib/fits/types";
+import {
+  DEFAULT_FITS_TARGET_OPTIONS,
+  type ExportFormat,
+  type FitsCompression,
+  type FitsExportMode,
+  type FitsTargetOptions,
+} from "../../lib/fits/types";
 import { supportsQuality } from "../../lib/converter/convertPresets";
 import { estimateFileSize } from "../../lib/converter/formatConverter";
 import { formatBytes } from "../../lib/utils/format";
@@ -15,16 +21,18 @@ interface ExportDialogProps {
   width?: number;
   height?: number;
   onFormatChange: (format: ExportFormat) => void;
-  onExport: (quality: number) => void;
-  onShare: (quality: number) => void;
-  onSaveToDevice: (quality: number) => void;
+  onExport: (quality: number, fits?: Partial<FitsTargetOptions>) => void;
+  onShare: (quality: number, fits?: Partial<FitsTargetOptions>) => void;
+  onSaveToDevice: (quality: number, fits?: Partial<FitsTargetOptions>) => void;
   onPrint?: () => void;
   onPrintToPdf?: () => void;
+  fitsScientificAvailable?: boolean;
   onClose: () => void;
 }
 
-const FORMATS: ExportFormat[] = ["png", "jpeg", "webp"];
+const FORMATS: ExportFormat[] = ["png", "jpeg", "webp", "tiff", "bmp", "fits"];
 const QUALITY_PRESETS = [60, 75, 85, 95, 100];
+const FITS_BITPIX_PRESETS: Array<FitsTargetOptions["bitpix"]> = [8, 16, 32, -32, -64];
 
 export function ExportDialog({
   visible,
@@ -38,19 +46,43 @@ export function ExportDialog({
   onSaveToDevice,
   onPrint,
   onPrintToPdf,
+  fitsScientificAvailable = true,
   onClose,
 }: ExportDialogProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const [quality, setQuality] = useState(85);
+  const [fitsMode, setFitsMode] = useState<FitsExportMode>(DEFAULT_FITS_TARGET_OPTIONS.mode);
+  const [fitsCompression, setFitsCompression] = useState<FitsCompression>(
+    DEFAULT_FITS_TARGET_OPTIONS.compression,
+  );
+  const [fitsBitpix, setFitsBitpix] = useState<FitsTargetOptions["bitpix"]>(
+    DEFAULT_FITS_TARGET_OPTIONS.bitpix,
+  );
 
   const showQuality = supportsQuality(format);
+  const showFitsOptions = format === "fits";
 
   useEffect(() => {
     if (format === "jpeg") setQuality(85);
     else if (format === "webp") setQuality(80);
     else setQuality(100);
   }, [format]);
+
+  useEffect(() => {
+    if (!fitsScientificAvailable && fitsMode === "scientific") {
+      setFitsMode("rendered");
+    }
+  }, [fitsScientificAvailable, fitsMode]);
+
+  const fitsOptions: Partial<FitsTargetOptions> | undefined = showFitsOptions
+    ? {
+        mode: fitsMode,
+        compression: fitsCompression,
+        bitpix: fitsBitpix,
+        colorLayout: DEFAULT_FITS_TARGET_OPTIONS.colorLayout,
+      }
+    : undefined;
 
   const estimatedSize =
     width && height
@@ -59,6 +91,10 @@ export function ExportDialog({
           quality,
           bitDepth: 8,
           dpi: 72,
+          fits: {
+            ...DEFAULT_FITS_TARGET_OPTIONS,
+            ...(fitsOptions ?? {}),
+          },
           stretch: "linear",
           colormap: "grayscale",
           blackPoint: 0,
@@ -123,20 +159,91 @@ export function ExportDialog({
             </View>
           )}
 
+          {showFitsOptions && (
+            <View className="mb-4 gap-3">
+              <View>
+                <Text className="text-xs font-semibold text-muted mb-2">
+                  {t("converter.fitsMode")}
+                </Text>
+                <View className="flex-row gap-2">
+                  <Chip
+                    size="sm"
+                    variant={fitsMode === "scientific" ? "primary" : "secondary"}
+                    onPress={() => fitsScientificAvailable && setFitsMode("scientific")}
+                  >
+                    <Chip.Label className="text-[9px]">
+                      {t("converter.fitsModeScientific")}
+                    </Chip.Label>
+                  </Chip>
+                  <Chip
+                    size="sm"
+                    variant={fitsMode === "rendered" ? "primary" : "secondary"}
+                    onPress={() => setFitsMode("rendered")}
+                  >
+                    <Chip.Label className="text-[9px]">
+                      {t("converter.fitsModeRendered")}
+                    </Chip.Label>
+                  </Chip>
+                </View>
+                {!fitsScientificAvailable && (
+                  <Text className="text-[10px] text-muted mt-1">
+                    {t("converter.fitsScientificUnavailable")}
+                  </Text>
+                )}
+              </View>
+
+              <View>
+                <Text className="text-xs font-semibold text-muted mb-2">
+                  {t("converter.fitsCompression")}
+                </Text>
+                <View className="flex-row gap-2">
+                  {(["none", "gzip"] as const).map((comp) => (
+                    <Chip
+                      key={comp}
+                      size="sm"
+                      variant={fitsCompression === comp ? "primary" : "secondary"}
+                      onPress={() => setFitsCompression(comp)}
+                    >
+                      <Chip.Label className="text-[9px] uppercase">{comp}</Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </View>
+
+              <View>
+                <Text className="text-xs font-semibold text-muted mb-2">
+                  {t("converter.bitpix")}
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {FITS_BITPIX_PRESETS.map((bp) => (
+                    <Chip
+                      key={bp}
+                      size="sm"
+                      variant={fitsBitpix === bp ? "primary" : "secondary"}
+                      onPress={() => setFitsBitpix(bp)}
+                    >
+                      <Chip.Label className="text-[9px]">{bp}</Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+
           {estimatedSize != null && (
             <Text className="text-[10px] text-muted mb-3">≈ {formatBytes(estimatedSize)}</Text>
           )}
 
           <View className="gap-2">
-            <Button variant="primary" onPress={() => onExport(quality)}>
+            <Button variant="primary" onPress={() => onExport(quality, fitsOptions)}>
               <Ionicons name="download-outline" size={16} color="#fff" />
               <Button.Label>{t("converter.convert")}</Button.Label>
             </Button>
-            <Button variant="outline" onPress={() => onSaveToDevice(quality)}>
+            <Button variant="outline" onPress={() => onSaveToDevice(quality, fitsOptions)}>
               <Ionicons name="phone-portrait-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.save")}</Button.Label>
             </Button>
-            <Button variant="outline" onPress={() => onShare(quality)}>
+            <Button variant="outline" onPress={() => onShare(quality, fitsOptions)}>
               <Ionicons name="share-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.share")}</Button.Label>
             </Button>

@@ -4,8 +4,9 @@
  */
 
 import { FITS, Image, BinaryTable, Table, CompressedImage } from "fitsjs-ng";
-import type { FitsMetadata, HeaderKeyword, HDUDataType } from "./types";
-import { classifyFrameType } from "../gallery/frameClassifier";
+import type { FitsMetadata, FrameClassificationConfig, HeaderKeyword, HDUDataType } from "./types";
+import { classifyWithDetail } from "../gallery/frameClassifier";
+import { gunzipFitsBytes, isGzipFitsBytes } from "./compression";
 
 // ===== FITS 文件加载 =====
 
@@ -14,6 +15,19 @@ import { classifyFrameType } from "../gallery/frameClassifier";
  */
 export function loadFitsFromBuffer(buffer: ArrayBuffer): FITS {
   return FITS.fromArrayBuffer(buffer);
+}
+
+/**
+ * 从 ArrayBuffer 加载 FITS 文件（自动识别 .fits.gz）
+ */
+export function loadFitsFromBufferAuto(buffer: ArrayBuffer): FITS {
+  const bytes = new Uint8Array(buffer);
+  if (!isGzipFitsBytes(bytes)) {
+    return loadFitsFromBuffer(buffer);
+  }
+  const inflated = gunzipFitsBytes(bytes);
+  const normalized = new Uint8Array(inflated).slice().buffer;
+  return loadFitsFromBuffer(normalized);
 }
 
 /**
@@ -28,6 +42,23 @@ export async function loadFitsFromBlob(blob: Blob): Promise<FITS> {
  */
 export async function loadFitsFromURL(url: string): Promise<FITS> {
   return FITS.fromURL(url);
+}
+
+function normalizeCompressedReadError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error ?? "unknown error");
+  const lowered = message.toLowerCase();
+  if (
+    lowered.includes("compression") ||
+    lowered.includes("decompress") ||
+    lowered.includes("unsupported") ||
+    lowered.includes("algorithm")
+  ) {
+    return new Error(
+      `Unsupported FITS compressed image algorithm for this file. ` +
+        `Try converting it with CFITSIO/fpack tools first. Raw error: ${message}`,
+    );
+  }
+  return error instanceof Error ? error : new Error(message);
 }
 
 // ===== Header 解析 =====
@@ -103,8 +134,15 @@ export async function getImagePixels(
   if (!dataUnit) return null;
 
   if (dataUnit instanceof Image || dataUnit instanceof CompressedImage) {
-    const pixels = await dataUnit.getFrame(frame);
-    return pixels as unknown as Float32Array;
+    try {
+      const pixels = await dataUnit.getFrame(frame);
+      return pixels as unknown as Float32Array;
+    } catch (error) {
+      if (dataUnit instanceof CompressedImage) {
+        throw normalizeCompressedReadError(error);
+      }
+      throw error;
+    }
   }
   return null;
 }
@@ -136,6 +174,50 @@ export function getImageDimensions(
     height: naxis2,
     depth: naxis3 ?? 1,
     isDataCube: (naxis ?? 0) > 2,
+  };
+}
+
+export function isRgbCube(
+  fits: FITS,
+  hduIndex?: number,
+): {
+  isRgb: boolean;
+  width: number;
+  height: number;
+} {
+  const dims = getImageDimensions(fits, hduIndex);
+  if (!dims) return { isRgb: false, width: 0, height: 0 };
+  return {
+    isRgb: dims.isDataCube && dims.depth === 3,
+    width: dims.width,
+    height: dims.height,
+  };
+}
+
+export async function getImageChannels(
+  fits: FITS,
+  hduIndex?: number,
+): Promise<{
+  r: Float32Array;
+  g: Float32Array;
+  b: Float32Array;
+  width: number;
+  height: number;
+} | null> {
+  const rgb = isRgbCube(fits, hduIndex);
+  if (!rgb.isRgb) return null;
+
+  const r = await getImagePixels(fits, hduIndex, 0);
+  const g = await getImagePixels(fits, hduIndex, 1);
+  const b = await getImagePixels(fits, hduIndex, 2);
+  if (!r || !g || !b) return null;
+
+  return {
+    r,
+    g,
+    b,
+    width: rgb.width,
+    height: rgb.height,
   };
 }
 
@@ -209,6 +291,7 @@ export async function getTableColumn(
 export function extractMetadata(
   fits: FITS,
   fileInfo: { filename: string; filepath: string; fileSize: number },
+  classificationConfig?: FrameClassificationConfig,
 ): Omit<FitsMetadata, "id" | "importDate" | "isFavorite" | "tags" | "albumIds"> {
   const header = fits.getHeader();
 
@@ -221,6 +304,15 @@ export function extractMetadata(
     const v = header?.get(key);
     return typeof v === "number" ? v : undefined;
   };
+
+  const imageTypeRaw = getString("IMAGETYP");
+  const frameHeaderRaw = getString("FRAME");
+  const frameClassified = classifyWithDetail(
+    imageTypeRaw,
+    frameHeaderRaw,
+    fileInfo.filename,
+    classificationConfig,
+  );
 
   return {
     filename: fileInfo.filename,
@@ -247,7 +339,10 @@ export function extractMetadata(
     gain: getNumber("GAIN"),
     ccdTemp: getNumber("CCD-TEMP") ?? getNumber("SET-TEMP"),
 
-    frameType: classifyFrameType(getString("IMAGETYP"), getString("FRAME"), fileInfo.filename),
+    imageTypeRaw,
+    frameHeaderRaw,
+    frameTypeSource: frameClassified.source,
+    frameType: frameClassified.type,
   };
 }
 

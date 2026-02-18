@@ -56,7 +56,7 @@ function makeSession(overrides: Partial<ObservationSession> = {}): ObservationSe
     startTime: 1,
     endTime: 2,
     duration: 1,
-    targets: [],
+    targetRefs: [],
     imageIds: [],
     equipment: {},
     createdAt: 1,
@@ -136,7 +136,12 @@ describe("targetRelations", () => {
       makeFile({ id: "f2", targetId: "source" }),
     ];
     const groups = [makeGroup({ id: "g1", targetIds: ["source", "dest", "source"] })];
-    const sessions = [makeSession({ id: "s1", targets: ["Andromeda", "M31"] })];
+    const sessions = [
+      makeSession({
+        id: "s1",
+        targetRefs: [{ name: "Andromeda" }, { name: "M31", targetId: "dest" }],
+      }),
+    ];
 
     const patch = computeMergeRelinkPatch({
       destId: "dest",
@@ -154,7 +159,7 @@ describe("targetRelations", () => {
     ]);
     expect(patch.files.find((file) => file.id === "f2")?.targetId).toBe("dest");
     expect(patch.groups[0].targetIds).toEqual(["dest"]);
-    expect(patch.sessions[0].targets).toEqual(["M31"]);
+    expect(patch.sessions[0].targetRefs).toEqual([{ targetId: "dest", name: "M31" }]);
     expect(patch.changed).toBe(true);
   });
 });

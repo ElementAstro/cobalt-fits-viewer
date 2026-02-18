@@ -14,6 +14,9 @@ const FORMAT_OPTIONS: FormatOption[] = [
   { key: "png", label: "PNG", descriptionKey: "converter.fmtPngDesc" },
   { key: "jpeg", label: "JPEG", descriptionKey: "converter.fmtJpegDesc" },
   { key: "webp", label: "WebP", descriptionKey: "converter.fmtWebpDesc" },
+  { key: "tiff", label: "TIFF", descriptionKey: "converter.fmtTiffDesc" },
+  { key: "bmp", label: "BMP", descriptionKey: "converter.fmtBmpDesc" },
+  { key: "fits", label: "FITS", descriptionKey: "converter.fmtFitsDesc" },
 ];
 
 interface FormatSelectorProps {

@@ -1,10 +1,12 @@
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { View, Text, Pressable, Animated } from "react-native";
 import { Image } from "expo-image";
 import { Button, Card, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Swipeable } from "react-native-gesture-handler";
 import { formatFileSize } from "../../lib/utils/fileManager";
+import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
+import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 type FileItemLayout = "grid" | "list" | "compact";
@@ -43,6 +45,10 @@ export const FileListItem = memo(function FileListItem({
 }: FileListItemProps) {
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
   const thumbSize = layout === "compact" ? 42 : 64;
+  const thumbnailUri = useMemo(
+    () => resolveThumbnailUri(file.id, file.thumbnailUri),
+    [file.id, file.thumbnailUri],
+  );
 
   const renderRightActions = (
     _progress: Animated.AnimatedInterpolation<number>,
@@ -79,6 +85,9 @@ export const FileListItem = memo(function FileListItem({
   };
 
   const hasSwipeActions = (onDelete || onToggleFavorite) && layout !== "grid";
+  const isVideo = file.mediaKind === "video" || file.sourceType === "video";
+  const videoResolution = formatVideoResolution(file.videoWidth, file.videoHeight);
+  const videoDuration = formatVideoDuration(file.durationMs);
 
   const metaSummary = [
     file.sourceFormat?.toUpperCase(),
@@ -93,9 +102,9 @@ export const FileListItem = memo(function FileListItem({
         <Card variant="secondary" className={selected ? "border border-success" : ""}>
           <Card.Body className="p-2">
             <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-success/10">
-              {file.thumbnailUri ? (
+              {thumbnailUri ? (
                 <Image
-                  source={{ uri: file.thumbnailUri }}
+                  source={{ uri: thumbnailUri }}
                   className="h-full w-full"
                   contentFit="cover"
                   cachePolicy="memory-disk"
@@ -104,6 +113,16 @@ export const FileListItem = memo(function FileListItem({
                 />
               ) : (
                 <Ionicons name="image-outline" size={24} color={successColor} />
+              )}
+              {isVideo && (
+                <>
+                  <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
+                    <Text className="text-[8px] font-semibold text-white">{videoDuration}</Text>
+                  </View>
+                  <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
+                    <Ionicons name="play" size={10} color="#fff" />
+                  </View>
+                </>
               )}
               {selected && (
                 <View className="absolute left-1 top-1 rounded-full bg-background/70 p-0.5">
@@ -126,6 +145,17 @@ export const FileListItem = memo(function FileListItem({
                 {metaSummary.join(" · ")}
               </Text>
             )}
+            {isVideo && (
+              <View className="mt-1 flex-row items-center gap-1.5">
+                <Chip size="sm" variant="secondary">
+                  <Chip.Label className="text-[9px] font-semibold">VIDEO</Chip.Label>
+                </Chip>
+                {!!videoResolution && (
+                  <Text className="text-[9px] text-muted">{videoResolution}</Text>
+                )}
+                <Text className="text-[9px] text-muted">{videoDuration}</Text>
+              </View>
+            )}
           </Card.Body>
         </Card>
       </Pressable>
@@ -139,9 +169,9 @@ export const FileListItem = memo(function FileListItem({
               className="items-center justify-center overflow-hidden rounded-xl bg-success/10"
               style={{ width: thumbSize, height: thumbSize }}
             >
-              {file.thumbnailUri ? (
+              {thumbnailUri ? (
                 <Image
-                  source={{ uri: file.thumbnailUri }}
+                  source={{ uri: thumbnailUri }}
                   className="h-full w-full"
                   contentFit="cover"
                   cachePolicy="memory-disk"
@@ -154,6 +184,11 @@ export const FileListItem = memo(function FileListItem({
                   size={layout === "compact" ? 20 : 28}
                   color={successColor}
                 />
+              )}
+              {isVideo && (
+                <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
+                  <Ionicons name="play" size={10} color="#fff" />
+                </View>
               )}
             </View>
             <View className="min-w-0 flex-1">
@@ -188,10 +223,23 @@ export const FileListItem = memo(function FileListItem({
                     </Chip.Label>
                   </Chip>
                 )}
+                {isVideo && (
+                  <Chip size="sm" variant="secondary">
+                    <Chip.Label className="text-[10px] font-semibold">VIDEO</Chip.Label>
+                  </Chip>
+                )}
                 {showExposure && file.exptime != null && (
                   <Text className="text-[10px] text-muted">{file.exptime}s</Text>
                 )}
               </View>
+              {isVideo && (
+                <View className="mt-1 flex-row items-center gap-2">
+                  {!!videoResolution && (
+                    <Text className="text-[9px] text-muted">{videoResolution}</Text>
+                  )}
+                  <Text className="text-[9px] text-muted">{videoDuration}</Text>
+                </View>
+              )}
               {layout !== "compact" && (
                 <Text className="mt-0.5 text-[9px] text-muted">
                   {formatImportDate(file.importDate)}

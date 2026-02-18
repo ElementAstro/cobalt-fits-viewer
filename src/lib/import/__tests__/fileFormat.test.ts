@@ -33,6 +33,16 @@ describe("fileFormat", () => {
     expect(detectSupportedImageFormat("preview.avif")?.id).toBe("avif");
   });
 
+  it("detects common video formats", () => {
+    expect(detectSupportedImageFormat("preview.mp4")?.id).toBe("mp4");
+    expect(detectSupportedImageFormat("preview.mov")?.id).toBe("mov");
+    expect(detectSupportedImageFormat("preview.m4v")?.id).toBe("m4v");
+    expect(detectSupportedImageFormat("preview.webm")?.id).toBe("webm");
+    expect(detectSupportedImageFormat("preview.mkv")?.id).toBe("mkv");
+    expect(detectSupportedImageFormat("preview.avi")?.id).toBe("avi");
+    expect(detectSupportedImageFormat("preview.3gp")?.id).toBe("3gp");
+  });
+
   it("handles query strings and unsupported names", () => {
     expect(isSupportedImageFilename("https://example.com/x.fits.gz?token=abc#part")).toBe(true);
     expect(isSupportedImageFilename("notes.txt")).toBe(false);
@@ -47,6 +57,13 @@ describe("fileFormat", () => {
     expect(toImageSourceFormat(detectSupportedImageFormat("x.gif"))).toBe("gif");
     expect(toImageSourceFormat(detectSupportedImageFormat("x.heic"))).toBe("heic");
     expect(toImageSourceFormat(detectSupportedImageFormat("x.avif"))).toBe("avif");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.mp4"))).toBe("mp4");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.mov"))).toBe("mov");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.m4v"))).toBe("m4v");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.webm"))).toBe("webm");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.mkv"))).toBe("mkv");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.avi"))).toBe("avi");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.3gp"))).toBe("3gp");
     expect(toImageSourceFormat(null)).toBe("unknown");
   });
 
@@ -54,6 +71,13 @@ describe("fileFormat", () => {
     expect(detectSupportedImageFormatByMimeType("image/png")?.id).toBe("png");
     expect(detectSupportedImageFormatByMimeType("image/jpeg; charset=utf-8")?.id).toBe("jpeg");
     expect(detectSupportedImageFormatByMimeType("application/fits")?.id).toBe("fits");
+    expect(detectSupportedImageFormatByMimeType("video/mp4")?.id).toBe("mp4");
+    expect(detectSupportedImageFormatByMimeType("video/quicktime")?.id).toBe("mov");
+    expect(detectSupportedImageFormatByMimeType("video/x-m4v")?.id).toBe("m4v");
+    expect(detectSupportedImageFormatByMimeType("video/webm")?.id).toBe("webm");
+    expect(detectSupportedImageFormatByMimeType("video/x-matroska")?.id).toBe("mkv");
+    expect(detectSupportedImageFormatByMimeType("video/x-msvideo")?.id).toBe("avi");
+    expect(detectSupportedImageFormatByMimeType("video/3gpp")?.id).toBe("3gp");
     expect(detectSupportedImageFormatByMimeType("application/octet-stream")).toBeNull();
   });
 
@@ -68,6 +92,15 @@ describe("fileFormat", () => {
     const gzip = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]).buffer;
     const avif = new TextEncoder().encode("\u0000\u0000\u0000\u0018ftypavif").buffer;
     const heic = new TextEncoder().encode("\u0000\u0000\u0000\u0018ftypheic").buffer;
+    const mp4 = new TextEncoder().encode("\u0000\u0000\u0000\u0018ftypisom").buffer;
+    const mov = new TextEncoder().encode("\u0000\u0000\u0000\u0018ftypqt  ").buffer;
+    const m4v = new TextEncoder().encode("\u0000\u0000\u0000\u0018ftypM4V ").buffer;
+    const threeGp = new TextEncoder().encode("\u0000\u0000\u0000\u0018ftyp3gp6").buffer;
+    const webm = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x42, 0x82, 0x84, 0x77, 0x65, 0x62, 0x6d])
+      .buffer;
+    const mkv = new Uint8Array([0x1a, 0x45, 0xdf, 0xa3, 0x42, 0x82, 0x84, 0x6d, 0x61, 0x74, 0x72])
+      .buffer;
+    const avi = new TextEncoder().encode("RIFFxxxxAVI ").buffer;
 
     expect(detectSupportedImageFormatByContent(png)?.id).toBe("png");
     expect(detectSupportedImageFormatByContent(jpeg)?.id).toBe("jpeg");
@@ -79,6 +112,13 @@ describe("fileFormat", () => {
     expect(detectSupportedImageFormatByContent(gzip)?.id).toBe("fits_gz");
     expect(detectSupportedImageFormatByContent(avif)?.id).toBe("avif");
     expect(detectSupportedImageFormatByContent(heic)?.id).toBe("heic");
+    expect(detectSupportedImageFormatByContent(mp4)?.id).toBe("mp4");
+    expect(detectSupportedImageFormatByContent(mov)?.id).toBe("mov");
+    expect(detectSupportedImageFormatByContent(m4v)?.id).toBe("m4v");
+    expect(detectSupportedImageFormatByContent(threeGp)?.id).toBe("3gp");
+    expect(detectSupportedImageFormatByContent(webm)?.id).toBe("webm");
+    expect(detectSupportedImageFormatByContent(mkv)?.id).toBe("mkv");
+    expect(detectSupportedImageFormatByContent(avi)?.id).toBe("avi");
     expect(detectSupportedImageFormatByContent(new Uint8Array([0, 1, 2, 3]))).toBeNull();
   });
 

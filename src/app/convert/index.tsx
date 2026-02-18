@@ -105,7 +105,13 @@ export default function ConvertScreen() {
   } = useConverter();
 
   const {
+    metadata,
+    headers,
+    comments,
+    history,
     pixels,
+    rgbChannels,
+    sourceBuffer,
     dimensions,
     isLoading: isFitsLoading,
     loadFromPath,
@@ -159,14 +165,27 @@ export default function ConvertScreen() {
       Alert.alert(t("common.error"), t("viewer.noImageData"));
       return;
     }
-    const path = await exportImage(
+    const path = await exportImage({
       rgbaData,
-      dimensions.width,
-      dimensions.height,
-      selectedFile.filename,
-      currentOptions.format,
-      currentOptions.quality,
-    );
+      width: dimensions.width,
+      height: dimensions.height,
+      filename: selectedFile.filename,
+      format: currentOptions.format,
+      quality: currentOptions.quality,
+      bitDepth: currentOptions.bitDepth,
+      fits: currentOptions.fits,
+      source: {
+        sourceType: metadata?.sourceType,
+        sourceFormat: metadata?.sourceFormat,
+        originalBuffer: sourceBuffer,
+        scientificPixels: pixels,
+        rgbChannels,
+        metadata: metadata ?? undefined,
+        headerKeywords: headers,
+        comments,
+        history,
+      },
+    });
     if (path) {
       Alert.alert(t("common.success"), t("viewer.exportSuccess"));
     } else {
@@ -281,6 +300,7 @@ export default function ConvertScreen() {
                         showCrosshair={false}
                         cursorX={-1}
                         cursorY={-1}
+                        interactionEnabled={false}
                       />
                     </View>
                     <View className="flex-row items-center gap-2 px-3 py-2">

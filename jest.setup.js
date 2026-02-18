@@ -84,6 +84,48 @@ jest.mock("@expo/vector-icons", () => {
   };
 });
 
+// Mock expo-video
+jest.mock("expo-video", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  const createPlayer = () => ({
+    addListener: jest.fn(() => ({ remove: jest.fn() })),
+    play: jest.fn(),
+    pause: jest.fn(),
+    seekBy: jest.fn(),
+    replay: jest.fn(),
+    playing: false,
+    muted: false,
+    loop: false,
+    playbackRate: 1,
+    currentTime: 0,
+    status: "readyToPlay",
+    timeUpdateEventInterval: 0.2,
+  });
+
+  const VideoView = React.forwardRef((props, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      enterFullscreen: jest.fn().mockResolvedValue(undefined),
+      startPictureInPicture: jest.fn().mockResolvedValue(undefined),
+    }));
+    return React.createElement(View, { testID: "expo-video-view", ...props }, props.children);
+  });
+  VideoView.displayName = "VideoView";
+
+  return {
+    VideoView,
+    isPictureInPictureSupported: () => true,
+    useVideoPlayer: (_source, onInit) => {
+      const player = createPlayer();
+      if (typeof onInit === "function") {
+        onInit(player);
+      }
+      return player;
+    },
+  };
+});
+
 // Mock heroui-native
 jest.mock("heroui-native", () => {
   const { View, Text, TextInput } = require("react-native");
@@ -114,6 +156,36 @@ jest.mock("heroui-native", () => {
   BottomSheet.Content = c("bottom-sheet-content");
   BottomSheet.Title = (props) => React.createElement(Text, props, props.children);
 
+  const Tabs = c("tabs");
+  Tabs.List = c("tabs-list");
+  Tabs.Trigger = c("tabs-trigger");
+  Tabs.Content = c("tabs-content");
+  Tabs.Indicator = c("tabs-indicator");
+  Tabs.Label = (props) => React.createElement(Text, props, props.children);
+
+  const Accordion = c("accordion");
+  Accordion.Item = c("accordion-item");
+  Accordion.Trigger = c("accordion-trigger");
+  Accordion.Content = c("accordion-content");
+  Accordion.Indicator = c("accordion-indicator");
+
+  const RadioGroup = c("radio-group");
+  RadioGroup.Item = c("radio-group-item");
+
+  const Select = c("select");
+  Select.Trigger = c("select-trigger");
+  Select.Value = (props) => React.createElement(Text, props, props.placeholder || props.children);
+  Select.TriggerIndicator = c("select-trigger-indicator");
+  Select.Portal = c("select-portal");
+  Select.Overlay = c("select-overlay");
+  Select.Content = c("select-content");
+  Select.Item = c("select-item");
+  Select.ItemLabel = (props) => React.createElement(Text, props, props.children);
+
+  const Switch = c("switch");
+  Switch.Thumb = c("switch-thumb");
+  const Skeleton = c("skeleton");
+
   const TextField = c("textfield");
 
   return {
@@ -122,13 +194,18 @@ jest.mock("heroui-native", () => {
     Card,
     Chip,
     Dialog,
+    Tabs,
+    Accordion,
+    RadioGroup,
+    Select,
     TextField,
     Input: (props) => React.createElement(TextInput, { testID: "input", ...props }),
     Label: (props) => React.createElement(Text, { testID: "label", ...props }, props.children),
-    Switch: c("switch"),
+    Switch,
     PressableFeedback: c("pressable-feedback"),
     Separator: c("separator"),
     Spinner: c("spinner"),
+    Skeleton,
     HeroUINativeProvider: (props) => React.createElement(View, null, props.children),
     useThemeColor: (keys) => (Array.isArray(keys) ? keys.map(() => "#000000") : "#000000"),
   };

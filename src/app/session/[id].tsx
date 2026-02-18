@@ -19,6 +19,8 @@ import { EditSessionSheet } from "../../components/sessions/EditSessionSheet";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
 import type { FitsMetadata, ObservationSession } from "../../lib/fits/types";
+import { resolveTargetId, resolveTargetName } from "../../lib/targets/targetRefs";
+import { resolveSessionTargetNames } from "../../lib/sessions/sessionLinking";
 
 export default function SessionDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -63,15 +65,15 @@ export default function SessionDetailScreen() {
     router.push(`/viewer/${file.id}`);
   };
 
-  const handleTargetPress = (targetName: string) => {
-    const target = targets.find(
-      (tgt) =>
-        tgt.name.toLowerCase() === targetName.toLowerCase() ||
-        tgt.aliases.some((a) => a.toLowerCase() === targetName.toLowerCase()),
-    );
-    if (target) {
-      router.push(`/target/${target.id}`);
-    }
+  const getSessionTargetNames = useCallback(
+    (currentSession: ObservationSession) => resolveSessionTargetNames(currentSession, targets),
+    [targets],
+  );
+
+  const handleTargetPress = (targetRef: ObservationSession["targetRefs"][number]) => {
+    const targetId = resolveTargetId(targetRef, targets);
+    if (!targetId) return;
+    router.push(`/target/${targetId}`);
   };
 
   const handleSave = (updates: Partial<ObservationSession>) => {
@@ -112,7 +114,7 @@ export default function SessionDetailScreen() {
       `🔭 ${t("sessions.sessionSummary")}`,
       `📅 ${session.date}`,
       `⏱ ${formatDuration(session.duration)}`,
-      `🎯 ${session.targets.join(", ") || "-"}`,
+      `🎯 ${getSessionTargetNames(session).join(", ") || "-"}`,
       `🖼 ${session.imageIds.length} ${t("sessions.frames")}`,
     ];
     if (session.equipment.telescope) lines.push(`🔭 ${session.equipment.telescope}`);
@@ -125,7 +127,7 @@ export default function SessionDetailScreen() {
     if (session.seeing) lines.push(`👁 ${session.seeing}`);
     if (session.notes) lines.push(`📝 ${session.notes}`);
     Share.share({ message: lines.join("\n") });
-  }, [session, t]);
+  }, [session, t, getSessionTargetNames]);
 
   if (!session) {
     return (
@@ -193,7 +195,7 @@ export default function SessionDetailScreen() {
             <Card.Body className="items-center p-3">
               <Ionicons name="telescope-outline" size={20} color={mutedColor} />
               <Text className="mt-1 text-sm font-bold text-foreground">
-                {session.targets.length}
+                {session.targetRefs.length}
               </Text>
               <Text className="text-[10px] text-muted">{t("targets.title")}</Text>
             </Card.Body>
@@ -210,23 +212,21 @@ export default function SessionDetailScreen() {
         </View>
 
         {/* Targets (clickable) */}
-        {session.targets.length > 0 && (
+        {session.targetRefs.length > 0 && (
           <View className="flex-row flex-wrap gap-1.5 mb-4">
-            {session.targets.map((targetName) => {
-              const linked = targets.some(
-                (tgt) =>
-                  tgt.name.toLowerCase() === targetName.toLowerCase() ||
-                  tgt.aliases.some((a) => a.toLowerCase() === targetName.toLowerCase()),
-              );
+            {session.targetRefs.map((targetRef, index) => {
+              const resolvedId = resolveTargetId(targetRef, targets);
+              const displayName = resolveTargetName(targetRef, targets);
+              const linked = Boolean(resolvedId);
               return (
                 <PressableFeedback
-                  key={targetName}
-                  onPress={() => handleTargetPress(targetName)}
+                  key={`${targetRef.targetId ?? targetRef.name}-${index}`}
+                  onPress={() => handleTargetPress(targetRef)}
                   isDisabled={!linked}
                 >
                   <PressableFeedback.Highlight />
                   <Chip size="sm" variant={linked ? "primary" : "secondary"}>
-                    <Chip.Label className="text-[9px]">{targetName}</Chip.Label>
+                    <Chip.Label className="text-[9px]">{displayName}</Chip.Label>
                   </Chip>
                 </PressableFeedback>
               );

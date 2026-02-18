@@ -47,6 +47,8 @@
     "expo-splash-screen": "~31.0.13",
     "expo-status-bar": "~3.0.8",
     "expo-updates": "^29.0.16",
+    "expo-video": "^3.0.16",
+    "expo-video-thumbnails": "^10.0.8",
     "fitsjs-ng": "^1.0.0",
     "heroui-native": "1.0.0-rc.1",
     "pako": "^2.1.0",

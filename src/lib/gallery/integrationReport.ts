@@ -5,6 +5,10 @@
 
 import type { FitsMetadata } from "../fits/types";
 
+export interface IntegrationReportOptions {
+  includedFrameTypes?: string[];
+}
+
 export interface FilterSummary {
   name: string;
   frameCount: number;
@@ -27,17 +31,26 @@ export interface IntegrationReport {
   totalExposure: number;
   uniqueFilters: string[];
   dateRange: [string, string] | null;
+  includedFrameTypes: string[];
 }
 
 /**
  * 生成曝光整合统计报告
- * 仅统计 light 帧
+ * 按可配置帧类型统计（默认仅 light）
  */
-export function generateIntegrationReport(files: FitsMetadata[]): IntegrationReport {
-  const lights = files.filter((f) => f.frameType === "light");
+export function generateIntegrationReport(
+  files: FitsMetadata[],
+  options: IntegrationReportOptions = {},
+): IntegrationReport {
+  const includedFrameTypesRaw = options.includedFrameTypes?.filter(
+    (item) => item && item.trim().length > 0,
+  ) ?? ["light"];
+  const includedFrameTypes = [...new Set(includedFrameTypesRaw)];
+  const includedSet = new Set(includedFrameTypes);
+  const includedFiles = files.filter((f) => includedSet.has(f.frameType));
 
   const targetMap = new Map<string, FitsMetadata[]>();
-  for (const f of lights) {
+  for (const f of includedFiles) {
     const target = f.object || "Unknown";
     const group = targetMap.get(target);
     if (group) {
@@ -51,7 +64,7 @@ export function generateIntegrationReport(files: FitsMetadata[]): IntegrationRep
   let minDate: string | null = null;
   let maxDate: string | null = null;
 
-  for (const f of lights) {
+  for (const f of includedFiles) {
     if (f.filter) allFilters.add(f.filter);
     if (f.dateObs) {
       if (!minDate || f.dateObs < minDate) minDate = f.dateObs;
@@ -112,10 +125,11 @@ export function generateIntegrationReport(files: FitsMetadata[]): IntegrationRep
 
   return {
     targets,
-    totalFrames: lights.length,
-    totalExposure: lights.reduce((sum, f) => sum + (f.exptime ?? 0), 0),
+    totalFrames: includedFiles.length,
+    totalExposure: includedFiles.reduce((sum, f) => sum + (f.exptime ?? 0), 0),
     uniqueFilters: [...allFilters].sort(),
     dateRange: minDate && maxDate ? [minDate, maxDate] : null,
+    includedFrameTypes: [...includedFrameTypes],
   };
 }
 
@@ -140,7 +154,8 @@ export function exportReportAsMarkdown(report: IntegrationReport): string {
       `**Date range:** ${report.dateRange[0].split("T")[0]} — ${report.dateRange[1].split("T")[0]}`,
     );
   }
-  lines.push(`**Total lights:** ${report.totalFrames}`);
+  lines.push(`**Included frame types:** ${report.includedFrameTypes.join(", ") || "light"}`);
+  lines.push(`**Total frames:** ${report.totalFrames}`);
   lines.push(`**Total exposure:** ${formatExposureTime(report.totalExposure)}`);
   lines.push(`**Filters:** ${report.uniqueFilters.join(", ") || "None"}\n`);
 

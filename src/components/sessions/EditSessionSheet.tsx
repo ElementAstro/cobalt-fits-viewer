@@ -14,6 +14,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { ObservationSession } from "../../lib/fits/types";
+import { useTargetStore } from "../../stores/useTargetStore";
+import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
 
 interface EditSessionSheetProps {
   visible: boolean;
@@ -35,6 +37,7 @@ export function EditSessionSheet({
 }: EditSessionSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const targetCatalog = useTargetStore((s) => s.targets);
 
   const [notes, setNotes] = useState(session.notes ?? "");
   const [weather, setWeather] = useState(session.weather ?? "");
@@ -42,7 +45,9 @@ export function EditSessionSheet({
   const [telescope, setTelescope] = useState(session.equipment.telescope ?? "");
   const [camera, setCamera] = useState(session.equipment.camera ?? "");
   const [mount, setMount] = useState(session.equipment.mount ?? "");
-  const [targets, setTargets] = useState<string[]>(session.targets ?? []);
+  const [targets, setTargets] = useState<string[]>(
+    (session.targetRefs ?? []).map((ref) => ref.name),
+  );
   const [targetInput, setTargetInput] = useState("");
   const [filters, setFilters] = useState<string[]>(session.equipment.filters ?? []);
   const [filterInput, setFilterInput] = useState("");
@@ -58,7 +63,7 @@ export function EditSessionSheet({
     setTelescope(session.equipment.telescope ?? "");
     setCamera(session.equipment.camera ?? "");
     setMount(session.equipment.mount ?? "");
-    setTargets(session.targets ?? []);
+    setTargets((session.targetRefs ?? []).map((ref) => ref.name));
     setFilters(session.equipment.filters ?? []);
     setRating(session.rating);
     setBortle(session.bortle);
@@ -75,7 +80,7 @@ export function EditSessionSheet({
     session.equipment.camera,
     session.equipment.mount,
     session.equipment.filters,
-    session.targets,
+    session.targetRefs,
     session.rating,
     session.bortle,
     session.tags,
@@ -109,7 +114,10 @@ export function EditSessionSheet({
       notes: notes.trim() || undefined,
       weather: weather.trim() || undefined,
       seeing: seeing.trim() || undefined,
-      targets,
+      targetRefs: dedupeTargetRefs(
+        targets.map((name) => toTargetRef(name, targetCatalog)),
+        targetCatalog,
+      ),
       rating,
       bortle,
       tags: tags.length > 0 ? tags : undefined,

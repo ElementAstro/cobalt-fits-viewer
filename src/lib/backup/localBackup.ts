@@ -72,8 +72,17 @@ function restoreFromManifest(
   if (options.includeTargets && manifest.targets.length > 0) {
     restoreTarget.setTargets(manifest.targets, options.restoreConflictStrategy);
   }
+  if (options.includeTargets && manifest.targetGroups.length > 0) {
+    restoreTarget.setTargetGroups(manifest.targetGroups, options.restoreConflictStrategy);
+  }
   if (options.includeSessions && manifest.sessions.length > 0) {
     restoreTarget.setSessions(manifest.sessions, options.restoreConflictStrategy);
+  }
+  if (options.includeSessions && manifest.plans.length > 0) {
+    restoreTarget.setPlans(manifest.plans, options.restoreConflictStrategy);
+  }
+  if (options.includeSessions && manifest.logEntries.length > 0) {
+    restoreTarget.setLogEntries(manifest.logEntries, options.restoreConflictStrategy);
   }
   if (options.includeSettings && Object.keys(manifest.settings).length > 0) {
     restoreTarget.setSettings(manifest.settings);
@@ -105,7 +114,10 @@ export async function exportLocalBackup(
         files: dataSource.getFiles(),
         albums: dataSource.getAlbums(),
         targets: dataSource.getTargets(),
+        targetGroups: dataSource.getTargetGroups(),
         sessions: dataSource.getSessions(),
+        plans: dataSource.getPlans(),
+        logEntries: dataSource.getLogEntries(),
         settings: dataSource.getSettings(),
       },
       localOptions,

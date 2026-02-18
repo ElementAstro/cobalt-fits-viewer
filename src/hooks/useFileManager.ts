@@ -5,11 +5,13 @@
  */
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
-import { InteractionManager } from "react-native";
+import { InteractionManager, Platform } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
 import { File, Directory, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
+import * as VideoThumbnails from "expo-video-thumbnails";
 import { LOG_TAGS, Logger } from "../lib/logger";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
@@ -17,12 +19,14 @@ import { useAlbumStore } from "../stores/useAlbumStore";
 import { useSessionStore } from "../stores/useSessionStore";
 import { useTrashStore } from "../stores/useTrashStore";
 import { useFileGroupStore } from "../stores/useFileGroupStore";
+import { useTargetStore } from "../stores/useTargetStore";
 import { useTargets } from "./useTargets";
 import {
   importFile,
   deleteFilesPermanently,
   moveFileToTrash,
   renameFitsFile,
+  readFileAsArrayBuffer,
   restoreFileFromTrash,
   generateFileId,
   scanDirectoryForSupportedImages,
@@ -30,15 +34,20 @@ import {
   cleanTempExtractDir,
 } from "../lib/utils/fileManager";
 import { computeQuickHash, findDuplicateOnImport } from "../lib/gallery/duplicateDetector";
+import { classifyWithDetail } from "../lib/gallery/frameClassifier";
 import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
 import {
-  loadFitsFromBuffer,
+  loadFitsFromBufferAuto,
   extractMetadata,
   getImagePixels,
   getImageDimensions,
 } from "../lib/fits/parser";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
-import { generateAndSaveThumbnail, deleteThumbnails } from "../lib/gallery/thumbnailCache";
+import {
+  copyThumbnailToCache,
+  generateAndSaveThumbnail,
+  deleteThumbnails,
+} from "../lib/gallery/thumbnailCache";
 import { LocationService } from "./useLocation";
 import type { FitsMetadata, TrashedFitsRecord } from "../lib/fits/types";
 import {
@@ -51,9 +60,24 @@ import {
   toImageSourceFormat,
 } from "../lib/import/fileFormat";
 import { extractRasterMetadata, parseRasterFromBuffer } from "../lib/image/rasterParser";
+import {
+  buildMissingLogEntries,
+  deriveSessionMetadataFromFiles,
+  resolveImportSessionId,
+} from "../lib/sessions/sessionLinking";
+import { mergeSessionLike } from "../lib/sessions/sessionNormalization";
+import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
 
 export interface ImportProgress {
-  phase: "picking" | "extracting" | "scanning" | "importing" | "downloading" | "clipboard";
+  phase:
+    | "picking"
+    | "extracting"
+    | "scanning"
+    | "importing"
+    | "downloading"
+    | "clipboard"
+    | "mediaLibrary"
+    | "recording";
   percent: number;
   currentFile?: string;
   current: number;
@@ -113,6 +137,14 @@ export interface ExportFilesResult {
 export interface GroupResult {
   success: number;
   failed: number;
+}
+
+export interface ReclassifyFramesResult {
+  total: number;
+  success: number;
+  failed: number;
+  updated: number;
+  failedEntries: Array<{ id: string; filename: string; reason: string }>;
 }
 
 type ImportFileStatus = "imported" | "duplicate" | "unsupported" | "failed";
@@ -236,6 +268,38 @@ function resolveUniqueExportName(rawName: string, usedNames: Set<string>): strin
   return candidate;
 }
 
+function resolvePickedAssetName(
+  asset: Pick<ImagePicker.ImagePickerAsset, "fileName" | "mimeType" | "type">,
+): string {
+  if (asset.fileName && asset.fileName.trim()) {
+    return sanitizeImportFilename(asset.fileName);
+  }
+  const ext = getPrimaryExtensionForFormat(
+    detectSupportedImageFormatByMimeType(asset.mimeType ?? undefined),
+  );
+  const inferredExt = ext || (asset.type === "video" ? ".mp4" : ".jpg");
+  return `picked_${Date.now()}${inferredExt}`;
+}
+
+async function generateVideoThumbnailToCache(
+  fileId: string,
+  filepath: string,
+  timeMs: number,
+  qualityPercent: number,
+): Promise<string | null> {
+  if (Platform.OS === "web") return null;
+  try {
+    const result = await VideoThumbnails.getThumbnailAsync(filepath, {
+      time: Math.max(0, Math.round(timeMs)),
+      quality: Math.min(1, Math.max(0.1, qualityPercent / 100)),
+    });
+    return copyThumbnailToCache(fileId, result.uri);
+  } catch (error) {
+    Logger.warn(LOG_TAGS.FileManager, `Video thumbnail generation failed for ${fileId}`, error);
+    return null;
+  }
+}
+
 export function useFileManager() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress>({
@@ -264,6 +328,8 @@ export function useFileManager() {
   const autoDetectDuplicates = useSettingsStore((s) => s.autoDetectDuplicates);
   const thumbnailSize = useSettingsStore((s) => s.thumbnailSize);
   const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
+  const videoThumbnailTimeMs = useSettingsStore((s) => s.videoThumbnailTimeMs);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
 
   const isZipImportAvailable = useMemo(() => {
     try {
@@ -352,27 +418,66 @@ export function useFileManager() {
         }),
       }));
 
-      useSessionStore.setState((state) => ({
-        sessions: state.sessions.map((session) => {
-          const toAdd = restoredFiles
-            .filter((file) => file.sessionId && file.sessionId === session.id)
-            .map((file) => file.id);
-          if (toAdd.length === 0) return session;
-          const nextIds = [...session.imageIds];
-          let changed = false;
-          for (const imageId of toAdd) {
-            if (!nextIds.includes(imageId)) {
-              nextIds.push(imageId);
-              changed = true;
+      const affectedSessionIds = [
+        ...new Set(
+          restoredFiles
+            .map((file) => file.sessionId)
+            .filter((sessionId): sessionId is string => Boolean(sessionId)),
+        ),
+      ];
+      if (affectedSessionIds.length > 0) {
+        const targetCatalog = useTargetStore.getState().targets;
+        const allFiles = useFitsStore.getState().files;
+        const filesBySessionId = new Map<string, FitsMetadata[]>();
+        for (const sessionId of affectedSessionIds) {
+          filesBySessionId.set(
+            sessionId,
+            allFiles.filter((file) => file.sessionId === sessionId),
+          );
+        }
+
+        useSessionStore.setState((state) => {
+          const sessions = state.sessions.map((session) => {
+            const sessionFiles = filesBySessionId.get(session.id);
+            if (!sessionFiles || sessionFiles.length === 0) return session;
+
+            const derived = deriveSessionMetadataFromFiles(sessionFiles, targetCatalog);
+            const merged = mergeSessionLike(
+              session,
+              {
+                imageIds: derived.imageIds,
+                targetRefs: derived.targetRefs,
+                equipment: derived.equipment,
+                location: derived.location ?? session.location,
+              },
+              targetCatalog,
+            );
+
+            return {
+              ...session,
+              imageIds: merged.imageIds ?? session.imageIds,
+              targetRefs: merged.targetRefs ?? session.targetRefs,
+              equipment: merged.equipment ?? session.equipment,
+              location: merged.location ?? session.location,
+            };
+          });
+
+          const nextLogEntries = [...state.logEntries];
+          for (const sessionId of affectedSessionIds) {
+            const sessionFiles = filesBySessionId.get(sessionId) ?? [];
+            if (sessionFiles.length === 0) continue;
+            const missing = buildMissingLogEntries(sessionFiles, sessionId, nextLogEntries);
+            if (missing.length > 0) {
+              nextLogEntries.push(...missing);
             }
           }
-          if (!changed) return session;
+
           return {
-            ...session,
-            imageIds: nextIds,
+            sessions,
+            logEntries: nextLogEntries,
           };
-        }),
-      }));
+        });
+      }
 
       for (const file of restoredFiles) {
         try {
@@ -411,6 +516,7 @@ export function useFileManager() {
       let importedFile: File | null = null;
       try {
         importedFile = importFile(uri, name);
+        let importedUri = importedFile.uri;
         const buffer = await importedFile.arrayBuffer();
         let finalName = name;
 
@@ -435,6 +541,7 @@ export function useFileManager() {
             const renamed = renameFitsFile(importedFile.uri, resolvedName);
             if (renamed.success) {
               importedFile = new File(renamed.filepath);
+              importedUri = importedFile.uri;
               finalName = renamed.filename;
             }
           }
@@ -460,18 +567,24 @@ export function useFileManager() {
         let fullMeta: FitsMetadata;
         const fileId = generateFileId();
         const location = autoTagLocation ? await fetchLocationForImport() : undefined;
+        const sessionId = resolveImportSessionId(useSessionStore.getState().activeSession);
 
         // Defer thumbnail generation and quality evaluation to avoid blocking UI
         const capturedThumbSize = thumbnailSize;
         const capturedThumbQuality = thumbnailQuality;
+        const capturedVideoThumbTimeMs = videoThumbnailTimeMs;
 
         if (detectedFormat.sourceType === "fits") {
-          const fitsObj = loadFitsFromBuffer(buffer);
-          const partialMeta = extractMetadata(fitsObj, {
-            filename: finalName,
-            filepath: importedFile.uri,
-            fileSize: size ?? buffer.byteLength,
-          });
+          const fitsObj = loadFitsFromBufferAuto(buffer);
+          const partialMeta = extractMetadata(
+            fitsObj,
+            {
+              filename: finalName,
+              filepath: importedUri,
+              fileSize: size ?? buffer.byteLength,
+            },
+            frameClassificationConfig,
+          );
 
           fullMeta = {
             ...partialMeta,
@@ -480,11 +593,13 @@ export function useFileManager() {
             isFavorite: false,
             tags: [],
             albumIds: [],
+            sessionId,
             location,
             thumbnailUri: undefined,
             hash,
             sourceType: "fits",
             sourceFormat: toImageSourceFormat(detectedFormat),
+            mediaKind: "image",
           };
 
           addFile(fullMeta);
@@ -532,15 +647,16 @@ export function useFileManager() {
               // Thumbnail generation failure is non-critical
             }
           });
-        } else {
+        } else if (detectedFormat.sourceType === "raster") {
           const decoded = parseRasterFromBuffer(buffer);
           const partialMeta = extractRasterMetadata(
             {
               filename: finalName,
-              filepath: importedFile.uri,
+              filepath: importedUri,
               fileSize: size ?? buffer.byteLength,
             },
             { width: decoded.width, height: decoded.height },
+            frameClassificationConfig,
           );
 
           fullMeta = {
@@ -550,11 +666,13 @@ export function useFileManager() {
             isFavorite: false,
             tags: [],
             albumIds: [],
+            sessionId,
             location,
             thumbnailUri: undefined,
             hash,
             sourceType: "raster",
             sourceFormat: toImageSourceFormat(detectedFormat),
+            mediaKind: "image",
           };
 
           addFile(fullMeta);
@@ -592,6 +710,74 @@ export function useFileManager() {
               useFitsStore.getState().updateFile(fileId, updates);
             }
           });
+        } else {
+          const classifiedVideoFrame = classifyWithDetail(
+            undefined,
+            undefined,
+            finalName,
+            frameClassificationConfig,
+          );
+          let videoMeta: VideoMetadataSnapshot = {};
+          try {
+            videoMeta = await extractVideoMetadata(importedUri);
+          } catch {
+            // Metadata extraction is best-effort.
+          }
+          const width = videoMeta.videoWidth;
+          const height = videoMeta.videoHeight;
+          const durationMs =
+            typeof videoMeta.durationMs === "number" && Number.isFinite(videoMeta.durationMs)
+              ? videoMeta.durationMs
+              : undefined;
+
+          fullMeta = {
+            id: fileId,
+            filename: finalName,
+            filepath: importedUri,
+            fileSize: size ?? buffer.byteLength,
+            importDate: Date.now(),
+            frameType: classifiedVideoFrame.type,
+            frameTypeSource: classifiedVideoFrame.source,
+            isFavorite: false,
+            tags: [],
+            albumIds: [],
+            sessionId,
+            location,
+            thumbnailUri: undefined,
+            hash,
+            sourceType: "video",
+            sourceFormat: toImageSourceFormat(detectedFormat),
+            mediaKind: "video",
+            durationMs,
+            frameRate: videoMeta.frameRate,
+            videoWidth: width,
+            videoHeight: height,
+            videoCodec: videoMeta.videoCodec,
+            audioCodec: videoMeta.audioCodec,
+            bitrateKbps: videoMeta.bitrateKbps,
+            rotationDeg: videoMeta.rotationDeg,
+            hasAudioTrack: videoMeta.hasAudioTrack,
+            thumbnailAtMs: capturedVideoThumbTimeMs,
+            naxis: 2,
+            naxis1: width,
+            naxis2: height,
+            naxis3: 1,
+            bitpix: 8,
+          };
+
+          addFile(fullMeta);
+
+          InteractionManager.runAfterInteractions(async () => {
+            const thumbUri = await generateVideoThumbnailToCache(
+              fileId,
+              importedUri,
+              capturedVideoThumbTimeMs,
+              capturedThumbQuality,
+            );
+            if (thumbUri) {
+              useFitsStore.getState().updateFile(fileId, { thumbnailUri: thumbUri });
+            }
+          });
         }
 
         if (autoGroupByObject) {
@@ -627,8 +813,10 @@ export function useFileManager() {
       autoGroupByObject,
       autoTagLocation,
       autoDetectDuplicates,
+      frameClassificationConfig,
       thumbnailSize,
       thumbnailQuality,
+      videoThumbnailTimeMs,
       fetchLocationForImport,
       upsertAndLinkFileTarget,
     ],
@@ -695,7 +883,7 @@ export function useFileManager() {
 
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
+        type: ["image/*", "video/*", "application/fits", "application/x-fits"],
         copyToCacheDirectory: true,
         multiple: true,
       });
@@ -715,6 +903,87 @@ export function useFileManager() {
       setLastImportResult(importResult);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : "Import failed");
+    } finally {
+      setIsImporting(false);
+    }
+  }, [importBatch]);
+
+  const pickAndImportFromMediaLibrary = useCallback(async () => {
+    setIsImporting(true);
+    setImportError(null);
+    setLastImportResult(null);
+    cancelRef.current = false;
+
+    try {
+      setImportProgress({
+        phase: "mediaLibrary",
+        percent: 0,
+        current: 0,
+        total: 0,
+      });
+
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        setImportError("mediaLibraryPermissionDenied");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images", "videos"],
+        allowsMultipleSelection: true,
+        quality: 1,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const entries = result.assets.map((asset) => ({
+        uri: asset.uri,
+        name: resolvePickedAssetName(asset),
+        size: asset.fileSize ?? undefined,
+      }));
+      const importResult = await importBatch(entries);
+      setLastImportResult(importResult);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Media library import failed");
+    } finally {
+      setIsImporting(false);
+    }
+  }, [importBatch]);
+
+  const recordAndImportVideo = useCallback(async () => {
+    setIsImporting(true);
+    setImportError(null);
+    setLastImportResult(null);
+    cancelRef.current = false;
+
+    try {
+      setImportProgress({
+        phase: "recording",
+        percent: 0,
+        current: 0,
+        total: 1,
+      });
+
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!cameraPermission.granted) {
+        setImportError("cameraPermissionDenied");
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["videos"],
+        quality: 1,
+      });
+      if (result.canceled || !result.assets || result.assets.length === 0) return;
+
+      const entries = result.assets.map((asset) => ({
+        uri: asset.uri,
+        name: resolvePickedAssetName(asset),
+        size: asset.fileSize ?? undefined,
+      }));
+      const importResult = await importBatch(entries);
+      setLastImportResult(importResult);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : "Video capture import failed");
     } finally {
       setIsImporting(false);
     }
@@ -1428,6 +1697,85 @@ export function useFileManager() {
     };
   }, []);
 
+  const reclassifyAllFrames = useCallback(async (): Promise<ReclassifyFramesResult> => {
+    const files = [...useFitsStore.getState().files];
+    const failedEntries: Array<{ id: string; filename: string; reason: string }> = [];
+    let updated = 0;
+    let failed = 0;
+
+    for (const file of files) {
+      try {
+        const fileNameLower = file.filename.toLowerCase();
+        const isFitsSource =
+          file.sourceType === "fits" || /\.(fits?|fts)(?:\.gz)?$/i.test(fileNameLower);
+
+        let nextFrameType = file.frameType;
+        let nextFrameTypeSource = file.frameTypeSource;
+        let nextImageTypeRaw = file.imageTypeRaw;
+        let nextFrameHeaderRaw = file.frameHeaderRaw;
+
+        if (isFitsSource) {
+          const buffer = await readFileAsArrayBuffer(file.filepath);
+          const fitsObj = loadFitsFromBufferAuto(buffer);
+          const partial = extractMetadata(
+            fitsObj,
+            {
+              filename: file.filename,
+              filepath: file.filepath,
+              fileSize: file.fileSize,
+            },
+            frameClassificationConfig,
+          );
+          nextFrameType = partial.frameType;
+          nextFrameTypeSource = partial.frameTypeSource;
+          nextImageTypeRaw = partial.imageTypeRaw;
+          nextFrameHeaderRaw = partial.frameHeaderRaw;
+        } else {
+          const classified = classifyWithDetail(
+            undefined,
+            undefined,
+            file.filename,
+            frameClassificationConfig,
+          );
+          nextFrameType = classified.type;
+          nextFrameTypeSource = classified.source;
+          nextImageTypeRaw = undefined;
+          nextFrameHeaderRaw = undefined;
+        }
+
+        if (
+          file.frameType !== nextFrameType ||
+          file.frameTypeSource !== nextFrameTypeSource ||
+          file.imageTypeRaw !== nextImageTypeRaw ||
+          file.frameHeaderRaw !== nextFrameHeaderRaw
+        ) {
+          updateFile(file.id, {
+            frameType: nextFrameType,
+            frameTypeSource: nextFrameTypeSource,
+            imageTypeRaw: nextImageTypeRaw,
+            frameHeaderRaw: nextFrameHeaderRaw,
+          });
+          updated++;
+        }
+      } catch (error) {
+        failed++;
+        failedEntries.push({
+          id: file.id,
+          filename: file.filename,
+          reason: error instanceof Error ? error.message : "reclassify_failed",
+        });
+      }
+    }
+
+    return {
+      total: files.length,
+      success: files.length - failed,
+      failed,
+      updated,
+      failedEntries,
+    };
+  }, [frameClassificationConfig, updateFile]);
+
   return {
     isImporting,
     importProgress,
@@ -1435,6 +1783,8 @@ export function useFileManager() {
     lastImportResult,
     isZipImportAvailable,
     pickAndImportFile,
+    pickAndImportFromMediaLibrary,
+    recordAndImportVideo,
     pickAndImportFolder,
     pickAndImportZip,
     importFromUrl,
@@ -1447,6 +1797,7 @@ export function useFileManager() {
     emptyTrash,
     exportFiles,
     groupFiles,
+    reclassifyAllFrames,
     handleRenameFiles,
   };
 }

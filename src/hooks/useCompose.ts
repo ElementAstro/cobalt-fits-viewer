@@ -5,7 +5,7 @@
 
 import { useState, useCallback } from "react";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import { loadFitsFromBuffer, getImagePixels, getImageDimensions } from "../lib/fits/parser";
+import { loadFitsFromBufferAuto, getImagePixels, getImageDimensions } from "../lib/fits/parser";
 import { composeRGB, type ChannelData } from "../lib/utils/rgbCompose";
 import { LOG_TAGS, Logger } from "../lib/logger";
 
@@ -94,7 +94,7 @@ export function useCompose(options: UseComposeOptions = {}) {
 
       try {
         const buffer = await readFileAsArrayBuffer(filepath);
-        const fits = loadFitsFromBuffer(buffer);
+        const fits = loadFitsFromBufferAuto(buffer);
         const dims = getImageDimensions(fits);
         const pixels = await getImagePixels(fits);
 

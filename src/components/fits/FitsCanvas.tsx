@@ -109,9 +109,14 @@ export interface CanvasTransform {
 }
 
 export interface FitsCanvasHandle {
-  setTransform: (tx: number, ty: number, s?: number) => void;
+  setTransform: (tx: number, ty: number, s?: number, options?: TransformSetOptions) => void;
   resetView: () => void;
   getTransform: () => CanvasTransform;
+}
+
+export interface TransformSetOptions {
+  animated?: boolean;
+  duration?: number;
 }
 
 interface FitsCanvasProps {
@@ -208,6 +213,13 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     zoomTimerRef.current = setTimeout(() => setZoomText(""), 1200);
   }, []);
 
+  useEffect(
+    () => () => {
+      if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
+    },
+    [],
+  );
+
   // Track scale changes to show zoom indicator
   useAnimatedReaction(
     () => scale.value,
@@ -244,36 +256,63 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   );
 
   // Expose imperative handle for programmatic navigation
+  const applyTransform = useCallback(
+    (tx: number, ty: number, nextScale?: number, options?: TransformSetOptions) => {
+      const targetScale = clampScale(nextScale ?? scale.value, propMinScale, propMaxScale);
+      const clamped = clampTranslation(
+        tx,
+        ty,
+        targetScale,
+        imgWidth,
+        imgHeight,
+        canvasWidth.value,
+        canvasHeight.value,
+      );
+      const animated = options?.animated ?? true;
+      const duration = Math.max(0, options?.duration ?? 200);
+
+      if (animated) {
+        if (nextScale != null) {
+          scale.value = withTiming(targetScale, { duration });
+        }
+        translateX.value = withTiming(clamped.x, { duration });
+        translateY.value = withTiming(clamped.y, { duration });
+      } else {
+        if (nextScale != null) {
+          scale.value = targetScale;
+        }
+        translateX.value = clamped.x;
+        translateY.value = clamped.y;
+      }
+
+      savedScale.value = targetScale;
+      savedTranslateX.value = clamped.x;
+      savedTranslateY.value = clamped.y;
+    },
+    [
+      canvasHeight,
+      canvasWidth,
+      imgHeight,
+      imgWidth,
+      propMaxScale,
+      propMinScale,
+      savedScale,
+      savedTranslateX,
+      savedTranslateY,
+      scale,
+      translateX,
+      translateY,
+    ],
+  );
+
   useImperativeHandle(
     ref,
     () => ({
-      setTransform: (tx: number, ty: number, s?: number) => {
-        const targetScale = clampScale(s ?? scale.value, propMinScale, propMaxScale);
-        const clamped = clampTranslation(
-          tx,
-          ty,
-          targetScale,
-          imgWidth,
-          imgHeight,
-          canvasWidth.value,
-          canvasHeight.value,
-        );
-        translateX.value = withTiming(clamped.x, { duration: 200 });
-        translateY.value = withTiming(clamped.y, { duration: 200 });
-        if (s != null) {
-          scale.value = withTiming(targetScale, { duration: 200 });
-        }
-        savedScale.value = targetScale;
-        savedTranslateX.value = clamped.x;
-        savedTranslateY.value = clamped.y;
+      setTransform: (tx: number, ty: number, s?: number, options?: TransformSetOptions) => {
+        applyTransform(tx, ty, s, options);
       },
       resetView: () => {
-        scale.value = withTiming(1, { duration: 220 });
-        translateX.value = withTiming(0, { duration: 220 });
-        translateY.value = withTiming(0, { duration: 220 });
-        savedScale.value = 1;
-        savedTranslateX.value = 0;
-        savedTranslateY.value = 0;
+        applyTransform(0, 0, 1, { animated: true, duration: 220 });
       },
       getTransform: () => ({
         scale: scale.value,
@@ -283,20 +322,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         canvasHeight: canvasHeight.value,
       }),
     }),
-    [
-      translateX,
-      translateY,
-      scale,
-      savedScale,
-      savedTranslateX,
-      savedTranslateY,
-      canvasWidth,
-      canvasHeight,
-      imgWidth,
-      imgHeight,
-      propMinScale,
-      propMaxScale,
-    ],
+    [applyTransform, canvasHeight, canvasWidth, scale, translateX, translateY],
   );
 
   // Create SkImage from RGBA data
@@ -315,17 +341,53 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
   const onLayout = useCallback(
     (e: LayoutChangeEvent) => {
-      canvasWidth.value = e.nativeEvent.layout.width;
-      canvasHeight.value = e.nativeEvent.layout.height;
+      const nextCanvasWidth = e.nativeEvent.layout.width;
+      const nextCanvasHeight = e.nativeEvent.layout.height;
+      canvasWidth.value = nextCanvasWidth;
+      canvasHeight.value = nextCanvasHeight;
+
+      const nextScale = clampScale(scale.value, propMinScale, propMaxScale);
+      if (Math.abs(nextScale - scale.value) > 0.0001) {
+        scale.value = nextScale;
+      }
+      const clamped = clampTranslation(
+        translateX.value,
+        translateY.value,
+        nextScale,
+        imgWidth,
+        imgHeight,
+        nextCanvasWidth,
+        nextCanvasHeight,
+      );
+      translateX.value = clamped.x;
+      translateY.value = clamped.y;
+      savedScale.value = nextScale;
+      savedTranslateX.value = clamped.x;
+      savedTranslateY.value = clamped.y;
+
       onTransformChange?.({
-        scale: scale.value,
-        translateX: translateX.value,
-        translateY: translateY.value,
-        canvasWidth: canvasWidth.value,
-        canvasHeight: canvasHeight.value,
+        scale: nextScale,
+        translateX: clamped.x,
+        translateY: clamped.y,
+        canvasWidth: nextCanvasWidth,
+        canvasHeight: nextCanvasHeight,
       });
     },
-    [canvasWidth, canvasHeight, onTransformChange, scale, translateX, translateY],
+    [
+      canvasHeight,
+      canvasWidth,
+      imgHeight,
+      imgWidth,
+      onTransformChange,
+      propMaxScale,
+      propMinScale,
+      savedScale,
+      savedTranslateX,
+      savedTranslateY,
+      scale,
+      translateX,
+      translateY,
+    ],
   );
 
   const handleWheel = useCallback(
@@ -550,6 +612,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   const doubleTapGesture = Gesture.Tap()
     .enabled(interactionEnabled)
     .numberOfTaps(2)
+    .maxDistance(18)
     .onEnd((e) => {
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
@@ -593,6 +656,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   const singleTapGesture = Gesture.Tap()
     .enabled(interactionEnabled)
     .numberOfTaps(1)
+    .maxDistance(10)
     .onEnd((e) => {
       if (!onPixelTap || imgWidth <= 0 || imgHeight <= 0) return;
       // Convert screen coords to image pixel coords
@@ -628,6 +692,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   const longPressGesture = Gesture.LongPress()
     .enabled(interactionEnabled)
     .minDuration(500)
+    .maxDistance(12)
     .onEnd((_e, success) => {
       if (success && onLongPress) {
         runOnJS(onLongPress)();

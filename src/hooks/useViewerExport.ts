@@ -4,7 +4,8 @@ import * as Haptics from "expo-haptics";
 import { useI18n } from "../i18n/useI18n";
 import { useExport } from "./useExport";
 import { useHapticFeedback } from "./useHapticFeedback";
-import type { ExportFormat } from "../lib/fits/types";
+import type { ExportFormat, FitsTargetOptions } from "../lib/fits/types";
+import type { ExportSourceContext } from "./useExport";
 
 interface UseViewerExportParams {
   rgbaData: Uint8ClampedArray | null;
@@ -12,6 +13,7 @@ interface UseViewerExportParams {
   height: number | undefined;
   filename: string;
   format: ExportFormat;
+  source?: ExportSourceContext;
   onDone: () => void;
 }
 
@@ -21,6 +23,7 @@ export function useViewerExport({
   height,
   filename,
   format,
+  source,
   onDone,
 }: UseViewerExportParams) {
   const { t } = useI18n();
@@ -28,12 +31,21 @@ export function useViewerExport({
   const { isExporting, exportImage, shareImage, saveImage, printImage, printToPdf } = useExport();
 
   const handleExport = useCallback(
-    async (quality: number) => {
+    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
       if (!rgbaData || !width || !height) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
-      const path = await exportImage(rgbaData, width, height, filename, format, quality);
+      const path = await exportImage({
+        rgbaData,
+        width,
+        height,
+        filename,
+        format,
+        quality,
+        fits,
+        source,
+      });
       if (path) {
         haptics.notify(Haptics.NotificationFeedbackType.Success);
         Alert.alert(t("common.success"), t("viewer.exportSuccess"));
@@ -43,32 +55,50 @@ export function useViewerExport({
       }
       onDone();
     },
-    [rgbaData, width, height, exportImage, filename, format, haptics, t, onDone],
+    [rgbaData, width, height, exportImage, filename, format, source, haptics, t, onDone],
   );
 
   const handleShare = useCallback(
-    async (quality: number) => {
+    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
       if (!rgbaData || !width || !height) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
       try {
-        await shareImage(rgbaData, width, height, filename, format, quality);
+        await shareImage({
+          rgbaData,
+          width,
+          height,
+          filename,
+          format,
+          quality,
+          fits,
+          source,
+        });
       } catch {
         Alert.alert(t("common.error"), t("share.failed"));
       }
       onDone();
     },
-    [rgbaData, width, height, shareImage, filename, format, t, onDone],
+    [rgbaData, width, height, shareImage, filename, format, source, t, onDone],
   );
 
   const handleSaveToDevice = useCallback(
-    async (quality: number) => {
+    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
       if (!rgbaData || !width || !height) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
-      const uri = await saveImage(rgbaData, width, height, filename, format, quality);
+      const uri = await saveImage({
+        rgbaData,
+        width,
+        height,
+        filename,
+        format,
+        quality,
+        fits,
+        source,
+      });
       if (uri) {
         haptics.notify(Haptics.NotificationFeedbackType.Success);
         Alert.alert(t("common.success"), t("viewer.savedToDevice"));
@@ -78,7 +108,7 @@ export function useViewerExport({
       }
       onDone();
     },
-    [rgbaData, width, height, saveImage, filename, format, haptics, t, onDone],
+    [rgbaData, width, height, saveImage, filename, format, source, haptics, t, onDone],
   );
 
   const handlePrint = useCallback(async () => {

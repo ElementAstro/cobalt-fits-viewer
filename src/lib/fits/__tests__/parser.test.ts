@@ -1,10 +1,19 @@
 const mockFromArrayBuffer = jest.fn((buffer: ArrayBuffer) => ({ kind: "buffer", buffer }));
 const mockFromBlob = jest.fn(async (blob: Blob) => ({ kind: "blob", blob }));
 const mockFromURL = jest.fn(async (url: string) => ({ kind: "url", url }));
-const mockClassifyFrameType = jest.fn(() => "light");
+const mockClassifyWithDetail = jest.fn(() => ({ type: "light", source: "header" }));
+const mockIsGzipFitsBytes = jest.fn(() => false);
+const mockGunzipFitsBytes = jest.fn((value: ArrayBuffer | Uint8Array) =>
+  value instanceof Uint8Array ? value : new Uint8Array(value),
+);
 
 jest.mock("../../gallery/frameClassifier", () => ({
-  classifyFrameType: (...args: unknown[]) => mockClassifyFrameType(...args),
+  classifyWithDetail: (...args: any[]) => (mockClassifyWithDetail as any)(...args),
+}));
+
+jest.mock("../compression", () => ({
+  isGzipFitsBytes: (...args: any[]) => (mockIsGzipFitsBytes as any)(...args),
+  gunzipFitsBytes: (...args: any[]) => (mockGunzipFitsBytes as any)(...args),
 }));
 
 jest.mock("fitsjs-ng", () => {
@@ -84,14 +93,17 @@ import {
   getHeaderKeywords,
   getHeaderValue,
   getImageDimensions,
+  getImageChannels,
   getImagePixels,
   getPixelExtent,
   getPixelValue,
   getTableColumn,
   getTableRows,
   loadFitsFromBlob,
+  loadFitsFromBufferAuto,
   loadFitsFromBuffer,
   loadFitsFromURL,
+  isRgbCube,
 } from "../parser";
 
 function createHeader(data: Record<string, unknown>) {
@@ -123,6 +135,20 @@ describe("fits parser", () => {
     expect(mockFromURL).toHaveBeenCalledWith("https://x.test/file.fits");
   });
 
+  it("loads FITS from buffer with gzip auto-detection", () => {
+    const buf = new ArrayBuffer(8);
+    mockIsGzipFitsBytes.mockReturnValueOnce(false);
+    expect(loadFitsFromBufferAuto(buf)).toEqual({ kind: "buffer", buffer: buf });
+
+    mockIsGzipFitsBytes.mockReturnValueOnce(true);
+    const gz = new Uint8Array([1, 2, 3, 4]).buffer;
+    const inflated = new Uint8Array([9, 8, 7, 6]);
+    mockGunzipFitsBytes.mockReturnValueOnce(inflated);
+    loadFitsFromBufferAuto(gz);
+    expect(mockGunzipFitsBytes).toHaveBeenCalled();
+    expect(mockFromArrayBuffer).toHaveBeenCalledWith(inflated.buffer);
+  });
+
   it("reads header values and HDU information", () => {
     const header = createHeader({
       SIMPLE: true,
@@ -132,7 +158,7 @@ describe("fits parser", () => {
       NAXIS2: 50,
       __dataType: "Image",
     });
-    const fits = new (FITS as unknown as new (opts: unknown) => FITS)({
+    const fits = new (FITS as any)({
       header,
       hdus: [
         { header: { getDataType: () => "Image", hasDataUnit: () => true } },
@@ -148,9 +174,9 @@ describe("fits parser", () => {
       ]),
     );
     expect(getHeaderValue(fits as unknown as FITS, "BITPIX")).toBe(16);
-    expect(getHeaderValue(new FITS() as unknown as FITS, "BITPIX")).toBeNull();
+    expect(getHeaderValue(new (FITS as any)() as unknown as FITS, "BITPIX")).toBeNull();
     expect(getHDUDataType(fits as unknown as FITS)).toBe("Image");
-    expect(getHDUDataType(new FITS() as unknown as FITS)).toBeNull();
+    expect(getHDUDataType(new (FITS as any)() as unknown as FITS)).toBeNull();
     expect(getHDUList(fits as unknown as FITS)).toEqual([
       { index: 0, type: "Image", hasData: true },
       { index: 1, type: "BinaryTable", hasData: false },
@@ -158,7 +184,7 @@ describe("fits parser", () => {
   });
 
   it("extracts image dimensions and pixel helpers", () => {
-    const fits = new FITS({
+    const fits = new (FITS as any)({
       header: createHeader({ NAXIS1: 6, NAXIS2: 4, NAXIS3: 3, NAXIS: 3 }),
     });
     expect(getImageDimensions(fits as unknown as FITS)).toEqual({
@@ -167,7 +193,8 @@ describe("fits parser", () => {
       depth: 3,
       isDataCube: true,
     });
-    expect(getImageDimensions(new FITS() as unknown as FITS)).toBeNull();
+    expect(getImageDimensions(new (FITS as any)() as unknown as FITS)).toBeNull();
+    expect(isRgbCube(fits as unknown as FITS).isRgb).toBe(true);
 
     const px = new Float32Array([3, NaN, 1, 9, 4]);
     expect(getPixelExtent(px)).toEqual([1, 9]);
@@ -175,13 +202,17 @@ describe("fits parser", () => {
   });
 
   it("reads image and table data units by runtime type", async () => {
-    const imageFits = new FITS({ dataUnit: new Image(new Float32Array([1, 2, 3])) });
-    const compressedFits = new FITS({ dataUnit: new CompressedImage(new Float32Array([4, 5])) });
-    const tableFits = new FITS({
-      dataUnit: new Table([{ id: 1 }, { id: 2 }], { A: [10, 20], B: [30] }),
+    const imageFits = new (FITS as any)({
+      dataUnit: new (Image as any)(new Float32Array([1, 2, 3])),
     });
-    const binaryTableFits = new FITS({
-      dataUnit: new BinaryTable([{ id: 3 }], { C: [99] }),
+    const compressedFits = new (FITS as any)({
+      dataUnit: new (CompressedImage as any)(new Float32Array([4, 5])),
+    });
+    const tableFits = new (FITS as any)({
+      dataUnit: new (Table as any)([{ id: 1 }, { id: 2 }], { A: [10, 20], B: [30] }),
+    });
+    const binaryTableFits = new (FITS as any)({
+      dataUnit: new (BinaryTable as any)([{ id: 3 }], { C: [99] }),
     });
 
     await expect(getImagePixels(imageFits as unknown as FITS)).resolves.toEqual(
@@ -191,7 +222,7 @@ describe("fits parser", () => {
       new Float32Array([4, 5]),
     );
     await expect(
-      getImagePixels(new FITS({ dataUnit: new Table() }) as unknown as FITS),
+      getImagePixels(new (FITS as any)({ dataUnit: new (Table as any)() }) as unknown as FITS),
     ).resolves.toBeNull();
 
     await expect(getTableRows(tableFits as unknown as FITS, 0, 0, 2)).resolves.toEqual([
@@ -208,8 +239,21 @@ describe("fits parser", () => {
     await expect(getTableColumn(imageFits as unknown as FITS, 0, "A")).resolves.toBeNull();
   });
 
+  it("reads RGB cube channels for cube-like FITS", async () => {
+    const frames = [new Float32Array([1, 2]), new Float32Array([3, 4]), new Float32Array([5, 6])];
+    const fits = new (FITS as any)({
+      header: createHeader({ NAXIS: 3, NAXIS1: 2, NAXIS2: 1, NAXIS3: 3 }),
+      dataUnit: new (Image as any)(frames),
+    });
+
+    const channels = await getImageChannels(fits as unknown as FITS);
+    expect(channels?.r).toEqual(frames[0]);
+    expect(channels?.g).toEqual(frames[1]);
+    expect(channels?.b).toEqual(frames[2]);
+  });
+
   it("extracts normalized metadata and comments/history", () => {
-    const fits = new FITS({
+    const fits = new (FITS as any)({
       header: createHeader({
         BITPIX: 16,
         NAXIS: 2,
@@ -245,13 +289,21 @@ describe("fits parser", () => {
     expect(metadata.filter).toBe("Ha");
     expect(metadata.ccdTemp).toBe(-10);
     expect(metadata.frameType).toBe("light");
-    expect(mockClassifyFrameType).toHaveBeenCalledWith("Light", "Light", "M42_LIGHT.FITS");
+    expect(metadata.frameTypeSource).toBe("header");
+    expect(metadata.imageTypeRaw).toBe("Light");
+    expect(metadata.frameHeaderRaw).toBe("Light");
+    expect(mockClassifyWithDetail).toHaveBeenCalledWith(
+      "Light",
+      "Light",
+      "M42_LIGHT.FITS",
+      undefined,
+    );
 
     expect(getCommentsAndHistory(fits as unknown as FITS)).toEqual({
       comments: ["c1"],
       history: ["h1"],
     });
-    expect(getCommentsAndHistory(new FITS() as unknown as FITS)).toEqual({
+    expect(getCommentsAndHistory(new (FITS as any)() as unknown as FITS)).toEqual({
       comments: [],
       history: [],
     });

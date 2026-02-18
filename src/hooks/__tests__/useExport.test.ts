@@ -10,14 +10,19 @@ const mockShareFile = jest.fn();
 const mockSaveToMediaLibrary = jest.fn();
 const mockGetExportDir = jest.fn();
 const mockGetExtension = jest.fn();
+const mockWriteFitsImage = jest.fn(() => new Uint8Array([7, 8, 9]));
+const mockGzipFitsBytes = jest.fn((bytes: Uint8Array) => bytes);
+const mockNormalizeFitsCompression = jest.fn((bytes: ArrayBuffer | Uint8Array) =>
+  bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
+);
 
 jest.mock("@shopify/react-native-skia", () => ({
   AlphaType: { Unpremul: "Unpremul" },
   ColorType: { RGBA_8888: "RGBA_8888" },
   ImageFormat: { PNG: "PNG", JPEG: "JPEG", WEBP: "WEBP" },
   Skia: {
-    Data: { fromBytes: (...args: unknown[]) => mockFromBytes(...args) },
-    Image: { MakeImage: (...args: unknown[]) => mockMakeImage(...args) },
+    Data: { fromBytes: (...args: any[]) => (mockFromBytes as any)(...args) },
+    Image: { MakeImage: (...args: any[]) => (mockMakeImage as any)(...args) },
   },
 }));
 
@@ -32,8 +37,8 @@ jest.mock("expo-file-system", () => ({
 }));
 
 jest.mock("expo-print", () => ({
-  printAsync: (...args: unknown[]) => mockPrintAsync(...args),
-  printToFileAsync: (...args: unknown[]) => mockPrintToFileAsync(...args),
+  printAsync: (...args: any[]) => (mockPrintAsync as any)(...args),
+  printToFileAsync: (...args: any[]) => (mockPrintToFileAsync as any)(...args),
   Orientation: {
     landscape: "landscape",
     portrait: "portrait",
@@ -41,13 +46,47 @@ jest.mock("expo-print", () => ({
 }));
 
 jest.mock("../../lib/utils/imageExport", () => ({
-  shareFile: (...args: unknown[]) => mockShareFile(...args),
-  saveToMediaLibrary: (...args: unknown[]) => mockSaveToMediaLibrary(...args),
+  shareFile: (...args: any[]) => (mockShareFile as any)(...args),
+  saveToMediaLibrary: (...args: any[]) => (mockSaveToMediaLibrary as any)(...args),
   getExportDir: () => mockGetExportDir(),
-  getExtension: (...args: unknown[]) => mockGetExtension(...args),
+  getExtension: (...args: any[]) => (mockGetExtension as any)(...args),
+}));
+
+jest.mock("../../lib/fits/writer", () => ({
+  writeFitsImage: (...args: any[]) => (mockWriteFitsImage as any)(...args),
+}));
+
+jest.mock("../../lib/fits/compression", () => ({
+  gzipFitsBytes: (...args: any[]) => (mockGzipFitsBytes as any)(...args),
+  normalizeFitsCompression: (...args: any[]) => (mockNormalizeFitsCompression as any)(...args),
+}));
+
+jest.mock("../../lib/image/encoders/tiff", () => ({
+  encodeTiff: jest.fn(() => new Uint8Array([1, 2, 3])),
+}));
+
+jest.mock("../../lib/image/encoders/bmp", () => ({
+  encodeBmp24: jest.fn(() => new Uint8Array([4, 5, 6])),
+}));
+
+jest.mock("../../lib/import/fileFormat", () => ({
+  splitFilenameExtension: (filename: string) => {
+    const fitGz = filename.toLowerCase().endsWith(".fits.gz");
+    if (fitGz) {
+      return { baseName: filename.slice(0, -8), extension: ".fits.gz" };
+    }
+    const dot = filename.lastIndexOf(".");
+    return {
+      baseName: dot > 0 ? filename.slice(0, dot) : filename,
+      extension: dot > 0 ? filename.slice(dot) : "",
+    };
+  },
 }));
 
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    Export: "export",
+  },
   Logger: {
     warn: jest.fn(),
     info: jest.fn(),
@@ -72,7 +111,7 @@ describe("useExport", () => {
     Object.defineProperty(Platform, "OS", { configurable: true, value: "ios" });
   });
 
-  it("exports, shares and saves image successfully", async () => {
+  it("exports, shares and saves image successfully (legacy signature)", async () => {
     const { result } = renderHook(() => useExport());
     const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
 
@@ -88,6 +127,31 @@ describe("useExport", () => {
     expect(mockShareFile).toHaveBeenCalled();
     expect(mockSaveToMediaLibrary).toHaveBeenCalled();
     expect(result.current.isExporting).toBe(false);
+  });
+
+  it("supports request-object signature with FITS export", async () => {
+    const { result } = renderHook(() => useExport());
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+    const original = new Uint8Array([0x53, 0x49, 0x4d, 0x50, 0x4c, 0x45]).buffer;
+
+    await act(async () => {
+      const path = await result.current.exportImage({
+        rgbaData: rgba,
+        width: 1,
+        height: 1,
+        filename: "x.fits.gz",
+        format: "fits",
+        fits: { mode: "scientific", compression: "gzip" },
+        source: {
+          sourceType: "fits",
+          originalBuffer: original,
+          metadata: { bitpix: 16 },
+        },
+      });
+      expect(path).toBe("file:///exports/x_export.fits.gz");
+    });
+
+    expect(mockNormalizeFitsCompression).toHaveBeenCalled();
   });
 
   it("returns null when skia image creation or encode fails", async () => {

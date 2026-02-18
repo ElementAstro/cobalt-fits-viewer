@@ -7,6 +7,7 @@ import type { FitsMetadata } from "../fits/types";
 export interface MetadataIndexResult {
   objects: string[];
   filters: string[];
+  frameTypes: string[];
   sourceFormats: string[];
   instruments: string[];
   telescopes: string[];
@@ -22,6 +23,7 @@ export interface MetadataIndexResult {
 export function buildMetadataIndex(files: FitsMetadata[]): MetadataIndexResult {
   const objects = new Set<string>();
   const filters = new Set<string>();
+  const frameTypes = new Set<string>();
   const sourceFormats = new Set<string>();
   const instruments = new Set<string>();
   const telescopes = new Set<string>();
@@ -35,6 +37,7 @@ export function buildMetadataIndex(files: FitsMetadata[]): MetadataIndexResult {
   for (const file of files) {
     if (file.object) objects.add(file.object);
     if (file.filter) filters.add(file.filter);
+    if (file.frameType) frameTypes.add(file.frameType);
     if (file.sourceFormat) sourceFormats.add(file.sourceFormat);
     if (file.instrument) instruments.add(file.instrument);
     if (file.telescope) telescopes.add(file.telescope);
@@ -55,6 +58,7 @@ export function buildMetadataIndex(files: FitsMetadata[]): MetadataIndexResult {
   return {
     objects: [...objects].sort(),
     filters: [...filters].sort(),
+    frameTypes: [...frameTypes].sort(),
     sourceFormats: [...sourceFormats].sort(),
     instruments: [...instruments].sort(),
     telescopes: [...telescopes].sort(),

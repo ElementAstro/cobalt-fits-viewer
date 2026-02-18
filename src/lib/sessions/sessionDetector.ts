@@ -8,6 +8,7 @@ import type {
   ObservationLogEntry,
   SessionEquipment,
 } from "../fits/types";
+import { dedupeTargetRefs, toTargetRef } from "../targets/targetRefs";
 
 /**
  * 从 FITS 元数据自动检测观测会话
@@ -47,7 +48,7 @@ export function detectSessions(
     const endTime = group[group.length - 1].timestamp;
     const lastExptime = group[group.length - 1].exptime ?? 0;
 
-    const targets = [...new Set(group.map((f) => f.object).filter(Boolean))] as string[];
+    const targetNames = [...new Set(group.map((f) => f.object).filter(Boolean))] as string[];
     const imageIds = group.map((f) => f.id);
 
     const equipment = extractEquipment(group);
@@ -59,7 +60,7 @@ export function detectSessions(
       startTime,
       endTime: endTime + lastExptime * 1000,
       duration: Math.round((endTime - startTime) / 1000) + lastExptime,
-      targets,
+      targetRefs: dedupeTargetRefs(targetNames.map((name) => toTargetRef(name))),
       imageIds,
       equipment,
       createdAt: Date.now(),

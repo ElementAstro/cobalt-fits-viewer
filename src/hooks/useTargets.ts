@@ -14,11 +14,16 @@ import {
   calculateCompletionRate,
   formatExposureTime,
 } from "../lib/targets/exposureStats";
+import { computeMergeRelinkPatch, normalizeTargetMatch } from "../lib/targets/targetRelations";
 import {
-  computeMergeRelinkPatch,
-  computeTargetFileReconciliation,
-  normalizeTargetMatch,
-} from "../lib/targets/targetRelations";
+  applyIntegrityPatch,
+  reconcileAll,
+  reconcileAllStores,
+  type TargetIntegrityInput,
+  type TargetIntegrityPatch,
+} from "../lib/targets/targetIntegrity";
+import { buildTargetIndexes } from "../lib/targets/targetIndexes";
+import { dedupeTargetRefs, normalizeSessionTargetRefs } from "../lib/targets/targetRefs";
 import type {
   FitsMetadata,
   RecommendedEquipment,
@@ -60,91 +65,69 @@ function isCoordinateMatch(ra1: number, dec1: number, ra2: number, dec2: number)
   return Math.sqrt(dRa * dRa + dDec * dDec) <= COORDINATE_MATCH_RADIUS_DEG;
 }
 
-function syncSessionTargetName(
-  sessions: ReturnType<typeof useSessionStore.getState>["sessions"],
-  sourceName: string,
-  destName?: string,
-) {
-  return sessions.map((session) => {
-    const replaced = session.targets
-      .map((targetName) => (targetName === sourceName ? destName : targetName))
-      .filter((targetName): targetName is string => Boolean(targetName));
-    const deduped = uniqueStrings(replaced);
-    if (
-      deduped.length === session.targets.length &&
-      deduped.every((value, idx) => value === session.targets[idx])
-    ) {
-      return session;
-    }
-    return {
-      ...session,
-      targets: deduped,
-    };
-  });
-}
-
-function applyTargetGraphPatch(patch: {
-  targets: Target[];
-  files: FitsMetadata[];
-  groups: ReturnType<typeof useTargetGroupStore.getState>["groups"];
-  sessions: ReturnType<typeof useSessionStore.getState>["sessions"];
-}) {
-  useTargetStore.setState({ targets: patch.targets });
-  useFitsStore.setState({ files: patch.files });
-  useTargetGroupStore.setState({ groups: patch.groups });
-  useSessionStore.setState({ sessions: patch.sessions });
-}
-
-export function reconcileTargetGraphStores(): boolean {
-  const patch = computeTargetFileReconciliation({
+function getTargetGraphSnapshot(): TargetIntegrityInput {
+  const sessionState = useSessionStore.getState();
+  return {
     targets: useTargetStore.getState().targets,
     files: useFitsStore.getState().files,
     groups: useTargetGroupStore.getState().groups,
-    sessions: useSessionStore.getState().sessions,
-  });
+    sessions: sessionState.sessions,
+    plans: sessionState.plans,
+    logEntries: sessionState.logEntries,
+  };
+}
 
-  if (!patch.changed) return false;
-  applyTargetGraphPatch(patch);
-  return true;
+function commitTargetGraphMutation(
+  mutator: (snapshot: TargetIntegrityInput) => TargetIntegrityInput,
+): TargetIntegrityPatch | null {
+  const snapshot = getTargetGraphSnapshot();
+  const mutated = mutator(snapshot);
+  const patch = reconcileAll(mutated);
+  if (!patch.valid) return null;
+
+  const hasMutation =
+    mutated.targets !== snapshot.targets ||
+    mutated.files !== snapshot.files ||
+    mutated.groups !== snapshot.groups ||
+    mutated.sessions !== snapshot.sessions ||
+    mutated.plans !== snapshot.plans ||
+    mutated.logEntries !== snapshot.logEntries;
+
+  const changed = patch.changed || hasMutation;
+  if (changed) {
+    applyIntegrityPatch({ ...patch, changed: true });
+  }
+
+  return { ...patch, changed };
+}
+
+export function reconcileTargetGraphStores(): boolean {
+  const patch = reconcileAllStores();
+  return patch.changed;
 }
 
 export function useTargets() {
   const targets = useTargetStore((s) => s.targets);
-  const addTarget = useTargetStore((s) => s.addTarget);
-  const removeTarget = useTargetStore((s) => s.removeTarget);
-  const updateTarget = useTargetStore((s) => s.updateTarget);
-  const addImageToTarget = useTargetStore((s) => s.addImageToTarget);
-  const removeImageFromTarget = useTargetStore((s) => s.removeImageFromTarget);
-  const addAlias = useTargetStore((s) => s.addAlias);
-  const setStatus = useTargetStore((s) => s.setStatus);
-  const toggleFavorite = useTargetStore((s) => s.toggleFavorite);
-  const togglePinned = useTargetStore((s) => s.togglePinned);
-  const addTag = useTargetStore((s) => s.addTag);
-  const removeTag = useTargetStore((s) => s.removeTag);
-  const setTags = useTargetStore((s) => s.setTags);
-  const setCategory = useTargetStore((s) => s.setCategory);
-  const setGroup = useTargetStore((s) => s.setGroup);
-  const setRecommendedEquipment = useTargetStore((s) => s.setRecommendedEquipment);
-  const setBestImage = useTargetStore((s) => s.setBestImage);
-  const setImageRating = useTargetStore((s) => s.setImageRating);
-  const removeImageRating = useTargetStore((s) => s.removeImageRating);
-  const getFavoriteTargets = useTargetStore((s) => s.getFavoriteTargets);
-  const getPinnedTargets = useTargetStore((s) => s.getPinnedTargets);
-  const getTargetsByTag = useTargetStore((s) => s.getTargetsByTag);
-  const getTargetsByCategory = useTargetStore((s) => s.getTargetsByCategory);
-
   const groups = useTargetGroupStore((s) => s.groups);
+  const files = useFitsStore((s) => s.files);
+
   const addGroup = useTargetGroupStore((s) => s.addGroup);
   const removeGroup = useTargetGroupStore((s) => s.removeGroup);
   const updateGroup = useTargetGroupStore((s) => s.updateGroup);
   const addTargetToGroup = useTargetGroupStore((s) => s.addTargetToGroup);
   const removeTargetFromGroup = useTargetGroupStore((s) => s.removeTargetFromGroup);
   const getGroupById = useTargetGroupStore((s) => s.getGroupById);
-  const removeTargetFromAllGroups = useTargetGroupStore((s) => s.removeTargetFromAllGroups);
-  const replaceTargetInGroups = useTargetGroupStore((s) => s.replaceTargetInGroups);
 
-  const files = useFitsStore((s) => s.files);
-  const updateFile = useFitsStore((s) => s.updateFile);
+  const targetIndexes = useMemo(() => buildTargetIndexes(targets, files), [targets, files]);
+
+  const updateTargetFields = useCallback((targetId: string, updates: Partial<Target>) => {
+    commitTargetGraphMutation((snapshot) => ({
+      ...snapshot,
+      targets: snapshot.targets.map((target) =>
+        target.id === targetId ? { ...target, ...updates, updatedAt: Date.now() } : target,
+      ),
+    }));
+  }, []);
 
   const upsertAndLinkFileTarget = useCallback(
     (
@@ -152,185 +135,246 @@ export function useTargets() {
       metadata: UpsertTargetMetadata = {},
       source: TargetLinkSource = "unknown",
     ): UpsertAndLinkResult | null => {
-      const fileStore = useFitsStore.getState();
-      const targetStore = useTargetStore.getState();
-      const file = fileStore.getFileById(fileId);
-      if (!file) return null;
+      let targetId: string | null = null;
+      let isNew = false;
 
-      const targetName = metadata.object?.trim() || file.object?.trim();
-      const aliasInputs = uniqueStrings(
-        (metadata.aliases ?? []).map((alias) => alias.trim()).filter((alias) => alias.length > 0),
-      );
-      const match = normalizeTargetMatch({
-        name: targetName,
-        aliases: aliasInputs,
-        targets: targetStore.targets,
+      const patch = commitTargetGraphMutation((snapshot) => {
+        const file = snapshot.files.find((item) => item.id === fileId);
+        if (!file) return snapshot;
+
+        const targetName = metadata.object?.trim() || file.object?.trim();
+        const aliasInputs = uniqueStrings(
+          (metadata.aliases ?? []).map((alias) => alias.trim()).filter((alias) => alias.length > 0),
+        );
+
+        let matched = normalizeTargetMatch({
+          name: targetName,
+          aliases: aliasInputs,
+          targets: snapshot.targets,
+        });
+
+        if (!matched && metadata.ra !== undefined && metadata.dec !== undefined) {
+          matched =
+            snapshot.targets.find(
+              (candidate) =>
+                candidate.ra !== undefined &&
+                candidate.dec !== undefined &&
+                isCoordinateMatch(metadata.ra!, metadata.dec!, candidate.ra, candidate.dec),
+            ) ?? null;
+        }
+
+        let nextTargets = [...snapshot.targets];
+
+        if (!matched) {
+          if (!targetName) {
+            return snapshot;
+          }
+          const nextTarget = createTarget(targetName, metadata.type ?? "other");
+          nextTarget.ra = metadata.ra ?? nextTarget.ra;
+          nextTarget.dec = metadata.dec ?? nextTarget.dec;
+          nextTarget.status = metadata.status ?? nextTarget.status;
+          nextTarget.category = metadata.category ?? nextTarget.category;
+          nextTarget.tags = metadata.tags ? uniqueStrings(metadata.tags) : nextTarget.tags;
+          nextTarget.notes = metadata.notes ?? nextTarget.notes;
+          const knownAliases = findKnownAliases(targetName);
+          nextTarget.aliases = uniqueStrings(
+            [...nextTarget.aliases, ...aliasInputs, ...knownAliases].filter(
+              (alias) => alias.toLowerCase() !== targetName.toLowerCase(),
+            ),
+          );
+          nextTarget.imageIds = uniqueStrings([...nextTarget.imageIds, fileId]);
+          nextTargets = [...nextTargets, nextTarget];
+          targetId = nextTarget.id;
+          isNew = true;
+        } else {
+          const updates: Partial<Target> = {};
+          if (metadata.ra !== undefined && matched.ra !== metadata.ra) {
+            updates.ra = metadata.ra;
+          }
+          if (metadata.dec !== undefined && matched.dec !== metadata.dec) {
+            updates.dec = metadata.dec;
+          }
+          if (metadata.status && matched.status !== metadata.status) {
+            updates.status = metadata.status;
+          }
+          if (metadata.category && matched.category !== metadata.category) {
+            updates.category = metadata.category;
+          }
+          if (metadata.notes && !matched.notes) {
+            updates.notes = metadata.notes;
+          }
+          if (metadata.type && matched.type === "other") {
+            updates.type = metadata.type;
+          }
+          if (metadata.tags && metadata.tags.length > 0) {
+            updates.tags = uniqueStrings([...(matched.tags ?? []), ...metadata.tags]);
+          }
+          if (targetName) {
+            const knownAliases = findKnownAliases(targetName);
+            const mergedAliases = uniqueStrings([
+              ...matched.aliases,
+              ...aliasInputs,
+              ...knownAliases,
+              ...(targetName.toLowerCase() === matched.name.toLowerCase() ? [] : [targetName]),
+            ]);
+            if (
+              mergedAliases.length !== matched.aliases.length ||
+              mergedAliases.some((alias, idx) => alias !== matched.aliases[idx])
+            ) {
+              updates.aliases = mergedAliases;
+            }
+          }
+          updates.imageIds = uniqueStrings([...(matched.imageIds ?? []), fileId]);
+
+          nextTargets = nextTargets.map((target) =>
+            target.id === matched!.id ? { ...target, ...updates, updatedAt: Date.now() } : target,
+          );
+          targetId = matched.id;
+        }
+
+        if (!targetId) return snapshot;
+
+        const nextFiles = snapshot.files.map((item) =>
+          item.id === fileId ? { ...item, targetId: targetId ?? undefined } : item,
+        );
+
+        return {
+          ...snapshot,
+          targets: nextTargets,
+          files: nextFiles,
+        };
       });
 
-      let target = match;
-      if (!target && metadata.ra !== undefined && metadata.dec !== undefined) {
-        target =
-          targetStore.targets.find(
-            (candidate) =>
-              candidate.ra !== undefined &&
-              candidate.dec !== undefined &&
-              isCoordinateMatch(metadata.ra!, metadata.dec!, candidate.ra, candidate.dec),
-          ) ?? null;
-      }
+      if (!patch || !targetId) return null;
+      const linkedTarget =
+        patch.targets.find((item) => item.id === targetId) ??
+        useTargetStore.getState().targets.find((item) => item.id === targetId);
+      if (!linkedTarget) return null;
 
-      let isNew = false;
-      if (!target) {
-        if (!targetName) return null;
-        const nextTarget = createTarget(targetName, metadata.type ?? "other");
-        nextTarget.ra = metadata.ra ?? nextTarget.ra;
-        nextTarget.dec = metadata.dec ?? nextTarget.dec;
-        nextTarget.status = metadata.status ?? nextTarget.status;
-        nextTarget.category = metadata.category ?? nextTarget.category;
-        nextTarget.tags = metadata.tags ? uniqueStrings(metadata.tags) : nextTarget.tags;
-        nextTarget.notes = metadata.notes ?? nextTarget.notes;
-        const knownAliases = findKnownAliases(targetName);
-        nextTarget.aliases = uniqueStrings(
-          [...nextTarget.aliases, ...aliasInputs, ...knownAliases].filter(
-            (alias) => alias.toLowerCase() !== targetName.toLowerCase(),
-          ),
-        );
-        addTarget(nextTarget);
-        target = nextTarget;
-        isNew = true;
-      } else {
-        const existingTarget = target;
-        const updates: Partial<Target> = {};
-        if (metadata.ra !== undefined && existingTarget.ra !== metadata.ra) {
-          updates.ra = metadata.ra;
-        }
-        if (metadata.dec !== undefined && existingTarget.dec !== metadata.dec) {
-          updates.dec = metadata.dec;
-        }
-        if (metadata.status && existingTarget.status !== metadata.status) {
-          updates.status = metadata.status;
-        }
-        if (metadata.category && existingTarget.category !== metadata.category) {
-          updates.category = metadata.category;
-        }
-        if (metadata.notes && !existingTarget.notes) {
-          updates.notes = metadata.notes;
-        }
-        if (metadata.type && existingTarget.type === "other") {
-          updates.type = metadata.type;
-        }
-        if (metadata.tags && metadata.tags.length > 0) {
-          updates.tags = uniqueStrings([...(existingTarget.tags ?? []), ...metadata.tags]);
-        }
-        if (targetName) {
-          const knownAliases = findKnownAliases(targetName);
-          const mergedAliases = uniqueStrings([
-            ...existingTarget.aliases,
-            ...aliasInputs,
-            ...knownAliases,
-            ...(targetName.toLowerCase() === existingTarget.name.toLowerCase() ? [] : [targetName]),
-          ]);
-          if (
-            mergedAliases.length !== existingTarget.aliases.length ||
-            mergedAliases.some((alias, idx) => alias !== existingTarget.aliases[idx])
-          ) {
-            updates.aliases = mergedAliases;
-          }
-        }
-        if (Object.keys(updates).length > 0) {
-          updateTarget(existingTarget.id, updates);
-        }
-      }
-
-      if (!target) return null;
-
-      addImageToTarget(target.id, fileId);
-      if (file.targetId !== target.id) {
-        fileStore.updateFile(fileId, { targetId: target.id });
-      }
-
-      const latest =
-        useTargetStore.getState().targets.find((item) => item.id === target.id) ?? target;
       return {
-        target: latest,
-        targetId: latest.id,
+        target: linkedTarget,
+        targetId,
         isNew,
         source,
       };
     },
-    [addTarget, addImageToTarget, updateTarget],
+    [],
   );
 
-  const removeTargetCascade = useCallback(
-    (targetId: string) => {
-      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
-      if (!target) return false;
+  const removeTargetCascade = useCallback((targetId: string) => {
+    const snapshot = getTargetGraphSnapshot();
+    const target = snapshot.targets.find((item) => item.id === targetId);
+    if (!target) return false;
 
-      removeTarget(targetId);
-      useFitsStore.setState((state) => ({
-        files: state.files.map((file) =>
-          file.targetId === targetId ? { ...file, targetId: undefined } : file,
-        ),
-      }));
-      removeTargetFromAllGroups(targetId);
-      useSessionStore.setState((state) => ({
-        sessions: syncSessionTargetName(state.sessions, target.name),
-      }));
-      reconcileTargetGraphStores();
-      return true;
-    },
-    [removeTarget, removeTargetFromAllGroups],
-  );
+    const targetNames = new Set([target.name, ...target.aliases].map((name) => name.toLowerCase()));
 
-  const mergeTargetsCascade = useCallback(
-    (destId: string, sourceId: string) => {
-      if (destId === sourceId) return null;
-      const stateSnapshot = {
-        targets: useTargetStore.getState().targets,
-        files: useFitsStore.getState().files,
-        groups: useTargetGroupStore.getState().groups,
-        sessions: useSessionStore.getState().sessions,
-      };
-      const source = stateSnapshot.targets.find((target) => target.id === sourceId);
-      if (!source) return null;
+    const patch = commitTargetGraphMutation((state) => ({
+      ...state,
+      targets: state.targets.filter((item) => item.id !== targetId),
+      files: state.files.map((file) =>
+        file.targetId === targetId ? { ...file, targetId: undefined } : file,
+      ),
+      groups: (state.groups ?? []).map((group) => ({
+        ...group,
+        targetIds: group.targetIds.filter((id) => id !== targetId),
+      })),
+      sessions: (state.sessions ?? []).map((session) => {
+        const refs = normalizeSessionTargetRefs(session, state.targets).filter(
+          (ref) => ref.targetId !== targetId && !targetNames.has(ref.name.toLowerCase()),
+        );
+        return {
+          ...session,
+          targetRefs: dedupeTargetRefs(refs, state.targets),
+        };
+      }),
+      plans: (state.plans ?? []).map((plan) => {
+        if (plan.targetId !== targetId) return plan;
+        return {
+          ...plan,
+          targetId: undefined,
+        };
+      }),
+    }));
 
-      replaceTargetInGroups(sourceId, destId);
-      const patch = computeMergeRelinkPatch({
-        ...stateSnapshot,
-        groups: useTargetGroupStore.getState().groups,
-        destId,
-        sourceId,
+    return Boolean(patch);
+  }, []);
+
+  const mergeTargetsCascade = useCallback((destId: string, sourceId: string) => {
+    if (destId === sourceId) return null;
+
+    const snapshot = getTargetGraphSnapshot();
+    const patch = computeMergeRelinkPatch({
+      ...snapshot,
+      destId,
+      sourceId,
+    });
+
+    if (!patch.changed) return null;
+
+    const validated = reconcileAll(patch);
+    if (!validated.valid) return null;
+
+    applyIntegrityPatch(validated);
+    return validated.targets.find((target) => target.id === destId) ?? null;
+  }, []);
+
+  const renameTargetCascade = useCallback((targetId: string, newName: string) => {
+    const snapshot = getTargetGraphSnapshot();
+    const target = snapshot.targets.find((item) => item.id === targetId);
+    const trimmed = newName.trim();
+    if (!target || !trimmed || target.name === trimmed) return false;
+
+    const patch = commitTargetGraphMutation((state) => {
+      const nextTargets = state.targets.map((item) => {
+        if (item.id !== targetId) return item;
+        const nextAliases = item.aliases.includes(item.name)
+          ? item.aliases
+          : [...item.aliases, item.name];
+        return {
+          ...item,
+          name: trimmed,
+          aliases: uniqueStrings(nextAliases),
+          updatedAt: Date.now(),
+        };
       });
-      if (!patch.changed) return null;
 
-      applyTargetGraphPatch(patch);
-      const mergedTarget = patch.targets.find((target) => target.id === destId) ?? null;
-      if (mergedTarget) {
-        useSessionStore.setState((state) => ({
-          sessions: syncSessionTargetName(state.sessions, source.name, mergedTarget.name),
-        }));
-      }
-      return mergedTarget;
-    },
-    [replaceTargetInGroups],
-  );
+      const nextSessions = (state.sessions ?? []).map((session) => {
+        const nextRefs = normalizeSessionTargetRefs(session, state.targets).map((ref) => {
+          if (ref.targetId === targetId) {
+            return { ...ref, name: trimmed };
+          }
+          if (!ref.targetId && ref.name.toLowerCase() === target.name.toLowerCase()) {
+            return { targetId, name: trimmed };
+          }
+          return ref;
+        });
 
-  const renameTargetCascade = useCallback(
-    (targetId: string, newName: string) => {
-      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
-      const trimmed = newName.trim();
-      if (!target || !trimmed || target.name === trimmed) return false;
+        return {
+          ...session,
+          targetRefs: dedupeTargetRefs(nextRefs, nextTargets),
+        };
+      });
 
-      const nextAliases = target.aliases.includes(target.name)
-        ? target.aliases
-        : [...target.aliases, target.name];
-      updateTarget(targetId, { name: trimmed, aliases: uniqueStrings(nextAliases) });
-      useSessionStore.setState((state) => ({
-        sessions: syncSessionTargetName(state.sessions, target.name, trimmed),
-      }));
-      return true;
-    },
-    [updateTarget],
-  );
+      const nextPlans = (state.plans ?? []).map((plan) => {
+        if (plan.targetId === targetId) {
+          return { ...plan, targetName: trimmed };
+        }
+        if (!plan.targetId && plan.targetName.toLowerCase() === target.name.toLowerCase()) {
+          return { ...plan, targetId, targetName: trimmed };
+        }
+        return plan;
+      });
+
+      return {
+        ...state,
+        targets: nextTargets,
+        sessions: nextSessions,
+        plans: nextPlans,
+      };
+    });
+
+    return Boolean(patch);
+  }, []);
 
   const reconcileTargetGraph = useCallback(() => reconcileTargetGraphStores(), []);
 
@@ -377,27 +421,30 @@ export function useTargets() {
         groupId?: string;
       },
     ) => {
+      const snapshot = getTargetGraphSnapshot();
       const existing = normalizeTargetMatch({
         name,
-        targets: useTargetStore.getState().targets,
+        targets: snapshot.targets,
       });
+
       if (existing) {
         const mergedTags = options?.tags
           ? uniqueStrings([...(existing.tags ?? []), ...(options.tags ?? [])])
           : existing.tags;
-        const updates: Partial<Target> = {
+
+        updateTargetFields(existing.id, {
           ra: existing.ra ?? options?.ra,
           dec: existing.dec ?? options?.dec,
           notes: existing.notes ?? options?.notes,
           category: existing.category ?? options?.category,
           tags: mergedTags,
           isFavorite: options?.isFavorite ?? existing.isFavorite,
-          groupId: options?.groupId ?? existing.groupId,
-        };
-        updateTarget(existing.id, updates);
+        });
+
         if (options?.groupId) {
           addTargetToGroup(options.groupId, existing.id);
         }
+
         return (
           useTargetStore.getState().targets.find((target) => target.id === existing.id) ?? existing
         );
@@ -410,20 +457,34 @@ export function useTargets() {
       if (options?.category) target.category = options.category;
       if (options?.tags) target.tags = uniqueStrings(options.tags);
       if (options?.isFavorite !== undefined) target.isFavorite = options.isFavorite;
-      if (options?.groupId) target.groupId = options.groupId;
       const aliases = findKnownAliases(target.name);
       if (aliases.length > 0) {
         target.aliases = uniqueStrings([...target.aliases, ...aliases]);
       }
-      addTarget(target);
 
-      if (options?.groupId) {
-        addTargetToGroup(options.groupId, target.id);
-      }
+      const patch = commitTargetGraphMutation((state) => {
+        const nextGroups = [...(state.groups ?? [])];
+        if (options?.groupId) {
+          for (let i = 0; i < nextGroups.length; i++) {
+            if (nextGroups[i].id !== options.groupId) continue;
+            nextGroups[i] = {
+              ...nextGroups[i],
+              targetIds: uniqueStrings([...(nextGroups[i].targetIds ?? []), target.id]),
+              updatedAt: Date.now(),
+            };
+          }
+        }
 
-      return target;
+        return {
+          ...state,
+          targets: [...state.targets, target],
+          groups: nextGroups,
+        };
+      });
+
+      return patch?.targets.find((item) => item.id === target.id) ?? target;
     },
-    [addTarget, addTargetToGroup, updateTarget],
+    [addTargetToGroup, updateTargetFields],
   );
 
   const updateTargetWithCascade = useCallback(
@@ -433,10 +494,10 @@ export function useTargets() {
         renameTargetCascade(targetId, name);
       }
       if (Object.keys(rest).length > 0) {
-        updateTarget(targetId, rest);
+        updateTargetFields(targetId, rest);
       }
     },
-    [renameTargetCascade, updateTarget],
+    [renameTargetCascade, updateTargetFields],
   );
 
   const getTargetStats = useCallback(
@@ -444,72 +505,102 @@ export function useTargets() {
       const target = targets.find((t) => t.id === targetId);
       if (!target) return null;
 
-      const targetFiles = files.filter((f) => target.imageIds.includes(f.id));
+      const cachedStats = targetIndexes.targetStatsCache.get(targetId);
+      const targetFiles =
+        cachedStats?.files ??
+        target.imageIds
+          .map((imageId) => targetIndexes.fileById.get(imageId))
+          .filter((file): file is FitsMetadata => Boolean(file));
+
       const exposureStats = calculateExposureStats(targetFiles);
       const completion = calculateCompletionRate(target, files);
 
       return {
         exposureStats,
         completion,
-        filterExposure: calculateTargetExposure(target, files),
+        filterExposure: cachedStats?.filterExposure ?? calculateTargetExposure(target, files),
       };
     },
-    [targets, files],
+    [targets, files, targetIndexes],
   );
 
-  const associateImages = useCallback(
-    (targetId: string, imageIds: string[]) => {
-      for (const imageId of imageIds) {
-        addImageToTarget(targetId, imageId);
-        updateFile(imageId, { targetId });
-      }
-    },
-    [addImageToTarget, updateFile],
-  );
+  const associateImages = useCallback((targetId: string, imageIds: string[]) => {
+    commitTargetGraphMutation((state) => ({
+      ...state,
+      targets: state.targets.map((target) =>
+        target.id === targetId
+          ? { ...target, imageIds: uniqueStrings([...(target.imageIds ?? []), ...imageIds]) }
+          : target,
+      ),
+      files: state.files.map((file) => (imageIds.includes(file.id) ? { ...file, targetId } : file)),
+    }));
+  }, []);
 
-  const disassociateImages = useCallback(
-    (targetId: string, imageIds: string[]) => {
-      for (const imageId of imageIds) {
-        removeImageFromTarget(targetId, imageId);
-        const file = files.find((f) => f.id === imageId);
-        if (file && file.targetId === targetId) {
-          updateFile(imageId, { targetId: undefined });
-        }
-      }
-    },
-    [removeImageFromTarget, files, updateFile],
-  );
+  const disassociateImages = useCallback((targetId: string, imageIds: string[]) => {
+    commitTargetGraphMutation((state) => ({
+      ...state,
+      targets: state.targets.map((target) =>
+        target.id === targetId
+          ? {
+              ...target,
+              imageIds: target.imageIds.filter((imageId) => !imageIds.includes(imageId)),
+            }
+          : target,
+      ),
+      files: state.files.map((file) =>
+        imageIds.includes(file.id) && file.targetId === targetId
+          ? { ...file, targetId: undefined }
+          : file,
+      ),
+    }));
+  }, []);
 
   const updateEquipment = useCallback(
     (targetId: string, equipment: RecommendedEquipment) => {
-      setRecommendedEquipment(targetId, equipment);
+      updateTargetFields(targetId, { recommendedEquipment: equipment });
     },
-    [setRecommendedEquipment],
+    [updateTargetFields],
   );
 
-  const rateImage = useCallback(
-    (targetId: string, imageId: string, rating: number) => {
-      if (rating < 1 || rating > 5) return;
-      setImageRating(targetId, imageId, rating);
-    },
-    [setImageRating],
-  );
+  const rateImage = useCallback((targetId: string, imageId: string, rating: number) => {
+    if (rating < 1 || rating > 5) return;
+    commitTargetGraphMutation((state) => ({
+      ...state,
+      targets: state.targets.map((target) =>
+        target.id === targetId
+          ? {
+              ...target,
+              imageRatings: { ...(target.imageRatings ?? {}), [imageId]: rating },
+              updatedAt: Date.now(),
+            }
+          : target,
+      ),
+    }));
+  }, []);
 
-  const clearImageRating = useCallback(
-    (targetId: string, imageId: string) => {
-      removeImageRating(targetId, imageId);
-    },
-    [removeImageRating],
-  );
+  const clearImageRating = useCallback((targetId: string, imageId: string) => {
+    commitTargetGraphMutation((state) => ({
+      ...state,
+      targets: state.targets.map((target) => {
+        if (target.id !== targetId) return target;
+        const { [imageId]: _removed, ...rest } = target.imageRatings ?? {};
+        return {
+          ...target,
+          imageRatings: rest,
+          updatedAt: Date.now(),
+        };
+      }),
+    }));
+  }, []);
 
   const setTargetBestImage = useCallback(
     (targetId: string, imageId: string | undefined) => {
-      const target = targets.find((t) => t.id === targetId);
+      const target = targets.find((item) => item.id === targetId);
       if (!target) return;
       if (imageId && !target.imageIds.includes(imageId)) return;
-      setBestImage(targetId, imageId);
+      updateTargetFields(targetId, { bestImageId: imageId });
     },
-    [targets, setBestImage],
+    [targets, updateTargetFields],
   );
 
   const allTags = useMemo(() => {
@@ -547,39 +638,67 @@ export function useTargets() {
     renameTargetCascade,
 
     // Image management
-    addImageToTarget,
-    removeImageFromTarget,
+    addImageToTarget: (targetId: string, imageId: string) => associateImages(targetId, [imageId]),
+    removeImageFromTarget: (targetId: string, imageId: string) =>
+      disassociateImages(targetId, [imageId]),
     associateImages,
     disassociateImages,
     upsertAndLinkFileTarget,
 
     // Alias management
-    addAlias,
+    addAlias: (targetId: string, alias: string) => {
+      const trimmed = alias.trim();
+      if (!trimmed) return;
+      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
+      if (!target || target.aliases.includes(trimmed)) return;
+      updateTargetFields(targetId, { aliases: [...target.aliases, trimmed] });
+    },
 
     // Status management
-    setStatus,
+    setStatus: (targetId: string, status: TargetStatus) => updateTargetFields(targetId, { status }),
     mergeIntoTarget: mergeTargetsCascade,
     mergeTargetsCascade,
     reconcileTargetGraph,
 
     // Favorite & Pin
-    toggleFavorite,
-    togglePinned,
-    favoriteTargets: getFavoriteTargets(),
-    pinnedTargets: getPinnedTargets(),
+    toggleFavorite: (targetId: string) => {
+      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
+      if (!target) return;
+      updateTargetFields(targetId, { isFavorite: !target.isFavorite });
+    },
+    togglePinned: (targetId: string) => {
+      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
+      if (!target) return;
+      updateTargetFields(targetId, { isPinned: !target.isPinned });
+    },
+    favoriteTargets: targets.filter((target) => target.isFavorite),
+    pinnedTargets: targets.filter((target) => target.isPinned),
 
     // Tag management
-    addTag,
-    removeTag,
-    setTags,
-    getTargetsByTag,
+    addTag: (targetId: string, tag: string) => {
+      const trimmed = tag.trim();
+      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
+      if (!target || !trimmed || target.tags.includes(trimmed)) return;
+      updateTargetFields(targetId, { tags: [...target.tags, trimmed] });
+    },
+    removeTag: (targetId: string, tag: string) => {
+      const target = useTargetStore.getState().targets.find((item) => item.id === targetId);
+      if (!target) return;
+      updateTargetFields(targetId, { tags: target.tags.filter((item) => item !== tag) });
+    },
+    setTags: (targetId: string, tags: string[]) => updateTargetFields(targetId, { tags }),
+    getTargetsByTag: (tag: string) => targets.filter((target) => target.tags.includes(tag)),
 
     // Category management
-    setCategory,
-    getTargetsByCategory,
+    setCategory: (targetId: string, category: string | undefined) =>
+      updateTargetFields(targetId, { category }),
+    getTargetsByCategory: (category: string) =>
+      targets.filter((target) => target.category === category),
 
     // Group management
-    setGroup,
+    setGroup: (_targetId: string, _groupId: string | undefined) => {
+      // Deprecated API. Group membership is sourced from TargetGroup.targetIds only.
+    },
     addGroup,
     removeGroup,
     updateGroup,
@@ -589,7 +708,7 @@ export function useTargets() {
 
     // Equipment
     updateEquipment,
-    setRecommendedEquipment,
+    setRecommendedEquipment: updateEquipment,
 
     // Best image
     setBestImage: setTargetBestImage,
@@ -597,8 +716,8 @@ export function useTargets() {
     // Image rating
     rateImage,
     clearImageRating,
-    setImageRating,
-    removeImageRating,
+    setImageRating: rateImage,
+    removeImageRating: clearImageRating,
 
     // Scan & Auto-detect
     scanAndAutoDetect,

@@ -7,7 +7,7 @@ const makeSession = (overrides: Partial<ObservationSession> = {}): ObservationSe
   startTime: 1705352400000,
   endTime: 1705356000000,
   duration: 3600,
-  targets: ["M42"],
+  targetRefs: [{ name: "M42" }],
   imageIds: ["f1", "f2"],
   equipment: { telescope: "RC8", camera: "ASI294MM", filters: ["Ha"] },
   createdAt: Date.now(),

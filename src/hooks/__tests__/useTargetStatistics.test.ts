@@ -31,8 +31,24 @@ describe("useTargetStatistics", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     const targets = [
-      { id: "t1", isFavorite: true, isPinned: false, imageIds: ["f1"] },
-      { id: "t2", isFavorite: false, isPinned: true, imageIds: [] },
+      {
+        id: "t1",
+        name: "M31",
+        aliases: [],
+        tags: [],
+        isFavorite: true,
+        isPinned: false,
+        imageIds: ["f1"],
+      },
+      {
+        id: "t2",
+        name: "M42",
+        aliases: [],
+        tags: [],
+        isFavorite: false,
+        isPinned: true,
+        imageIds: [],
+      },
     ];
     const files = [{ id: "f1" }];
     useTargetStore.mockImplementation((selector: (s: { targets: unknown[] }) => unknown) =>
@@ -57,6 +73,7 @@ describe("useTargetStatistics", () => {
       expect.any(Array),
       expect.any(Array),
       12,
+      expect.anything(),
     );
     expect(targetStatsLib.getProgressOverview).toHaveBeenCalled();
     expect(result.current.quickStats).toEqual({

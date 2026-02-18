@@ -5,7 +5,9 @@
 
 import * as Calendar from "expo-calendar";
 import { Platform } from "react-native";
-import type { ObservationSession, ObservationPlan } from "../fits/types";
+import type { ObservationSession, ObservationPlan, Target } from "../fits/types";
+import { resolveTargetName } from "../targets/targetRefs";
+import { resolveSessionTargetNames } from "../sessions/sessionLinking";
 
 const APP_CALENDAR_TITLE = "Cobalt Observations";
 const APP_CALENDAR_COLOR = "#6366f1";
@@ -71,11 +73,12 @@ async function getDefaultCalendarSource(): Promise<Calendar.Source> {
 export async function syncSessionToCalendar(
   session: ObservationSession,
   reminderMinutes: number = 0,
+  targets: Target[] = [],
 ): Promise<string> {
   const calendarId = await getOrCreateAppCalendar();
   const eventId = await Calendar.createEventAsync(
     calendarId,
-    buildSessionEventDetails(session, reminderMinutes),
+    buildSessionEventDetails(session, reminderMinutes, targets),
   );
 
   return eventId;
@@ -84,9 +87,12 @@ export async function syncSessionToCalendar(
 /**
  * 创建观测计划事件到系统日历
  */
-export async function createPlanEvent(plan: ObservationPlan): Promise<string> {
+export async function createPlanEvent(
+  plan: ObservationPlan,
+  targets: Target[] = [],
+): Promise<string> {
   const calendarId = await getOrCreateAppCalendar();
-  const eventId = await Calendar.createEventAsync(calendarId, buildPlanEventDetails(plan));
+  const eventId = await Calendar.createEventAsync(calendarId, buildPlanEventDetails(plan, targets));
 
   return eventId;
 }
@@ -94,8 +100,12 @@ export async function createPlanEvent(plan: ObservationPlan): Promise<string> {
 /**
  * 更新观测计划事件
  */
-export async function updatePlanEvent(eventId: string, plan: ObservationPlan): Promise<void> {
-  await Calendar.updateEventAsync(eventId, buildPlanEventDetails(plan));
+export async function updatePlanEvent(
+  eventId: string,
+  plan: ObservationPlan,
+  targets: Target[] = [],
+): Promise<void> {
+  await Calendar.updateEventAsync(eventId, buildPlanEventDetails(plan, targets));
 }
 
 /**
@@ -146,8 +156,15 @@ export async function createEventViaSystemUI(
   return Calendar.createEventInCalendarAsync(eventData, presentationOptions);
 }
 
-export function buildPlanEventDetails(plan: ObservationPlan): Omit<Partial<Calendar.Event>, "id"> {
-  const title = `🔭 ${plan.title || plan.targetName}`;
+export function buildPlanEventDetails(
+  plan: ObservationPlan,
+  targets: Target[] = [],
+): Omit<Partial<Calendar.Event>, "id"> {
+  const resolvedName =
+    plan.targetId || plan.targetName
+      ? resolveTargetName({ targetId: plan.targetId, name: plan.targetName }, targets)
+      : plan.targetName;
+  const title = `🔭 ${plan.title || resolvedName}`;
   const notes = plan.notes ?? "";
   const location = plan.location
     ? (plan.location.placeName ??
@@ -174,11 +191,13 @@ export function buildPlanEventDetails(plan: ObservationPlan): Omit<Partial<Calen
 export function buildSessionEventDetails(
   session: ObservationSession,
   reminderMinutes: number = 0,
+  targets: Target[] = [],
 ): Omit<Partial<Calendar.Event>, "id"> {
   const startDate = new Date(session.startTime);
   const endDate = new Date(session.endTime);
-  const title = `🔭 ${session.targets.join(", ") || "Observation Session"}`;
-  const notes = buildSessionNotes(session);
+  const targetNames = resolveSessionTargetNames(session, targets);
+  const title = `🔭 ${targetNames.join(", ") || "Observation Session"}`;
+  const notes = buildSessionNotes(session, targets);
   const location = session.location
     ? (session.location.placeName ??
       session.location.city ??
@@ -201,11 +220,12 @@ export function buildSessionEventDetails(
   };
 }
 
-function buildSessionNotes(session: ObservationSession): string {
+function buildSessionNotes(session: ObservationSession, targets: Target[]): string {
   const lines: string[] = [];
+  const targetNames = resolveSessionTargetNames(session, targets);
 
-  if (session.targets.length > 0) {
-    lines.push(`Targets: ${session.targets.join(", ")}`);
+  if (targetNames.length > 0) {
+    lines.push(`Targets: ${targetNames.join(", ")}`);
   }
 
   const duration = session.duration;

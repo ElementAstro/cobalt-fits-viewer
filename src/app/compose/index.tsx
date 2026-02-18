@@ -253,6 +253,7 @@ export default function ComposeScreen() {
               showCrosshair={false}
               cursorX={-1}
               cursorY={-1}
+              interactionEnabled={false}
             />
           </View>
           <Text className="text-[9px] text-muted text-center mb-3">

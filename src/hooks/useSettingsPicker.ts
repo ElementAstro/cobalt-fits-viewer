@@ -21,6 +21,7 @@ export type SettingsPickerType =
   | "gallerySortOrder"
   | "stackMethod"
   | "alignmentMode"
+  | "stackingDetectionProfile"
   | "debounce"
   | "fileListStyle"
   | "converterFormat"

@@ -41,6 +41,23 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.logConsoleOutput).toBe(__DEV__);
       expect(s.logPersistEnabled).toBe(true);
     });
+
+    it("has stacking detection defaults", () => {
+      const s = useSettingsStore.getState();
+      expect(s.stackingDetectionProfile).toBe("balanced");
+      expect(s.stackingDetectSigmaThreshold).toBe(5);
+      expect(s.stackingDetectMaxStars).toBe(220);
+      expect(s.stackingDeblendNLevels).toBe(16);
+      expect(s.stackingAlignmentInlierThreshold).toBe(3);
+    });
+
+    it("has frame classification defaults", () => {
+      const s = useSettingsStore.getState();
+      expect(s.frameClassificationConfig.frameTypes.some((item) => item.key === "darkflat")).toBe(
+        true,
+      );
+      expect(s.reportFrameTypes).toEqual(["light"]);
+    });
   });
 
   // ===== Setter =====
@@ -237,6 +254,22 @@ describe("useSettingsStore — orientationLock", () => {
       expect(partial?.logPersistEnabled).toBe(useSettingsStore.getState().logPersistEnabled);
     });
 
+    it("partialize includes stacking advanced settings", () => {
+      const partialize = useSettingsStore.persist.getOptions().partialize;
+      const partial = partialize?.(useSettingsStore.getState()) as {
+        stackingDetectionProfile?: string;
+        stackingDetectSigmaThreshold?: number;
+        stackingDetectMaxStars?: number;
+        stackingDeblendNLevels?: number;
+        stackingAlignmentInlierThreshold?: number;
+      };
+      expect(partial.stackingDetectionProfile).toBe("balanced");
+      expect(partial.stackingDetectSigmaThreshold).toBe(5);
+      expect(partial.stackingDetectMaxStars).toBe(220);
+      expect(partial.stackingDeblendNLevels).toBe(16);
+      expect(partial.stackingAlignmentInlierThreshold).toBe(3);
+    });
+
     it("applySettingsPatch sanitizes out-of-range values", () => {
       useSettingsStore.getState().applySettingsPatch({
         thumbnailQuality: 1000,
@@ -254,6 +287,32 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.canvasMaxScale).toBeGreaterThanOrEqual(s.canvasMinScale);
       expect(s.canvasDoubleTapScale).toBeLessThanOrEqual(s.canvasMaxScale);
       expect(s.defaultWhitePoint).toBeGreaterThan(s.defaultBlackPoint);
+    });
+
+    it("applySettingsPatch sanitizes stacking detection numeric range and area consistency", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        stackingDetectSigmaThreshold: 200,
+        stackingDetectMaxStars: 99999,
+        stackingDetectMinArea: 500,
+        stackingDetectMaxArea: 40,
+        stackingDeblendNLevels: 0,
+        stackingDeblendMinContrast: -1,
+        stackingFilterFwhm: 99,
+        stackingMaxEllipticity: 5,
+        stackingRansacMaxIterations: 2,
+        stackingAlignmentInlierThreshold: 99,
+      });
+
+      const s = useSettingsStore.getState();
+      expect(s.stackingDetectSigmaThreshold).toBe(20);
+      expect(s.stackingDetectMaxStars).toBe(2000);
+      expect(s.stackingDetectMinArea).toBeLessThanOrEqual(s.stackingDetectMaxArea);
+      expect(s.stackingDeblendNLevels).toBe(1);
+      expect(s.stackingDeblendMinContrast).toBe(0);
+      expect(s.stackingFilterFwhm).toBe(15);
+      expect(s.stackingMaxEllipticity).toBe(1);
+      expect(s.stackingRansacMaxIterations).toBe(10);
+      expect(s.stackingAlignmentInlierThreshold).toBe(20);
     });
 
     it("applySettingsPatch accepts numeric-string payloads", () => {
@@ -393,6 +452,45 @@ describe("useSettingsStore — orientationLock", () => {
       expect(merged.themeColorMode).toBe("accent");
       expect(merged.accentColor).toBe("purple");
     });
+
+    it("sanitizes frame classification config and report scope", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        frameClassificationConfig: {
+          frameTypes: [{ key: "focus", label: "Focus" }],
+          rules: [
+            {
+              id: "rule-1",
+              enabled: true,
+              priority: 10,
+              target: "filename",
+              matchType: "contains",
+              pattern: "focus",
+              frameType: "focus",
+            },
+            {
+              id: "invalid-rule",
+              enabled: true,
+              priority: 10,
+              target: "filename",
+              matchType: "contains",
+              pattern: "x",
+              frameType: "missing",
+            },
+          ],
+        },
+        reportFrameTypes: ["focus", "missing"],
+      } as unknown as Record<string, unknown>);
+
+      const s = useSettingsStore.getState();
+      expect(s.frameClassificationConfig.frameTypes.some((item) => item.key === "darkflat")).toBe(
+        true,
+      );
+      expect(s.frameClassificationConfig.frameTypes.some((item) => item.key === "focus")).toBe(
+        true,
+      );
+      expect(s.frameClassificationConfig.rules).toHaveLength(1);
+      expect(s.reportFrameTypes).toEqual(["focus"]);
+    });
   });
 
   describe("runtime sync", () => {
@@ -448,6 +546,19 @@ describe("useSettingsStore — orientationLock", () => {
       store.setTargetSortBy("frames");
       store.setTargetSortOrder("desc");
       store.setDefaultComposePreset("sho");
+      store.setFrameClassificationConfig({
+        frameTypes: [
+          { key: "light", label: "Light", builtin: true },
+          { key: "dark", label: "Dark", builtin: true },
+          { key: "flat", label: "Flat", builtin: true },
+          { key: "bias", label: "Bias", builtin: true },
+          { key: "darkflat", label: "Dark Flat", builtin: true },
+          { key: "unknown", label: "Unknown", builtin: true },
+          { key: "focus", label: "Focus", builtin: false },
+        ],
+        rules: [],
+      });
+      store.setReportFrameTypes(["light", "focus"]);
 
       const s = useSettingsStore.getState();
       expect(s.defaultStretch).toBe("linear");
@@ -492,6 +603,10 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.targetSortBy).toBe("frames");
       expect(s.targetSortOrder).toBe("desc");
       expect(s.defaultComposePreset).toBe("sho");
+      expect(s.frameClassificationConfig.frameTypes.some((item) => item.key === "focus")).toBe(
+        true,
+      );
+      expect(s.reportFrameTypes).toEqual(["light", "focus"]);
     });
 
     it("covers remaining patch-backed numeric setters", () => {
@@ -544,6 +659,30 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.composeRedWeight).toBe(1.7);
       expect(s.composeGreenWeight).toBe(1.1);
       expect(s.composeBlueWeight).toBe(0.9);
+    });
+
+    it("resets frame classification defaults", () => {
+      const store = useSettingsStore.getState();
+      store.setFrameClassificationConfig({
+        frameTypes: [
+          { key: "light", label: "Light", builtin: true },
+          { key: "dark", label: "Dark", builtin: true },
+          { key: "flat", label: "Flat", builtin: true },
+          { key: "bias", label: "Bias", builtin: true },
+          { key: "darkflat", label: "Dark Flat", builtin: true },
+          { key: "unknown", label: "Unknown", builtin: true },
+          { key: "focus", label: "Focus", builtin: false },
+        ],
+        rules: [],
+      });
+      store.setReportFrameTypes(["focus"]);
+      store.resetFrameClassificationConfig();
+
+      const s = useSettingsStore.getState();
+      expect(s.frameClassificationConfig.frameTypes.some((item) => item.key === "focus")).toBe(
+        false,
+      );
+      expect(s.reportFrameTypes).toEqual(["light"]);
     });
 
     it("normalizes legacy targetSortBy value in applySettingsPatch", () => {

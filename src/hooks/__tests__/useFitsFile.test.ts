@@ -1,11 +1,15 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useFitsFile } from "../useFitsFile";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBuffer: jest.fn(),
+  loadFitsFromBufferAuto: jest.fn(),
   extractMetadata: jest.fn(),
   getHeaderKeywords: jest.fn(),
+  getCommentsAndHistory: jest.fn(),
   getImagePixels: jest.fn(),
+  getImageChannels: jest.fn(),
+  isRgbCube: jest.fn(() => ({ isRgb: false, width: 0, height: 0 })),
   getImageDimensions: jest.fn(),
   getHDUList: jest.fn(),
 }));
@@ -37,10 +41,13 @@ jest.mock("../../lib/logger", () => {
 });
 
 const parserLib = jest.requireMock("../../lib/fits/parser") as {
-  loadFitsFromBuffer: jest.Mock;
+  loadFitsFromBufferAuto: jest.Mock;
   extractMetadata: jest.Mock;
   getHeaderKeywords: jest.Mock;
+  getCommentsAndHistory: jest.Mock;
   getImagePixels: jest.Mock;
+  getImageChannels: jest.Mock;
+  isRgbCube: jest.Mock;
   getImageDimensions: jest.Mock;
   getHDUList: jest.Mock;
 };
@@ -57,16 +64,41 @@ const rasterLib = jest.requireMock("../../lib/image/rasterParser") as {
 };
 
 describe("useFitsFile", () => {
+  const classificationConfig = {
+    frameTypes: [
+      { key: "light", label: "Light", builtin: true },
+      { key: "dark", label: "Dark", builtin: true },
+      { key: "flat", label: "Flat", builtin: true },
+      { key: "bias", label: "Bias", builtin: true },
+      { key: "darkflat", label: "Dark Flat", builtin: true },
+      { key: "unknown", label: "Unknown", builtin: true },
+      { key: "focus", label: "Focus", builtin: false },
+    ],
+    rules: [
+      {
+        id: "focus-name",
+        enabled: true,
+        priority: 10,
+        target: "filename",
+        matchType: "contains",
+        pattern: "focus",
+        frameType: "focus",
+      },
+    ],
+  } as const;
+
   beforeEach(() => {
     jest.clearAllMocks();
+    useSettingsStore.setState({ frameClassificationConfig: classificationConfig as any });
     fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    parserLib.loadFitsFromBuffer.mockReturnValue({ fits: true });
+    parserLib.loadFitsFromBufferAuto.mockReturnValue({ fits: true });
     parserLib.extractMetadata.mockReturnValue({
       filename: "a.fits",
       filepath: "/tmp/a.fits",
       fileSize: 10,
     });
     parserLib.getHeaderKeywords.mockReturnValue([{ key: "SIMPLE", value: true }]);
+    parserLib.getCommentsAndHistory.mockReturnValue({ comments: [], history: [] });
     parserLib.getHDUList.mockReturnValue([{ index: 0, type: "image", hasData: true }]);
     parserLib.getImageDimensions.mockReturnValue({
       width: 2,
@@ -83,7 +115,13 @@ describe("useFitsFile", () => {
     rasterLib.parseRasterFromBuffer.mockReturnValue({
       width: 2,
       height: 2,
+      rgba: new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]),
       pixels: new Float32Array([1, 2, 3, 4]),
+      channels: {
+        r: new Float32Array([1, 0, 0, 1]),
+        g: new Float32Array([0, 1, 0, 1]),
+        b: new Float32Array([0, 0, 1, 1]),
+      },
     });
     rasterLib.extractRasterMetadata.mockReturnValue({
       filename: "a.png",
@@ -107,7 +145,19 @@ describe("useFitsFile", () => {
         sourceFormat: "fits",
       }),
     );
+    expect(parserLib.extractMetadata).toHaveBeenCalledWith(
+      { fits: true },
+      expect.objectContaining({
+        filename: "a.fits",
+        filepath: "/tmp/a.fits",
+        fileSize: 10,
+      }),
+      expect.objectContaining({
+        rules: expect.arrayContaining([expect.objectContaining({ id: "focus-name" })]),
+      }),
+    );
     expect(result.current.headers).toEqual([{ key: "SIMPLE", value: true }]);
+    expect(result.current.sourceBuffer).toBeInstanceOf(ArrayBuffer);
 
     await act(async () => {
       await result.current.loadFrame(3, 0);
@@ -120,6 +170,7 @@ describe("useFitsFile", () => {
     expect(result.current.fits).toBeNull();
     expect(result.current.metadata).toBeNull();
     expect(result.current.pixels).toBeNull();
+    expect(result.current.sourceBuffer).toBeNull();
   });
 
   it("loads raster from path and buffer branches", async () => {
@@ -134,10 +185,22 @@ describe("useFitsFile", () => {
       await result.current.loadFromPath("/tmp/a.png", "a.png", 10);
     });
     expect(result.current.fits).toBeNull();
+    expect(result.current.rgbChannels).not.toBeNull();
     expect(result.current.metadata).toEqual(
       expect.objectContaining({
         sourceType: "raster",
         sourceFormat: "png",
+      }),
+    );
+    expect(rasterLib.extractRasterMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "a.png",
+        filepath: "/tmp/a.png",
+        fileSize: 10,
+      }),
+      expect.objectContaining({ width: 2, height: 2 }),
+      expect.objectContaining({
+        rules: expect.arrayContaining([expect.objectContaining({ id: "focus-name" })]),
       }),
     );
 

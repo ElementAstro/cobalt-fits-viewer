@@ -69,7 +69,7 @@ function makeSession(overrides: Partial<ObservationSession> = {}): ObservationSe
     startTime: 1,
     endTime: 2,
     duration: 1,
-    targets: [],
+    targetRefs: [],
     imageIds: [],
     equipment: {},
     createdAt: 1,
@@ -91,7 +91,9 @@ describe("useTargets cascade actions", () => {
     });
     useFitsStore.setState({ files: [makeFile({ id: "f1", targetId: "t1" })] });
     useTargetGroupStore.setState({ groups: [makeGroup({ id: "g1", targetIds: ["t1"] })] });
-    useSessionStore.setState({ sessions: [makeSession({ id: "s1", targets: ["M31"] })] });
+    useSessionStore.setState({
+      sessions: [makeSession({ id: "s1", targetRefs: [{ name: "M31", targetId: "t1" }] })],
+    });
 
     const { result } = renderHook(() => useTargets());
     act(() => {
@@ -103,7 +105,7 @@ describe("useTargets cascade actions", () => {
       useFitsStore.getState().files.find((file) => file.id === "f1")?.targetId,
     ).toBeUndefined();
     expect(useTargetGroupStore.getState().groups[0].targetIds).toEqual([]);
-    expect(useSessionStore.getState().sessions[0].targets).toEqual([]);
+    expect(useSessionStore.getState().sessions[0].targetRefs).toEqual([]);
   });
 
   it("upsertAndLinkFileTarget keeps file.targetId and target.imageIds in sync", () => {
@@ -139,7 +141,9 @@ describe("useTargets cascade actions", () => {
       groups: [makeGroup({ id: "g1", targetIds: ["source"] })],
     });
     useSessionStore.setState({
-      sessions: [makeSession({ id: "s1", targets: ["Andromeda"] })],
+      sessions: [
+        makeSession({ id: "s1", targetRefs: [{ name: "Andromeda", targetId: "source" }] }),
+      ],
     });
 
     const { result } = renderHook(() => useTargets());
@@ -152,7 +156,9 @@ describe("useTargets cascade actions", () => {
     expect(targets.find((target) => target.id === "dest")?.imageIds.sort()).toEqual(["f1", "f2"]);
     expect(useFitsStore.getState().files.find((file) => file.id === "f2")?.targetId).toBe("dest");
     expect(useTargetGroupStore.getState().groups[0].targetIds).toEqual(["dest"]);
-    expect(useSessionStore.getState().sessions[0].targets).toEqual(["M31"]);
+    expect(useSessionStore.getState().sessions[0].targetRefs).toEqual([
+      { targetId: "dest", name: "M31" },
+    ]);
   });
 
   it("renameTargetCascade updates session target names", () => {
@@ -160,7 +166,7 @@ describe("useTargets cascade actions", () => {
       targets: [makeTarget({ id: "t1", name: "Old Name" })],
     });
     useSessionStore.setState({
-      sessions: [makeSession({ id: "s1", targets: ["Old Name"] })],
+      sessions: [makeSession({ id: "s1", targetRefs: [{ name: "Old Name", targetId: "t1" }] })],
     });
 
     const { result } = renderHook(() => useTargets());
@@ -169,7 +175,9 @@ describe("useTargets cascade actions", () => {
     });
 
     expect(useTargetStore.getState().targets[0].name).toBe("New Name");
-    expect(useSessionStore.getState().sessions[0].targets).toEqual(["New Name"]);
+    expect(useSessionStore.getState().sessions[0].targetRefs).toEqual([
+      { targetId: "t1", name: "New Name" },
+    ]);
   });
 
   it("removeTargetCascade is a no-op for unknown target id", () => {

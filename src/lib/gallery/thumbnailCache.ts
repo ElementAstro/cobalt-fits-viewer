@@ -43,6 +43,31 @@ export function hasThumbnail(fileId: string): boolean {
 }
 
 /**
+ * 解析可显示的缩略图 URI。
+ * 优先使用仍然存在的已保存 URI，若不可用则回退到统一缓存路径。
+ */
+export function resolveThumbnailUri(fileId: string, thumbnailUri?: string): string | null {
+  if (thumbnailUri) {
+    try {
+      if (/^https?:\/\//i.test(thumbnailUri)) {
+        return thumbnailUri;
+      }
+      const persistedThumb = new File(thumbnailUri);
+      if (persistedThumb.exists) {
+        return persistedThumb.uri;
+      }
+    } catch {
+      // Ignore invalid persisted URI and fall back to canonical cache path.
+    }
+  }
+
+  if (hasThumbnail(fileId)) {
+    return getThumbnailPath(fileId);
+  }
+  return null;
+}
+
+/**
  * 清除所有缩略图缓存
  */
 export function clearThumbnailCache(): void {
@@ -143,6 +168,30 @@ export function generateAndSaveThumbnail(
     return thumbPath;
   } catch (err) {
     Logger.warn(LOG_TAGS.Thumbnail, `Thumbnail generation failed for ${fileId}`, err);
+    return null;
+  }
+}
+
+/**
+ * 将外部生成的缩略图文件复制到统一缓存路径。
+ * 主要用于视频缩略图（expo-video-thumbnails）。
+ */
+export function copyThumbnailToCache(fileId: string, sourceUri: string): string | null {
+  try {
+    ensureThumbnailDir();
+    const targetPath = getThumbnailPath(fileId);
+    const src = new File(sourceUri);
+    if (!src.exists) return null;
+
+    const target = new File(targetPath);
+    if (target.exists) {
+      target.delete();
+    }
+
+    src.copy(target);
+    return targetPath;
+  } catch (err) {
+    Logger.warn(LOG_TAGS.Thumbnail, `Copy thumbnail failed for ${fileId}`, err);
     return null;
   }
 }

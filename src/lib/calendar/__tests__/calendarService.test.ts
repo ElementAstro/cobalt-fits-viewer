@@ -69,7 +69,7 @@ const session: ObservationSession = {
   startTime: new Date("2024-01-01T20:00:00.000Z").getTime(),
   endTime: new Date("2024-01-01T22:00:00.000Z").getTime(),
   duration: 7200,
-  targets: ["M42"],
+  targetRefs: [{ name: "M42" }],
   imageIds: ["f1", "f2"],
   equipment: { telescope: "RC8", camera: "ASI2600", filters: ["Ha"] },
   notes: "clear sky",

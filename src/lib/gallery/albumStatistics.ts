@@ -10,7 +10,7 @@ import type { FitsMetadata, Album, AlbumStatistics, FrameType } from "../fits/ty
 export function calculateAlbumStatistics(album: Album, files: FitsMetadata[]): AlbumStatistics {
   const albumFiles = files.filter((f) => album.imageIds.includes(f.id));
 
-  const frameBreakdown = { light: 0, dark: 0, flat: 0, bias: 0, unknown: 0 };
+  const frameBreakdown: Record<string, number> = {};
   const filterBreakdown: Record<string, number> = {};
   let totalExposure = 0;
   let totalFileSize = 0;
@@ -19,7 +19,7 @@ export function calculateAlbumStatistics(album: Album, files: FitsMetadata[]): A
 
   for (const file of albumFiles) {
     // Frame type breakdown
-    frameBreakdown[file.frameType]++;
+    frameBreakdown[file.frameType] = (frameBreakdown[file.frameType] ?? 0) + 1;
 
     // Filter breakdown
     const filter = file.filter ?? "No Filter";
@@ -73,12 +73,13 @@ export function formatFileSize(bytes: number): string {
  * 获取帧类型的显示名称
  */
 export function getFrameTypeLabel(type: FrameType): string {
-  const labels: Record<FrameType, string> = {
+  const labels: Record<string, string> = {
     light: "Light",
     dark: "Dark",
     flat: "Flat",
     bias: "Bias",
+    darkflat: "Dark Flat",
     unknown: "Unknown",
   };
-  return labels[type];
+  return labels[type] ?? type;
 }

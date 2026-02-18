@@ -1,9 +1,11 @@
-import { memo, useCallback } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { View, Text, Pressable, useWindowDimensions } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
 import { Skeleton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
+import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 interface ThumbnailGridProps {
@@ -51,6 +53,14 @@ const ThumbnailItem = memo(function ThumbnailItem({
   showFilter?: boolean;
   showExposure?: boolean;
 }) {
+  const thumbnailUri = useMemo(
+    () => resolveThumbnailUri(file.id, file.thumbnailUri),
+    [file.id, file.thumbnailUri],
+  );
+  const isVideo = file.mediaKind === "video" || file.sourceType === "video";
+  const duration = formatVideoDuration(file.durationMs);
+  const resolution = formatVideoResolution(file.videoWidth, file.videoHeight);
+
   return (
     <Pressable
       style={{ width: size, height: size, padding: 3 }}
@@ -68,9 +78,9 @@ const ThumbnailItem = memo(function ThumbnailItem({
           isSelected ? "border-2 border-success" : ""
         }`}
       >
-        {file.thumbnailUri ? (
+        {thumbnailUri ? (
           <Image
-            source={{ uri: file.thumbnailUri }}
+            source={{ uri: thumbnailUri }}
             style={{ width: "100%", height: "100%" }}
             contentFit="cover"
             cachePolicy="memory-disk"
@@ -83,6 +93,17 @@ const ThumbnailItem = memo(function ThumbnailItem({
               <Ionicons name="image-outline" size={28} color={mutedColor} />
             </View>
           </Skeleton>
+        )}
+
+        {isVideo && (
+          <>
+            <View className="absolute right-1 top-1 rounded-full bg-black/60 p-1">
+              <Ionicons name="play" size={10} color="#fff" />
+            </View>
+            <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
+              <Text className="text-[8px] font-semibold text-white">{duration}</Text>
+            </View>
+          </>
         )}
 
         {/* Overlay info */}
@@ -99,6 +120,8 @@ const ThumbnailItem = memo(function ThumbnailItem({
                   showObject && file.object,
                   showFilter && file.filter,
                   showExposure && file.exptime != null && `${file.exptime}s`,
+                  isVideo && "VIDEO",
+                  isVideo && resolution,
                 ]
                   .filter(Boolean)
                   .join(" · ")}

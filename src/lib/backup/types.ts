@@ -2,7 +2,15 @@
  * 云备份相关类型定义
  */
 
-import type { FitsMetadata, Album, Target, ObservationSession } from "../fits/types";
+import type {
+  FitsMetadata,
+  Album,
+  Target,
+  ObservationSession,
+  TargetGroup,
+  ObservationPlan,
+  ObservationLogEntry,
+} from "../fits/types";
 
 // ===== 云服务提供商 =====
 export type CloudProvider = "google-drive" | "onedrive" | "dropbox" | "webdav";
@@ -17,7 +25,10 @@ export interface BackupManifest {
   files: FitsMetadata[];
   albums: Album[];
   targets: Target[];
+  targetGroups: TargetGroup[];
   sessions: ObservationSession[];
+  plans: ObservationPlan[];
+  logEntries: ObservationLogEntry[];
   settings: Record<string, unknown>;
 }
 
@@ -148,4 +159,4 @@ export const BACKUP_DIR = "cobalt-backup";
 export const MANIFEST_FILENAME = "manifest.json";
 export const FITS_SUBDIR = "fits_files";
 export const THUMBNAIL_SUBDIR = "thumbnails";
-export const MANIFEST_VERSION = 1;
+export const MANIFEST_VERSION = 3;

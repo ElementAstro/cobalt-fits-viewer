@@ -12,7 +12,31 @@ const mockExportLocalBackup = jest.fn();
 const mockImportLocalBackup = jest.fn();
 const mockPreviewLocalBackup = jest.fn();
 const mockGetNetworkStateAsync = jest.fn();
-const mockReconcileTargetGraphStores = jest.fn();
+const mockReconcileAllStores = jest.fn();
+const mockApplySettingsPatch = jest.fn();
+const mockSettingsState: Record<string, unknown> = {
+  applySettingsPatch: mockApplySettingsPatch,
+  defaultStretch: "asinh",
+  defaultColormap: "grayscale",
+  defaultGridColumns: 3,
+  thumbnailQuality: 80,
+  thumbnailSize: 256,
+  defaultExportFormat: "png",
+  stackingDetectionProfile: "accurate",
+  stackingDetectSigmaThreshold: 4.5,
+  stackingDetectMaxStars: 300,
+  stackingDetectMinArea: 3,
+  stackingDetectMaxArea: 900,
+  stackingDetectBorderMargin: 8,
+  stackingBackgroundMeshSize: 48,
+  stackingDeblendNLevels: 32,
+  stackingDeblendMinContrast: 0.05,
+  stackingFilterFwhm: 2.0,
+  stackingMaxFwhm: 10,
+  stackingMaxEllipticity: 0.55,
+  stackingRansacMaxIterations: 180,
+  stackingAlignmentInlierThreshold: 2.5,
+};
 
 jest.mock("../../lib/storage", () => ({
   zustandMMKVStorage: {
@@ -30,9 +54,7 @@ jest.mock("uniwind", () => ({
 
 jest.mock("../../stores/useSettingsStore", () => ({
   useSettingsStore: {
-    getState: () => ({
-      applySettingsPatch: jest.fn(),
-    }),
+    getState: () => mockSettingsState,
   },
 }));
 
@@ -52,8 +74,8 @@ jest.mock("expo-network", () => ({
   getNetworkStateAsync: (...args: unknown[]) => mockGetNetworkStateAsync(...args),
 }));
 
-jest.mock("../useTargets", () => ({
-  reconcileTargetGraphStores: (...args: unknown[]) => mockReconcileTargetGraphStores(...args),
+jest.mock("../../lib/targets/targetIntegrity", () => ({
+  reconcileAllStores: (...args: unknown[]) => mockReconcileAllStores(...args),
 }));
 
 jest.mock("../../lib/targets/targetRelations", () => ({
@@ -222,6 +244,7 @@ const makeAlbum = (id: string, overrides: Partial<Album> = {}): Album =>
 describe("useBackup consistency reconciliation", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockApplySettingsPatch.mockClear();
 
     useBackupStore.setState({
       connections: [],
@@ -278,7 +301,7 @@ describe("useBackup consistency reconciliation", () => {
     expect(response).toEqual({ success: true });
     expect(mockPerformRestore).toHaveBeenCalled();
     expect(useFitsStore.getState().files[0].albumIds).toEqual(["a"]);
-    expect(mockReconcileTargetGraphStores).toHaveBeenCalled();
+    expect(mockReconcileAllStores).toHaveBeenCalled();
   });
 
   it("localImport syncs file.albumIds from imported albums", async () => {
@@ -301,7 +324,7 @@ describe("useBackup consistency reconciliation", () => {
     expect(response).toEqual({ success: true });
     expect(mockImportLocalBackup).toHaveBeenCalled();
     expect(useFitsStore.getState().files[0].albumIds).toEqual(["b"]);
-    expect(mockReconcileTargetGraphStores).toHaveBeenCalled();
+    expect(mockReconcileAllStores).toHaveBeenCalled();
   });
 
   it("backup returns no internet error when offline", async () => {
@@ -318,5 +341,53 @@ describe("useBackup consistency reconciliation", () => {
 
     expect(response).toEqual({ success: false, error: "No internet connection" });
     expect(mockPerformBackup).not.toHaveBeenCalled();
+  });
+
+  it("backup exports advanced stacking settings in data source", async () => {
+    mockPerformBackup.mockImplementation(async (_provider, dataSource) => {
+      const settings = (dataSource as { getSettings: () => Record<string, unknown> }).getSettings();
+      expect(settings.stackingDetectionProfile).toBe("accurate");
+      expect(settings.stackingDetectSigmaThreshold).toBe(4.5);
+      expect(settings.stackingDeblendNLevels).toBe(32);
+      expect(settings.stackingAlignmentInlierThreshold).toBe(2.5);
+    });
+
+    const { result } = renderHook(() => useBackup());
+    let response: { success: boolean; error?: string } | undefined;
+
+    await act(async () => {
+      response = await result.current.backup("webdav");
+    });
+
+    expect(response).toEqual({ success: true });
+    expect(mockPerformBackup).toHaveBeenCalled();
+  });
+
+  it("restore applies advanced stacking settings through whitelist", async () => {
+    mockPerformRestore.mockImplementation(async (_provider, restoreTarget) => {
+      (restoreTarget as { setSettings: (settings: Record<string, unknown>) => void }).setSettings({
+        stackingDetectionProfile: "fast",
+        stackingDetectSigmaThreshold: 6.2,
+        stackingDeblendMinContrast: 0.12,
+        stackingRansacMaxIterations: 220,
+      });
+    });
+
+    const { result } = renderHook(() => useBackup());
+    let response: { success: boolean; error?: string } | undefined;
+
+    await act(async () => {
+      response = await result.current.restore("webdav");
+    });
+
+    expect(response).toEqual({ success: true });
+    expect(mockApplySettingsPatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stackingDetectionProfile: "fast",
+        stackingDetectSigmaThreshold: 6.2,
+        stackingDeblendMinContrast: 0.12,
+        stackingRansacMaxIterations: 220,
+      }),
+    );
   });
 });

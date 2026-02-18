@@ -106,6 +106,7 @@ jest.mock("react-native-gesture-handler", () => {
       minPointers: () => builder,
       maxPointers: () => builder,
       minDistance: () => builder,
+      maxDistance: () => builder,
       minDuration: () => builder,
       numberOfTaps: (count: number) => {
         builder.config.numberOfTaps = count;
@@ -190,6 +191,32 @@ describe("FitsCanvas", () => {
     expect(transform?.translateY).toBeCloseTo(-450, 6);
   });
 
+  it("supports immediate transform updates without animation options", () => {
+    const ref = React.createRef<FitsCanvasHandle>();
+    const view = render(
+      <FitsCanvas
+        ref={ref}
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+      />,
+    );
+    triggerLayout(view, 200, 100);
+
+    act(() => {
+      ref.current?.setTransform(9999, -9999, 99, { animated: false });
+    });
+
+    const transform = ref.current?.getTransform();
+    expect(transform?.scale).toBe(10);
+    expect(transform?.translateX).toBeCloseTo(900, 6);
+    expect(transform?.translateY).toBeCloseTo(-450, 6);
+  });
+
   it("notifies layout-only changes through onTransformChange", () => {
     const onTransformChange = jest.fn();
     const view = render(
@@ -218,6 +245,35 @@ describe("FitsCanvas", () => {
         canvasHeight: 200,
       }),
     );
+  });
+
+  it("reclamps translation when canvas layout changes", () => {
+    const ref = React.createRef<FitsCanvasHandle>();
+    const view = render(
+      <FitsCanvas
+        ref={ref}
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+      />,
+    );
+
+    triggerLayout(view, 400, 200);
+
+    act(() => {
+      ref.current?.setTransform(200, 100, 2, { animated: false });
+    });
+
+    triggerLayout(view, 200, 100);
+
+    const transform = ref.current?.getTransform();
+    expect(transform?.scale).toBe(2);
+    expect(transform?.translateX).toBeCloseTo(100, 6);
+    expect(transform?.translateY).toBeCloseTo(50, 6);
   });
 
   it("maps single-tap pixel from render space back to source space", () => {

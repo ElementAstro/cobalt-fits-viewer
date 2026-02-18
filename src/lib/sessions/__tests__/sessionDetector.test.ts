@@ -79,7 +79,7 @@ describe("detectSessions", () => {
       makeFile("f3", "2024-01-15T23:00:00Z", { object: "M43" }),
     ];
     const sessions = detectSessions(files);
-    expect(sessions[0].targets).toEqual(["M42", "M43"]);
+    expect(sessions[0].targetRefs).toEqual([{ name: "M42" }, { name: "M43" }]);
   });
 
   it("extracts equipment from files", () => {
@@ -202,7 +202,7 @@ const makeSession = (overrides: Partial<ObservationSession> = {}): ObservationSe
   startTime: 1705356000000,
   endTime: 1705363200000,
   duration: 7200,
-  targets: ["M42"],
+  targetRefs: [{ name: "M42" }],
   imageIds: ["img-1", "img-2", "img-3", "img-4"],
   equipment: {},
   createdAt: Date.now(),

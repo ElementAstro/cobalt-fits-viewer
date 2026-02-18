@@ -36,10 +36,39 @@ export type ColormapType =
   | "blue";
 
 // ===== 帧类型 =====
-export type FrameType = "light" | "dark" | "flat" | "bias" | "unknown";
+export type BuiltinFrameType = "light" | "dark" | "flat" | "bias" | "darkflat" | "unknown";
+export type FrameType = string;
+export type FrameTypeSource = "header" | "filename" | "rule" | "manual" | "fallback";
+
+export interface FrameTypeDefinition {
+  key: string;
+  label: string;
+  builtin?: boolean;
+}
+
+export type FrameClassificationRuleTarget = "header" | "filename";
+export type FrameClassificationRuleMatchType = "exact" | "contains" | "regex";
+export type FrameClassificationRuleHeaderField = "IMAGETYP" | "FRAME" | "ANY";
+
+export interface FrameClassificationRule {
+  id: string;
+  enabled: boolean;
+  priority: number;
+  target: FrameClassificationRuleTarget;
+  headerField?: FrameClassificationRuleHeaderField;
+  matchType: FrameClassificationRuleMatchType;
+  pattern: string;
+  caseSensitive?: boolean;
+  frameType: string;
+}
+
+export interface FrameClassificationConfig {
+  frameTypes: FrameTypeDefinition[];
+  rules: FrameClassificationRule[];
+}
 
 // ===== 文件来源类型 =====
-export type ImageSourceType = "fits" | "raster";
+export type ImageSourceType = "fits" | "raster" | "video";
 export type ImageSourceFormat =
   | "fits"
   | "fit"
@@ -55,6 +84,13 @@ export type ImageSourceFormat =
   | "gif"
   | "heic"
   | "avif"
+  | "mp4"
+  | "mov"
+  | "m4v"
+  | "webm"
+  | "mkv"
+  | "avi"
+  | "3gp"
   | "unknown";
 
 // ===== HDU 数据类型 =====
@@ -89,6 +125,9 @@ export interface FitsMetadata {
 
   // 帧类型
   frameType: FrameType;
+  frameTypeSource?: FrameTypeSource;
+  imageTypeRaw?: string;
+  frameHeaderRaw?: string;
 
   // 观测信息
   object?: string;
@@ -116,6 +155,27 @@ export interface FitsMetadata {
   sessionId?: string;
   thumbnailUri?: string;
   hash?: string;
+  mediaKind?: "image" | "video";
+  durationMs?: number;
+  frameRate?: number;
+  videoWidth?: number;
+  videoHeight?: number;
+  videoCodec?: string;
+  audioCodec?: string;
+  bitrateKbps?: number;
+  rotationDeg?: number;
+  hasAudioTrack?: boolean;
+  thumbnailAtMs?: number;
+  derivedFromId?: string;
+  processingTag?:
+    | "trim"
+    | "split"
+    | "compress"
+    | "transcode"
+    | "merge"
+    | "extract-audio"
+    | "mute"
+    | "cover";
 
   // 质量评分
   qualityScore?: number; // 0-100
@@ -128,6 +188,71 @@ export interface FitsMetadata {
 
   // Viewer per-file preset
   viewerPreset?: ViewerPreset;
+
+  // Non-destructive editor recipe
+  editorRecipe?: ProcessingPipelineSnapshot;
+}
+
+export type ProcessingExecutionMode = "preview" | "full";
+
+export type ProcessingOperationId =
+  | "rotate90cw"
+  | "rotate90ccw"
+  | "rotate180"
+  | "flipH"
+  | "flipV"
+  | "invert"
+  | "blur"
+  | "sharpen"
+  | "denoise"
+  | "histogramEq"
+  | "crop"
+  | "brightness"
+  | "contrast"
+  | "gamma"
+  | "levels"
+  | "rotateArbitrary"
+  | "backgroundExtract"
+  | "mtf"
+  | "starMask"
+  | "binarize"
+  | "rescale"
+  | "clahe"
+  | "curves"
+  | "morphology"
+  | "hdr"
+  | "rangeMask"
+  | "pixelMath"
+  | "deconvolution"
+  | "dbe"
+  | "multiscaleDenoise"
+  | "localContrast"
+  | "starReduction"
+  | "deconvolutionAuto"
+  | "scnr"
+  | "colorCalibration"
+  | "saturation"
+  | "colorBalance";
+
+export type ProcessingParamPrimitive = number | string | boolean;
+
+export type ProcessingParamValue =
+  | ProcessingParamPrimitive
+  | Array<{ x: number; y: number }>
+  | number[]
+  | string[];
+
+export interface ProcessingNode {
+  id: string;
+  operationId: ProcessingOperationId;
+  enabled: boolean;
+  params: Record<string, ProcessingParamValue>;
+}
+
+export interface ProcessingPipelineSnapshot {
+  version: number;
+  savedAt: number;
+  nodes: ProcessingNode[];
 }
 
 export interface TrashedFitsRecord {
@@ -279,13 +404,7 @@ export interface SmartAlbumRule {
 export interface AlbumStatistics {
   albumId: string;
   totalExposure: number;
-  frameBreakdown: {
-    light: number;
-    dark: number;
-    flat: number;
-    bias: number;
-    unknown: number;
-  };
+  frameBreakdown: Record<string, number>;
   dateRange: [string, string] | null;
   filterBreakdown: Record<string, number>;
   totalFileSize: number;
@@ -335,6 +454,10 @@ export interface Target {
   tags: string[];
   isFavorite: boolean;
   isPinned: boolean;
+  /**
+   * @deprecated Group membership is now sourced from TargetGroup.targetIds only.
+   * Kept for migration compatibility reads.
+   */
   groupId?: string;
   ra?: number;
   dec?: number;
@@ -374,6 +497,11 @@ export type TargetType =
 
 export type TargetStatus = "planned" | "acquiring" | "completed" | "processed";
 
+export interface TargetRef {
+  targetId?: string;
+  name: string;
+}
+
 // ===== 观测会话 =====
 export interface ObservationSession {
   id: string;
@@ -381,7 +509,7 @@ export interface ObservationSession {
   startTime: number;
   endTime: number;
   duration: number; // seconds
-  targets: string[];
+  targetRefs: TargetRef[];
   imageIds: string[];
   equipment: SessionEquipment;
   location?: GeoLocation;
@@ -399,6 +527,7 @@ export interface ObservationSession {
 export interface ObservationPlan {
   id: string;
   title: string;
+  targetId?: string;
   targetName: string;
   startDate: string; // ISO string
   endDate: string; // ISO string
@@ -435,13 +564,36 @@ export interface ObservationLogEntry {
 }
 
 // ===== 格式转换 =====
-export type ExportFormat = "png" | "jpeg" | "webp" | "tiff" | "bmp";
+export type ExportFormat = "png" | "jpeg" | "webp" | "tiff" | "bmp" | "fits";
+
+export type FitsCompression = "none" | "gzip";
+export type FitsExportMode = "scientific" | "rendered";
+export type FitsColorLayout = "mono2d" | "rgbCube3d";
+
+export interface FitsTargetOptions {
+  mode: FitsExportMode;
+  compression: FitsCompression;
+  bitpix: 8 | 16 | 32 | -32 | -64;
+  colorLayout: FitsColorLayout;
+  preserveOriginalHeader: boolean;
+  preserveWcs: boolean;
+}
+
+export const DEFAULT_FITS_TARGET_OPTIONS: FitsTargetOptions = {
+  mode: "scientific",
+  compression: "none",
+  bitpix: -32,
+  colorLayout: "rgbCube3d",
+  preserveOriginalHeader: true,
+  preserveWcs: true,
+};
 
 export interface ConvertOptions {
   format: ExportFormat;
   quality: number; // 1-100 for JPEG/WebP
   bitDepth: 8 | 16 | 32; // for TIFF
   dpi: number;
+  fits: FitsTargetOptions;
   stretch: StretchType;
   colormap: ColormapType;
   blackPoint: number;
@@ -470,6 +622,7 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       quality: 85,
       bitDepth: 8,
       dpi: 72,
+      fits: DEFAULT_FITS_TARGET_OPTIONS,
       stretch: "asinh",
       colormap: "grayscale",
       blackPoint: 0,
@@ -490,6 +643,7 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       quality: 100,
       bitDepth: 8,
       dpi: 300,
+      fits: DEFAULT_FITS_TARGET_OPTIONS,
       stretch: "asinh",
       colormap: "grayscale",
       blackPoint: 0,
@@ -510,6 +664,7 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       quality: 100,
       bitDepth: 16,
       dpi: 72,
+      fits: DEFAULT_FITS_TARGET_OPTIONS,
       stretch: "linear",
       colormap: "grayscale",
       blackPoint: 0,
@@ -553,7 +708,7 @@ export type BatchTaskStatus = "pending" | "running" | "completed" | "failed" | "
 
 export interface BatchTask {
   id: string;
-  type: "convert" | "export" | "stack";
+  type: "convert" | "export" | "stack" | "video-process";
   status: BatchTaskStatus;
   progress: number; // 0-100
   total: number;

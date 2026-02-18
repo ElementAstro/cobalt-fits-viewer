@@ -5,7 +5,7 @@ jest.mock("../../lib/utils/fileManager", () => ({
   readFileAsArrayBuffer: jest.fn(),
 }));
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBuffer: jest.fn(),
+  loadFitsFromBufferAuto: jest.fn(),
   getImagePixels: jest.fn(),
   getImageDimensions: jest.fn(),
 }));
@@ -28,13 +28,27 @@ jest.mock("../../lib/stacking/calibration", () => ({
   createMasterFlat: jest.fn((frames: Float32Array[]) => frames[0]),
 }));
 jest.mock("../../lib/stacking/alignment", () => ({
-  alignFrame: jest.fn((ref: Float32Array, cur: Float32Array) => ({
+  alignFrameAsync: jest.fn(async (ref: Float32Array, cur: Float32Array) => ({
     aligned: cur,
-    transform: { matchedStars: 10, rmsError: 0.8 },
+    transform: {
+      matchedStars: 10,
+      rmsError: 0.8,
+      detectionCounts: { ref: 12, target: 11 },
+      fallbackUsed: "none",
+    },
   })),
 }));
 jest.mock("../../lib/stacking/frameQuality", () => ({
-  evaluateFrameQuality: jest.fn(() => ({ score: 0.9 })),
+  evaluateFrameQualityAsync: jest.fn(async () => ({
+    backgroundMedian: 0,
+    backgroundNoise: 1,
+    snr: 10,
+    starCount: 20,
+    medianFwhm: 2.3,
+    roundness: 0.9,
+    score: 90,
+    stars: [],
+  })),
   qualityToWeights: jest.fn(() => [0.7, 0.3]),
 }));
 jest.mock("../../lib/logger", () => {
@@ -55,7 +69,7 @@ const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
   readFileAsArrayBuffer: jest.Mock;
 };
 const parserLib = jest.requireMock("../../lib/fits/parser") as {
-  loadFitsFromBuffer: jest.Mock;
+  loadFitsFromBufferAuto: jest.Mock;
   getImagePixels: jest.Mock;
   getImageDimensions: jest.Mock;
 };
@@ -69,18 +83,18 @@ const converterLib = jest.requireMock("../../lib/converter/formatConverter") as 
   fitsToRGBA: jest.Mock;
 };
 const qualityLib = jest.requireMock("../../lib/stacking/frameQuality") as {
-  evaluateFrameQuality: jest.Mock;
+  evaluateFrameQualityAsync: jest.Mock;
   qualityToWeights: jest.Mock;
 };
 const alignLib = jest.requireMock("../../lib/stacking/alignment") as {
-  alignFrame: jest.Mock;
+  alignFrameAsync: jest.Mock;
 };
 
 describe("useStacking", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    parserLib.loadFitsFromBuffer.mockReturnValue({ fits: true });
+    parserLib.loadFitsFromBufferAuto.mockReturnValue({ fits: true });
     parserLib.getImageDimensions.mockReturnValue({ width: 2, height: 2 });
     parserLib.getImagePixels
       .mockResolvedValueOnce(new Float32Array([1, 2, 3, 4]))
@@ -154,22 +168,21 @@ describe("useStacking", () => {
     const { result } = renderHook(() => useStacking());
 
     await act(async () => {
-      await result.current.stackFiles(
-        [
+      await result.current.stackFiles({
+        files: [
           { filepath: "/tmp/a.fits", filename: "a.fits" },
           { filepath: "/tmp/b.fits", filename: "b.fits" },
         ],
-        "weighted",
-        2.5,
-        undefined,
-        "stars",
-        true,
-      );
+        method: "weighted",
+        sigma: 2.5,
+        alignmentMode: "full",
+        enableQualityEval: true,
+      });
     });
 
-    expect(qualityLib.evaluateFrameQuality).toHaveBeenCalled();
+    expect(qualityLib.evaluateFrameQualityAsync).toHaveBeenCalled();
     expect(qualityLib.qualityToWeights).toHaveBeenCalled();
-    expect(alignLib.alignFrame).toHaveBeenCalled();
+    expect(alignLib.alignFrameAsync).toHaveBeenCalled();
     expect(mathLib.stackWeightedAverage).toHaveBeenCalledWith(expect.any(Array), [0.7, 0.3]);
 
     act(() => {
@@ -183,5 +196,106 @@ describe("useStacking", () => {
     });
     expect(result.current.result).toBeNull();
     expect(result.current.error).toBeNull();
+  });
+
+  it("cancels in-flight request without publishing result", async () => {
+    parserLib.getImagePixels.mockImplementation(
+      () =>
+        new Promise<Float32Array>((resolve) => {
+          setTimeout(() => resolve(new Float32Array([1, 2, 3, 4])), 30);
+        }),
+    );
+
+    const { result } = renderHook(() => useStacking());
+    const runPromise = act(async () => {
+      await result.current.stackFiles(
+        [
+          { filepath: "/tmp/a.fits", filename: "a.fits" },
+          { filepath: "/tmp/b.fits", filename: "b.fits" },
+        ],
+        "average",
+      );
+    });
+
+    act(() => {
+      result.current.cancel();
+    });
+
+    await runPromise;
+
+    expect(result.current.isStacking).toBe(false);
+    expect(result.current.progress).toBeNull();
+    expect(result.current.result).toBeNull();
+  });
+
+  it("passes advanced detection/alignment options through async pipeline", async () => {
+    const { result } = renderHook(() => useStacking());
+
+    await act(async () => {
+      await result.current.stackFiles({
+        files: [
+          { filepath: "/tmp/a.fits", filename: "a.fits" },
+          { filepath: "/tmp/b.fits", filename: "b.fits" },
+        ],
+        method: "weighted",
+        alignmentMode: "full",
+        enableQualityEval: true,
+        advanced: {
+          detection: {
+            profile: "accurate",
+            sigmaThreshold: 4.4,
+            maxStars: 333,
+            minArea: 4,
+            maxArea: 888,
+            borderMargin: 9,
+            meshSize: 48,
+            deblendNLevels: 20,
+            deblendMinContrast: 0.06,
+            filterFwhm: 2.1,
+            maxFwhm: 9.5,
+            maxEllipticity: 0.6,
+          },
+          alignment: {
+            inlierThreshold: 2.5,
+            maxRansacIterations: 180,
+            fallbackToTranslation: true,
+          },
+        },
+      });
+    });
+
+    const qualityOpts = qualityLib.evaluateFrameQualityAsync.mock.calls[0]?.[3];
+    expect(qualityOpts?.detectionOptions).toEqual(
+      expect.objectContaining({
+        profile: "accurate",
+        sigmaThreshold: 4.4,
+        maxStars: 333,
+        minArea: 4,
+        maxArea: 888,
+        borderMargin: 9,
+        meshSize: 48,
+        deblendNLevels: 20,
+        deblendMinContrast: 0.06,
+        filterFwhm: 2.1,
+        maxFwhm: 9.5,
+        maxEllipticity: 0.6,
+      }),
+    );
+
+    const alignOpts = alignLib.alignFrameAsync.mock.calls[0]?.[5];
+    expect(alignOpts).toEqual(
+      expect.objectContaining({
+        inlierThreshold: 2.5,
+        maxRansacIterations: 180,
+        fallbackToTranslation: true,
+      }),
+    );
+    expect(alignOpts?.detectionOptions).toEqual(
+      expect.objectContaining({
+        profile: "accurate",
+        sigmaThreshold: 4.4,
+        maxStars: 333,
+      }),
+    );
   });
 });

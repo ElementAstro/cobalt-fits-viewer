@@ -4,7 +4,9 @@ import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import {
   generateIntegrationReport,
   formatExposureTime,
@@ -40,8 +42,33 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const haptics = useHapticFeedback();
   const files = useFitsStore((s) => s.files);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
+  const reportFrameTypes = useSettingsStore((s) => s.reportFrameTypes);
 
-  const report = useMemo(() => generateIntegrationReport(files), [files]);
+  const frameTypeLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const definition of getFrameTypeDefinitions(frameClassificationConfig)) {
+      map.set(
+        definition.key,
+        definition.builtin
+          ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
+          : definition.label || definition.key,
+      );
+    }
+    return map;
+  }, [frameClassificationConfig, t]);
+
+  const report = useMemo(
+    () =>
+      generateIntegrationReport(files, {
+        includedFrameTypes: reportFrameTypes,
+      }),
+    [files, reportFrameTypes],
+  );
+  const scopeLabel = useMemo(
+    () => report.includedFrameTypes.map((type) => frameTypeLabelMap.get(type) ?? type).join(", "),
+    [frameTypeLabelMap, report.includedFrameTypes],
+  );
 
   const handleCopyMarkdown = async () => {
     const md = exportReportAsMarkdown(report);
@@ -119,7 +146,7 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
             </View>
             <View className="items-center">
               <Text className="text-lg font-bold text-foreground">{report.totalFrames}</Text>
-              <Text className="text-[9px] text-muted">{t("gallery.lights")}</Text>
+              <Text className="text-[9px] text-muted">{t("gallery.includedFrames")}</Text>
             </View>
             <View className="items-center">
               <Text className="text-lg font-bold text-foreground">
@@ -128,6 +155,10 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
               <Text className="text-[9px] text-muted">{t("gallery.totalExp")}</Text>
             </View>
           </View>
+
+          <Text className="text-center text-[10px] text-muted mb-1">
+            {t("gallery.reportScope")}: {scopeLabel || "light"}
+          </Text>
 
           {report.dateRange && (
             <Text className="text-center text-[10px] text-muted mb-1">
@@ -140,7 +171,7 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
           {report.targets.length === 0 ? (
             <View className="items-center py-8">
               <Ionicons name="telescope-outline" size={28} color={mutedColor} />
-              <Text className="mt-2 text-xs text-muted">{t("gallery.noLights")}</Text>
+              <Text className="mt-2 text-xs text-muted">{t("gallery.noFramesInScope")}</Text>
             </View>
           ) : (
             <FlatList

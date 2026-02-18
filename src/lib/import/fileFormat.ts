@@ -1,13 +1,13 @@
 /**
  * 导入格式识别工具
- * 统一管理支持的图像格式与扩展名匹配逻辑
+ * 统一管理支持的媒体格式与扩展名匹配逻辑
  */
 
 import type { ImageSourceFormat } from "../fits/types";
 
-export type ImageSourceType = "fits" | "raster";
+export type ImageSourceType = "fits" | "raster" | "video";
 
-export type SupportedImageFormatId =
+export type SupportedMediaFormatId =
   | "fits"
   | "fit"
   | "fts"
@@ -21,16 +21,31 @@ export type SupportedImageFormatId =
   | "bmp"
   | "gif"
   | "heic"
-  | "avif";
+  | "avif"
+  | "mp4"
+  | "mov"
+  | "m4v"
+  | "webm"
+  | "mkv"
+  | "avi"
+  | "3gp";
 
-export interface SupportedImageFormat {
-  id: SupportedImageFormatId;
+export type SupportedImageFormatId = Exclude<
+  SupportedMediaFormatId,
+  "mp4" | "mov" | "m4v" | "webm" | "mkv" | "avi" | "3gp"
+>;
+
+export interface SupportedMediaFormat {
+  id: SupportedMediaFormatId;
   sourceType: ImageSourceType;
   label: string;
   extensions: string[];
 }
 
-const SUPPORTED_FORMATS: SupportedImageFormat[] = [
+// Legacy alias kept for compatibility.
+export type SupportedImageFormat = SupportedMediaFormat;
+
+const SUPPORTED_FORMATS: SupportedMediaFormat[] = [
   { id: "fits", sourceType: "fits", label: "FITS", extensions: [".fits"] },
   { id: "fit", sourceType: "fits", label: "FIT", extensions: [".fit"] },
   { id: "fts", sourceType: "fits", label: "FTS", extensions: [".fts"] },
@@ -50,21 +65,28 @@ const SUPPORTED_FORMATS: SupportedImageFormat[] = [
   { id: "gif", sourceType: "raster", label: "GIF", extensions: [".gif"] },
   { id: "heic", sourceType: "raster", label: "HEIC/HEIF", extensions: [".heic", ".heif"] },
   { id: "avif", sourceType: "raster", label: "AVIF", extensions: [".avif"] },
+  { id: "mp4", sourceType: "video", label: "MP4", extensions: [".mp4"] },
+  { id: "mov", sourceType: "video", label: "MOV", extensions: [".mov"] },
+  { id: "m4v", sourceType: "video", label: "M4V", extensions: [".m4v"] },
+  { id: "webm", sourceType: "video", label: "WebM", extensions: [".webm"] },
+  { id: "mkv", sourceType: "video", label: "MKV", extensions: [".mkv"] },
+  { id: "avi", sourceType: "video", label: "AVI", extensions: [".avi"] },
+  { id: "3gp", sourceType: "video", label: "3GP", extensions: [".3gp"] },
 ];
 
-const FORMAT_LOOKUP = new Map<string, SupportedImageFormat>();
+const FORMAT_LOOKUP = new Map<string, SupportedMediaFormat>();
 for (const format of SUPPORTED_FORMATS) {
   for (const ext of format.extensions) {
     FORMAT_LOOKUP.set(ext, format);
   }
 }
 
-const FORMAT_ID_LOOKUP = new Map<SupportedImageFormatId, SupportedImageFormat>();
+const FORMAT_ID_LOOKUP = new Map<SupportedMediaFormatId, SupportedMediaFormat>();
 for (const format of SUPPORTED_FORMATS) {
   FORMAT_ID_LOOKUP.set(format.id, format);
 }
 
-const MIME_LOOKUP = new Map<string, SupportedImageFormatId>([
+const MIME_LOOKUP = new Map<string, SupportedMediaFormatId>([
   ["image/png", "png"],
   ["image/jpeg", "jpeg"],
   ["image/jpg", "jpeg"],
@@ -81,13 +103,23 @@ const MIME_LOOKUP = new Map<string, SupportedImageFormatId>([
   ["application/fits", "fits"],
   ["image/fits", "fits"],
   ["application/x-fits", "fits"],
+  ["video/mp4", "mp4"],
+  ["video/quicktime", "mov"],
+  ["video/x-m4v", "m4v"],
+  ["video/webm", "webm"],
+  ["video/x-matroska", "mkv"],
+  ["video/x-msvideo", "avi"],
+  ["video/3gpp", "3gp"],
 ]);
 
-export interface SupportedImageFormatDetectionInput {
+export interface SupportedMediaFormatDetectionInput {
   filename?: string | null;
   mimeType?: string | null;
   payload?: ArrayBuffer | Uint8Array | null;
 }
+
+// Legacy alias kept for compatibility.
+export type SupportedImageFormatDetectionInput = SupportedMediaFormatDetectionInput;
 
 const KNOWN_MULTIPART_EXTENSIONS = [".fits.gz", ".fit.gz"] as const;
 
@@ -139,7 +171,7 @@ export function replaceFilenameExtension(filename: string, nextExtension: string
   return `${baseName || filename}${ext}`;
 }
 
-export function detectSupportedImageFormat(filename: string): SupportedImageFormat | null {
+export function detectSupportedMediaFormat(filename: string): SupportedMediaFormat | null {
   const normalized = normalizeFilename(filename);
   for (const ext of KNOWN_MULTIPART_EXTENSIONS) {
     if (normalized.endsWith(ext)) {
@@ -153,30 +185,46 @@ export function detectSupportedImageFormat(filename: string): SupportedImageForm
   return FORMAT_LOOKUP.get(ext) ?? null;
 }
 
-export function detectPreferredSupportedImageFormat(
-  input: SupportedImageFormatDetectionInput,
-): SupportedImageFormat | null {
-  const byContent = detectSupportedImageFormatByContent(input.payload);
+export function detectSupportedImageFormat(filename: string): SupportedMediaFormat | null {
+  return detectSupportedMediaFormat(filename);
+}
+
+export function detectPreferredSupportedMediaFormat(
+  input: SupportedMediaFormatDetectionInput,
+): SupportedMediaFormat | null {
+  const byContent = detectSupportedMediaFormatByContent(input.payload);
   if (byContent) return byContent;
 
-  const byMimeType = detectSupportedImageFormatByMimeType(input.mimeType);
+  const byMimeType = detectSupportedMediaFormatByMimeType(input.mimeType);
   if (byMimeType) return byMimeType;
 
   if (input.filename) {
-    return detectSupportedImageFormat(input.filename);
+    return detectSupportedMediaFormat(input.filename);
   }
 
   return null;
 }
 
-export function detectSupportedImageFormatByMimeType(
+export function detectPreferredSupportedImageFormat(
+  input: SupportedImageFormatDetectionInput,
+): SupportedMediaFormat | null {
+  return detectPreferredSupportedMediaFormat(input);
+}
+
+export function detectSupportedMediaFormatByMimeType(
   mimeType: string | null | undefined,
-): SupportedImageFormat | null {
+): SupportedMediaFormat | null {
   if (!mimeType) return null;
   const normalized = mimeType.toLowerCase().split(";")[0].trim();
   const formatId = MIME_LOOKUP.get(normalized);
   if (!formatId) return null;
   return FORMAT_ID_LOOKUP.get(formatId) ?? null;
+}
+
+export function detectSupportedImageFormatByMimeType(
+  mimeType: string | null | undefined,
+): SupportedMediaFormat | null {
+  return detectSupportedMediaFormatByMimeType(mimeType);
 }
 
 function ascii(bytes: Uint8Array, start: number, length: number): string {
@@ -196,9 +244,50 @@ function equalsBytes(bytes: Uint8Array, offset: number, expected: number[]): boo
   return true;
 }
 
-export function detectSupportedImageFormatByContent(
+function detectIsoBmff(bytes: Uint8Array): SupportedMediaFormat | null {
+  if (ascii(bytes, 4, 4) !== "ftyp") return null;
+  const brands = ascii(bytes, 8, Math.min(64, bytes.length - 8)).toLowerCase();
+
+  if (brands.includes("avif") || brands.includes("avis")) {
+    return FORMAT_ID_LOOKUP.get("avif") ?? null;
+  }
+  if (
+    brands.includes("heic") ||
+    brands.includes("heif") ||
+    brands.includes("heix") ||
+    brands.includes("hevc") ||
+    brands.includes("hevx") ||
+    brands.includes("mif1") ||
+    brands.includes("msf1")
+  ) {
+    return FORMAT_ID_LOOKUP.get("heic") ?? null;
+  }
+  if (brands.includes("qt")) {
+    return FORMAT_ID_LOOKUP.get("mov") ?? null;
+  }
+  if (brands.includes("m4v")) {
+    return FORMAT_ID_LOOKUP.get("m4v") ?? null;
+  }
+  if (brands.includes("3gp") || brands.includes("3g2")) {
+    return FORMAT_ID_LOOKUP.get("3gp") ?? null;
+  }
+  if (
+    brands.includes("mp4") ||
+    brands.includes("isom") ||
+    brands.includes("iso2") ||
+    brands.includes("avc1") ||
+    brands.includes("mp41") ||
+    brands.includes("mp42")
+  ) {
+    return FORMAT_ID_LOOKUP.get("mp4") ?? null;
+  }
+
+  return null;
+}
+
+export function detectSupportedMediaFormatByContent(
   payload: ArrayBuffer | Uint8Array | null | undefined,
-): SupportedImageFormat | null {
+): SupportedMediaFormat | null {
   if (!payload) return null;
   const bytes = payload instanceof Uint8Array ? payload : new Uint8Array(payload);
   if (bytes.length < 4) return null;
@@ -224,6 +313,11 @@ export function detectSupportedImageFormatByContent(
     return FORMAT_ID_LOOKUP.get("webp") ?? null;
   }
 
+  // AVI (RIFF....AVI )
+  if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "AVI ") {
+    return FORMAT_ID_LOOKUP.get("avi") ?? null;
+  }
+
   // TIFF
   if (
     equalsBytes(bytes, 0, [0x49, 0x49, 0x2a, 0x00]) ||
@@ -247,47 +341,56 @@ export function detectSupportedImageFormatByContent(
     return FORMAT_ID_LOOKUP.get("fits_gz") ?? null;
   }
 
-  // ISO BMFF (HEIC/AVIF) boxes include ftyp brand
-  if (ascii(bytes, 4, 4) === "ftyp") {
-    const brands = ascii(bytes, 8, Math.min(64, bytes.length - 8)).toLowerCase();
-    if (brands.includes("avif") || brands.includes("avis")) {
-      return FORMAT_ID_LOOKUP.get("avif") ?? null;
+  // ISO BMFF (HEIC/AVIF/MP4/MOV/M4V/3GP)
+  const iso = detectIsoBmff(bytes);
+  if (iso) return iso;
+
+  // Matroska/WebM: EBML header 0x1A45DFA3
+  if (equalsBytes(bytes, 0, [0x1a, 0x45, 0xdf, 0xa3])) {
+    const ebml = ascii(bytes, 0, Math.min(128, bytes.length)).toLowerCase();
+    if (ebml.includes("webm")) {
+      return FORMAT_ID_LOOKUP.get("webm") ?? null;
     }
-    if (
-      brands.includes("heic") ||
-      brands.includes("heif") ||
-      brands.includes("heix") ||
-      brands.includes("hevc") ||
-      brands.includes("hevx") ||
-      brands.includes("mif1") ||
-      brands.includes("msf1")
-    ) {
-      return FORMAT_ID_LOOKUP.get("heic") ?? null;
-    }
+    return FORMAT_ID_LOOKUP.get("mkv") ?? null;
   }
 
   return null;
 }
 
+export function detectSupportedImageFormatByContent(
+  payload: ArrayBuffer | Uint8Array | null | undefined,
+): SupportedMediaFormat | null {
+  return detectSupportedMediaFormatByContent(payload);
+}
+
 export function getPrimaryExtensionForFormat(
-  format: SupportedImageFormat | SupportedImageFormatId | null | undefined,
+  format: SupportedMediaFormat | SupportedMediaFormatId | null | undefined,
 ): string {
   if (!format) return "";
   const id = typeof format === "string" ? format : format.id;
   return FORMAT_ID_LOOKUP.get(id)?.extensions[0] ?? "";
 }
 
+export function isSupportedMediaFilename(filename: string): boolean {
+  return detectSupportedMediaFormat(filename) !== null;
+}
+
 export function isSupportedImageFilename(filename: string): boolean {
-  return detectSupportedImageFormat(filename) !== null;
+  return isSupportedMediaFilename(filename);
 }
 
 export function isFitsFamilyFilename(filename: string): boolean {
-  const format = detectSupportedImageFormat(filename);
+  const format = detectSupportedMediaFormat(filename);
   return format?.sourceType === "fits";
 }
 
+export function isVideoFilename(filename: string): boolean {
+  const format = detectSupportedMediaFormat(filename);
+  return format?.sourceType === "video";
+}
+
 const FORMAT_TO_SOURCE_FORMAT: Record<
-  SupportedImageFormatId,
+  SupportedMediaFormatId,
   Exclude<ImageSourceFormat, "unknown">
 > = {
   fits: "fits",
@@ -304,10 +407,17 @@ const FORMAT_TO_SOURCE_FORMAT: Record<
   gif: "gif",
   heic: "heic",
   avif: "avif",
+  mp4: "mp4",
+  mov: "mov",
+  m4v: "m4v",
+  webm: "webm",
+  mkv: "mkv",
+  avi: "avi",
+  "3gp": "3gp",
 };
 
 export function toImageSourceFormat(
-  format: SupportedImageFormat | SupportedImageFormatId | null | undefined,
+  format: SupportedMediaFormat | SupportedMediaFormatId | null | undefined,
 ): ImageSourceFormat {
   if (!format) return "unknown";
   const id = typeof format === "string" ? format : format.id;

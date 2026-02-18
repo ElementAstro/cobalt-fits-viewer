@@ -1,7 +1,7 @@
 import type { SystemInfo } from "../types";
 
 const mockPlatform = { OS: "ios" };
-const mockDimensionsGet = jest.fn(() => ({ width: 390, height: 844 }));
+const mockDimensionsGet = jest.fn((_name: "window" | "screen") => ({ width: 390, height: 844 }));
 const mockPixelRatioGet = jest.fn(() => 3);
 const mockPixelRatioFontScale = jest.fn(() => 1.2);
 
@@ -46,11 +46,11 @@ function loadSystemInfoModule() {
   jest.doMock("react-native", () => ({
     Platform: mockPlatform,
     Dimensions: {
-      get: (...args: unknown[]) => mockDimensionsGet(...args),
+      get: (name: "window" | "screen") => mockDimensionsGet(name),
     },
     PixelRatio: {
-      get: (...args: unknown[]) => mockPixelRatioGet(...args),
-      getFontScale: (...args: unknown[]) => mockPixelRatioFontScale(...args),
+      get: () => mockPixelRatioGet(),
+      getFontScale: () => mockPixelRatioFontScale(),
     },
   }));
 
@@ -60,7 +60,7 @@ function loadSystemInfoModule() {
   jest.doMock("expo-network", () => ({ ...mockNetwork }));
 
   jest.doMock("../../version", () => ({
-    getAppVersionInfo: (...args: unknown[]) => mockGetAppVersionInfo(...args),
+    getAppVersionInfo: () => mockGetAppVersionInfo(),
   }));
 
   return require("../systemInfo") as {

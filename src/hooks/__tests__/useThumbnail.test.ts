@@ -7,11 +7,13 @@ const mockGetThumbnailPath = jest.fn();
 const mockClearThumbnailCache = jest.fn();
 const mockGetThumbnailCacheSize = jest.fn();
 const mockGenerateAndSaveThumbnail = jest.fn();
-const mockLoadFitsFromBuffer = jest.fn();
+const mockCopyThumbnailToCache = jest.fn();
+const mockLoadFitsFromBufferAuto = jest.fn();
 const mockGetImageDimensions = jest.fn();
 const mockGetImagePixels = jest.fn();
 const mockFitsToRGBA = jest.fn();
 const mockParseRasterFromBuffer = jest.fn();
+const mockGetThumbnailAsync = jest.fn();
 
 type FileEntry = { exists: boolean; buffer?: ArrayBuffer };
 const mockFileMap: Record<string, FileEntry> = {};
@@ -22,6 +24,11 @@ jest.mock("../../lib/gallery/thumbnailCache", () => ({
   clearThumbnailCache: (...args: unknown[]) => mockClearThumbnailCache(...args),
   getThumbnailCacheSize: (...args: unknown[]) => mockGetThumbnailCacheSize(...args),
   generateAndSaveThumbnail: (...args: unknown[]) => mockGenerateAndSaveThumbnail(...args),
+  copyThumbnailToCache: (...args: unknown[]) => mockCopyThumbnailToCache(...args),
+}));
+
+jest.mock("expo-video-thumbnails", () => ({
+  getThumbnailAsync: (...args: unknown[]) => mockGetThumbnailAsync(...args),
 }));
 
 jest.mock("../../stores/useSettingsStore", () => ({
@@ -29,7 +36,7 @@ jest.mock("../../stores/useSettingsStore", () => ({
 }));
 
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBuffer: (...args: unknown[]) => mockLoadFitsFromBuffer(...args),
+  loadFitsFromBufferAuto: (...args: unknown[]) => mockLoadFitsFromBufferAuto(...args),
   getImageDimensions: (...args: unknown[]) => mockGetImageDimensions(...args),
   getImagePixels: (...args: unknown[]) => mockGetImagePixels(...args),
 }));
@@ -89,11 +96,14 @@ describe("useThumbnail", () => {
         defaultBlackPoint: 0,
         defaultWhitePoint: 1,
         defaultGamma: 1,
+        videoThumbnailTimeMs: 1000,
       }),
     );
     mockGetThumbnailPath.mockReturnValue("file:///thumb/f1.jpg");
     mockGetThumbnailCacheSize.mockReturnValue(1024);
     mockGenerateAndSaveThumbnail.mockImplementation((id: string) => `file:///thumb/${id}.jpg`);
+    mockCopyThumbnailToCache.mockImplementation((id: string) => `file:///thumb/${id}.jpg`);
+    mockGetThumbnailAsync.mockResolvedValue({ uri: "file:///tmp/generated_video_thumb.jpg" });
     mockGetImageDimensions.mockReturnValue({ width: 2, height: 2 });
     mockGetImagePixels.mockResolvedValue(new Float32Array([0, 1, 2, 3]));
     mockFitsToRGBA.mockReturnValue(new Uint8ClampedArray([1, 2, 3, 4]));
@@ -132,8 +142,8 @@ describe("useThumbnail", () => {
     mockFileMap["/tmp/ras-ok.png"] = { exists: true, buffer: new ArrayBuffer(8) };
     mockFileMap["/tmp/missing.fits"] = { exists: false };
 
-    mockLoadFitsFromBuffer.mockImplementationOnce(() => ({ fits: true }));
-    mockLoadFitsFromBuffer.mockImplementationOnce(() => {
+    mockLoadFitsFromBufferAuto.mockImplementationOnce(() => ({ fits: true }));
+    mockLoadFitsFromBufferAuto.mockImplementationOnce(() => {
       throw new Error("fits parse fail");
     });
 
@@ -148,5 +158,33 @@ describe("useThumbnail", () => {
 
     expect(mockGenerateAndSaveThumbnail).toHaveBeenCalled();
     expect(result.current.isGenerating).toBe(false);
+  });
+
+  it("regenerates video thumbnails using expo-video-thumbnails", async () => {
+    const files = [
+      makeFile({
+        id: "video-ok",
+        filepath: "/tmp/video-ok.mp4",
+        sourceType: "video",
+        mediaKind: "video",
+      }),
+    ];
+    mockFileMap["/tmp/video-ok.mp4"] = { exists: true, buffer: new ArrayBuffer(8) };
+
+    const { result } = renderHook(() => useThumbnail());
+    await act(async () => {
+      const out = await result.current.regenerateThumbnails(files);
+      expect(out.success).toBe(1);
+      expect(out.skipped).toBe(0);
+    });
+
+    expect(mockGetThumbnailAsync).toHaveBeenCalledWith("/tmp/video-ok.mp4", {
+      time: 1000,
+      quality: 0.8,
+    });
+    expect(mockCopyThumbnailToCache).toHaveBeenCalledWith(
+      "video-ok",
+      "file:///tmp/generated_video_thumb.jpg",
+    );
   });
 });

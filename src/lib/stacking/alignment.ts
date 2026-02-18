@@ -1,11 +1,17 @@
 /**
  * 图像对齐/配准模块
  * 支持两种对齐模式:
- * 1. Translation-only: 基于相位相关的平移检测
+ * 1. Translation-only: 基于星点平移聚类
  * 2. Full (rotation+scale+translation): 基于三角形星群匹配 (Astroalign 风格)
  */
 
-import { detectStars, type DetectedStar } from "./starDetection";
+import {
+  detectStars,
+  detectStarsAsync,
+  type DetectedStar,
+  type StarDetectionOptions,
+  type StarDetectionRuntime,
+} from "./starDetection";
 
 export type AlignmentMode = "none" | "translation" | "full";
 
@@ -16,6 +22,33 @@ export interface AlignmentTransform {
   matchedStars: number;
   /** 配准误差 (均方根像素距离) */
   rmsError: number;
+  /** 检测统计信息 */
+  detectionCounts?: { ref: number; target: number };
+  /** 回退路径 */
+  fallbackUsed?: "none" | "translation" | "identity";
+}
+
+export interface AlignmentOptions {
+  detectionOptions?: StarDetectionOptions;
+  detectionRuntime?: StarDetectionRuntime;
+  searchRadius?: number;
+  toleranceRatio?: number;
+  inlierThreshold?: number;
+  maxRansacIterations?: number;
+  fallbackToTranslation?: boolean;
+}
+
+function identityTransform(
+  detectionCounts?: { ref: number; target: number },
+  fallbackUsed: AlignmentTransform["fallbackUsed"] = "identity",
+): AlignmentTransform {
+  return {
+    matrix: [1, 0, 0, 0, 1, 0],
+    matchedStars: 0,
+    rmsError: Infinity,
+    detectionCounts,
+    fallbackUsed,
+  };
 }
 
 /**
@@ -31,7 +64,6 @@ export function computeTranslation(
     return { matrix: [1, 0, 0, 0, 1, 0], matchedStars: 0, rmsError: Infinity };
   }
 
-  // Vote for translation offsets using bright star pairs
   const votes: Array<{ dx: number; dy: number }> = [];
   const topRef = refStars.slice(0, 50);
   const topTarget = targetStars.slice(0, 50);
@@ -40,7 +72,6 @@ export function computeTranslation(
     for (const ts of topTarget) {
       const dx = ts.cx - rs.cx;
       const dy = ts.cy - rs.cy;
-      // Only consider reasonable offsets
       if (Math.abs(dx) < searchRadius * 10 && Math.abs(dy) < searchRadius * 10) {
         votes.push({ dx, dy });
       }
@@ -51,7 +82,6 @@ export function computeTranslation(
     return { matrix: [1, 0, 0, 0, 1, 0], matchedStars: 0, rmsError: Infinity };
   }
 
-  // Find the best offset by clustering
   let bestDx = 0;
   let bestDy = 0;
   let bestCount = 0;
@@ -70,7 +100,6 @@ export function computeTranslation(
     }
   }
 
-  // Refine: average all votes within cluster
   let sumDx = 0;
   let sumDy = 0;
   let clusterCount = 0;
@@ -85,7 +114,6 @@ export function computeTranslation(
   const tx = clusterCount > 0 ? sumDx / clusterCount : 0;
   const ty = clusterCount > 0 ? sumDy / clusterCount : 0;
 
-  // Compute RMS error
   let sumErr = 0;
   let matchCount = 0;
   for (const rs of topRef) {
@@ -110,23 +138,14 @@ export function computeTranslation(
   };
 }
 
-/**
- * 三角形描述符，用于星群匹配
- */
 interface TriangleDescriptor {
-  /** 三个星点的索引 */
   indices: [number, number, number];
-  /** 归一化边长比 [ratio1, ratio2] (最短边/最长边, 中间边/最长边) */
   ratios: [number, number];
-  /** 最长边长度 */
   maxSide: number;
 }
 
-/**
- * 从星点列表构建三角形描述符
- */
 function buildTriangles(stars: DetectedStar[], maxTriangles: number = 500): TriangleDescriptor[] {
-  const n = Math.min(stars.length, 30); // Use top 30 brightest stars
+  const n = Math.min(stars.length, 30);
   const triangles: TriangleDescriptor[] = [];
 
   for (let i = 0; i < n && triangles.length < maxTriangles; i++) {
@@ -137,7 +156,7 @@ function buildTriangles(stars: DetectedStar[], maxTriangles: number = 500): Tria
         const d12 = Math.hypot(stars[j].cx - stars[k].cx, stars[j].cy - stars[k].cy);
 
         const sides = [d01, d02, d12].sort((a, b) => a - b);
-        if (sides[2] < 10) continue; // Skip degenerate triangles
+        if (sides[2] < 10) continue;
 
         triangles.push({
           indices: [i, j, k],
@@ -151,10 +170,6 @@ function buildTriangles(stars: DetectedStar[], maxTriangles: number = 500): Tria
   return triangles;
 }
 
-/**
- * 计算仿射变换矩阵 (最小二乘法)
- * 给定 >= 3 对匹配点，求解 x' = a*x + b*y + tx, y' = c*x + d*y + ty
- */
 function computeAffineTransform(
   srcPoints: Array<[number, number]>,
   dstPoints: Array<[number, number]>,
@@ -162,27 +177,18 @@ function computeAffineTransform(
   const n = srcPoints.length;
   if (n < 3) return [1, 0, 0, 0, 1, 0];
 
-  // Solve using normal equations:
-  // [sum(xi^2)+sum(yi^2)  0                    sum(xi)  sum(yi) ] [a ]   [sum(xi*xi') + sum(yi*yi')]
-  // [0                    sum(xi^2)+sum(yi^2)   sum(yi) -sum(xi) ] [b ] = [sum(yi*xi') - sum(xi*yi')]
-  // etc. — simplified for similarity transform first, then generalize
-
-  // For general affine: solve two 3x3 systems
-  // x' = a*x + b*y + tx  =>  [x y 1] * [a b tx]^T = x'
-  // y' = c*x + d*y + ty  =>  [x y 1] * [c d ty]^T = y'
-
-  let sxx = 0,
-    sxy = 0,
-    sx = 0,
-    syy = 0,
-    sy = 0;
+  let sxx = 0;
+  let sxy = 0;
+  let sx = 0;
+  let syy = 0;
+  let sy = 0;
   const sn = n;
-  let sxXp = 0,
-    syXp = 0,
-    sXp = 0;
-  let sxYp = 0,
-    syYp = 0,
-    sYp = 0;
+  let sxXp = 0;
+  let syXp = 0;
+  let sXp = 0;
+  let sxYp = 0;
+  let syYp = 0;
+  let sYp = 0;
 
   for (let i = 0; i < n; i++) {
     const [x, y] = srcPoints[i];
@@ -200,15 +206,10 @@ function computeAffineTransform(
     sYp += yp;
   }
 
-  // Solve 3x3 system: A * [a,b,tx] = B for x', same for y'
-  // A = [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, sn]]
   const det = sxx * (syy * sn - sy * sy) - sxy * (sxy * sn - sy * sx) + sx * (sxy * sy - syy * sx);
-
   if (Math.abs(det) < 1e-10) return [1, 0, 0, 0, 1, 0];
 
   const invDet = 1 / det;
-
-  // Cofactors for row 0
   const c00 = syy * sn - sy * sy;
   const c01 = -(sxy * sn - sy * sx);
   const c02 = sxy * sy - syy * sx;
@@ -232,12 +233,13 @@ function computeAffineTransform(
 
 /**
  * 完整对齐: 三角形星群匹配 + 仿射变换
- * 参考 Astroalign 算法: 构建三角形描述符 → 匹配相似三角形 → RANSAC 求变换
  */
 export function computeFullAlignment(
   refStars: DetectedStar[],
   targetStars: DetectedStar[],
   toleranceRatio: number = 0.01,
+  inlierThreshold: number = 3,
+  maxRansacIterations: number = 100,
 ): AlignmentTransform {
   if (refStars.length < 3 || targetStars.length < 3) {
     return { matrix: [1, 0, 0, 0, 1, 0], matchedStars: 0, rmsError: Infinity };
@@ -246,7 +248,6 @@ export function computeFullAlignment(
   const refTriangles = buildTriangles(refStars);
   const targetTriangles = buildTriangles(targetStars);
 
-  // Match triangles by ratio similarity
   type TriMatch = {
     refTri: TriangleDescriptor;
     targetTri: TriangleDescriptor;
@@ -267,33 +268,23 @@ export function computeFullAlignment(
     return { matrix: [1, 0, 0, 0, 1, 0], matchedStars: 0, rmsError: Infinity };
   }
 
-  // Sort by match quality
   matches.sort((a, b) => a.diff - b.diff);
 
-  // RANSAC: try top matches to find best transform
   let bestTransform: [number, number, number, number, number, number] = [1, 0, 0, 0, 1, 0];
   let bestInliers = 0;
   let bestRms = Infinity;
-  const inlierThreshold = 3; // pixels
-
-  const maxIterations = Math.min(matches.length, 100);
+  const maxIterations = Math.min(matches.length, maxRansacIterations);
 
   for (let iter = 0; iter < maxIterations; iter++) {
     const match = matches[iter];
-
-    // Build point correspondences from this triangle match
-    // Try all 3 possible vertex orderings (rotations)
     const ri = match.refTri.indices;
     const ti = match.targetTri.indices;
 
-    // We need to figure out correct vertex correspondence
-    // Try matching by sorting edges
     const refPts = ri.map((idx) => [refStars[idx].cx, refStars[idx].cy] as [number, number]);
     const targetPts = ti.map(
       (idx) => [targetStars[idx].cx, targetStars[idx].cy] as [number, number],
     );
 
-    // Sort both triangles vertices by angle from centroid
     const sortByAngle = (pts: [number, number][]) => {
       const cx = (pts[0][0] + pts[1][0] + pts[2][0]) / 3;
       const cy = (pts[0][1] + pts[1][1] + pts[2][1]) / 3;
@@ -302,15 +293,10 @@ export function computeFullAlignment(
       return angles.map((a) => pts[a.i]);
     };
 
-    const sortedRef = sortByAngle(refPts);
-    const sortedTarget = sortByAngle(targetPts);
+    const transform = computeAffineTransform(sortByAngle(refPts), sortByAngle(targetPts));
 
-    const transform = computeAffineTransform(sortedRef, sortedTarget);
-
-    // Count inliers across all stars
     let inliers = 0;
     let sumErr = 0;
-
     for (const rs of refStars.slice(0, 50)) {
       const tx = transform[0] * rs.cx + transform[1] * rs.cy + transform[2];
       const ty = transform[3] * rs.cx + transform[4] * rs.cy + transform[5];
@@ -320,7 +306,6 @@ export function computeFullAlignment(
         const d = Math.hypot(ts.cx - tx, ts.cy - ty);
         if (d < minDist) minDist = d;
       }
-
       if (minDist < inlierThreshold) {
         inliers++;
         sumErr += minDist * minDist;
@@ -334,7 +319,6 @@ export function computeFullAlignment(
     }
   }
 
-  // Refine with all inliers
   if (bestInliers >= 3) {
     const srcPts: [number, number][] = [];
     const dstPts: [number, number][] = [];
@@ -362,7 +346,6 @@ export function computeFullAlignment(
     if (srcPts.length >= 3) {
       bestTransform = computeAffineTransform(srcPts, dstPts);
 
-      // Recompute RMS
       let sumErr = 0;
       for (let i = 0; i < srcPts.length; i++) {
         const tx =
@@ -396,7 +379,6 @@ export function applyTransform(
   const [a, b, tx, c, d, ty] = transform.matrix;
   const result = new Float32Array(width * height);
 
-  // Compute inverse transform: map output (ref) coords to input (target) coords
   const det = a * d - b * c;
   if (Math.abs(det) < 1e-10) {
     result.set(pixels);
@@ -413,18 +395,16 @@ export function applyTransform(
 
   for (let oy = 0; oy < height; oy++) {
     for (let ox = 0; ox < width; ox++) {
-      // Input coordinates
       const ix = ia * ox + ib * oy + itx;
       const iy = ic * ox + id * oy + ity;
 
-      // Bilinear interpolation
       const x0 = Math.floor(ix);
       const y0 = Math.floor(iy);
       const x1 = x0 + 1;
       const y1 = y0 + 1;
 
       if (x0 < 0 || x1 >= width || y0 < 0 || y1 >= height) {
-        result[oy * width + ox] = 0; // Out of bounds
+        result[oy * width + ox] = 0;
         continue;
       }
 
@@ -445,8 +425,7 @@ export function applyTransform(
 }
 
 /**
- * 对齐单帧到参考帧
- * 自动选择星点检测 → 匹配 → 变换
+ * 同步对齐入口（兼容旧调用）
  */
 export function alignFrame(
   refPixels: Float32Array,
@@ -454,33 +433,154 @@ export function alignFrame(
   width: number,
   height: number,
   mode: AlignmentMode,
+  options: AlignmentOptions = {},
 ): { aligned: Float32Array; transform: AlignmentTransform } {
   if (mode === "none") {
     return {
       aligned: targetPixels,
-      transform: { matrix: [1, 0, 0, 0, 1, 0], matchedStars: 0, rmsError: 0 },
+      transform: {
+        matrix: [1, 0, 0, 0, 1, 0],
+        matchedStars: 0,
+        rmsError: 0,
+        fallbackUsed: "none",
+        detectionCounts: { ref: 0, target: 0 },
+      },
     };
   }
 
-  const refStars = detectStars(refPixels, width, height);
-  const targetStars = detectStars(targetPixels, width, height);
+  const refStars = detectStars(refPixels, width, height, options.detectionOptions);
+  const targetStars = detectStars(targetPixels, width, height, options.detectionOptions);
+  const detectionCounts = { ref: refStars.length, target: targetStars.length };
+
+  const searchRadius = options.searchRadius ?? 20;
+  const toleranceRatio = options.toleranceRatio ?? 0.01;
+  const inlierThreshold = options.inlierThreshold ?? 3;
+  const maxRansacIterations = options.maxRansacIterations ?? 100;
+  const fallbackToTranslation = options.fallbackToTranslation ?? true;
 
   let transform: AlignmentTransform;
 
   if (mode === "translation") {
-    transform = computeTranslation(refStars, targetStars);
+    transform = computeTranslation(refStars, targetStars, searchRadius);
+    transform.fallbackUsed = "none";
   } else {
-    transform = computeFullAlignment(refStars, targetStars);
+    transform = computeFullAlignment(
+      refStars,
+      targetStars,
+      toleranceRatio,
+      inlierThreshold,
+      maxRansacIterations,
+    );
+    transform.fallbackUsed = "none";
+
+    if (transform.matchedStars < 3 && fallbackToTranslation) {
+      const translation = computeTranslation(refStars, targetStars, searchRadius);
+      if (translation.matchedStars >= 3) {
+        transform = { ...translation, fallbackUsed: "translation" };
+      }
+    }
   }
 
-  // If alignment failed, return original
+  transform.detectionCounts = detectionCounts;
+
   if (transform.matchedStars < 3) {
     return {
       aligned: targetPixels,
-      transform: { matrix: [1, 0, 0, 0, 1, 0], matchedStars: 0, rmsError: Infinity },
+      transform: identityTransform(detectionCounts, transform.fallbackUsed ?? "identity"),
     };
   }
 
   const aligned = applyTransform(targetPixels, width, height, transform);
+  return { aligned, transform };
+}
+
+/**
+ * 异步对齐入口（用于堆叠链路）
+ */
+export async function alignFrameAsync(
+  refPixels: Float32Array,
+  targetPixels: Float32Array,
+  width: number,
+  height: number,
+  mode: AlignmentMode,
+  options: AlignmentOptions = {},
+): Promise<{ aligned: Float32Array; transform: AlignmentTransform }> {
+  if (mode === "none") {
+    return {
+      aligned: targetPixels,
+      transform: {
+        matrix: [1, 0, 0, 0, 1, 0],
+        matchedStars: 0,
+        rmsError: 0,
+        fallbackUsed: "none",
+        detectionCounts: { ref: 0, target: 0 },
+      },
+    };
+  }
+
+  const runtime = options.detectionRuntime;
+  runtime?.onProgress?.(0.01, "detect-ref");
+  const refStars = await detectStarsAsync(
+    refPixels,
+    width,
+    height,
+    options.detectionOptions ?? { profile: "balanced" },
+    runtime,
+  );
+
+  runtime?.onProgress?.(0.35, "detect-target");
+  const targetStars = await detectStarsAsync(
+    targetPixels,
+    width,
+    height,
+    options.detectionOptions ?? { profile: "balanced" },
+    runtime,
+  );
+
+  const detectionCounts = { ref: refStars.length, target: targetStars.length };
+
+  const searchRadius = options.searchRadius ?? 20;
+  const toleranceRatio = options.toleranceRatio ?? 0.01;
+  const inlierThreshold = options.inlierThreshold ?? 3;
+  const maxRansacIterations = options.maxRansacIterations ?? 100;
+  const fallbackToTranslation = options.fallbackToTranslation ?? true;
+
+  runtime?.onProgress?.(0.7, "solve-transform");
+
+  let transform: AlignmentTransform;
+  if (mode === "translation") {
+    transform = computeTranslation(refStars, targetStars, searchRadius);
+    transform.fallbackUsed = "none";
+  } else {
+    transform = computeFullAlignment(
+      refStars,
+      targetStars,
+      toleranceRatio,
+      inlierThreshold,
+      maxRansacIterations,
+    );
+    transform.fallbackUsed = "none";
+
+    if (transform.matchedStars < 3 && fallbackToTranslation) {
+      const translation = computeTranslation(refStars, targetStars, searchRadius);
+      if (translation.matchedStars >= 3) {
+        transform = { ...translation, fallbackUsed: "translation" };
+      }
+    }
+  }
+
+  transform.detectionCounts = detectionCounts;
+
+  if (transform.matchedStars < 3) {
+    runtime?.onProgress?.(1, "failed");
+    return {
+      aligned: targetPixels,
+      transform: identityTransform(detectionCounts, transform.fallbackUsed ?? "identity"),
+    };
+  }
+
+  runtime?.onProgress?.(0.88, "warp");
+  const aligned = applyTransform(targetPixels, width, height, transform);
+  runtime?.onProgress?.(1, "done");
   return { aligned, transform };
 }

@@ -4,7 +4,9 @@ import { Ionicons } from "@expo/vector-icons";
 import type { ObservationSession } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useTargetStore } from "../../stores/useTargetStore";
 import { formatDuration } from "../../lib/sessions/format";
+import { resolveSessionTargetNames } from "../../lib/sessions/sessionLinking";
 
 interface SessionCardProps {
   session: ObservationSession;
@@ -34,6 +36,8 @@ export function SessionCard({
   const showExposureCount = useSettingsStore((s) => s.sessionShowExposureCount);
   const showTotalExposure = useSettingsStore((s) => s.sessionShowTotalExposure);
   const showFilters = useSettingsStore((s) => s.sessionShowFilters);
+  const targets = useTargetStore((s) => s.targets);
+  const targetNames = resolveSessionTargetNames(session, targets);
 
   return (
     <PressableFeedback onPress={onPress}>
@@ -86,9 +90,9 @@ export function SessionCard({
             </View>
           </View>
 
-          {session.targets.length > 0 && (
+          {targetNames.length > 0 && (
             <View className="flex-row flex-wrap gap-1.5">
-              {session.targets.map((target) => (
+              {targetNames.map((target) => (
                 <Chip key={target} size="sm" variant="secondary">
                   <Chip.Label className="text-[9px]">{target}</Chip.Label>
                 </Chip>

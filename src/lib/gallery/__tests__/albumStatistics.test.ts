@@ -67,9 +67,6 @@ describe("albumStatistics", () => {
     expect(stats.frameBreakdown).toEqual({
       light: 1,
       dark: 1,
-      flat: 0,
-      bias: 0,
-      unknown: 0,
     });
     expect(stats.filterBreakdown).toEqual({
       Ha: 1,
@@ -102,6 +99,8 @@ describe("albumStatistics", () => {
     expect(getFrameTypeLabel("dark")).toBe("Dark");
     expect(getFrameTypeLabel("flat")).toBe("Flat");
     expect(getFrameTypeLabel("bias")).toBe("Bias");
+    expect(getFrameTypeLabel("darkflat")).toBe("Dark Flat");
     expect(getFrameTypeLabel("unknown")).toBe("Unknown");
+    expect(getFrameTypeLabel("custom-frame")).toBe("custom-frame");
   });
 });

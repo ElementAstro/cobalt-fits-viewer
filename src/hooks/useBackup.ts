@@ -7,6 +7,7 @@ import { useBackupStore } from "../stores/useBackupStore";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useAlbumStore } from "../stores/useAlbumStore";
 import { useTargetStore } from "../stores/useTargetStore";
+import { useTargetGroupStore } from "../stores/useTargetGroupStore";
 import { useSessionStore } from "../stores/useSessionStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import {
@@ -38,8 +39,10 @@ import { DEFAULT_BACKUP_OPTIONS } from "../lib/backup/types";
 import type { BackupDataSource, RestoreTarget } from "../lib/backup/backupService";
 import * as Network from "expo-network";
 import { normalizeTargetMatch } from "../lib/targets/targetRelations";
-import { reconcileTargetGraphStores } from "./useTargets";
+import { reconcileAllStores } from "../lib/targets/targetIntegrity";
 import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
+import { resolveTargetId, resolveTargetName } from "../lib/targets/targetRefs";
+import { mergeSessionLike } from "../lib/sessions/sessionNormalization";
 
 // Provider singletons
 const providers: Partial<Record<CloudProvider, ICloudProvider>> = {};
@@ -86,6 +89,7 @@ export function useBackup() {
   const fitsStore = useFitsStore;
   const albumStore = useAlbumStore;
   const targetStore = useTargetStore;
+  const targetGroupStore = useTargetGroupStore;
   const sessionStore = useSessionStore;
   const settingsStore = useSettingsStore;
 
@@ -97,7 +101,10 @@ export function useBackup() {
       getFiles: () => fitsStore.getState().files,
       getAlbums: () => albumStore.getState().albums,
       getTargets: () => targetStore.getState().targets,
+      getTargetGroups: () => targetGroupStore.getState().groups,
       getSessions: () => sessionStore.getState().sessions,
+      getPlans: () => sessionStore.getState().plans,
+      getLogEntries: () => sessionStore.getState().logEntries,
       getSettings: () => {
         const s = settingsStore.getState();
         return {
@@ -150,6 +157,20 @@ export function useBackup() {
           defaultSigmaValue: s.defaultSigmaValue,
           defaultAlignmentMode: s.defaultAlignmentMode,
           defaultEnableQuality: s.defaultEnableQuality,
+          stackingDetectionProfile: s.stackingDetectionProfile,
+          stackingDetectSigmaThreshold: s.stackingDetectSigmaThreshold,
+          stackingDetectMaxStars: s.stackingDetectMaxStars,
+          stackingDetectMinArea: s.stackingDetectMinArea,
+          stackingDetectMaxArea: s.stackingDetectMaxArea,
+          stackingDetectBorderMargin: s.stackingDetectBorderMargin,
+          stackingBackgroundMeshSize: s.stackingBackgroundMeshSize,
+          stackingDeblendNLevels: s.stackingDeblendNLevels,
+          stackingDeblendMinContrast: s.stackingDeblendMinContrast,
+          stackingFilterFwhm: s.stackingFilterFwhm,
+          stackingMaxFwhm: s.stackingMaxFwhm,
+          stackingMaxEllipticity: s.stackingMaxEllipticity,
+          stackingRansacMaxIterations: s.stackingRansacMaxIterations,
+          stackingAlignmentInlierThreshold: s.stackingAlignmentInlierThreshold,
           // Grid/crosshair styles
           gridColor: s.gridColor,
           gridOpacity: s.gridOpacity,
@@ -192,7 +213,7 @@ export function useBackup() {
         };
       },
     };
-  }, [fitsStore, albumStore, targetStore, sessionStore, settingsStore]);
+  }, [fitsStore, albumStore, targetStore, targetGroupStore, sessionStore, settingsStore]);
 
   /**
    * 构建恢复目标
@@ -286,6 +307,11 @@ export function useBackup() {
             continue;
           }
 
+          const mergedExposure: Record<string, number> = { ...(existing.plannedExposure ?? {}) };
+          for (const [filter, seconds] of Object.entries(target.plannedExposure ?? {})) {
+            mergedExposure[filter] = Math.max(mergedExposure[filter] ?? 0, seconds);
+          }
+
           store.updateTarget(existing.id, {
             ...target,
             id: existing.id,
@@ -295,11 +321,35 @@ export function useBackup() {
             plannedFilters: [
               ...new Set([...(existing.plannedFilters ?? []), ...(target.plannedFilters ?? [])]),
             ],
-            plannedExposure: {
-              ...(existing.plannedExposure ?? {}),
-              ...(target.plannedExposure ?? {}),
-            },
+            plannedExposure: mergedExposure,
             imageRatings: { ...(existing.imageRatings ?? {}), ...(target.imageRatings ?? {}) },
+            bestImageId: existing.bestImageId ?? target.bestImageId,
+            recommendedEquipment: existing.recommendedEquipment ?? target.recommendedEquipment,
+          });
+        }
+      },
+      setTargetGroups: (groups, strategy) => {
+        const mode = resolveStrategy(strategy);
+        const store = targetGroupStore.getState();
+        for (const group of groups) {
+          const existing = store.groups.find((g) => g.id === group.id);
+          if (!existing) {
+            store.upsertGroup({
+              ...group,
+              targetIds: [...new Set(group.targetIds ?? [])],
+            });
+            continue;
+          }
+
+          if (mode === "skip-existing") continue;
+          if (mode === "overwrite-existing") {
+            store.updateGroup(existing.id, group);
+            continue;
+          }
+
+          store.updateGroup(existing.id, {
+            ...group,
+            targetIds: [...new Set([...(existing.targetIds ?? []), ...(group.targetIds ?? [])])],
           });
         }
       },
@@ -320,11 +370,61 @@ export function useBackup() {
             continue;
           }
 
-          store.updateSession(session.id, {
-            ...session,
-            targets: [...new Set([...(existing.targets ?? []), ...(session.targets ?? [])])],
-            imageIds: [...new Set([...(existing.imageIds ?? []), ...(session.imageIds ?? [])])],
-            notes: [existing.notes, session.notes].filter(Boolean).join("\n"),
+          const merged = mergeSessionLike(existing, session, targetStore.getState().targets);
+          store.updateSession(session.id, merged);
+        }
+      },
+      setPlans: (plans, strategy) => {
+        const mode = resolveStrategy(strategy);
+        const store = sessionStore.getState();
+        const targets = targetStore.getState().targets;
+        for (const plan of plans) {
+          const resolvedTargetId = plan.targetId
+            ? resolveTargetId({ targetId: plan.targetId, name: plan.targetName }, targets)
+            : resolveTargetId({ name: plan.targetName }, targets);
+          const normalizedPlan = {
+            ...plan,
+            targetId: resolvedTargetId,
+            targetName: resolveTargetName(
+              { targetId: resolvedTargetId, name: plan.targetName },
+              targets,
+            ),
+          };
+          const existing = store.plans.find((p) => p.id === normalizedPlan.id);
+          if (!existing) {
+            store.addPlan(normalizedPlan);
+            continue;
+          }
+          if (mode === "skip-existing") continue;
+          if (mode === "overwrite-existing") {
+            store.updatePlan(existing.id, normalizedPlan);
+            continue;
+          }
+          store.updatePlan(existing.id, {
+            ...normalizedPlan,
+            targetId: existing.targetId ?? normalizedPlan.targetId,
+            targetName: normalizedPlan.targetName || existing.targetName,
+            notes: [existing.notes, normalizedPlan.notes].filter(Boolean).join("\n") || undefined,
+          });
+        }
+      },
+      setLogEntries: (entries, strategy) => {
+        const mode = resolveStrategy(strategy);
+        const store = sessionStore.getState();
+        for (const entry of entries) {
+          const existing = store.logEntries.find((log) => log.id === entry.id);
+          if (!existing) {
+            store.addLogEntry(entry);
+            continue;
+          }
+          if (mode === "skip-existing") continue;
+          if (mode === "overwrite-existing") {
+            store.updateLogEntry(existing.id, entry);
+            continue;
+          }
+          store.updateLogEntry(existing.id, {
+            ...entry,
+            notes: [existing.notes, entry.notes].filter(Boolean).join("\n") || undefined,
           });
         }
       },
@@ -382,6 +482,20 @@ export function useBackup() {
           "defaultSigmaValue",
           "defaultAlignmentMode",
           "defaultEnableQuality",
+          "stackingDetectionProfile",
+          "stackingDetectSigmaThreshold",
+          "stackingDetectMaxStars",
+          "stackingDetectMinArea",
+          "stackingDetectMaxArea",
+          "stackingDetectBorderMargin",
+          "stackingBackgroundMeshSize",
+          "stackingDeblendNLevels",
+          "stackingDeblendMinContrast",
+          "stackingFilterFwhm",
+          "stackingMaxFwhm",
+          "stackingMaxEllipticity",
+          "stackingRansacMaxIterations",
+          "stackingAlignmentInlierThreshold",
           // Grid/crosshair styles
           "gridColor",
           "gridOpacity",
@@ -434,7 +548,7 @@ export function useBackup() {
         }
       },
     };
-  }, [fitsStore, albumStore, targetStore, sessionStore, settingsStore]);
+  }, [fitsStore, albumStore, targetStore, targetGroupStore, sessionStore, settingsStore]);
 
   const reconcileAlbumFileConsistency = useCallback(() => {
     const currentFiles = fitsStore.getState().files;
@@ -635,7 +749,7 @@ export function useBackup() {
         );
 
         reconcileAlbumFileConsistency();
-        reconcileTargetGraphStores();
+        reconcileAllStores();
         resetProgress();
         return { success: true };
       } catch (error) {
@@ -795,7 +909,7 @@ export function useBackup() {
 
         if (result.success) {
           reconcileAlbumFileConsistency();
-          reconcileTargetGraphStores();
+          reconcileAllStores();
         }
         resetProgress();
         if (!result.success) {

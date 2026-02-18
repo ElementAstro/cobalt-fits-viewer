@@ -1,5 +1,14 @@
-import type { FitsMetadata, ObservationSession, Target, TargetGroup } from "../fits/types";
+import type {
+  FitsMetadata,
+  ObservationLogEntry,
+  ObservationPlan,
+  ObservationSession,
+  Target,
+  TargetGroup,
+} from "../fits/types";
 import { matchTargetByName, mergeTargets, normalizeName } from "./targetMatcher";
+import { dedupeTargetRefs, normalizeSessionTargetRefs } from "./targetRefs";
+import { reconcileAll } from "./targetIntegrity";
 
 export interface NormalizedTargetMatchInput {
   name?: string;
@@ -12,6 +21,8 @@ export interface TargetGraphInput {
   files: FitsMetadata[];
   groups?: TargetGroup[];
   sessions?: ObservationSession[];
+  plans?: ObservationPlan[];
+  logEntries?: ObservationLogEntry[];
 }
 
 export interface TargetGraphPatch {
@@ -19,6 +30,8 @@ export interface TargetGraphPatch {
   files: FitsMetadata[];
   groups: TargetGroup[];
   sessions: ObservationSession[];
+  plans: ObservationPlan[];
+  logEntries: ObservationLogEntry[];
   changed: boolean;
 }
 
@@ -39,13 +52,6 @@ function arrayEquals(a: string[], b: string[]): boolean {
     if (a[i] !== b[i]) return false;
   }
   return true;
-}
-
-function pickNewestTarget(targets: Target[]): Target {
-  return [...targets].sort((a, b) => {
-    if (a.updatedAt !== b.updatedAt) return b.updatedAt - a.updatedAt;
-    return b.createdAt - a.createdAt;
-  })[0];
 }
 
 export function normalizeTargetMatch({
@@ -83,165 +89,49 @@ export function computeTargetFileReconciliation({
   files,
   groups = [],
   sessions = [],
+  plans = [],
+  logEntries = [],
 }: TargetGraphInput): TargetGraphPatch {
-  const validFileIds = new Set(files.map((file) => file.id));
-  const targetById = new Map(targets.map((target) => [target.id, target]));
-  const validTargetIds = new Set(targetById.keys());
-
-  const sanitizedFiles = files.map((file) => {
-    if (!file.targetId || validTargetIds.has(file.targetId)) return file;
-    return { ...file, targetId: undefined };
+  const patch = reconcileAll({
+    targets,
+    files,
+    groups,
+    sessions,
+    plans,
+    logEntries,
   });
-
-  const fileTargetCandidates = new Map<string, Target[]>();
-  for (const target of targets) {
-    const dedupedImageIds = toUniqueStrings(target.imageIds).filter((imageId) =>
-      validFileIds.has(imageId),
-    );
-    for (const imageId of dedupedImageIds) {
-      const list = fileTargetCandidates.get(imageId);
-      if (list) {
-        list.push(target);
-      } else {
-        fileTargetCandidates.set(imageId, [target]);
-      }
-    }
-  }
-
-  const fileAssignment = new Map<string, string | undefined>();
-  for (const file of sanitizedFiles) {
-    if (file.targetId && validTargetIds.has(file.targetId)) {
-      fileAssignment.set(file.id, file.targetId);
-      continue;
-    }
-
-    const candidates = fileTargetCandidates.get(file.id) ?? [];
-    if (candidates.length === 1) {
-      fileAssignment.set(file.id, candidates[0].id);
-      continue;
-    }
-
-    if (candidates.length > 1) {
-      fileAssignment.set(file.id, pickNewestTarget(candidates).id);
-      continue;
-    }
-
-    fileAssignment.set(file.id, undefined);
-  }
-
-  const imageIdsByTarget = new Map<string, Set<string>>();
-  for (const [fileId, targetId] of fileAssignment.entries()) {
-    if (!targetId) continue;
-    const bucket = imageIdsByTarget.get(targetId);
-    if (bucket) {
-      bucket.add(fileId);
-    } else {
-      imageIdsByTarget.set(targetId, new Set([fileId]));
-    }
-  }
-
-  let targetsChanged = false;
-  const reconciledTargets = targets.map((target) => {
-    const assignedSet = imageIdsByTarget.get(target.id) ?? new Set<string>();
-    const orderedImageIds = target.imageIds.filter((imageId) => assignedSet.has(imageId));
-    for (const imageId of assignedSet) {
-      if (!orderedImageIds.includes(imageId)) {
-        orderedImageIds.push(imageId);
-      }
-    }
-
-    const cleanedRatings: Record<string, number> = {};
-    for (const [imageId, rating] of Object.entries(target.imageRatings)) {
-      if (assignedSet.has(imageId)) {
-        cleanedRatings[imageId] = rating;
-      }
-    }
-
-    const nextBestImageId =
-      target.bestImageId && assignedSet.has(target.bestImageId) ? target.bestImageId : undefined;
-
-    const imageIdsChanged = !arrayEquals(target.imageIds, orderedImageIds);
-    const ratingsChanged =
-      Object.keys(cleanedRatings).length !== Object.keys(target.imageRatings).length;
-    const bestImageChanged = target.bestImageId !== nextBestImageId;
-    if (!imageIdsChanged && !ratingsChanged && !bestImageChanged) return target;
-
-    targetsChanged = true;
-    return {
-      ...target,
-      imageIds: orderedImageIds,
-      imageRatings: cleanedRatings,
-      bestImageId: nextBestImageId,
-      updatedAt: Date.now(),
-    };
-  });
-
-  let filesChanged = false;
-  const reconciledFiles = sanitizedFiles.map((file) => {
-    const assignedTargetId = fileAssignment.get(file.id);
-    if (file.targetId === assignedTargetId) return file;
-    filesChanged = true;
-    return { ...file, targetId: assignedTargetId };
-  });
-
-  let groupsChanged = false;
-  const reconciledGroups = groups.map((group) => {
-    const normalizedTargetIds = toUniqueStrings(group.targetIds).filter((targetId) =>
-      validTargetIds.has(targetId),
-    );
-    if (arrayEquals(group.targetIds, normalizedTargetIds)) return group;
-    groupsChanged = true;
-    return {
-      ...group,
-      targetIds: normalizedTargetIds,
-      updatedAt: Date.now(),
-    };
-  });
-
-  const validTargetNames = new Set(reconciledTargets.map((target) => target.name));
-  let sessionsChanged = false;
-  const reconciledSessions = sessions.map((session) => {
-    const normalizedTargetNames = toUniqueStrings(session.targets).filter((name) =>
-      validTargetNames.has(name),
-    );
-    const normalizedImageIds = toUniqueStrings(session.imageIds).filter((imageId) =>
-      validFileIds.has(imageId),
-    );
-    if (
-      arrayEquals(session.targets, normalizedTargetNames) &&
-      arrayEquals(session.imageIds, normalizedImageIds)
-    ) {
-      return session;
-    }
-    sessionsChanged = true;
-    return {
-      ...session,
-      targets: normalizedTargetNames,
-      imageIds: normalizedImageIds,
-    };
-  });
-
   return {
-    targets: reconciledTargets,
-    files: reconciledFiles,
-    groups: reconciledGroups,
-    sessions: reconciledSessions,
-    changed: targetsChanged || filesChanged || groupsChanged || sessionsChanged,
+    targets: patch.targets,
+    files: patch.files,
+    groups: patch.groups,
+    sessions: patch.sessions,
+    plans: patch.plans,
+    logEntries: patch.logEntries,
+    changed: patch.changed,
   };
 }
 
 export function computeMergeRelinkPatch(
   input: TargetGraphInput & { destId: string; sourceId: string },
 ): TargetGraphPatch {
-  const { destId, sourceId, targets, files, groups = [], sessions = [] } = input;
+  const {
+    destId,
+    sourceId,
+    targets,
+    files,
+    groups = [],
+    sessions = [],
+    plans = [],
+    logEntries = [],
+  } = input;
   if (destId === sourceId) {
-    return { targets, files, groups, sessions, changed: false };
+    return { targets, files, groups, sessions, plans, logEntries, changed: false };
   }
 
   const dest = targets.find((target) => target.id === destId);
   const source = targets.find((target) => target.id === sourceId);
   if (!dest || !source) {
-    return { targets, files, groups, sessions, changed: false };
+    return { targets, files, groups, sessions, plans, logEntries, changed: false };
   }
 
   const mergedTarget: Target = {
@@ -272,16 +162,51 @@ export function computeMergeRelinkPatch(
     };
   });
 
+  const sourceNames = new Set([source.name, ...source.aliases].map((name) => normalizeName(name)));
   const relinkedSessions = sessions.map((session) => {
-    const replaced = session.targets.map((targetName) =>
-      targetName === source.name ? mergedTarget.name : targetName,
-    );
-    const deduped = toUniqueStrings(replaced);
-    if (arrayEquals(session.targets, deduped)) return session;
+    const normalizedRefs = normalizeSessionTargetRefs(session, targets);
+    const replacedRefs = normalizedRefs.map((ref) => {
+      const normalizedRefName = normalizeName(ref.name);
+      if (ref.targetId === sourceId || (!ref.targetId && sourceNames.has(normalizedRefName))) {
+        return { targetId: destId, name: mergedTarget.name };
+      }
+      if (ref.targetId === destId) {
+        return { ...ref, name: mergedTarget.name };
+      }
+      return ref;
+    });
+    const dedupedRefs = dedupeTargetRefs(replacedRefs, targets);
+    if (session.targetRefs && session.targetRefs.length > 0) {
+      const unchanged =
+        session.targetRefs.length === dedupedRefs.length &&
+        session.targetRefs.every(
+          (ref, idx) =>
+            ref.targetId === dedupedRefs[idx].targetId && ref.name === dedupedRefs[idx].name,
+        );
+      if (unchanged) return session;
+    }
     return {
       ...session,
-      targets: deduped,
+      targetRefs: dedupedRefs,
     };
+  });
+
+  const relinkedPlans = plans.map((plan) => {
+    const normalizedPlanName = normalizeName(plan.targetName);
+    if (plan.targetId === sourceId || (!plan.targetId && sourceNames.has(normalizedPlanName))) {
+      return {
+        ...plan,
+        targetId: destId,
+        targetName: mergedTarget.name,
+      };
+    }
+    if (plan.targetId === destId && plan.targetName !== mergedTarget.name) {
+      return {
+        ...plan,
+        targetName: mergedTarget.name,
+      };
+    }
+    return plan;
   });
 
   const reconciled = computeTargetFileReconciliation({
@@ -289,6 +214,8 @@ export function computeMergeRelinkPatch(
     files: relinkedFiles,
     groups: relinkedGroups,
     sessions: relinkedSessions,
+    plans: relinkedPlans,
+    logEntries,
   });
 
   return {

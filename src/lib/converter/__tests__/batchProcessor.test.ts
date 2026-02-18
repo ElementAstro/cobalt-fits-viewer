@@ -1,7 +1,9 @@
 import type { ConvertOptions, BatchTask } from "../../fits/types";
+import { DEFAULT_FITS_TARGET_OPTIONS } from "../../fits/types";
 
 const mockReadFileAsArrayBuffer = jest.fn();
-const mockLoadFitsFromBuffer = jest.fn();
+const mockDetectPreferredSupportedImageFormat = jest.fn();
+const mockLoadFitsFromBufferAuto = jest.fn();
 const mockGetImageDimensions = jest.fn();
 const mockGetImagePixels = jest.fn();
 const mockFitsToRGBA = jest.fn();
@@ -12,31 +14,71 @@ const mockSkiaMakeImage = jest.fn();
 const mockWrittenFiles = new Map<string, Uint8Array>();
 
 jest.mock("../../utils/fileManager", () => ({
-  readFileAsArrayBuffer: (...args: unknown[]) => mockReadFileAsArrayBuffer(...args),
+  readFileAsArrayBuffer: (...args: any[]) => (mockReadFileAsArrayBuffer as any)(...args),
+}));
+
+jest.mock("../../import/fileFormat", () => ({
+  detectPreferredSupportedImageFormat: (...args: any[]) =>
+    (mockDetectPreferredSupportedImageFormat as any)(...args),
+  toImageSourceFormat: () => "fits",
+  splitFilenameExtension: (name: string) => {
+    const lastDot = name.lastIndexOf(".");
+    return {
+      baseName: lastDot > 0 ? name.slice(0, lastDot) : name,
+      extension: lastDot > 0 ? name.slice(lastDot) : "",
+    };
+  },
 }));
 
 jest.mock("../../fits/parser", () => ({
-  loadFitsFromBuffer: (...args: unknown[]) => mockLoadFitsFromBuffer(...args),
-  getImageDimensions: (...args: unknown[]) => mockGetImageDimensions(...args),
-  getImagePixels: (...args: unknown[]) => mockGetImagePixels(...args),
+  loadFitsFromBufferAuto: (...args: any[]) => (mockLoadFitsFromBufferAuto as any)(...args),
+  getImageDimensions: (...args: any[]) => (mockGetImageDimensions as any)(...args),
+  getImagePixels: (...args: any[]) => (mockGetImagePixels as any)(...args),
+  isRgbCube: () => ({ isRgb: false, width: 0, height: 0 }),
+  getImageChannels: jest.fn(),
+  getHeaderKeywords: jest.fn(() => []),
+  getCommentsAndHistory: jest.fn(() => ({ comments: [], history: [] })),
+  extractMetadata: jest.fn(() => ({ bitpix: 16 })),
 }));
 
 jest.mock("../formatConverter", () => ({
-  fitsToRGBA: (...args: unknown[]) => mockFitsToRGBA(...args),
+  fitsToRGBA: (...args: any[]) => (mockFitsToRGBA as any)(...args),
+}));
+
+jest.mock("../../image/rasterParser", () => ({
+  parseRasterFromBuffer: jest.fn(),
+  extractRasterMetadata: jest.fn(() => ({ frameType: "unknown" })),
+}));
+
+jest.mock("../../fits/writer", () => ({
+  writeFitsImage: jest.fn(() => new Uint8Array([1, 2, 3])),
+}));
+
+jest.mock("../../fits/compression", () => ({
+  gzipFitsBytes: jest.fn((bytes: Uint8Array) => bytes),
+  normalizeFitsCompression: jest.fn((buffer: ArrayBuffer) => new Uint8Array(buffer)),
+}));
+
+jest.mock("../../image/encoders/tiff", () => ({
+  encodeTiff: jest.fn(() => new Uint8Array([1, 2, 3])),
+}));
+
+jest.mock("../../image/encoders/bmp", () => ({
+  encodeBmp24: jest.fn(() => new Uint8Array([1, 2, 3])),
 }));
 
 jest.mock("../../utils/imageExport", () => ({
-  getExportDir: (...args: unknown[]) => mockGetExportDir(...args),
-  getExtension: (...args: unknown[]) => mockGetExtension(...args),
+  getExportDir: (...args: any[]) => (mockGetExportDir as any)(...args),
+  getExtension: (...args: any[]) => (mockGetExtension as any)(...args),
 }));
 
 jest.mock("@shopify/react-native-skia", () => ({
   Skia: {
     Data: {
-      fromBytes: (...args: unknown[]) => mockSkiaFromBytes(...args),
+      fromBytes: (...args: any[]) => (mockSkiaFromBytes as any)(...args),
     },
     Image: {
-      MakeImage: (...args: unknown[]) => mockSkiaMakeImage(...args),
+      MakeImage: (...args: any[]) => (mockSkiaMakeImage as any)(...args),
     },
   },
   AlphaType: { Unpremul: 2 },
@@ -73,6 +115,7 @@ const defaultOptions: ConvertOptions = {
   quality: 77,
   bitDepth: 8,
   dpi: 72,
+  fits: DEFAULT_FITS_TARGET_OPTIONS,
   stretch: "asinh",
   colormap: "grayscale",
   blackPoint: 0,
@@ -88,6 +131,10 @@ describe("batchProcessor", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockWrittenFiles.clear();
+    mockDetectPreferredSupportedImageFormat.mockReturnValue({
+      id: "fits",
+      sourceType: "fits",
+    });
   });
 
   it("creates a pending batch task with expected shape", () => {
@@ -112,8 +159,8 @@ describe("batchProcessor", () => {
     const mockEncodeToBytes = jest.fn(() => new Uint8Array([9, 8, 7]));
 
     mockReadFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    mockLoadFitsFromBuffer.mockReturnValue({});
-    mockGetImageDimensions.mockReturnValue({ width: 2, height: 1 });
+    mockLoadFitsFromBufferAuto.mockReturnValue({});
+    mockGetImageDimensions.mockReturnValue({ width: 2, height: 1, depth: 1, isDataCube: false });
     mockGetImagePixels.mockResolvedValue(new Float32Array([0.1, 0.2]));
     mockFitsToRGBA.mockReturnValue(new Uint8ClampedArray([1, 2, 3, 255, 4, 5, 6, 255]));
     mockSkiaFromBytes.mockReturnValue({ data: true });
@@ -145,7 +192,7 @@ describe("batchProcessor", () => {
     const onProgress = jest.fn();
 
     mockReadFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    mockLoadFitsFromBuffer.mockReturnValue({});
+    mockLoadFitsFromBufferAuto.mockReturnValue({});
     mockGetImageDimensions.mockReturnValue(null);
 
     await executeBatchConvert(
@@ -192,6 +239,7 @@ describe("batchProcessor", () => {
     expect(generateOutputFilename("m42.fits", "png", "sequence", { index: 12 })).toBe(
       "m42_0012.png",
     );
+    expect(generateOutputFilename("m42.fits.gz", "fits.gz", "original")).toBe("m42.fits.gz");
 
     expect(calculateProgress({ total: 0, completed: 0, failed: 0 } as BatchTask)).toBe(0);
     expect(calculateProgress({ total: 8, completed: 5, failed: 1 } as BatchTask)).toBe(75);

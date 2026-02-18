@@ -40,7 +40,7 @@ export function GroupManagerSheet({
   onClose,
   onSelectGroup,
   onCreateGroup,
-  onUpdateGroup: _onUpdateGroup,
+  onUpdateGroup,
   onDeleteGroup,
 }: GroupManagerSheetProps) {
   const { t } = useI18n();
@@ -52,6 +52,10 @@ export function GroupManagerSheet({
   const [newName, setNewName] = useState("");
   const [newDescription, setNewDescription] = useState("");
   const [newColor, setNewColor] = useState(GROUP_COLORS[0]);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editColor, setEditColor] = useState(GROUP_COLORS[0]);
 
   const handleCreate = () => {
     const trimmed = newName.trim();
@@ -73,6 +77,23 @@ export function GroupManagerSheet({
 
   const handleClearSelection = () => {
     onSelectGroup(undefined);
+  };
+
+  const startEdit = (group: TargetGroup) => {
+    setEditingGroupId(group.id);
+    setEditName(group.name);
+    setEditDescription(group.description ?? "");
+    setEditColor(group.color ?? GROUP_COLORS[0]);
+  };
+
+  const saveEdit = () => {
+    if (!editingGroupId || !editName.trim()) return;
+    onUpdateGroup(editingGroupId, {
+      name: editName.trim(),
+      description: editDescription.trim() || undefined,
+      color: editColor,
+    });
+    setEditingGroupId(null);
   };
 
   return (
@@ -194,37 +215,92 @@ export function GroupManagerSheet({
                     className={selectedGroupId === group.id ? "border-primary" : ""}
                   >
                     <Card.Body className="p-3">
-                      <View className="flex-row items-center justify-between">
-                        <View className="flex-row items-center gap-2 flex-1">
-                          <View
-                            className="w-3 h-3 rounded-full"
-                            style={{ backgroundColor: group.color ?? "#888" }}
+                      {editingGroupId === group.id ? (
+                        <View className="gap-2">
+                          <Input value={editName} onChangeText={setEditName} autoCorrect={false} />
+                          <Input
+                            value={editDescription}
+                            onChangeText={setEditDescription}
+                            autoCorrect={false}
                           />
-                          <View className="flex-1">
-                            <Text className="text-sm font-medium text-foreground">
-                              {group.name}
-                            </Text>
-                            {group.description && (
-                              <Text className="text-xs text-muted">{group.description}</Text>
-                            )}
-                            <Text className="text-[10px] text-muted mt-0.5">
-                              {group.targetIds.length} {t("targets.groups.targets")}
-                            </Text>
+                          <View className="flex-row gap-2 flex-wrap">
+                            {GROUP_COLORS.map((color) => (
+                              <Button
+                                key={color}
+                                variant={editColor === color ? "primary" : "outline"}
+                                size="sm"
+                                className="w-8 h-8 p-0"
+                                onPress={() => setEditColor(color)}
+                              >
+                                <View
+                                  className="w-5 h-5 rounded-full"
+                                  style={{ backgroundColor: color }}
+                                />
+                              </Button>
+                            ))}
+                          </View>
+                          <View className="flex-row gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onPress={() => setEditingGroupId(null)}
+                            >
+                              <Button.Label>{t("common.cancel")}</Button.Label>
+                            </Button>
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onPress={saveEdit}
+                              isDisabled={!editName.trim()}
+                            >
+                              <Button.Label>{t("common.save")}</Button.Label>
+                            </Button>
                           </View>
                         </View>
-                        <View className="flex-row gap-1">
-                          <Button variant="ghost" size="sm" onPress={() => handleSelect(group.id)}>
-                            <Ionicons
-                              name={selectedGroupId === group.id ? "checkmark" : "add"}
-                              size={16}
-                              color={mutedColor}
+                      ) : (
+                        <View className="flex-row items-center justify-between">
+                          <View className="flex-row items-center gap-2 flex-1">
+                            <View
+                              className="w-3 h-3 rounded-full"
+                              style={{ backgroundColor: group.color ?? "#888" }}
                             />
-                          </Button>
-                          <Button variant="ghost" size="sm" onPress={() => onDeleteGroup(group.id)}>
-                            <Ionicons name="trash-outline" size={14} color={dangerColor} />
-                          </Button>
+                            <View className="flex-1">
+                              <Text className="text-sm font-medium text-foreground">
+                                {group.name}
+                              </Text>
+                              {group.description && (
+                                <Text className="text-xs text-muted">{group.description}</Text>
+                              )}
+                              <Text className="text-[10px] text-muted mt-0.5">
+                                {group.targetIds.length} {t("targets.groups.targets")}
+                              </Text>
+                            </View>
+                          </View>
+                          <View className="flex-row gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onPress={() => handleSelect(group.id)}
+                            >
+                              <Ionicons
+                                name={selectedGroupId === group.id ? "checkmark" : "add"}
+                                size={16}
+                                color={mutedColor}
+                              />
+                            </Button>
+                            <Button variant="ghost" size="sm" onPress={() => startEdit(group)}>
+                              <Ionicons name="create-outline" size={14} color={mutedColor} />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onPress={() => onDeleteGroup(group.id)}
+                            >
+                              <Ionicons name="trash-outline" size={14} color={dangerColor} />
+                            </Button>
+                          </View>
                         </View>
-                      </View>
+                      )}
                     </Card.Body>
                   </Card>
                 ))}
