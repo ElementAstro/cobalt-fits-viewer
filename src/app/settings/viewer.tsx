@@ -87,9 +87,17 @@ export default function ViewerSettingsScreen() {
   const canvasMinScale = useSettingsStore((s) => s.canvasMinScale);
   const canvasMaxScale = useSettingsStore((s) => s.canvasMaxScale);
   const canvasDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
+  const canvasPinchSensitivity = useSettingsStore((s) => s.canvasPinchSensitivity);
+  const canvasPinchOverzoomFactor = useSettingsStore((s) => s.canvasPinchOverzoomFactor);
+  const canvasPanRubberBandFactor = useSettingsStore((s) => s.canvasPanRubberBandFactor);
+  const canvasWheelZoomSensitivity = useSettingsStore((s) => s.canvasWheelZoomSensitivity);
   const setCanvasMinScale = useSettingsStore((s) => s.setCanvasMinScale);
   const setCanvasMaxScale = useSettingsStore((s) => s.setCanvasMaxScale);
   const setCanvasDoubleTapScale = useSettingsStore((s) => s.setCanvasDoubleTapScale);
+  const setCanvasPinchSensitivity = useSettingsStore((s) => s.setCanvasPinchSensitivity);
+  const setCanvasPinchOverzoomFactor = useSettingsStore((s) => s.setCanvasPinchOverzoomFactor);
+  const setCanvasPanRubberBandFactor = useSettingsStore((s) => s.setCanvasPanRubberBandFactor);
+  const setCanvasWheelZoomSensitivity = useSettingsStore((s) => s.setCanvasWheelZoomSensitivity);
 
   // Histogram & Pixel info
   const defaultHistogramMode = useSettingsStore((s) => s.defaultHistogramMode);
@@ -144,7 +152,7 @@ export default function ViewerSettingsScreen() {
   }));
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__viewer" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -164,6 +172,7 @@ export default function ViewerSettingsScreen() {
         {/* Basic Defaults */}
         <SettingsSection title={t("settings.viewer")}>
           <SettingsRow
+            testID="e2e-action-settings__viewer-open-stretch"
             icon="resize-outline"
             label={t("viewer.stretch")}
             value={getStretchLabel(defaultStretch)}
@@ -171,6 +180,7 @@ export default function ViewerSettingsScreen() {
           />
           <Separator />
           <SettingsRow
+            testID="e2e-action-settings__viewer-open-colormap"
             icon="color-palette-outline"
             label={t("viewer.colormap")}
             value={getColormapLabel(defaultColormap)}
@@ -384,6 +394,70 @@ export default function ViewerSettingsScreen() {
               max={10}
               step={1}
               onValueChange={setCanvasDoubleTapScale}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="resize-outline"
+            label={t("settings.canvasPinchSensitivity")}
+            value={`${canvasPinchSensitivity.toFixed(2)}`}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={canvasPinchSensitivity}
+              min={0.6}
+              max={1.8}
+              step={0.05}
+              onValueChange={setCanvasPinchSensitivity}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="expand-outline"
+            label={t("settings.canvasPinchOverzoom")}
+            value={`+${Math.round((canvasPinchOverzoomFactor - 1) * 100)}%`}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={canvasPinchOverzoomFactor}
+              min={1}
+              max={1.6}
+              step={0.05}
+              onValueChange={setCanvasPinchOverzoomFactor}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="move-outline"
+            label={t("settings.canvasPanElasticity")}
+            value={`${Math.round(canvasPanRubberBandFactor * 100)}%`}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={canvasPanRubberBandFactor}
+              min={0}
+              max={0.9}
+              step={0.05}
+              onValueChange={setCanvasPanRubberBandFactor}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="options-outline"
+            label={t("settings.canvasWheelZoomSensitivity")}
+            value={canvasWheelZoomSensitivity.toFixed(4)}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={canvasWheelZoomSensitivity}
+              min={0.0005}
+              max={0.004}
+              step={0.0001}
+              onValueChange={setCanvasWheelZoomSensitivity}
             />
           </View>
         </SettingsSection>

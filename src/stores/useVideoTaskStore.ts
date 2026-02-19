@@ -36,7 +36,7 @@ interface VideoTaskStoreState {
 
 export const useVideoTaskStore = create<VideoTaskStoreState>()(
   persist(
-    (set, get) => ({
+    (set) => ({
       tasks: [],
 
       enqueueTask: (request) => {

@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://session/session-001
+- assertVisible:
+    id: e2e-screen-session__param_id
+- tapOn:
+    id: e2e-action-session__param_id-open-edit
+- tapOn:
+    id: e2e-action-session__param_id-back

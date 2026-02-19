@@ -15,6 +15,9 @@ const mockGzipFitsBytes = jest.fn((bytes: Uint8Array) => bytes);
 const mockNormalizeFitsCompression = jest.fn((bytes: ArrayBuffer | Uint8Array) =>
   bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
 );
+const mockCreateTiffFrameProvider = jest.fn();
+const mockEncodeTiff = jest.fn(() => new Uint8Array([1, 2, 3]));
+const mockEncodeTiffDocument = jest.fn(() => new Uint8Array([3, 2, 1]));
 
 jest.mock("@shopify/react-native-skia", () => ({
   AlphaType: { Unpremul: "Unpremul" },
@@ -62,7 +65,12 @@ jest.mock("../../lib/fits/compression", () => ({
 }));
 
 jest.mock("../../lib/image/encoders/tiff", () => ({
-  encodeTiff: jest.fn(() => new Uint8Array([1, 2, 3])),
+  encodeTiff: (...args: any[]) => (mockEncodeTiff as any)(...args),
+  encodeTiffDocument: (...args: any[]) => (mockEncodeTiffDocument as any)(...args),
+}));
+
+jest.mock("../../lib/image/tiff/decoder", () => ({
+  createTiffFrameProvider: (...args: any[]) => (mockCreateTiffFrameProvider as any)(...args),
 }));
 
 jest.mock("../../lib/image/encoders/bmp", () => ({
@@ -94,6 +102,12 @@ jest.mock("../../lib/logger", () => ({
     debug: jest.fn(),
   },
 }));
+
+const loggerMock = jest.requireMock("../../lib/logger") as {
+  Logger: {
+    warn: jest.Mock;
+  };
+};
 
 describe("useExport", () => {
   beforeEach(() => {
@@ -152,6 +166,177 @@ describe("useExport", () => {
     });
 
     expect(mockNormalizeFitsCompression).toHaveBeenCalled();
+  });
+
+  it("preserves multipage TIFF with compression options during TIFF export", async () => {
+    const { result } = renderHook(() => useExport());
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+    const original = new Uint8Array([0x49, 0x49, 0x2b, 0x00, 0x08, 0x00]).buffer;
+    mockGetExtension.mockReturnValue("tiff");
+    const frame = {
+      index: 0,
+      width: 1,
+      height: 1,
+      bitDepth: 16,
+      sampleFormat: "uint",
+      photometric: 1,
+      compression: 5,
+      orientation: 1,
+      rgba: new Uint8Array([255, 255, 255, 255]),
+      pixels: new Float32Array([0.5]),
+      channels: null,
+      headers: [],
+    };
+    mockCreateTiffFrameProvider.mockResolvedValue({
+      pageCount: 2,
+      pages: [],
+      getHeaders: () => [],
+      getFrame: jest.fn(async () => frame),
+    });
+
+    await act(async () => {
+      const path = await result.current.exportImage({
+        rgbaData: rgba,
+        width: 1,
+        height: 1,
+        filename: "x.tiff",
+        format: "tiff",
+        tiff: { compression: "deflate", multipage: "preserve" },
+        source: {
+          sourceType: "raster",
+          sourceFormat: "tiff",
+          originalBuffer: original,
+        },
+      });
+      expect(path).toBe("file:///exports/x_export.tiff");
+    });
+
+    expect(mockEncodeTiffDocument).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        compression: "deflate",
+      }),
+    );
+    expect(mockEncodeTiff).not.toHaveBeenCalled();
+  });
+
+  it("preserves multipage mono TIFF structure when exporting FITS", async () => {
+    const { result } = renderHook(() => useExport());
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+    const original = new Uint8Array([0x49, 0x49, 0x2b, 0x00, 0x08, 0x00]).buffer;
+    mockGetExtension.mockReturnValue("fits");
+    const frameProvider = {
+      pageCount: 2,
+      pages: [],
+      getHeaders: () => [],
+      getFrame: jest.fn(async (index: number) => ({
+        index,
+        width: 2,
+        height: 1,
+        bitDepth: 16,
+        sampleFormat: "uint",
+        photometric: 1,
+        compression: 5,
+        orientation: 1,
+        rgba: new Uint8Array([255, 255, 255, 255, 0, 0, 0, 255]),
+        pixels: new Float32Array(index === 0 ? [0.1, 0.2] : [0.3, 0.4]),
+        channels: null,
+        headers: [],
+      })),
+    };
+    mockCreateTiffFrameProvider.mockResolvedValue(frameProvider);
+
+    await act(async () => {
+      const path = await result.current.exportImage({
+        rgbaData: rgba,
+        width: 2,
+        height: 1,
+        filename: "mono.tiff",
+        format: "fits",
+        fits: { mode: "scientific", compression: "none", colorLayout: "mono2d" },
+        tiff: { multipage: "preserve" },
+        source: {
+          sourceType: "raster",
+          sourceFormat: "tiff",
+          originalBuffer: original,
+        },
+      });
+      expect(path).toBe("file:///exports/mono_export.fits");
+    });
+
+    expect(mockWriteFitsImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        image: expect.objectContaining({
+          kind: "monoCube3d",
+          width: 2,
+          height: 1,
+          depth: 2,
+        }),
+      }),
+    );
+  });
+
+  it("logs warning and degrades when multipage TIFF cannot map losslessly to FITS", async () => {
+    const { result } = renderHook(() => useExport());
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+    const original = new Uint8Array([0x49, 0x49, 0x2b, 0x00, 0x08, 0x00]).buffer;
+    mockGetExtension.mockReturnValue("fits");
+    const frameProvider = {
+      pageCount: 2,
+      pages: [],
+      getHeaders: () => [],
+      getFrame: jest.fn(async (index: number) => ({
+        index,
+        width: 2,
+        height: 1,
+        bitDepth: 16,
+        sampleFormat: "uint",
+        photometric: 1,
+        compression: 5,
+        orientation: 1,
+        rgba: new Uint8Array([255, 255, 255, 255, 0, 0, 0, 255]),
+        pixels: new Float32Array([0.1, 0.2]),
+        channels:
+          index === 1
+            ? {
+                r: new Float32Array([0.1, 0.2]),
+                g: new Float32Array([0.3, 0.4]),
+                b: new Float32Array([0.5, 0.6]),
+              }
+            : null,
+        headers: [],
+      })),
+    };
+    mockCreateTiffFrameProvider.mockResolvedValue(frameProvider);
+
+    await act(async () => {
+      await result.current.exportImage({
+        rgbaData: rgba,
+        width: 2,
+        height: 1,
+        filename: "rgb-multi.tiff",
+        format: "fits",
+        fits: { mode: "scientific", compression: "none", colorLayout: "mono2d" },
+        tiff: { multipage: "preserve" },
+        source: {
+          sourceType: "raster",
+          sourceFormat: "tiff",
+          originalBuffer: original,
+        },
+      });
+    });
+
+    expect(mockWriteFitsImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        image: expect.objectContaining({
+          kind: "mono2d",
+        }),
+      }),
+    );
+    expect(loggerMock.Logger.warn).toHaveBeenCalledWith(
+      "export",
+      expect.stringContaining("not fully representable"),
+    );
   });
 
   it("returns null when skia image creation or encode fails", async () => {

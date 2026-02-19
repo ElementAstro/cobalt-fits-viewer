@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://settings/gallery
+- assertVisible:
+    id: e2e-screen-settings__gallery
+- tapOn:
+    id: e2e-action-settings__gallery-open-grid-columns
+- tapOn:
+    id: e2e-action-settings__gallery-open-file-list-style

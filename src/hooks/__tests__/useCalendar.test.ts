@@ -396,4 +396,90 @@ describe("useCalendar", () => {
     });
     expect(calendarApi.createPlanEvent).not.toHaveBeenCalled();
   });
+
+  it("createObservationPlan saves locally when permission is denied", async () => {
+    calendarApi.checkCalendarPermission.mockResolvedValueOnce(false);
+    calendarApi.requestCalendarPermission.mockResolvedValueOnce(false);
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const ok = await result.current.createObservationPlan({
+        title: "Local Plan",
+        targetName: "M31",
+        startDate: "2025-03-20T20:00:00.000Z",
+        endDate: "2025-03-20T22:00:00.000Z",
+        reminderMinutes: 30,
+      });
+      expect(ok).toBe(true);
+    });
+
+    expect(calendarApi.createPlanEvent).not.toHaveBeenCalled();
+    expect(useSessionStore.getState().plans).toHaveLength(1);
+    expect(useSessionStore.getState().plans[0].calendarEventId).toBeUndefined();
+    expect(useSessionStore.getState().plans[0].title).toBe("Local Plan");
+  });
+
+  it("create*ViaSystemCalendar performs permission precheck", async () => {
+    const session = makeSession({ id: "s-system" });
+    const plan = makePlan({ id: "p-system" });
+    useSessionStore.setState({ sessions: [session], plans: [plan] });
+
+    calendarApi.checkCalendarPermission.mockResolvedValue(false);
+    calendarApi.requestCalendarPermission.mockResolvedValue(false);
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const sessionOk = await result.current.createSessionViaSystemCalendar(session);
+      const planOk = await result.current.createPlanViaSystemCalendar(plan);
+      expect(sessionOk).toBe(false);
+      expect(planOk).toBe(false);
+    });
+
+    expect(calendarApi.createEventViaSystemUI).not.toHaveBeenCalled();
+  });
+
+  it("unsyncObservationPlan removes calendar link locally", async () => {
+    const plan = makePlan({ id: "plan-unsync", calendarEventId: "event-plan-unsync" });
+    useSessionStore.setState({ plans: [plan] });
+    calendarApi.deleteCalendarEvent.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const ok = await result.current.unsyncObservationPlan(plan.id);
+      expect(ok).toBe(true);
+    });
+
+    expect(calendarApi.deleteCalendarEvent).toHaveBeenCalledWith("event-plan-unsync");
+    expect(useSessionStore.getState().plans[0].calendarEventId).toBeUndefined();
+  });
+
+  it("editPlanInCalendar refreshes local plan when action is opened", async () => {
+    const plan = makePlan({
+      id: "plan-opened-refresh",
+      title: "Old Plan",
+      calendarEventId: "event-plan-opened",
+    });
+    useSessionStore.setState({ plans: [plan] });
+
+    calendarApi.editEventInSystemCalendar.mockResolvedValueOnce({ action: "opened" });
+    calendarApi.getCalendarEvent.mockResolvedValueOnce({
+      id: "event-plan-opened",
+      title: "🔭 Refreshed Plan",
+      notes: "from system calendar",
+      startDate: new Date("2025-05-01T02:00:00.000Z"),
+      endDate: new Date("2025-05-01T04:00:00.000Z"),
+      alarms: [{ relativeOffset: -20 }],
+    });
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const ok = await result.current.editPlanInCalendar(plan);
+      expect(ok).toBe(true);
+    });
+
+    expect(calendarApi.getCalendarEvent).toHaveBeenCalledWith("event-plan-opened");
+    const updated = useSessionStore.getState().plans[0];
+    expect(updated.title).toBe("Refreshed Plan");
+    expect(updated.reminderMinutes).toBe(20);
+  });
 });

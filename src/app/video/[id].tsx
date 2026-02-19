@@ -46,7 +46,7 @@ function toMediaExportFormat(format?: string): MediaExportFormat {
 export default function VideoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const [, mutedColor] = useThemeColor(["success", "muted"]);
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
   const allFiles = useFitsStore((s) => s.files);
@@ -260,7 +260,7 @@ export default function VideoDetailScreen() {
   }
 
   return (
-    <View className="flex-1 bg-background px-4 pt-4">
+    <View testID="e2e-screen-video__param_id" className="flex-1 bg-background px-4 pt-4">
       <View className="mb-3 flex-row items-center justify-between gap-2">
         <Button size="sm" variant="outline" isIconOnly onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={16} color={mutedColor} />
@@ -317,7 +317,13 @@ export default function VideoDetailScreen() {
               <Button size="sm" variant="outline" isIconOnly onPress={() => handleSeekBy(-10)}>
                 <Ionicons name="play-back" size={14} color={mutedColor} />
               </Button>
-              <Button size="sm" variant="primary" isIconOnly onPress={handlePlayPause}>
+              <Button
+                testID="e2e-action-video__param_id-play-pause"
+                size="sm"
+                variant="primary"
+                isIconOnly
+                onPress={handlePlayPause}
+              >
                 <Ionicons name={isPlaying ? "pause" : "play"} size={14} color="#fff" />
               </Button>
               <Button size="sm" variant="outline" isIconOnly onPress={() => handleSeekBy(10)}>
@@ -325,7 +331,12 @@ export default function VideoDetailScreen() {
               </Button>
             </View>
             <View className="flex-row items-center gap-1">
-              <Button size="sm" variant="outline" onPress={handleCycleRate}>
+              <Button
+                testID="e2e-action-video__param_id-cycle-rate"
+                size="sm"
+                variant="outline"
+                onPress={handleCycleRate}
+              >
                 <Button.Label>{playbackRate.toFixed(1)}x</Button.Label>
               </Button>
               <Button size="sm" variant="outline" isIconOnly onPress={handleToggleMute}>
@@ -383,7 +394,11 @@ export default function VideoDetailScreen() {
           <Ionicons name="build-outline" size={14} color="#fff" />
           <Button.Label>Process</Button.Label>
         </Button>
-        <Button variant="outline" onPress={() => setShowQueueSheet(true)}>
+        <Button
+          testID="e2e-action-video__param_id-open-queue"
+          variant="outline"
+          onPress={() => setShowQueueSheet(true)}
+        >
           <Ionicons name="list-outline" size={14} color={mutedColor} />
           <Button.Label>Queue</Button.Label>
         </Button>

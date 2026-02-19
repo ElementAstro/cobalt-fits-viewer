@@ -101,7 +101,7 @@ export default function GallerySettingsScreen() {
   }));
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__gallery" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -121,6 +121,7 @@ export default function GallerySettingsScreen() {
         {/* Grid & Thumbnails */}
         <SettingsSection title={t("settings.gallery")}>
           <SettingsRow
+            testID="e2e-action-settings__gallery-open-grid-columns"
             icon="grid-outline"
             label={t("settings.gridColumns")}
             value={`${gridColumns}`}
@@ -164,6 +165,7 @@ export default function GallerySettingsScreen() {
         {/* File List Style */}
         <SettingsSection title={t("settings.fileListStyle")}>
           <SettingsRow
+            testID="e2e-action-settings__gallery-open-file-list-style"
             icon="list-outline"
             label={t("settings.fileListStyle")}
             value={

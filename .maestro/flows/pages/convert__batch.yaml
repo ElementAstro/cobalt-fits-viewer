@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://convert/batch
+- assertVisible:
+    id: e2e-screen-convert__index
+- tapOn:
+    id: e2e-action-convert__index-select-file-fits-001
+- tapOn:
+    id: e2e-action-convert__index-convert

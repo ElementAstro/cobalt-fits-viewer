@@ -80,6 +80,9 @@ describe("calendarService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockPlatform.OS = "ios";
+    if (!mockCalendar.editEventInCalendarAsync) {
+      mockCalendar.editEventInCalendarAsync = jest.fn();
+    }
   });
 
   it("checks availability and permission state", async () => {
@@ -116,7 +119,7 @@ describe("calendarService", () => {
     const mod = loadCalendarService();
     const planDetails = mod.buildPlanEventDetails(plan);
     expect(planDetails.title).toBe("🔭 Plan A");
-    expect(planDetails.location).toBe("Tokyo");
+    expect(planDetails.location).toBe("10.0000, 20.0000");
     expect(planDetails.alarms).toEqual([{ relativeOffset: -30 }]);
 
     const sessionDetails = mod.buildSessionEventDetails(session, 15);
@@ -153,5 +156,17 @@ describe("calendarService", () => {
 
     mockCalendar.deleteEventAsync.mockRejectedValue(new Error("already deleted"));
     await expect(mod.deleteCalendarEvent("missing")).resolves.toBeUndefined();
+  });
+
+  it("falls back to open event flow when edit API is unavailable", async () => {
+    delete (mockCalendar as { editEventInCalendarAsync?: jest.Mock }).editEventInCalendarAsync;
+    const mod = loadCalendarService();
+    mockCalendar.openEventInCalendarAsync.mockResolvedValue(undefined);
+
+    await expect(mod.editEventInSystemCalendar("event-opened")).resolves.toEqual({
+      action: "opened",
+      id: "event-opened",
+    });
+    expect(mockCalendar.openEventInCalendarAsync).toHaveBeenCalledWith({ id: "event-opened" });
   });
 });

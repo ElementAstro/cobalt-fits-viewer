@@ -47,6 +47,7 @@ export default function SessionsScreen() {
   const {
     calendarSyncEnabled,
     syncSession,
+    unsyncSession,
     syncAllSessions,
     syncAllObservationPlans,
     refreshSessionFromCalendar,
@@ -62,6 +63,7 @@ export default function SessionsScreen() {
     deleteObservationPlan,
     updateObservationPlan,
     syncObservationPlan,
+    unsyncObservationPlan,
     plans,
     syncing,
   } = useCalendar();
@@ -361,6 +363,7 @@ export default function SessionsScreen() {
             }
           }}
           onSyncToCalendar={isSelectionMode || !calendarSyncEnabled ? undefined : syncSession}
+          onUnsyncFromCalendar={isSelectionMode || !calendarSyncEnabled ? undefined : unsyncSession}
           onOpenInCalendar={
             isSelectionMode || !calendarSyncEnabled ? undefined : openSessionInCalendar
           }
@@ -385,6 +388,7 @@ export default function SessionsScreen() {
       toggleSelect,
       router,
       syncSession,
+      unsyncSession,
       openSessionInCalendar,
       refreshSessionFromCalendar,
       editSessionInCalendar,
@@ -616,6 +620,9 @@ export default function SessionsScreen() {
               key={plan.id}
               plan={plan}
               onSyncToCalendar={calendarSyncEnabled ? (p) => syncObservationPlan(p.id) : undefined}
+              onUnsyncFromCalendar={
+                calendarSyncEnabled ? (p) => void unsyncObservationPlan(p.id) : undefined
+              }
               onOpenInCalendar={calendarSyncEnabled ? openPlanInCalendar : undefined}
               onRefreshFromCalendar={calendarSyncEnabled ? refreshPlanFromCalendar : undefined}
               onEditInCalendar={calendarSyncEnabled ? editPlanInCalendar : undefined}
@@ -724,10 +731,20 @@ export default function SessionsScreen() {
           </Text>
         </View>
         <View className="flex-row gap-2">
-          <Button size="sm" variant="outline" onPress={() => setShowCreateSheet(true)}>
+          <Button
+            testID="e2e-action-tabs__sessions-open-create"
+            size="sm"
+            variant="outline"
+            onPress={() => setShowCreateSheet(true)}
+          >
             <Ionicons name="add-outline" size={14} color={mutedColor} />
           </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowPlanSheet(true)}>
+          <Button
+            testID="e2e-action-tabs__sessions-open-plan"
+            size="sm"
+            variant="outline"
+            onPress={() => setShowPlanSheet(true)}
+          >
             <Ionicons name="calendar-outline" size={14} color={mutedColor} />
           </Button>
           {sessions.length > 1 && (
@@ -883,7 +900,11 @@ export default function SessionsScreen() {
   ) : null;
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: contentPaddingTop }}>
+    <View
+      testID="e2e-screen-tabs__sessions"
+      className="flex-1 bg-background"
+      style={{ paddingTop: contentPaddingTop }}
+    >
       {selectionBar}
       {isLandscape ? (
         <View className="flex-1 flex-row">
@@ -895,10 +916,20 @@ export default function SessionsScreen() {
             <View className="mb-3 flex-row items-center justify-between">
               <Text className="text-xl font-bold text-foreground">{t("sessions.title")}</Text>
               <View className="flex-row gap-1">
-                <Button size="sm" variant="outline" onPress={() => setShowCreateSheet(true)}>
+                <Button
+                  testID="e2e-action-tabs__sessions-open-create"
+                  size="sm"
+                  variant="outline"
+                  onPress={() => setShowCreateSheet(true)}
+                >
                   <Ionicons name="add-outline" size={14} color={mutedColor} />
                 </Button>
-                <Button size="sm" variant="outline" onPress={() => setShowPlanSheet(true)}>
+                <Button
+                  testID="e2e-action-tabs__sessions-open-plan"
+                  size="sm"
+                  variant="outline"
+                  onPress={() => setShowPlanSheet(true)}
+                >
                   <Ionicons name="calendar-outline" size={14} color={mutedColor} />
                 </Button>
                 <Button

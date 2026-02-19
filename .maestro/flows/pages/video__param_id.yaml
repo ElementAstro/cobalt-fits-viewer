@@ -1,0 +1,11 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://video/video-001
+- assertVisible:
+    id: e2e-screen-video__param_id
+- tapOn:
+    id: e2e-action-video__param_id-play-pause
+- tapOn:
+    id: e2e-action-video__param_id-cycle-rate
+- tapOn:
+    id: e2e-action-video__param_id-open-queue

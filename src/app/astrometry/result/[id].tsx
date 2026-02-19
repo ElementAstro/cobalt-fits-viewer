@@ -145,7 +145,7 @@ export default function AstrometryResultScreen() {
   const durationStr = formatDuration(job.updatedAt - job.createdAt);
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-astrometry__result__param_id" className="flex-1 bg-background">
       {/* Header */}
       <View
         className="flex-row items-center pb-3"
@@ -175,7 +175,11 @@ export default function AstrometryResultScreen() {
 
         {/* Navigate to viewer if file exists */}
         {job.fileId && (
-          <PressableFeedback onPress={() => router.push(`/viewer/${job.fileId}`)} className="ml-2">
+          <PressableFeedback
+            testID="e2e-action-astrometry__result__param_id-open-viewer"
+            onPress={() => router.push(`/viewer/${job.fileId}`)}
+            className="ml-2"
+          >
             <Ionicons name="eye-outline" size={20} color={mutedColor} />
           </PressableFeedback>
         )}
@@ -201,7 +205,10 @@ export default function AstrometryResultScreen() {
             <View className="flex-row items-center justify-between w-full">
               <Card.Title className="text-xs">FITS WCS Keywords</Card.Title>
               <View className="flex-row gap-2">
-                <PressableFeedback onPress={handleCopyWCS}>
+                <PressableFeedback
+                  testID="e2e-action-astrometry__result__param_id-copy-wcs"
+                  onPress={handleCopyWCS}
+                >
                   <Ionicons
                     name={copied ? "checkmark-circle" : "copy-outline"}
                     size={16}

@@ -1,5 +1,5 @@
 import type { ConvertOptions, BatchTask } from "../../fits/types";
-import { DEFAULT_FITS_TARGET_OPTIONS } from "../../fits/types";
+import { DEFAULT_FITS_TARGET_OPTIONS, DEFAULT_TIFF_TARGET_OPTIONS } from "../../fits/types";
 
 const mockReadFileAsArrayBuffer = jest.fn();
 const mockDetectPreferredSupportedImageFormat = jest.fn();
@@ -7,6 +7,8 @@ const mockLoadFitsFromBufferAuto = jest.fn();
 const mockGetImageDimensions = jest.fn();
 const mockGetImagePixels = jest.fn();
 const mockFitsToRGBA = jest.fn();
+const mockParseRasterFromBufferAsync = jest.fn();
+const mockWriteFitsImage = jest.fn(() => new Uint8Array([1, 2, 3]));
 const mockGetExportDir = jest.fn(() => "/exports");
 const mockGetExtension = jest.fn(() => "png");
 const mockSkiaFromBytes = jest.fn();
@@ -46,12 +48,12 @@ jest.mock("../formatConverter", () => ({
 }));
 
 jest.mock("../../image/rasterParser", () => ({
-  parseRasterFromBuffer: jest.fn(),
+  parseRasterFromBufferAsync: (...args: any[]) => (mockParseRasterFromBufferAsync as any)(...args),
   extractRasterMetadata: jest.fn(() => ({ frameType: "unknown" })),
 }));
 
 jest.mock("../../fits/writer", () => ({
-  writeFitsImage: jest.fn(() => new Uint8Array([1, 2, 3])),
+  writeFitsImage: (...args: any[]) => (mockWriteFitsImage as any)(...args),
 }));
 
 jest.mock("../../fits/compression", () => ({
@@ -115,6 +117,7 @@ const defaultOptions: ConvertOptions = {
   quality: 77,
   bitDepth: 8,
   dpi: 72,
+  tiff: DEFAULT_TIFF_TARGET_OPTIONS,
   fits: DEFAULT_FITS_TARGET_OPTIONS,
   stretch: "asinh",
   colormap: "grayscale",
@@ -135,6 +138,9 @@ describe("batchProcessor", () => {
       id: "fits",
       sourceType: "fits",
     });
+    mockParseRasterFromBufferAsync.mockReset();
+    mockWriteFitsImage.mockReset();
+    mockWriteFitsImage.mockReturnValue(new Uint8Array([1, 2, 3]));
   });
 
   it("creates a pending batch task with expected shape", () => {
@@ -243,5 +249,75 @@ describe("batchProcessor", () => {
 
     expect(calculateProgress({ total: 0, completed: 0, failed: 0 } as BatchTask)).toBe(0);
     expect(calculateProgress({ total: 8, completed: 5, failed: 1 } as BatchTask)).toBe(75);
+  });
+
+  it("preserves multipage mono TIFF when converting to FITS", async () => {
+    const onProgress = jest.fn();
+    const frameProvider = {
+      pageCount: 2,
+      pages: [],
+      getHeaders: () => [],
+      getFrame: jest.fn(async (index: number) => ({
+        index,
+        width: 2,
+        height: 1,
+        bitDepth: 16,
+        sampleFormat: "uint",
+        photometric: 1,
+        compression: 5,
+        orientation: 1,
+        rgba: new Uint8Array([255, 255, 255, 255, 0, 0, 0, 255]),
+        pixels: new Float32Array(index === 0 ? [0.1, 0.2] : [0.3, 0.4]),
+        channels: null,
+        headers: [],
+      })),
+    };
+
+    mockReadFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(16));
+    mockDetectPreferredSupportedImageFormat.mockReturnValue({
+      id: "tiff",
+      sourceType: "raster",
+    });
+    mockParseRasterFromBufferAsync.mockResolvedValue({
+      width: 2,
+      height: 1,
+      depth: 2,
+      isMultiFrame: true,
+      frameIndex: 0,
+      bitDepth: 16,
+      sampleFormat: "uint",
+      photometric: 1,
+      compression: 5,
+      orientation: 1,
+      rgba: new Uint8Array([255, 255, 255, 255, 0, 0, 0, 255]),
+      pixels: new Float32Array([0.1, 0.2]),
+      channels: null,
+      headers: [],
+      frameProvider,
+      decodeStatus: "ready",
+    });
+
+    await executeBatchConvert(
+      "task-4",
+      [{ filepath: "/tmp/multi.tiff", filename: "multi.tiff" }],
+      {
+        ...defaultOptions,
+        format: "fits",
+      },
+      onProgress,
+    );
+
+    expect(frameProvider.getFrame).toHaveBeenCalledWith(0);
+    expect(frameProvider.getFrame).toHaveBeenCalledWith(1);
+    expect(mockWriteFitsImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        image: expect.objectContaining({
+          kind: "monoCube3d",
+          depth: 2,
+          width: 2,
+          height: 1,
+        }),
+      }),
+    );
   });
 });

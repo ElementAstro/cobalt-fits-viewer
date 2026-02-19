@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://settings/processing
+- assertVisible:
+    id: e2e-screen-settings__processing
+- tapOn:
+    id: e2e-action-settings__processing-open-stack-method
+- tapOn:
+    id: e2e-action-settings__processing-open-converter-format

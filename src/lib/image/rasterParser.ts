@@ -5,18 +5,35 @@
 
 import { Skia, AlphaType, ColorType } from "@shopify/react-native-skia";
 import { classifyWithDetail } from "../gallery/frameClassifier";
-import type { FitsMetadata, FrameClassificationConfig } from "../fits/types";
+import type { FitsMetadata, FrameClassificationConfig, HeaderKeyword } from "../fits/types";
+import {
+  createTiffFrameProvider,
+  isTiffLikeBuffer,
+  type RasterFrameProvider,
+} from "./tiff/decoder";
 
 export interface RasterDecodeResult {
   width: number;
   height: number;
+  depth: number;
+  isMultiFrame: boolean;
+  frameIndex: number;
+  bitDepth: number;
+  sampleFormat?: string;
+  photometric?: number;
+  compression?: number;
+  orientation?: number;
   rgba: Uint8Array;
   pixels: Float32Array;
   channels: {
     r: Float32Array;
     g: Float32Array;
     b: Float32Array;
-  };
+  } | null;
+  headers: HeaderKeyword[];
+  frameProvider?: RasterFrameProvider;
+  decodeStatus?: "ready" | "failed";
+  decodeError?: string;
 }
 
 function clampToByte(value: number): number {
@@ -89,16 +106,64 @@ export function parseRasterFromBuffer(buffer: ArrayBuffer): RasterDecodeResult {
   return {
     width,
     height,
+    depth: 1,
+    isMultiFrame: false,
+    frameIndex: 0,
+    bitDepth: 8,
     rgba,
     pixels: rgbaToLuma(rgba),
     channels: rgbaToChannels(rgba),
+    headers: [],
+    decodeStatus: "ready",
+  };
+}
+
+export async function parseRasterFromBufferAsync(
+  buffer: ArrayBuffer,
+  options?: {
+    frameIndex?: number;
+    cacheSize?: number;
+    preferTiffDecoder?: boolean;
+  },
+): Promise<RasterDecodeResult> {
+  const bytes = new Uint8Array(buffer);
+  const frameIndex = options?.frameIndex ?? 0;
+  const shouldUseTiffDecoder = options?.preferTiffDecoder !== false && isTiffLikeBuffer(bytes);
+  if (!shouldUseTiffDecoder) {
+    return parseRasterFromBuffer(buffer);
+  }
+
+  const frameProvider = await createTiffFrameProvider(buffer, options?.cacheSize ?? 3);
+  const safeFrameIndex = Math.max(0, Math.min(frameProvider.pageCount - 1, frameIndex));
+  const frame = await frameProvider.getFrame(safeFrameIndex);
+  return {
+    width: frame.width,
+    height: frame.height,
+    depth: frameProvider.pageCount,
+    isMultiFrame: frameProvider.pageCount > 1,
+    frameIndex: safeFrameIndex,
+    bitDepth: frame.bitDepth,
+    sampleFormat: frame.sampleFormat,
+    photometric: frame.photometric,
+    compression: frame.compression,
+    orientation: frame.orientation,
+    rgba: frame.rgba,
+    pixels: frame.pixels,
+    channels: frame.channels,
+    headers: frame.headers,
+    frameProvider,
+    decodeStatus: "ready",
   };
 }
 
 export function extractRasterMetadata(
   fileInfo: { filename: string; filepath: string; fileSize: number },
-  dims: { width: number; height: number },
+  dims: { width: number; height: number; depth?: number; bitDepth?: number },
   classificationConfig?: FrameClassificationConfig,
+  options?: {
+    decodeStatus?: FitsMetadata["decodeStatus"];
+    decodeError?: string;
+  },
 ): Omit<FitsMetadata, "id" | "importDate" | "isFavorite" | "tags" | "albumIds"> {
   const frameClassified = classifyWithDetail(
     undefined,
@@ -110,12 +175,14 @@ export function extractRasterMetadata(
     filename: fileInfo.filename,
     filepath: fileInfo.filepath,
     fileSize: fileInfo.fileSize,
-    bitpix: 8,
+    bitpix: dims.bitDepth ?? 8,
     naxis: 2,
     naxis1: dims.width,
     naxis2: dims.height,
-    naxis3: 1,
+    naxis3: dims.depth ?? 1,
     frameType: frameClassified.type,
     frameTypeSource: frameClassified.source,
+    decodeStatus: options?.decodeStatus ?? "ready",
+    decodeError: options?.decodeError,
   };
 }

@@ -139,6 +139,10 @@ export default function ViewerDetailScreen() {
   const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
   const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
   const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
+  const settingsPinchSensitivity = useSettingsStore((s) => s.canvasPinchSensitivity);
+  const settingsPinchOverzoomFactor = useSettingsStore((s) => s.canvasPinchOverzoomFactor);
+  const settingsPanRubberBandFactor = useSettingsStore((s) => s.canvasPanRubberBandFactor);
+  const settingsWheelZoomSensitivity = useSettingsStore((s) => s.canvasWheelZoomSensitivity);
   const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
   const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
   const haptics = useHapticFeedback();
@@ -200,6 +204,20 @@ export default function ViewerDetailScreen() {
   const [showAstrometryResult, setShowAstrometryResult] = useState(false);
   const [showAnnotations, setShowAnnotations] = useState(true);
   const [exportFormat, setExportFormat] = useState<ExportFormat>(defaultExportFormat);
+  const canvasGestureConfig = useMemo(
+    () => ({
+      pinchSensitivity: settingsPinchSensitivity,
+      pinchOverzoomFactor: settingsPinchOverzoomFactor,
+      panRubberBandFactor: settingsPanRubberBandFactor,
+      wheelZoomSensitivity: settingsWheelZoomSensitivity,
+    }),
+    [
+      settingsPanRubberBandFactor,
+      settingsPinchOverzoomFactor,
+      settingsPinchSensitivity,
+      settingsWheelZoomSensitivity,
+    ],
+  );
 
   const closeExportDialog = useCallback(() => setShowExport(false), []);
   const {
@@ -959,6 +977,7 @@ export default function ViewerDetailScreen() {
             minScale={settingsMinScale}
             maxScale={settingsMaxScale}
             doubleTapScale={settingsDoubleTapScale}
+            gestureConfig={canvasGestureConfig}
             onSwipeLeft={() => nextId && navigateTo(nextId)}
             onSwipeRight={() => prevId && navigateTo(prevId)}
             onLongPress={toggleFullscreen}
@@ -1106,6 +1125,7 @@ export default function ViewerDetailScreen() {
 
   return (
     <View
+      testID="e2e-screen-viewer__param_id"
       className="flex-1 bg-background"
       style={isLandscape ? { paddingLeft: insets.left, paddingRight: insets.right } : undefined}
     >

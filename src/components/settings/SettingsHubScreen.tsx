@@ -23,6 +23,7 @@ interface CategoryInfo {
   titleKey: string;
   descKey: string;
   route: SettingsRoute;
+  actionTestID: string;
   searchKeyHints: string[];
   searchTerms: string[];
 }
@@ -34,6 +35,7 @@ const CATEGORIES: CategoryInfo[] = [
     titleKey: "settings.categories.viewer",
     descKey: "settings.categories.viewerDesc",
     route: "/settings/viewer",
+    actionTestID: "e2e-action-settings__index-open-viewer",
     searchKeyHints: [
       "viewer.stretch",
       "viewer.colormap",
@@ -55,6 +57,7 @@ const CATEGORIES: CategoryInfo[] = [
     titleKey: "settings.categories.gallery",
     descKey: "settings.categories.galleryDesc",
     route: "/settings/gallery",
+    actionTestID: "e2e-action-settings__index-open-gallery",
     searchKeyHints: [
       "settings.gridColumns",
       "settings.thumbnailQuality",
@@ -74,6 +77,7 @@ const CATEGORIES: CategoryInfo[] = [
     titleKey: "settings.categories.processing",
     descKey: "settings.categories.processingDesc",
     route: "/settings/processing",
+    actionTestID: "e2e-action-settings__index-open-processing",
     searchKeyHints: [
       "settings.editorDefaults",
       "settings.defaultStackMethod",
@@ -91,6 +95,7 @@ const CATEGORIES: CategoryInfo[] = [
     titleKey: "settings.categories.observation",
     descKey: "settings.categories.observationDesc",
     route: "/settings/observation",
+    actionTestID: "e2e-action-settings__index-open-observation",
     searchKeyHints: [
       "settings.autoGroupByObject",
       "settings.targetSortBy",
@@ -110,6 +115,7 @@ const CATEGORIES: CategoryInfo[] = [
     titleKey: "settings.categories.appearance",
     descKey: "settings.categories.appearanceDesc",
     route: "/settings/appearance",
+    actionTestID: "e2e-action-settings__index-open-appearance",
     searchKeyHints: [
       "settings.language",
       "settings.theme",
@@ -128,6 +134,7 @@ const CATEGORIES: CategoryInfo[] = [
     titleKey: "settings.categories.storage",
     descKey: "settings.categories.storageDesc",
     route: "/settings/storage",
+    actionTestID: "e2e-action-settings__index-open-storage",
     searchKeyHints: [
       "settings.storageUsage",
       "settings.cacheSize",
@@ -145,6 +152,7 @@ const CATEGORIES: CategoryInfo[] = [
     titleKey: "settings.categories.about",
     descKey: "settings.categories.aboutDesc",
     route: "/settings/about",
+    actionTestID: "e2e-action-settings__index-open-about",
     searchKeyHints: [
       "settings.version",
       "settings.general",
@@ -185,7 +193,7 @@ export default function SettingsHubScreen() {
   const backgroundColor = useThemeColor("surface");
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__index" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -202,6 +210,7 @@ export default function SettingsHubScreen() {
         >
           <Ionicons name="search-outline" size={18} color={mutedColor} />
           <TextInput
+            testID="e2e-action-settings__index-search"
             placeholder={t("common.search")}
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -226,6 +235,7 @@ export default function SettingsHubScreen() {
               style={isLandscapeTablet ? { width: "48.5%", marginBottom: 12 } : undefined}
             >
               <SettingsCategoryCard
+                testID={category.actionTestID}
                 icon={category.icon}
                 title={t(category.titleKey)}
                 description={t(category.descKey)}

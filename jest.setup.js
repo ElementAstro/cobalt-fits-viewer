@@ -170,7 +170,13 @@ jest.mock("heroui-native", () => {
   Accordion.Indicator = c("accordion-indicator");
 
   const RadioGroup = c("radio-group");
-  RadioGroup.Item = c("radio-group-item");
+  RadioGroup.Item = (props) => {
+    const child =
+      typeof props.children === "function"
+        ? props.children({ isSelected: false, isDisabled: false, value: props.value })
+        : props.children;
+    return React.createElement(View, { testID: "radio-group-item", ...props }, child);
+  };
 
   const Select = c("select");
   Select.Trigger = c("select-trigger");

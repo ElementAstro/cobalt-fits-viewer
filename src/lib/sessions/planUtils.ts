@@ -1,4 +1,4 @@
-import type { ObservationPlan, ObservationSession } from "../fits/types";
+import type { GeoLocation, ObservationPlan, ObservationSession } from "../fits/types";
 
 export type PlanStatus = NonNullable<ObservationPlan["status"]>;
 export type PlanStatusFilter = PlanStatus | "all";
@@ -83,6 +83,17 @@ export function sortObservationPlans(
   }
 }
 
+function isValidGeoLocation(location: GeoLocation): boolean {
+  return (
+    Number.isFinite(location.latitude) &&
+    Number.isFinite(location.longitude) &&
+    location.latitude >= -90 &&
+    location.latitude <= 90 &&
+    location.longitude >= -180 &&
+    location.longitude <= 180
+  );
+}
+
 export function buildSessionFromPlan(
   plan: ObservationPlan,
   now: number = Date.now(),
@@ -95,6 +106,9 @@ export function buildSessionFromPlan(
   }
   if (endTime <= startTime) {
     throw new Error("Invalid plan time range");
+  }
+  if (plan.location && !isValidGeoLocation(plan.location)) {
+    throw new Error("Invalid plan location");
   }
 
   return {

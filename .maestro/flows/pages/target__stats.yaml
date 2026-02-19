@@ -1,0 +1,13 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://target/stats
+- assertVisible:
+    id: e2e-screen-target__stats
+- tapOn:
+    id: e2e-action-target__stats-back
+- assertVisible:
+    id: e2e-screen-tabs__targets
+- tapOn:
+    id: e2e-action-tabs__targets-open-stats
+- assertVisible:
+    id: e2e-screen-target__stats

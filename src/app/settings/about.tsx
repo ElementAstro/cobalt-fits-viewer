@@ -115,7 +115,7 @@ export default function AboutSettingsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__about" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -246,6 +246,7 @@ export default function AboutSettingsScreen() {
 
         {/* Restart Guide */}
         <Button
+          testID="e2e-action-settings__about-restart-guide"
           variant="outline"
           className="rounded-xl"
           onPress={handleRestartGuide}
@@ -259,6 +260,7 @@ export default function AboutSettingsScreen() {
 
         {/* Reset */}
         <Button
+          testID="e2e-action-settings__about-reset-all"
           variant="danger-soft"
           className="rounded-xl"
           onPress={handleResetAll}

@@ -1,14 +1,19 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import VideoDetailScreen from "../[id]";
 import { useFitsStore } from "../../../stores/useFitsStore";
+import { useSettingsStore } from "../../../stores/useSettingsStore";
+
+const mockBack = jest.fn();
+const mockPush = jest.fn();
+const mockReplace = jest.fn();
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ id: "video-1" }),
   useRouter: () => ({
-    back: jest.fn(),
-    push: jest.fn(),
-    replace: jest.fn(),
+    back: mockBack,
+    push: mockPush,
+    replace: mockReplace,
   }),
 }));
 
@@ -55,6 +60,11 @@ jest.mock("../../../hooks/useVideoProcessing", () => ({
 
 describe("/video/[id]", () => {
   beforeEach(() => {
+    jest.clearAllMocks();
+    useSettingsStore.setState({
+      videoCoreEnabled: true,
+      videoProcessingEnabled: true,
+    });
     useFitsStore.setState({
       files: [
         {
@@ -83,5 +93,42 @@ describe("/video/[id]", () => {
     expect(screen.getByTestId("video-view")).toBeTruthy();
     expect(screen.getByText("Process")).toBeTruthy();
     expect(screen.getByText("Queue")).toBeTruthy();
+  });
+
+  it("shows disabled state when video core feature flag is off", () => {
+    useSettingsStore.setState({
+      videoCoreEnabled: false,
+    });
+
+    render(<VideoDetailScreen />);
+    expect(screen.getByText("Video features are disabled by current settings.")).toBeTruthy();
+    fireEvent.press(screen.getByText("Back"));
+    expect(mockBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects to image viewer when current file is not video", async () => {
+    useFitsStore.setState({
+      files: [
+        {
+          id: "video-1",
+          filename: "image.fits",
+          filepath: "file:///image.fits",
+          fileSize: 2048,
+          importDate: Date.now(),
+          frameType: "light",
+          isFavorite: false,
+          tags: [],
+          albumIds: [],
+          mediaKind: "image",
+          sourceType: "fits",
+          sourceFormat: "fits",
+        },
+      ],
+    });
+
+    render(<VideoDetailScreen />);
+    await waitFor(() => {
+      expect(mockReplace).toHaveBeenCalledWith("/viewer/video-1");
+    });
   });
 });

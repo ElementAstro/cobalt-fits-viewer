@@ -1,4 +1,5 @@
 import { useSessionStore } from "../useSessionStore";
+import { useFitsStore } from "../useFitsStore";
 import type {
   ObservationSession,
   ObservationLogEntry,
@@ -49,6 +50,19 @@ const makePlan = (overrides: Partial<ObservationPlan> = {}): ObservationPlan => 
   ...overrides,
 });
 
+const makeFitsFile = (id: string, sessionId?: string) => ({
+  id,
+  filename: `${id}.fits`,
+  filepath: `file:///document/fits_files/${id}.fits`,
+  fileSize: 1024,
+  importDate: Date.now(),
+  frameType: "light",
+  isFavorite: false,
+  tags: [],
+  albumIds: [],
+  sessionId,
+});
+
 describe("useSessionStore", () => {
   beforeEach(() => {
     useSessionStore.setState({
@@ -56,6 +70,9 @@ describe("useSessionStore", () => {
       logEntries: [],
       plans: [],
       activeSession: null,
+    });
+    useFitsStore.setState({
+      files: [],
     });
   });
 
@@ -99,6 +116,20 @@ describe("useSessionStore", () => {
       expect(state.sessions[0].id).toBe("s2");
       expect(state.logEntries).toHaveLength(1);
       expect(state.logEntries[0].sessionId).toBe("s2");
+    });
+
+    it("removeSession clears linked file sessionId", () => {
+      useSessionStore.setState({
+        sessions: [makeSession({ id: "s1" }), makeSession({ id: "s2" })],
+      });
+      useFitsStore.setState({
+        files: [makeFitsFile("f1", "s1"), makeFitsFile("f2", "s2")],
+      });
+
+      useSessionStore.getState().removeSession("s1");
+      const files = useFitsStore.getState().files;
+      expect(files.find((file) => file.id === "f1")?.sessionId).toBeUndefined();
+      expect(files.find((file) => file.id === "f2")?.sessionId).toBe("s2");
     });
 
     it("updates a session partially", () => {
@@ -625,6 +656,64 @@ describe("useSessionStore", () => {
       useSessionStore.getState().mergeSessions(["s1", "nonexistent"]);
       // Should still have at least the original session
       expect(useSessionStore.getState().sessions.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it("mergeSessions rewrites linked files to merged session id", () => {
+      const s1 = makeSession({ id: "s1", startTime: 1000, endTime: 2000, duration: 1000 });
+      const s2 = makeSession({ id: "s2", startTime: 3000, endTime: 4000, duration: 1000 });
+      useSessionStore.setState({ sessions: [s1, s2] });
+      useFitsStore.setState({
+        files: [makeFitsFile("f1", "s1"), makeFitsFile("f2", "s2")],
+      });
+
+      useSessionStore.getState().mergeSessions(["s1", "s2"]);
+      const mergedId = useSessionStore.getState().sessions[0]?.id;
+      expect(mergedId).toBeTruthy();
+      expect(useFitsStore.getState().files.map((file) => file.sessionId)).toEqual([
+        mergedId,
+        mergedId,
+      ]);
+    });
+  });
+
+  describe("persistence migration", () => {
+    it("v3 migration recomputes session date from startTime local date", () => {
+      const migrate = (
+        useSessionStore as unknown as {
+          persist: {
+            getOptions: () => {
+              migrate: (state: unknown, version: number) => unknown;
+            };
+          };
+        }
+      ).persist.getOptions().migrate;
+
+      const startTime = new Date("2025-03-11T01:30:00.000Z").getTime();
+      const migrated = migrate(
+        {
+          sessions: [
+            {
+              id: "legacy-1",
+              date: "1999-01-01",
+              startTime,
+              endTime: startTime + 3_600_000,
+              duration: 3600,
+              targets: ["M42"],
+              imageIds: ["img-1"],
+              equipment: {},
+              createdAt: 1,
+            },
+          ],
+          plans: [],
+          logEntries: [],
+          activeSession: null,
+        },
+        2,
+      ) as { sessions: ObservationSession[] };
+
+      const localDate = new Date(startTime);
+      const expectedDate = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
+      expect(migrated.sessions[0].date).toBe(expectedDate);
     });
   });
 

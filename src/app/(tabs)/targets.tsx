@@ -269,7 +269,13 @@ export default function TargetsScreen() {
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View className="flex-row items-center gap-1 pr-1">
                 {targets.length > 0 && (
-                  <Button size="sm" isIconOnly variant="outline" onPress={() => setShowStats(true)}>
+                  <Button
+                    testID="e2e-action-tabs__targets-open-stats"
+                    size="sm"
+                    isIconOnly
+                    variant="outline"
+                    onPress={() => setShowStats(true)}
+                  >
                     <Ionicons name="stats-chart-outline" size={14} color={mutedColor} />
                   </Button>
                 )}
@@ -337,7 +343,13 @@ export default function TargetsScreen() {
             </View>
             <View className="flex-row gap-1">
               {targets.length > 0 && (
-                <Button size="sm" isIconOnly variant="outline" onPress={() => setShowStats(true)}>
+                <Button
+                  testID="e2e-action-tabs__targets-open-stats"
+                  size="sm"
+                  isIconOnly
+                  variant="outline"
+                  onPress={() => setShowStats(true)}
+                >
                   <Ionicons name="stats-chart-outline" size={14} color={mutedColor} />
                 </Button>
               )}
@@ -384,7 +396,13 @@ export default function TargetsScreen() {
               >
                 <Ionicons name="scan-outline" size={14} color={mutedColor} />
               </Button>
-              <Button size="sm" isIconOnly variant="primary" onPress={() => setShowAddSheet(true)}>
+              <Button
+                testID="e2e-action-tabs__targets-open-add"
+                size="sm"
+                isIconOnly
+                variant="primary"
+                onPress={() => setShowAddSheet(true)}
+              >
                 <Ionicons name="add" size={14} color="#fff" />
               </Button>
             </View>
@@ -668,7 +686,11 @@ export default function TargetsScreen() {
   );
 
   return (
-    <View className="flex-1 bg-background" style={{ paddingTop: contentPaddingTop }}>
+    <View
+      testID="e2e-screen-tabs__targets"
+      className="flex-1 bg-background"
+      style={{ paddingTop: contentPaddingTop }}
+    >
       {isLandscapeTablet ? (
         <View className="flex-1 flex-row">
           <View style={{ width: sidePanelWidth, paddingHorizontal: horizontalPadding }}>

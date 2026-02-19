@@ -8,6 +8,15 @@
       "developmentClient": true,
       "distribution": "internal"
     },
+    "e2e-test": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_E2E": "1"
+      },
+      "android": {
+        "buildType": "apk"
+      }
+    },
     "preview": {
       "distribution": "internal"
     },

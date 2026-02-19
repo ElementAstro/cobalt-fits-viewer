@@ -87,6 +87,8 @@ describe("fileFormat", () => {
     const gif = new TextEncoder().encode("GIF89a1234").buffer;
     const webp = new TextEncoder().encode("RIFFxxxxWEBPVP8 ").buffer;
     const tiff = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08]).buffer;
+    const bigTiffLe = new Uint8Array([0x49, 0x49, 0x2b, 0x00, 0x08, 0x00]).buffer;
+    const bigTiffBe = new Uint8Array([0x4d, 0x4d, 0x00, 0x2b, 0x00, 0x08]).buffer;
     const bmp = new TextEncoder().encode("BM......").buffer;
     const fits = new TextEncoder().encode("SIMPLE  =T").buffer;
     const gzip = new Uint8Array([0x1f, 0x8b, 0x08, 0x00]).buffer;
@@ -107,6 +109,8 @@ describe("fileFormat", () => {
     expect(detectSupportedImageFormatByContent(gif)?.id).toBe("gif");
     expect(detectSupportedImageFormatByContent(webp)?.id).toBe("webp");
     expect(detectSupportedImageFormatByContent(tiff)?.id).toBe("tiff");
+    expect(detectSupportedImageFormatByContent(bigTiffLe)?.id).toBe("tiff");
+    expect(detectSupportedImageFormatByContent(bigTiffBe)?.id).toBe("tiff");
     expect(detectSupportedImageFormatByContent(bmp)?.id).toBe("bmp");
     expect(detectSupportedImageFormatByContent(fits)?.id).toBe("fits");
     expect(detectSupportedImageFormatByContent(gzip)?.id).toBe("fits_gz");

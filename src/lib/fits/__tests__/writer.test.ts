@@ -15,6 +15,16 @@ function hasCard(header: string, key: string): boolean {
   return false;
 }
 
+function parseFloat32Data(bytes: Uint8Array, count: number): number[] {
+  const dataOffset = 2880;
+  const values: number[] = [];
+  const view = new DataView(bytes.buffer, bytes.byteOffset + dataOffset);
+  for (let i = 0; i < count; i++) {
+    values.push(view.getFloat32(i * 4, false));
+  }
+  return values;
+}
+
 describe("fits writer", () => {
   it("writes mono 2D float FITS with aligned blocks", () => {
     const bytes = writeFitsImage({
@@ -55,6 +65,26 @@ describe("fits writer", () => {
 
     const header = readHeaderText(bytes);
     expect(hasCard(header, "NAXIS3")).toBe(true);
+  });
+
+  it("writes mono 3D cube frames in frame-major order", () => {
+    const input = new Float32Array([1, 2, 3, 4, 5, 6]);
+    const bytes = writeFitsImage({
+      image: {
+        kind: "monoCube3d",
+        width: 1,
+        height: 2,
+        depth: 3,
+        pixels: input,
+      },
+      bitpix: -32,
+      sourceFormat: "tiff",
+      targetFormat: "fits",
+    });
+
+    const header = readHeaderText(bytes);
+    expect(hasCard(header, "NAXIS3")).toBe(true);
+    expect(parseFloat32Data(bytes, 6)).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
   it("adds BSCALE/BZERO when integer BITPIX requires scaling", () => {

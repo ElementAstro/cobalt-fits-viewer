@@ -146,6 +146,10 @@ interface SettingsStoreState {
   canvasMinScale: number;
   canvasMaxScale: number;
   canvasDoubleTapScale: number;
+  canvasPinchSensitivity: number;
+  canvasPinchOverzoomFactor: number;
+  canvasPanRubberBandFactor: number;
+  canvasWheelZoomSensitivity: number;
 
   // 缩略图叠加信息
   thumbnailShowFilename: boolean;
@@ -289,6 +293,10 @@ interface SettingsStoreState {
   setCanvasMinScale: (scale: number) => void;
   setCanvasMaxScale: (scale: number) => void;
   setCanvasDoubleTapScale: (scale: number) => void;
+  setCanvasPinchSensitivity: (value: number) => void;
+  setCanvasPinchOverzoomFactor: (value: number) => void;
+  setCanvasPanRubberBandFactor: (value: number) => void;
+  setCanvasWheelZoomSensitivity: (value: number) => void;
   setThumbnailShowFilename: (v: boolean) => void;
   setThumbnailShowObject: (v: boolean) => void;
   setThumbnailShowFilter: (v: boolean) => void;
@@ -414,6 +422,10 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   canvasMinScale: 0.5,
   canvasMaxScale: 10,
   canvasDoubleTapScale: 3,
+  canvasPinchSensitivity: 1.0,
+  canvasPinchOverzoomFactor: 1.25,
+  canvasPanRubberBandFactor: 0.55,
+  canvasWheelZoomSensitivity: 0.0015,
   thumbnailShowFilename: true,
   thumbnailShowObject: false,
   thumbnailShowFilter: true,
@@ -478,6 +490,8 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
+const OPTIONAL_CUSTOM_THEME_TOKENS = new Set<ThemeEditableToken>(["background", "surface"]);
+
 function sanitizeCustomThemeColors(
   value: unknown,
   fallback: ThemeCustomColors,
@@ -493,6 +507,14 @@ function sanitizeCustomThemeColors(
     if (!modeRaw || typeof modeRaw !== "object") continue;
     const tokenMap = modeRaw as Record<string, unknown>;
     for (const token of Object.keys(next[mode]) as Array<keyof ThemeCustomColors["light"]>) {
+      if (
+        OPTIONAL_CUSTOM_THEME_TOKENS.has(token) &&
+        typeof tokenMap[token] === "string" &&
+        tokenMap[token].trim().length === 0
+      ) {
+        next[mode][token] = "";
+        continue;
+      }
       const normalized = normalizeHexColor(tokenMap[token]);
       if (normalized) {
         next[mode][token] = normalized;
@@ -577,6 +599,10 @@ function sanitizeSettingsPatch(
     { key: "canvasMinScale", min: 0.1, max: 10 },
     { key: "canvasMaxScale", min: 1, max: 30 },
     { key: "canvasDoubleTapScale", min: 1, max: 30 },
+    { key: "canvasPinchSensitivity", min: 0.6, max: 1.8 },
+    { key: "canvasPinchOverzoomFactor", min: 1, max: 1.6 },
+    { key: "canvasPanRubberBandFactor", min: 0, max: 0.9 },
+    { key: "canvasWheelZoomSensitivity", min: 0.0005, max: 0.004 },
     { key: "defaultConverterQuality", min: 1, max: 100, integer: true },
     { key: "defaultBlurSigma", min: 0.1, max: 20 },
     { key: "defaultSharpenAmount", min: 0, max: 10 },
@@ -905,8 +931,10 @@ export const useSettingsStore = create<SettingsStoreState>()(
       },
 
       setCustomThemeToken: (token, value, mode = "light") => {
-        const normalized = normalizeHexColor(value);
-        if (!normalized) return;
+        const trimmed = value.trim();
+        const isOptionalToken = OPTIONAL_CUSTOM_THEME_TOKENS.has(token);
+        const normalized = isOptionalToken && trimmed.length === 0 ? "" : normalizeHexColor(value);
+        if (normalized === null) return;
 
         const current = get();
         const nextCustomTheme = cloneCustomThemeColors(current.customThemeColors);
@@ -1020,6 +1048,14 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setCanvasMinScale: (scale) => get().applySettingsPatch({ canvasMinScale: scale }),
       setCanvasMaxScale: (scale) => get().applySettingsPatch({ canvasMaxScale: scale }),
       setCanvasDoubleTapScale: (scale) => get().applySettingsPatch({ canvasDoubleTapScale: scale }),
+      setCanvasPinchSensitivity: (value) =>
+        get().applySettingsPatch({ canvasPinchSensitivity: value }),
+      setCanvasPinchOverzoomFactor: (value) =>
+        get().applySettingsPatch({ canvasPinchOverzoomFactor: value }),
+      setCanvasPanRubberBandFactor: (value) =>
+        get().applySettingsPatch({ canvasPanRubberBandFactor: value }),
+      setCanvasWheelZoomSensitivity: (value) =>
+        get().applySettingsPatch({ canvasWheelZoomSensitivity: value }),
       setThumbnailShowFilename: (v) => set({ thumbnailShowFilename: v }),
       setThumbnailShowObject: (v) => set({ thumbnailShowObject: v }),
       setThumbnailShowFilter: (v) => set({ thumbnailShowFilter: v }),

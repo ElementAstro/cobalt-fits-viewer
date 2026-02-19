@@ -45,7 +45,18 @@ export interface FitsRgbCubeWriteInput {
   b: Float32Array | Float64Array;
 }
 
-export type FitsWriteImageInput = FitsMonoWriteInput | FitsRgbCubeWriteInput;
+export interface FitsMonoCubeWriteInput {
+  kind: "monoCube3d";
+  width: number;
+  height: number;
+  depth: number;
+  pixels: Float32Array | Float64Array;
+}
+
+export type FitsWriteImageInput =
+  | FitsMonoWriteInput
+  | FitsRgbCubeWriteInput
+  | FitsMonoCubeWriteInput;
 
 export interface FitsWriteOptions {
   image: FitsWriteImageInput;
@@ -289,7 +300,16 @@ function encodeImageData(
   options: FitsWriteOptions,
 ): EncodedData {
   const planes: Array<Float32Array | Float64Array> =
-    image.kind === "mono2d" ? [image.pixels] : [image.r, image.g, image.b];
+    image.kind === "mono2d"
+      ? [image.pixels]
+      : image.kind === "monoCube3d"
+        ? Array.from({ length: image.depth }, (_, index) => {
+            const planeSize = image.width * image.height;
+            const start = index * planeSize;
+            const end = start + planeSize;
+            return image.pixels.subarray(start, end);
+          })
+        : [image.r, image.g, image.b];
 
   if (bitpix < 0) {
     const encodedPlanes = planes.map((plane) => encodePlaneData(plane, bitpix));
@@ -397,6 +417,15 @@ function validateImageInput(image: FitsWriteImageInput): void {
     }
     return;
   }
+  if (image.kind === "monoCube3d") {
+    if (image.depth <= 0 || !Number.isFinite(image.depth)) {
+      throw new Error("FITS mono cube depth must be positive");
+    }
+    if (image.pixels.length !== expected * image.depth) {
+      throw new Error("FITS mono cube data length does not match dimensions/depth");
+    }
+    return;
+  }
   if (image.r.length !== expected || image.g.length !== expected || image.b.length !== expected) {
     throw new Error("FITS RGB cube channel length does not match dimensions");
   }
@@ -405,7 +434,7 @@ function validateImageInput(image: FitsWriteImageInput): void {
 export function writeFitsImage(options: FitsWriteOptions): Uint8Array {
   validateImageInput(options.image);
 
-  const naxis = options.image.kind === "rgbCube3d" ? 3 : 2;
+  const naxis = options.image.kind === "rgbCube3d" || options.image.kind === "monoCube3d" ? 3 : 2;
   const encoded = encodeImageData(options.image, options.bitpix, options);
   const cards: string[] = [];
   const seenKeys = new Set<string>();
@@ -431,7 +460,12 @@ export function writeFitsImage(options: FitsWriteOptions): Uint8Array {
   pushKeyValueCard("NAXIS1", options.image.width, "axis length");
   pushKeyValueCard("NAXIS2", options.image.height, "axis length");
   if (naxis === 3) {
-    pushKeyValueCard("NAXIS3", 3, "RGB planes");
+    const axis3 = options.image.kind === "monoCube3d" ? options.image.depth : 3;
+    pushKeyValueCard(
+      "NAXIS3",
+      axis3,
+      options.image.kind === "monoCube3d" ? "Frame depth" : "RGB planes",
+    );
   }
 
   if (typeof encoded.bscale === "number" && encoded.bscale !== 1) {

@@ -4,7 +4,11 @@
 
 import { create } from "zustand";
 import type { ExportFormat, ConvertOptions, ConvertPreset, BatchTask } from "../lib/fits/types";
-import { DEFAULT_CONVERT_PRESETS, DEFAULT_FITS_TARGET_OPTIONS } from "../lib/fits/types";
+import {
+  DEFAULT_CONVERT_PRESETS,
+  DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
+} from "../lib/fits/types";
 
 interface ConverterStoreState {
   // 当前转换设置
@@ -36,6 +40,7 @@ const DEFAULT_OPTIONS: ConvertOptions = {
   quality: 90,
   bitDepth: 8,
   dpi: 72,
+  tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
   fits: DEFAULT_FITS_TARGET_OPTIONS,
   stretch: "asinh",
   colormap: "grayscale",

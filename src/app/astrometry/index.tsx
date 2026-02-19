@@ -167,7 +167,7 @@ export default function AstrometryScreen() {
   }
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-astrometry__index" className="flex-1 bg-background">
       {/* Header */}
       <View
         className="pb-3"
@@ -203,12 +203,24 @@ export default function AstrometryScreen() {
 
         {/* 操作栏 */}
         <View className="flex-row gap-2 mt-3">
-          <Button variant="primary" size="sm" className="flex-1" onPress={handleOpenFilePicker}>
+          <Button
+            testID="e2e-action-astrometry__index-open-file"
+            variant="primary"
+            size="sm"
+            className="flex-1"
+            onPress={handleOpenFilePicker}
+          >
             <Button.Label className="text-xs">
               <Ionicons name="document-outline" size={14} /> {t("astrometry.selectFile")}
             </Button.Label>
           </Button>
-          <Button variant="secondary" size="sm" className="flex-1" onPress={handleOpenUrlDialog}>
+          <Button
+            testID="e2e-action-astrometry__index-open-url"
+            variant="secondary"
+            size="sm"
+            className="flex-1"
+            onPress={handleOpenUrlDialog}
+          >
             <Button.Label className="text-xs">
               <Ionicons name="link-outline" size={14} /> {t("astrometry.submitUrl")}
             </Button.Label>

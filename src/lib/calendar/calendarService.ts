@@ -12,6 +12,11 @@ import { resolveSessionTargetNames } from "../sessions/sessionLinking";
 const APP_CALENDAR_TITLE = "Cobalt Observations";
 const APP_CALENDAR_COLOR = "#6366f1";
 
+export interface CalendarEditResult {
+  action: "saved" | "deleted" | "canceled" | "opened";
+  id?: string;
+}
+
 /**
  * 请求日历权限
  */
@@ -140,10 +145,24 @@ export async function openEventInSystemCalendar(eventId: string): Promise<void> 
 /**
  * 打开系统日历编辑事件
  */
-export async function editEventInSystemCalendar(
-  eventId: string,
-): Promise<Calendar.DialogEventResult> {
-  return Calendar.editEventInCalendarAsync({ id: eventId });
+export async function editEventInSystemCalendar(eventId: string): Promise<CalendarEditResult> {
+  const editableCalendar = Calendar as typeof Calendar & {
+    editEventInCalendarAsync?: (event: {
+      id: string;
+    }) => Promise<{ action?: string; id?: string | undefined }>;
+  };
+
+  if (typeof editableCalendar.editEventInCalendarAsync === "function") {
+    const result = await editableCalendar.editEventInCalendarAsync({ id: eventId });
+    const normalizedId = typeof result.id === "string" ? result.id : undefined;
+    if (result.action === "saved" || result.action === "deleted" || result.action === "canceled") {
+      return { action: result.action, id: normalizedId };
+    }
+    return { action: "saved", id: normalizedId };
+  }
+
+  await Calendar.openEventInCalendarAsync({ id: eventId });
+  return { action: "opened", id: eventId };
 }
 
 /**
@@ -168,7 +187,6 @@ export function buildPlanEventDetails(
   const notes = plan.notes ?? "";
   const location = plan.location
     ? (plan.location.placeName ??
-      plan.location.city ??
       `${plan.location.latitude.toFixed(4)}, ${plan.location.longitude.toFixed(4)}`)
     : undefined;
 

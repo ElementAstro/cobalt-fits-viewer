@@ -4,8 +4,13 @@ import * as Haptics from "expo-haptics";
 import { useI18n } from "../i18n/useI18n";
 import { useExport } from "./useExport";
 import { useHapticFeedback } from "./useHapticFeedback";
-import type { ExportFormat, FitsTargetOptions } from "../lib/fits/types";
+import type { ExportFormat, FitsTargetOptions, TiffTargetOptions } from "../lib/fits/types";
 import type { ExportSourceContext } from "./useExport";
+
+type ViewerExportOptions = {
+  fits?: Partial<FitsTargetOptions>;
+  tiff?: Partial<TiffTargetOptions>;
+};
 
 interface UseViewerExportParams {
   rgbaData: Uint8ClampedArray | null;
@@ -31,7 +36,7 @@ export function useViewerExport({
   const { isExporting, exportImage, shareImage, saveImage, printImage, printToPdf } = useExport();
 
   const handleExport = useCallback(
-    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
+    async (quality: number, options?: ViewerExportOptions) => {
       if (!rgbaData || !width || !height) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
@@ -43,7 +48,8 @@ export function useViewerExport({
         filename,
         format,
         quality,
-        fits,
+        fits: options?.fits,
+        tiff: options?.tiff,
         source,
       });
       if (path) {
@@ -59,7 +65,7 @@ export function useViewerExport({
   );
 
   const handleShare = useCallback(
-    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
+    async (quality: number, options?: ViewerExportOptions) => {
       if (!rgbaData || !width || !height) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
@@ -72,7 +78,8 @@ export function useViewerExport({
           filename,
           format,
           quality,
-          fits,
+          fits: options?.fits,
+          tiff: options?.tiff,
           source,
         });
       } catch {
@@ -84,7 +91,7 @@ export function useViewerExport({
   );
 
   const handleSaveToDevice = useCallback(
-    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
+    async (quality: number, options?: ViewerExportOptions) => {
       if (!rgbaData || !width || !height) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
@@ -96,7 +103,8 @@ export function useViewerExport({
         filename,
         format,
         quality,
-        fits,
+        fits: options?.fits,
+        tiff: options?.tiff,
         source,
       });
       if (uri) {

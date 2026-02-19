@@ -24,7 +24,7 @@ export function SessionCard({
   session,
   onPress,
   onSyncToCalendar,
-  onUnsyncFromCalendar: _onUnsyncFromCalendar,
+  onUnsyncFromCalendar,
   onOpenInCalendar,
   onRefreshFromCalendar,
   onEditInCalendar,
@@ -78,6 +78,12 @@ export function SessionCard({
                 <PressableFeedback onPress={() => onEditInCalendar(session)} hitSlop={8}>
                   <PressableFeedback.Highlight />
                   <Ionicons name="build-outline" size={14} color={mutedColor} />
+                </PressableFeedback>
+              )}
+              {session.calendarEventId && onUnsyncFromCalendar && (
+                <PressableFeedback onPress={() => onUnsyncFromCalendar(session)} hitSlop={8}>
+                  <PressableFeedback.Highlight />
+                  <Ionicons name="remove-circle-outline" size={14} color={mutedColor} />
                 </PressableFeedback>
               )}
               {onDelete && (

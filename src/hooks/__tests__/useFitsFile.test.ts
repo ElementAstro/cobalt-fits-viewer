@@ -24,7 +24,7 @@ jest.mock("../../lib/import/fileFormat", () => ({
 }));
 jest.mock("../../lib/image/rasterParser", () => ({
   extractRasterMetadata: jest.fn(),
-  parseRasterFromBuffer: jest.fn(),
+  parseRasterFromBufferAsync: jest.fn(),
 }));
 jest.mock("../../lib/logger", () => {
   const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
@@ -60,7 +60,7 @@ const formatLib = jest.requireMock("../../lib/import/fileFormat") as {
 };
 const rasterLib = jest.requireMock("../../lib/image/rasterParser") as {
   extractRasterMetadata: jest.Mock;
-  parseRasterFromBuffer: jest.Mock;
+  parseRasterFromBufferAsync: jest.Mock;
 };
 
 describe("useFitsFile", () => {
@@ -112,9 +112,17 @@ describe("useFitsFile", () => {
       sourceType: "fits",
     });
     formatLib.toImageSourceFormat.mockReturnValue("fits");
-    rasterLib.parseRasterFromBuffer.mockReturnValue({
+    rasterLib.parseRasterFromBufferAsync.mockResolvedValue({
       width: 2,
       height: 2,
+      depth: 1,
+      isMultiFrame: false,
+      frameIndex: 0,
+      bitDepth: 16,
+      sampleFormat: "uint",
+      photometric: 1,
+      compression: 5,
+      orientation: 1,
       rgba: new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]),
       pixels: new Float32Array([1, 2, 3, 4]),
       channels: {
@@ -122,6 +130,8 @@ describe("useFitsFile", () => {
         g: new Float32Array([0, 1, 0, 1]),
         b: new Float32Array([0, 0, 1, 1]),
       },
+      headers: [{ key: "TIFF_PAGE", value: 0 }],
+      decodeStatus: "ready",
     });
     rasterLib.extractRasterMetadata.mockReturnValue({
       filename: "a.png",
@@ -198,16 +208,93 @@ describe("useFitsFile", () => {
         filepath: "/tmp/a.png",
         fileSize: 10,
       }),
-      expect.objectContaining({ width: 2, height: 2 }),
+      expect.objectContaining({ width: 2, height: 2, bitDepth: 16, depth: 1 }),
       expect.objectContaining({
         rules: expect.arrayContaining([expect.objectContaining({ id: "focus-name" })]),
+      }),
+      expect.objectContaining({
+        decodeStatus: "ready",
       }),
     );
 
     await act(async () => {
       await result.current.loadFromBuffer(new ArrayBuffer(8), "b.png", 11);
     });
-    expect(rasterLib.parseRasterFromBuffer).toHaveBeenCalled();
+    expect(rasterLib.parseRasterFromBufferAsync).toHaveBeenCalled();
+  });
+
+  it("maps multipage TIFF to frame loading and headers", async () => {
+    const { result } = renderHook(() => useFitsFile());
+    const frameProvider = {
+      pageCount: 2,
+      pages: [],
+      getHeaders: jest.fn((index: number) => [{ key: "TIFF_PAGE", value: index }]),
+      getFrame: jest.fn(async (index: number) => ({
+        index,
+        width: 2,
+        height: 2,
+        bitDepth: 16,
+        sampleFormat: "uint",
+        photometric: 1,
+        compression: 5,
+        orientation: 1,
+        rgba: new Uint8Array([
+          255, 255, 255, 255, 0, 0, 0, 255, 20, 20, 20, 255, 200, 200, 200, 255,
+        ]),
+        pixels: new Float32Array([index, index + 1, index + 2, index + 3]),
+        channels: null,
+        headers: [{ key: "TIFF_PAGE", value: index }],
+      })),
+    };
+
+    formatLib.detectPreferredSupportedImageFormat.mockReturnValue({
+      id: "tiff",
+      sourceType: "raster",
+    });
+    formatLib.toImageSourceFormat.mockReturnValue("tiff");
+    rasterLib.parseRasterFromBufferAsync.mockResolvedValue({
+      width: 2,
+      height: 2,
+      depth: 2,
+      isMultiFrame: true,
+      frameIndex: 0,
+      bitDepth: 16,
+      sampleFormat: "uint",
+      photometric: 1,
+      compression: 5,
+      orientation: 1,
+      rgba: new Uint8Array([255, 255, 255, 255, 0, 0, 0, 255, 20, 20, 20, 255, 200, 200, 200, 255]),
+      pixels: new Float32Array([0, 1, 2, 3]),
+      channels: null,
+      headers: [{ key: "TIFF_PAGE", value: 0 }],
+      frameProvider,
+      decodeStatus: "ready",
+    });
+
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.tiff", "a.tiff", 10);
+    });
+
+    expect(result.current.dimensions).toEqual({
+      width: 2,
+      height: 2,
+      depth: 2,
+      isDataCube: true,
+    });
+    expect(result.current.headers).toEqual([{ key: "TIFF_PAGE", value: 0 }]);
+
+    await act(async () => {
+      await result.current.loadFrame(1);
+    });
+    expect(frameProvider.getFrame).toHaveBeenCalledWith(1);
+    expect(result.current.headers).toEqual([{ key: "TIFF_PAGE", value: 1 }]);
+    expect(result.current.metadata).toEqual(
+      expect.objectContaining({
+        sourceType: "raster",
+        sourceFormat: "tiff",
+        naxis3: 2,
+      }),
+    );
   });
 
   it("handles unsupported format and no-fits loadFrame guard", async () => {

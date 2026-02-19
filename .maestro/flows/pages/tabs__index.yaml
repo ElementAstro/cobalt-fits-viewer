@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://
+- assertVisible:
+    id: e2e-screen-tabs__index
+- tapOn:
+    id: files-enter-selection-mode-button
+- tapOn:
+    id: files-open-trash-button

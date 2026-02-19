@@ -107,6 +107,50 @@ export interface GeoLocation {
   country?: string;
 }
 
+export interface StarAnnotationDetectionSnapshot {
+  profile: "fast" | "balanced" | "accurate";
+  sigmaThreshold: number;
+  maxStars: number;
+  minArea: number;
+  maxArea: number;
+  borderMargin: number;
+  meshSize: number;
+  deblendNLevels: number;
+  deblendMinContrast: number;
+  filterFwhm: number;
+  maxFwhm: number;
+  maxEllipticity: number;
+}
+
+export interface StarAnnotationMetrics {
+  flux?: number;
+  peak?: number;
+  area?: number;
+  fwhm?: number;
+  snr?: number;
+  roundness?: number;
+  ellipticity?: number;
+  sharpness?: number;
+}
+
+export interface StarAnnotationPoint {
+  id: string;
+  x: number;
+  y: number;
+  enabled: boolean;
+  source: "detected" | "manual";
+  anchorIndex?: 1 | 2 | 3;
+  metrics?: StarAnnotationMetrics;
+}
+
+export interface StarAnnotationBundle {
+  version: 1;
+  updatedAt: number;
+  detectionSnapshot: StarAnnotationDetectionSnapshot;
+  points: StarAnnotationPoint[];
+  stale?: boolean;
+}
+
 // ===== FITS 文件元数据 =====
 export interface FitsMetadata {
   id: string;
@@ -155,6 +199,8 @@ export interface FitsMetadata {
   sessionId?: string;
   thumbnailUri?: string;
   hash?: string;
+  decodeStatus?: "ready" | "failed";
+  decodeError?: string;
   mediaKind?: "image" | "video";
   durationMs?: number;
   frameRate?: number;
@@ -185,6 +231,9 @@ export interface FitsMetadata {
 
   // 地理位置
   location?: GeoLocation;
+
+  // Star annotation linkage
+  starAnnotations?: StarAnnotationBundle;
 
   // Viewer per-file preset
   viewerPreset?: ViewerPreset;
@@ -566,6 +615,19 @@ export interface ObservationLogEntry {
 // ===== 格式转换 =====
 export type ExportFormat = "png" | "jpeg" | "webp" | "tiff" | "bmp" | "fits";
 
+export type TiffCompression = "none" | "lzw" | "deflate";
+export type TiffMultipageMode = "preserve" | "firstFrame";
+
+export interface TiffTargetOptions {
+  compression: TiffCompression;
+  multipage: TiffMultipageMode;
+}
+
+export const DEFAULT_TIFF_TARGET_OPTIONS: TiffTargetOptions = {
+  compression: "lzw",
+  multipage: "preserve",
+};
+
 export type FitsCompression = "none" | "gzip";
 export type FitsExportMode = "scientific" | "rendered";
 export type FitsColorLayout = "mono2d" | "rgbCube3d";
@@ -593,6 +655,7 @@ export interface ConvertOptions {
   quality: number; // 1-100 for JPEG/WebP
   bitDepth: 8 | 16 | 32; // for TIFF
   dpi: number;
+  tiff: TiffTargetOptions;
   fits: FitsTargetOptions;
   stretch: StretchType;
   colormap: ColormapType;
@@ -622,6 +685,7 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       quality: 85,
       bitDepth: 8,
       dpi: 72,
+      tiff: DEFAULT_TIFF_TARGET_OPTIONS,
       fits: DEFAULT_FITS_TARGET_OPTIONS,
       stretch: "asinh",
       colormap: "grayscale",
@@ -643,6 +707,7 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       quality: 100,
       bitDepth: 8,
       dpi: 300,
+      tiff: DEFAULT_TIFF_TARGET_OPTIONS,
       fits: DEFAULT_FITS_TARGET_OPTIONS,
       stretch: "asinh",
       colormap: "grayscale",
@@ -664,6 +729,7 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       quality: 100,
       bitDepth: 16,
       dpi: 72,
+      tiff: DEFAULT_TIFF_TARGET_OPTIONS,
       fits: DEFAULT_FITS_TARGET_OPTIONS,
       stretch: "linear",
       colormap: "grayscale",

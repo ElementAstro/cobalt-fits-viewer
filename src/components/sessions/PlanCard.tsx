@@ -10,6 +10,7 @@ import { resolveTargetName } from "../../lib/targets/targetRefs";
 interface PlanCardProps {
   plan: ObservationPlan;
   onSyncToCalendar?: (plan: ObservationPlan) => void;
+  onUnsyncFromCalendar?: (plan: ObservationPlan) => void;
   onOpenInCalendar?: (plan: ObservationPlan) => void;
   onRefreshFromCalendar?: (plan: ObservationPlan) => void;
   onEditInCalendar?: (plan: ObservationPlan) => void;
@@ -29,6 +30,7 @@ const STATUS_COLOR_CLASS: Record<"planned" | "completed" | "cancelled", string> 
 export function PlanCard({
   plan,
   onSyncToCalendar,
+  onUnsyncFromCalendar,
   onOpenInCalendar,
   onRefreshFromCalendar,
   onEditInCalendar,
@@ -101,6 +103,12 @@ export function PlanCard({
               <PressableFeedback onPress={() => onEditInCalendar(plan)} hitSlop={8}>
                 <PressableFeedback.Highlight />
                 <Ionicons name="build-outline" size={13} color={mutedColor} />
+              </PressableFeedback>
+            )}
+            {plan.calendarEventId && onUnsyncFromCalendar && (
+              <PressableFeedback onPress={() => onUnsyncFromCalendar(plan)} hitSlop={8}>
+                <PressableFeedback.Highlight />
+                <Ionicons name="remove-circle-outline" size={13} color={mutedColor} />
               </PressableFeedback>
             )}
             {onCreateSession && (

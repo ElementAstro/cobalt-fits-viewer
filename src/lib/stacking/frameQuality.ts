@@ -48,6 +48,7 @@ export interface FrameQualityOptions {
   detectionOptions?: StarDetectionOptions;
   scoringWeights?: Partial<FrameQualityScoringWeights>;
   scoringThresholds?: Partial<FrameQualityScoringThresholds>;
+  starsOverride?: DetectedStar[];
 }
 
 export interface FrameQualityRuntime {
@@ -211,7 +212,10 @@ export function evaluateFrameQuality(
     resolved.detectionOptions.sigmaClipIters ?? 2,
   );
 
-  const stars = detectStars(pixels, width, height, resolved.detectionOptions);
+  const stars =
+    options.starsOverride && options.starsOverride.length > 0
+      ? options.starsOverride
+      : detectStars(pixels, width, height, resolved.detectionOptions);
   return buildMetrics(
     pixels,
     width,
@@ -252,13 +256,16 @@ export async function evaluateFrameQualityAsync(
   );
 
   runtime.onProgress?.(0.25, "detect-stars");
-  const stars = await detectStarsAsync(
-    pixels,
-    width,
-    height,
-    resolved.detectionOptions,
-    runtime.detectionRuntime,
-  );
+  const stars =
+    options.starsOverride && options.starsOverride.length > 0
+      ? options.starsOverride
+      : await detectStarsAsync(
+          pixels,
+          width,
+          height,
+          resolved.detectionOptions,
+          runtime.detectionRuntime,
+        );
 
   runtime.onProgress?.(0.95, "score");
   const metrics = buildMetrics(

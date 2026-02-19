@@ -13,13 +13,26 @@ import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageEditor } from "../../hooks/useImageEditor";
 import { useExport } from "../../hooks/useExport";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { FitsCanvas } from "../../components/fits/FitsCanvas";
+import { FitsCanvas, type CanvasTransform } from "../../components/fits/FitsCanvas";
 import { CropOverlay } from "../../components/fits/CropOverlay";
+import { StarAnnotationOverlay } from "../../components/fits/StarAnnotationOverlay";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
 import { ExportDialog } from "../../components/common/ExportDialog";
-import type { ExportFormat, FitsTargetOptions } from "../../lib/fits/types";
+import type {
+  ExportFormat,
+  FitsTargetOptions,
+  TiffTargetOptions,
+  StarAnnotationBundle,
+  StarAnnotationDetectionSnapshot,
+  StarAnnotationPoint,
+} from "../../lib/fits/types";
 import type { ImageEditOperation } from "../../lib/utils/imageOperations";
 import { detectStars, type DetectedStar } from "../../lib/stacking/starDetection";
+import {
+  createManualStarAnnotationPoint,
+  mergeDetectedWithManual,
+  sanitizeStarAnnotations,
+} from "../../lib/stacking/starAnnotationLinkage";
 
 type EditorTool =
   | "crop"
@@ -48,6 +61,11 @@ type EditorTool =
   | "deconvolution"
   | "pixelMath"
   | null;
+
+type EditorExportOptions = {
+  fits?: Partial<FitsTargetOptions>;
+  tiff?: Partial<TiffTargetOptions>;
+};
 
 const GEOMETRY_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "crop", icon: "crop-outline" },
@@ -94,6 +112,15 @@ const ADVANCED_TOOLS: { key: string; icon: keyof typeof Ionicons.glyphMap; route
   { key: "starDetect", icon: "star-outline" },
 ];
 
+const STAR_POINT_TAP_RADIUS = 12;
+const EMPTY_TRANSFORM: CanvasTransform = {
+  scale: 1,
+  translateX: 0,
+  translateY: 0,
+  canvasWidth: 0,
+  canvasHeight: 0,
+};
+
 export default function EditorDetailScreen() {
   useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -104,12 +131,32 @@ export default function EditorDetailScreen() {
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
+  const updateFile = useFitsStore((s) => s.updateFile);
   const isVideoFile = file?.mediaKind === "video" || file?.sourceType === "video";
   const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
   const defaultBlurSigma = useSettingsStore((s) => s.defaultBlurSigma);
   const defaultSharpenAmount = useSettingsStore((s) => s.defaultSharpenAmount);
   const defaultDenoiseRadius = useSettingsStore((s) => s.defaultDenoiseRadius);
   const editorMaxUndo = useSettingsStore((s) => s.editorMaxUndo);
+  const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
+  const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
+  const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
+  const settingsPinchSensitivity = useSettingsStore((s) => s.canvasPinchSensitivity);
+  const settingsPinchOverzoomFactor = useSettingsStore((s) => s.canvasPinchOverzoomFactor);
+  const settingsPanRubberBandFactor = useSettingsStore((s) => s.canvasPanRubberBandFactor);
+  const settingsWheelZoomSensitivity = useSettingsStore((s) => s.canvasWheelZoomSensitivity);
+  const settingsDetectionProfile = useSettingsStore((s) => s.stackingDetectionProfile);
+  const settingsDetectSigmaThreshold = useSettingsStore((s) => s.stackingDetectSigmaThreshold);
+  const settingsDetectMaxStars = useSettingsStore((s) => s.stackingDetectMaxStars);
+  const settingsDetectMinArea = useSettingsStore((s) => s.stackingDetectMinArea);
+  const settingsDetectMaxArea = useSettingsStore((s) => s.stackingDetectMaxArea);
+  const settingsDetectBorderMargin = useSettingsStore((s) => s.stackingDetectBorderMargin);
+  const settingsBackgroundMeshSize = useSettingsStore((s) => s.stackingBackgroundMeshSize);
+  const settingsDeblendNLevels = useSettingsStore((s) => s.stackingDeblendNLevels);
+  const settingsDeblendMinContrast = useSettingsStore((s) => s.stackingDeblendMinContrast);
+  const settingsFilterFwhm = useSettingsStore((s) => s.stackingFilterFwhm);
+  const settingsMaxFwhm = useSettingsStore((s) => s.stackingMaxFwhm);
+  const settingsMaxEllipticity = useSettingsStore((s) => s.stackingMaxEllipticity);
   const { pixels, dimensions, isLoading: fitsLoading, loadFromPath } = useFitsFile();
   const editor = useImageEditor({ maxHistory: editorMaxUndo });
   const haptics = useHapticFeedback();
@@ -132,7 +179,26 @@ export default function EditorDetailScreen() {
   const [bgGridSize, setBgGridSize] = useState(8);
   const [rotateAngle, setRotateAngle] = useState(0);
   const [canvasLayout, setCanvasLayout] = useState({ width: 0, height: 0 });
+  const [canvasTransform, setCanvasTransform] = useState<CanvasTransform>(EMPTY_TRANSFORM);
   const [detectedStars, setDetectedStars] = useState<DetectedStar[]>([]);
+  const [isStarAnnotationMode, setIsStarAnnotationMode] = useState(false);
+  const [starPoints, setStarPoints] = useState<StarAnnotationPoint[]>([]);
+  const [starSnapshot, setStarSnapshot] = useState<StarAnnotationDetectionSnapshot>({
+    profile: settingsDetectionProfile,
+    sigmaThreshold: settingsDetectSigmaThreshold,
+    maxStars: settingsDetectMaxStars,
+    minArea: settingsDetectMinArea,
+    maxArea: settingsDetectMaxArea,
+    borderMargin: settingsDetectBorderMargin,
+    meshSize: settingsBackgroundMeshSize,
+    deblendNLevels: settingsDeblendNLevels,
+    deblendMinContrast: settingsDeblendMinContrast,
+    filterFwhm: settingsFilterFwhm,
+    maxFwhm: settingsMaxFwhm,
+    maxEllipticity: settingsMaxEllipticity,
+  });
+  const [starAnnotationsStale, setStarAnnotationsStale] = useState(false);
+  const [pendingAnchorIndex, setPendingAnchorIndex] = useState<1 | 2 | 3 | null>(null);
 
   // New tool state
   const [mtfMidtone, setMtfMidtone] = useState(0.25);
@@ -181,6 +247,257 @@ export default function EditorDetailScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pixels, dimensions]);
+
+  const buildDetectionSnapshot = useCallback(
+    (): StarAnnotationDetectionSnapshot => ({
+      profile: settingsDetectionProfile,
+      sigmaThreshold: settingsDetectSigmaThreshold,
+      maxStars: settingsDetectMaxStars,
+      minArea: settingsDetectMinArea,
+      maxArea: settingsDetectMaxArea,
+      borderMargin: settingsDetectBorderMargin,
+      meshSize: settingsBackgroundMeshSize,
+      deblendNLevels: settingsDeblendNLevels,
+      deblendMinContrast: settingsDeblendMinContrast,
+      filterFwhm: settingsFilterFwhm,
+      maxFwhm: settingsMaxFwhm,
+      maxEllipticity: settingsMaxEllipticity,
+    }),
+    [
+      settingsDetectionProfile,
+      settingsDetectSigmaThreshold,
+      settingsDetectMaxStars,
+      settingsDetectMinArea,
+      settingsDetectMaxArea,
+      settingsDetectBorderMargin,
+      settingsBackgroundMeshSize,
+      settingsDeblendNLevels,
+      settingsDeblendMinContrast,
+      settingsFilterFwhm,
+      settingsMaxFwhm,
+      settingsMaxEllipticity,
+    ],
+  );
+
+  const updateDetectedStarsFromPoints = useCallback((points: StarAnnotationPoint[]) => {
+    const derived = points
+      .filter((point) => point.source === "detected" && point.enabled)
+      .map(
+        (point): DetectedStar => ({
+          cx: point.x,
+          cy: point.y,
+          flux: point.metrics?.flux ?? 1,
+          peak: point.metrics?.peak ?? 0,
+          area: point.metrics?.area ?? 3,
+          fwhm: point.metrics?.fwhm ?? 2.5,
+          snr: point.metrics?.snr,
+          roundness: point.metrics?.roundness,
+          ellipticity: point.metrics?.ellipticity,
+          sharpness: point.metrics?.sharpness,
+        }),
+      );
+    setDetectedStars(derived);
+  }, []);
+
+  const persistStarAnnotations = useCallback(
+    (
+      nextPoints: StarAnnotationPoint[],
+      nextSnapshot: StarAnnotationDetectionSnapshot,
+      nextStale: boolean,
+    ) => {
+      if (!file?.id) return;
+      const payload: Partial<StarAnnotationBundle> = {
+        version: 1,
+        updatedAt: Date.now(),
+        detectionSnapshot: nextSnapshot,
+        points: nextPoints,
+        stale: nextStale,
+      };
+      const sanitized = sanitizeStarAnnotations(payload, {
+        width: dimensions?.width,
+        height: dimensions?.height,
+      });
+      updateFile(file.id, { starAnnotations: sanitized });
+    },
+    [dimensions?.height, dimensions?.width, file?.id, updateFile],
+  );
+
+  const applyStarAnnotationState = useCallback(
+    (
+      nextPoints: StarAnnotationPoint[],
+      nextSnapshot: StarAnnotationDetectionSnapshot,
+      nextStale: boolean,
+    ) => {
+      const sanitized = sanitizeStarAnnotations(
+        {
+          version: 1,
+          updatedAt: Date.now(),
+          detectionSnapshot: nextSnapshot,
+          points: nextPoints,
+          stale: nextStale,
+        },
+        {
+          width: dimensions?.width,
+          height: dimensions?.height,
+        },
+      );
+      setStarPoints(sanitized.points);
+      setStarSnapshot(sanitized.detectionSnapshot);
+      setStarAnnotationsStale(!!sanitized.stale);
+      updateDetectedStarsFromPoints(sanitized.points);
+      persistStarAnnotations(sanitized.points, sanitized.detectionSnapshot, !!sanitized.stale);
+    },
+    [dimensions?.height, dimensions?.width, persistStarAnnotations, updateDetectedStarsFromPoints],
+  );
+
+  useEffect(() => {
+    if (!file?.id) return;
+    if (file.starAnnotations) {
+      const sanitized = sanitizeStarAnnotations(file.starAnnotations, {
+        width: dimensions?.width,
+        height: dimensions?.height,
+      });
+      setStarPoints(sanitized.points);
+      setStarSnapshot(sanitized.detectionSnapshot);
+      setStarAnnotationsStale(!!sanitized.stale);
+      updateDetectedStarsFromPoints(sanitized.points);
+      return;
+    }
+    setStarPoints([]);
+    setStarSnapshot(buildDetectionSnapshot());
+    setStarAnnotationsStale(false);
+    setDetectedStars([]);
+  }, [
+    buildDetectionSnapshot,
+    dimensions?.height,
+    dimensions?.width,
+    file?.id,
+    file?.starAnnotations,
+    updateDetectedStarsFromPoints,
+  ]);
+
+  const detectAndMergeStars = useCallback(() => {
+    if (!editor.current) return;
+    const snapshot = buildDetectionSnapshot();
+    const stars = detectStars(editor.current.pixels, editor.current.width, editor.current.height, {
+      profile: snapshot.profile,
+      sigmaThreshold: snapshot.sigmaThreshold,
+      maxStars: snapshot.maxStars,
+      minArea: snapshot.minArea,
+      maxArea: snapshot.maxArea,
+      borderMargin: snapshot.borderMargin,
+      meshSize: snapshot.meshSize,
+      deblendNLevels: snapshot.deblendNLevels,
+      deblendMinContrast: snapshot.deblendMinContrast,
+      filterFwhm: snapshot.filterFwhm,
+      maxFwhm: snapshot.maxFwhm,
+      maxEllipticity: snapshot.maxEllipticity,
+    });
+
+    const merged = mergeDetectedWithManual(starPoints, stars, {
+      maxDetectedPoints: snapshot.maxStars,
+      preserveDetectedDisabled: true,
+      matchRadiusPx: 4,
+    });
+    applyStarAnnotationState(merged, snapshot, false);
+    setPendingAnchorIndex(null);
+    setIsStarAnnotationMode(true);
+  }, [applyStarAnnotationState, buildDetectionSnapshot, editor, starPoints]);
+
+  const findNearestPoint = useCallback(
+    (x: number, y: number) => {
+      let nearest: StarAnnotationPoint | null = null;
+      let bestDist2 = STAR_POINT_TAP_RADIUS * STAR_POINT_TAP_RADIUS;
+      for (const point of starPoints) {
+        const dx = point.x - x;
+        const dy = point.y - y;
+        const dist2 = dx * dx + dy * dy;
+        if (dist2 <= bestDist2) {
+          nearest = point;
+          bestDist2 = dist2;
+        }
+      }
+      return nearest;
+    },
+    [starPoints],
+  );
+
+  const upsertAnchor = useCallback(
+    (points: StarAnnotationPoint[], pointId: string, anchor: 1 | 2 | 3) => {
+      return points.map((point) => {
+        if (point.id === pointId) return { ...point, anchorIndex: anchor };
+        if (point.anchorIndex === anchor) return { ...point, anchorIndex: undefined };
+        return point;
+      });
+    },
+    [],
+  );
+
+  const handleStarPointTap = useCallback(
+    (x: number, y: number) => {
+      if (!isStarAnnotationMode) return;
+      const nearest = findNearestPoint(x, y);
+      if (nearest) {
+        const nextPoints =
+          pendingAnchorIndex != null
+            ? upsertAnchor(
+                starPoints.map((point) =>
+                  point.id === nearest.id ? { ...point, enabled: true } : point,
+                ),
+                nearest.id,
+                pendingAnchorIndex,
+              )
+            : starPoints.map((point) =>
+                point.id === nearest.id ? { ...point, enabled: !point.enabled } : point,
+              );
+        applyStarAnnotationState(nextPoints, starSnapshot, starAnnotationsStale);
+        setPendingAnchorIndex(null);
+        return;
+      }
+
+      const manualPoint = createManualStarAnnotationPoint(x, y, pendingAnchorIndex ?? undefined);
+      const nextPoints =
+        pendingAnchorIndex != null
+          ? upsertAnchor([...starPoints, manualPoint], manualPoint.id, pendingAnchorIndex)
+          : [...starPoints, manualPoint];
+      applyStarAnnotationState(nextPoints, starSnapshot, starAnnotationsStale);
+      setPendingAnchorIndex(null);
+    },
+    [
+      applyStarAnnotationState,
+      findNearestPoint,
+      isStarAnnotationMode,
+      pendingAnchorIndex,
+      starAnnotationsStale,
+      starPoints,
+      starSnapshot,
+      upsertAnchor,
+    ],
+  );
+
+  const handleStarPointLongPress = useCallback(
+    (x: number, y: number) => {
+      if (!isStarAnnotationMode) return;
+      const nearest = findNearestPoint(x, y);
+      if (!nearest || nearest.source !== "manual") return;
+      const nextPoints = starPoints.filter((point) => point.id !== nearest.id);
+      applyStarAnnotationState(nextPoints, starSnapshot, starAnnotationsStale);
+      setPendingAnchorIndex(null);
+    },
+    [
+      applyStarAnnotationState,
+      findNearestPoint,
+      isStarAnnotationMode,
+      starAnnotationsStale,
+      starPoints,
+      starSnapshot,
+    ],
+  );
+
+  const markStarAnnotationsStale = useCallback(() => {
+    if (starPoints.length === 0) return;
+    applyStarAnnotationState(starPoints, starSnapshot, true);
+  }, [applyStarAnnotationState, starPoints, starSnapshot]);
 
   const handleToolPress = useCallback(
     (tool: EditorTool & string) => {
@@ -333,6 +650,7 @@ export default function EditorDetailScreen() {
     if (op) {
       haptics.impact();
       editor.applyEdit(op);
+      markStarAnnotationsStale();
     }
     setActiveTool(null);
   }, [
@@ -371,17 +689,19 @@ export default function EditorDetailScreen() {
     pixelMathExpr,
     curvesPreset,
     haptics,
+    markStarAnnotationsStale,
   ]);
 
   const handleQuickAction = useCallback(
     (op: ImageEditOperation) => {
       editor.applyEdit(op);
+      markStarAnnotationsStale();
     },
-    [editor],
+    [editor, markStarAnnotationsStale],
   );
 
   const handleEditorExport = useCallback(
-    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
+    async (quality: number, options?: EditorExportOptions) => {
       if (!editor.rgbaData || !editor.current) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
@@ -393,7 +713,8 @@ export default function EditorDetailScreen() {
         filename: file?.filename ?? "edited",
         format: exportFormat,
         quality,
-        fits: { ...fits, mode: "rendered" },
+        fits: { ...options?.fits, mode: "rendered" },
+        tiff: options?.tiff,
       });
       if (path) {
         Alert.alert(t("common.success"), t("viewer.exportSuccess"));
@@ -406,7 +727,7 @@ export default function EditorDetailScreen() {
   );
 
   const handleEditorShare = useCallback(
-    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
+    async (quality: number, options?: EditorExportOptions) => {
       if (!editor.rgbaData || !editor.current) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
@@ -419,7 +740,8 @@ export default function EditorDetailScreen() {
           filename: file?.filename ?? "edited",
           format: exportFormat,
           quality,
-          fits: { ...fits, mode: "rendered" },
+          fits: { ...options?.fits, mode: "rendered" },
+          tiff: options?.tiff,
         });
       } catch {
         Alert.alert(t("common.error"), t("share.failed"));
@@ -430,7 +752,7 @@ export default function EditorDetailScreen() {
   );
 
   const handleEditorSave = useCallback(
-    async (quality: number, fits?: Partial<FitsTargetOptions>) => {
+    async (quality: number, options?: EditorExportOptions) => {
       if (!editor.rgbaData || !editor.current) {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
@@ -442,7 +764,8 @@ export default function EditorDetailScreen() {
         filename: file?.filename ?? "edited",
         format: exportFormat,
         quality,
-        fits: { ...fits, mode: "rendered" },
+        fits: { ...options?.fits, mode: "rendered" },
+        tiff: options?.tiff,
       });
       if (uri) {
         Alert.alert(t("common.success"), t("viewer.savedToDevice"));
@@ -481,15 +804,23 @@ export default function EditorDetailScreen() {
   }
 
   const isLoading = fitsLoading || editor.isProcessing;
+  const detectedStarCount = starPoints.filter((point) => point.source === "detected").length;
+  const manualStarCount = starPoints.filter((point) => point.source === "manual").length;
+  const enabledStarCount = starPoints.filter((point) => point.enabled).length;
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-editor__param_id" className="flex-1 bg-background">
       {/* Top Bar */}
       <View
         className="flex-row items-center justify-between pb-2"
         style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
       >
-        <Button size="sm" variant="outline" onPress={() => router.back()}>
+        <Button
+          testID="e2e-action-editor__param_id-back"
+          size="sm"
+          variant="outline"
+          onPress={() => router.back()}
+        >
           <Ionicons name="arrow-back" size={16} color={mutedColor} />
         </Button>
         <Text
@@ -499,14 +830,26 @@ export default function EditorDetailScreen() {
           {t("editor.title")} - {file.filename}
         </Text>
         <View className="flex-row gap-1">
-          <Button size="sm" variant="outline" onPress={editor.undo} isDisabled={!editor.canUndo}>
+          <Button
+            testID="e2e-action-editor__param_id-undo"
+            size="sm"
+            variant="outline"
+            onPress={editor.undo}
+            isDisabled={!editor.canUndo}
+          >
             <Ionicons
               name="arrow-undo-outline"
               size={14}
               color={editor.canUndo ? successColor : mutedColor}
             />
           </Button>
-          <Button size="sm" variant="outline" onPress={editor.redo} isDisabled={!editor.canRedo}>
+          <Button
+            testID="e2e-action-editor__param_id-redo"
+            size="sm"
+            variant="outline"
+            onPress={editor.redo}
+            isDisabled={!editor.canRedo}
+          >
             <Ionicons
               name="arrow-redo-outline"
               size={14}
@@ -514,6 +857,7 @@ export default function EditorDetailScreen() {
             />
           </Button>
           <Button
+            testID="e2e-action-editor__param_id-open-export"
             size="sm"
             variant="outline"
             onPress={() => setShowExport(true)}
@@ -551,13 +895,38 @@ export default function EditorDetailScreen() {
               rgbaData={editor.rgbaData}
               width={editor.current.width}
               height={editor.current.height}
+              sourceWidth={editor.current.width}
+              sourceHeight={editor.current.height}
               showGrid={false}
               showCrosshair={false}
               cursorX={-1}
               cursorY={-1}
+              onPixelTap={handleStarPointTap}
+              onPixelLongPress={handleStarPointLongPress}
+              onTransformChange={setCanvasTransform}
+              minScale={settingsMinScale}
+              maxScale={settingsMaxScale}
+              doubleTapScale={settingsDoubleTapScale}
+              gestureConfig={{
+                pinchSensitivity: settingsPinchSensitivity,
+                pinchOverzoomFactor: settingsPinchOverzoomFactor,
+                panRubberBandFactor: settingsPanRubberBandFactor,
+                wheelZoomSensitivity: settingsWheelZoomSensitivity,
+              }}
               interactionEnabled={!showCrop}
               wheelZoomEnabled
             />
+            {isStarAnnotationMode && (
+              <StarAnnotationOverlay
+                points={starPoints}
+                renderWidth={editor.current.width}
+                renderHeight={editor.current.height}
+                sourceWidth={editor.current.width}
+                sourceHeight={editor.current.height}
+                transform={canvasTransform}
+                visible={isStarAnnotationMode}
+              />
+            )}
             {showCrop && canvasLayout.width > 0 && (
               <CropOverlay
                 imageWidth={editor.current.width}
@@ -566,6 +935,7 @@ export default function EditorDetailScreen() {
                 containerHeight={canvasLayout.height}
                 onCropConfirm={(x, y, w, h) => {
                   editor.applyEdit({ type: "crop", x, y, width: w, height: h });
+                  markStarAnnotationsStale();
                   setShowCrop(false);
                   setActiveTool(null);
                 }}
@@ -1017,6 +1387,98 @@ export default function EditorDetailScreen() {
           </View>
         )}
 
+        {isStarAnnotationMode && (
+          <View className="absolute top-4 left-4 right-4">
+            <Card variant="secondary">
+              <Card.Body className="p-3">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="star-outline" size={14} color={successColor} />
+                    <Text className="text-xs font-semibold text-success">
+                      {t("editor.starAnnotationMode" as TranslationKey)}
+                    </Text>
+                  </View>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onPress={() => {
+                      setIsStarAnnotationMode(false);
+                      setPendingAnchorIndex(null);
+                    }}
+                  >
+                    <Button.Label className="text-[10px]">{t("common.close")}</Button.Label>
+                  </Button>
+                </View>
+
+                <Text className="mt-2 text-[10px] text-muted">
+                  {t("editor.detectedStars" as TranslationKey)}: {detectedStarCount} ·{" "}
+                  {t("editor.manualStars" as TranslationKey)}: {manualStarCount} ·{" "}
+                  {t("editor.enabledStars" as TranslationKey)}: {enabledStarCount}
+                </Text>
+
+                {starAnnotationsStale && (
+                  <View className="mt-2 rounded-md bg-warning/15 px-2 py-1">
+                    <Text className="text-[9px] text-warning">
+                      {t("editor.annotationStale" as TranslationKey)}
+                    </Text>
+                  </View>
+                )}
+
+                <View className="mt-2 flex-row flex-wrap gap-1.5">
+                  <Button size="sm" variant="outline" onPress={detectAndMergeStars}>
+                    <Button.Label className="text-[9px]">
+                      {t("editor.reDetectStars" as TranslationKey)}
+                    </Button.Label>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={pendingAnchorIndex === 1 ? "primary" : "outline"}
+                    onPress={() => setPendingAnchorIndex((prev) => (prev === 1 ? null : 1))}
+                  >
+                    <Button.Label className="text-[9px]">
+                      {t("editor.setAnchor1" as TranslationKey)}
+                    </Button.Label>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={pendingAnchorIndex === 2 ? "primary" : "outline"}
+                    onPress={() => setPendingAnchorIndex((prev) => (prev === 2 ? null : 2))}
+                  >
+                    <Button.Label className="text-[9px]">
+                      {t("editor.setAnchor2" as TranslationKey)}
+                    </Button.Label>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={pendingAnchorIndex === 3 ? "primary" : "outline"}
+                    onPress={() => setPendingAnchorIndex((prev) => (prev === 3 ? null : 3))}
+                  >
+                    <Button.Label className="text-[9px]">
+                      {t("editor.setAnchor3" as TranslationKey)}
+                    </Button.Label>
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onPress={() => {
+                      const cleared = starPoints.map((point) => ({
+                        ...point,
+                        anchorIndex: undefined,
+                      }));
+                      applyStarAnnotationState(cleared, starSnapshot, starAnnotationsStale);
+                      setPendingAnchorIndex(null);
+                    }}
+                  >
+                    <Button.Label className="text-[9px]">
+                      {t("editor.clearAnchors" as TranslationKey)}
+                    </Button.Label>
+                  </Button>
+                </View>
+              </Card.Body>
+            </Card>
+          </View>
+        )}
+
         {/* Processing indicator overlay */}
         {editor.isProcessing && (
           <View className="absolute inset-0 items-center justify-center bg-black/50">
@@ -1108,13 +1570,21 @@ export default function EditorDetailScreen() {
                 onPress={() => {
                   if (tool.route) {
                     router.push(tool.route);
-                  } else if (tool.key === "starDetect" && editor.current) {
-                    const stars = detectStars(
-                      editor.current.pixels,
-                      editor.current.width,
-                      editor.current.height,
-                    );
-                    setDetectedStars(stars);
+                  } else if (tool.key === "starDetect") {
+                    if (isStarAnnotationMode) {
+                      setIsStarAnnotationMode(false);
+                      setPendingAnchorIndex(null);
+                      return;
+                    }
+                    setIsStarAnnotationMode(true);
+                    if (
+                      !editor.current ||
+                      starPoints.length === 0 ||
+                      starAnnotationsStale ||
+                      detectedStars.length === 0
+                    ) {
+                      detectAndMergeStars();
+                    }
                   } else {
                     handleToolPress(tool.key as Exclude<EditorTool, null>);
                   }
@@ -1125,16 +1595,17 @@ export default function EditorDetailScreen() {
                     name={tool.icon}
                     size={20}
                     color={
-                      tool.key === "starDetect" && detectedStars.length > 0
+                      tool.key === "starDetect" &&
+                      (detectedStars.length > 0 || isStarAnnotationMode)
                         ? successColor
                         : mutedColor
                     }
                   />
                   <Text
-                    className={`mt-1 text-[9px] ${tool.key === "starDetect" && detectedStars.length > 0 ? "text-success font-semibold" : "text-muted"}`}
+                    className={`mt-1 text-[9px] ${tool.key === "starDetect" && (detectedStars.length > 0 || isStarAnnotationMode) ? "text-success font-semibold" : "text-muted"}`}
                   >
                     {tool.key === "starDetect" && detectedStars.length > 0
-                      ? `${detectedStars.length} stars`
+                      ? `${detectedStars.length} ${t("editor.stars")}`
                       : t(`editor.${tool.key}` as TranslationKey)}
                   </Text>
                 </View>

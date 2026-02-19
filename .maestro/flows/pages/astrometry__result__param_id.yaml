@@ -1,0 +1,11 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://astrometry/result/astro-001
+- assertVisible:
+    id: e2e-screen-astrometry__result__param_id
+- tapOn:
+    id: e2e-action-astrometry__result__param_id-copy-wcs
+- tapOn:
+    id: e2e-action-astrometry__result__param_id-open-viewer
+- assertVisible:
+    id: e2e-screen-viewer__param_id

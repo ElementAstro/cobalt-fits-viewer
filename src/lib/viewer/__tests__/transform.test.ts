@@ -2,6 +2,7 @@ import {
   clampScale,
   clampTranslation,
   clampImagePoint,
+  computeIncrementalPinchTranslation,
   computeOneToOneScale,
   computeTranslateBounds,
   computeFitGeometry,
@@ -9,6 +10,7 @@ import {
   remapPointBetweenSpaces,
   remapRegionBetweenSpaces,
   screenToImagePoint,
+  zoomAroundPoint,
 } from "../transform";
 
 describe("viewer transform helpers", () => {
@@ -49,6 +51,23 @@ describe("viewer transform helpers", () => {
     expect(clampScale(8, 1, 6)).toBe(6);
     expect(clampScale(0.4, 1, 6)).toBe(1);
     expect(clampScale(3, 1, 6)).toBe(3);
+  });
+
+  it("keeps focal point stable when zooming around a point", () => {
+    const next = zoomAroundPoint(120, 80, 1.5, 2.4, -30, 14);
+    const localBeforeX = (120 - -30) / 1.5;
+    const localBeforeY = (80 - 14) / 1.5;
+    const localAfterX = (120 - next.x) / 2.4;
+    const localAfterY = (80 - next.y) / 2.4;
+    expect(localAfterX).toBeCloseTo(localBeforeX, 6);
+    expect(localAfterY).toBeCloseTo(localBeforeY, 6);
+  });
+
+  it("applies incremental pinch translation with focal movement", () => {
+    const next = computeIncrementalPinchTranslation(140, 110, 132, 102, 1.2, 1.6, -20, 30);
+    const expectedFromZoomOnly = zoomAroundPoint(140, 110, 1.2, 1.6, -20, 30);
+    expect(next.x).toBeCloseTo(expectedFromZoomOnly.x + 8, 6);
+    expect(next.y).toBeCloseTo(expectedFromZoomOnly.y + 8, 6);
   });
 
   it("computes translate bounds and clamps translation", () => {

@@ -172,7 +172,12 @@ export default function AlbumDetailScreen() {
           </View>
           <View className="flex-row gap-1">
             {isLandscape && statistics && (
-              <Button size="sm" variant="outline" onPress={() => setShowStatistics(true)}>
+              <Button
+                testID="e2e-action-album__param_id-open-stats"
+                size="sm"
+                variant="outline"
+                onPress={() => setShowStatistics(true)}
+              >
                 <Ionicons name="stats-chart-outline" size={14} color={successColor} />
               </Button>
             )}
@@ -181,7 +186,12 @@ export default function AlbumDetailScreen() {
                 <Ionicons name="document-text-outline" size={14} color={mutedColor} />
               </Button>
             )}
-            <Button size="sm" variant="outline" onPress={handleRename}>
+            <Button
+              testID="e2e-action-album__param_id-open-rename"
+              size="sm"
+              variant="outline"
+              onPress={handleRename}
+            >
               <Ionicons name="pencil-outline" size={14} color={mutedColor} />
             </Button>
             <Button size="sm" variant="outline" onPress={handleDeleteAlbum}>
@@ -204,7 +214,12 @@ export default function AlbumDetailScreen() {
               </View>
               <View className="flex-row gap-1">
                 {statistics && (
-                  <Button size="sm" variant="ghost" onPress={() => setShowStatistics(true)}>
+                  <Button
+                    testID="e2e-action-album__param_id-open-stats"
+                    size="sm"
+                    variant="ghost"
+                    onPress={() => setShowStatistics(true)}
+                  >
                     <Ionicons name="stats-chart-outline" size={14} color={successColor} />
                   </Button>
                 )}
@@ -329,6 +344,7 @@ export default function AlbumDetailScreen() {
   return (
     <>
       <View
+        testID="e2e-screen-album__param_id"
         className="flex-1 bg-background"
         style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
       >

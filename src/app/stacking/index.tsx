@@ -162,8 +162,10 @@ export default function StackingScreen() {
     }
 
     const fileInfos = selectedFiles.map((f) => ({
+      id: f.id,
       filepath: f.filepath,
       filename: f.filename,
+      starAnnotations: f.starAnnotations,
     }));
 
     const hasCalibration =
@@ -328,7 +330,7 @@ export default function StackingScreen() {
   );
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-stacking__index" className="flex-1 bg-background">
       <LoadingOverlay
         visible={stacking.isStacking}
         message={stacking.progress?.message ?? `${t("editor.stacking")}...`}
@@ -357,7 +359,12 @@ export default function StackingScreen() {
             </Text>
           </View>
           {stacking.result && (
-            <Button size="sm" variant="outline" onPress={stacking.reset}>
+            <Button
+              testID="e2e-action-stacking__index-reset"
+              size="sm"
+              variant="outline"
+              onPress={stacking.reset}
+            >
               <Ionicons name="refresh-outline" size={14} color={mutedColor} />
             </Button>
           )}
@@ -903,6 +910,7 @@ export default function StackingScreen() {
         {/* Stack Button */}
         <View className="mt-6">
           <Button
+            testID="e2e-action-stacking__index-start"
             variant="primary"
             onPress={handleStack}
             isDisabled={selectedFiles.length < 2 || stacking.isStacking}

@@ -1,0 +1,9 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+- clearState
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: e2e-bootstrap-ready
+    timeout: 15000

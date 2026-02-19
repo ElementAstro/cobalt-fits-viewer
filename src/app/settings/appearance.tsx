@@ -33,12 +33,19 @@ import {
   MONO_FONT_KEYS,
 } from "../../lib/theme/fonts";
 
-const CUSTOM_TOKEN_KEYS: Array<{ token: ThemeEditableToken; labelKey: string }> = [
+const CUSTOM_BASE_TOKEN_KEYS: Array<{ token: ThemeEditableToken; labelKey: string }> = [
+  { token: "background", labelKey: "settings.customThemeBackground" },
+  { token: "surface", labelKey: "settings.customThemeSurface" },
+];
+
+const CUSTOM_SEMANTIC_TOKEN_KEYS: Array<{ token: ThemeEditableToken; labelKey: string }> = [
   { token: "accent", labelKey: "settings.customThemeAccent" },
   { token: "success", labelKey: "settings.customThemeSuccess" },
   { token: "warning", labelKey: "settings.customThemeWarning" },
   { token: "danger", labelKey: "settings.customThemeDanger" },
 ];
+
+const OPTIONAL_CUSTOM_TOKENS = new Set<ThemeEditableToken>(["background", "surface"]);
 
 const QUICK_COLOR_SWATCHES = [
   "#4F6BED",
@@ -92,7 +99,20 @@ export default function AppearanceSettingsScreen() {
   const setFontFamily = useSettingsStore((s) => s.setFontFamily);
   const setMonoFontFamily = useSettingsStore((s) => s.setMonoFontFamily);
 
-  const [accentPreview, successPreview, warningPreview, dangerPreview] = useThemeColor([
+  const [
+    backgroundPreview,
+    foregroundPreview,
+    surfacePreview,
+    surfaceForegroundPreview,
+    accentPreview,
+    successPreview,
+    warningPreview,
+    dangerPreview,
+  ] = useThemeColor([
+    "background",
+    "foreground",
+    "surface",
+    "surface-foreground",
     "accent",
     "success",
     "warning",
@@ -155,6 +175,11 @@ export default function AppearanceSettingsScreen() {
 
   const applyCustomToken = (mode: "light" | "dark", token: ThemeEditableToken) => {
     const raw = customDraft[mode][token];
+    if (OPTIONAL_CUSTOM_TOKENS.has(token) && raw.trim().length === 0) {
+      haptics.selection();
+      setCustomThemeToken(token, "", mode);
+      return;
+    }
     const normalized = normalizeHexColor(raw);
     if (!normalized) {
       haptics.notify(Haptics.NotificationFeedbackType.Warning);
@@ -172,8 +197,83 @@ export default function AppearanceSettingsScreen() {
     setCustomThemeToken(token, normalized, mode);
   };
 
+  const renderTokenEditors = (
+    mode: "light" | "dark",
+    tokens: Array<{ token: ThemeEditableToken; labelKey: string }>,
+  ) =>
+    tokens.map(({ token, labelKey }, index) => {
+      const value = customDraft[mode][token];
+      const normalized = normalizeHexColor(value);
+      const isOptional = OPTIONAL_CUSTOM_TOKENS.has(token);
+      const canApply = isOptional ? value.trim().length === 0 || !!normalized : !!normalized;
+      return (
+        <View key={`${mode}-${token}`}>
+          <View className="mb-2 flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2">
+              <View
+                style={{
+                  width: 12,
+                  height: 12,
+                  borderRadius: 999,
+                  backgroundColor: normalized ?? "#6b7280",
+                }}
+              />
+              <Text className="text-sm text-foreground">{t(labelKey)}</Text>
+            </View>
+            <Text className="text-xs text-muted">{value}</Text>
+          </View>
+          <View className="mb-2 flex-row items-center gap-2">
+            <Input
+              className="flex-1"
+              placeholder={isOptional ? "#111827 / (auto)" : "#4F6BED"}
+              value={value}
+              onChangeText={(nextValue) => updateCustomDraft(mode, token, nextValue)}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              onPress={() => applyCustomToken(mode, token)}
+              isDisabled={!canApply}
+            >
+              <Button.Label>{t("common.confirm")}</Button.Label>
+            </Button>
+          </View>
+          <View className="mb-2 flex-row flex-wrap gap-2">
+            {QUICK_COLOR_SWATCHES.map((color) => {
+              const isSelected = normalized === color;
+              return (
+                <TouchableOpacity
+                  key={`${mode}-${token}-${color}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={color}
+                  onPress={() => applyCustomSwatch(mode, token, color)}
+                >
+                  <View
+                    style={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: 999,
+                      backgroundColor: color,
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? "#ffffff" : "#6b7280",
+                    }}
+                  />
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {!normalized && value.length > 0 && (
+            <Text className="mb-2 text-xs text-danger">{t("settings.invalidHexHint")}</Text>
+          )}
+          {index !== tokens.length - 1 && <Separator className="my-2" />}
+        </View>
+      );
+    });
+
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__appearance" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -193,6 +293,7 @@ export default function AppearanceSettingsScreen() {
         {/* Display Settings */}
         <SettingsSection title={t("settings.display")}>
           <SettingsRow
+            testID="e2e-action-settings__appearance-open-language"
             icon="language-outline"
             label={t("settings.language")}
             value={
@@ -202,6 +303,7 @@ export default function AppearanceSettingsScreen() {
           />
           <Separator />
           <SettingsRow
+            testID="e2e-action-settings__appearance-open-theme"
             icon="moon-outline"
             label={t("settings.theme")}
             value={themeLabel}
@@ -398,78 +500,13 @@ export default function AppearanceSettingsScreen() {
                         ? t("settings.customThemeLight")
                         : t("settings.customThemeDark")}
                     </Text>
-                    {CUSTOM_TOKEN_KEYS.map(({ token, labelKey }, index) => {
-                      const value = customDraft[mode][token];
-                      const normalized = normalizeHexColor(value);
-                      return (
-                        <View key={`${mode}-${token}`}>
-                          <View className="mb-2 flex-row items-center justify-between">
-                            <View className="flex-row items-center gap-2">
-                              <View
-                                style={{
-                                  width: 12,
-                                  height: 12,
-                                  borderRadius: 999,
-                                  backgroundColor: normalized ?? "#6b7280",
-                                }}
-                              />
-                              <Text className="text-sm text-foreground">{t(labelKey)}</Text>
-                            </View>
-                            <Text className="text-xs text-muted">{value}</Text>
-                          </View>
-                          <View className="mb-2 flex-row items-center gap-2">
-                            <Input
-                              className="flex-1"
-                              placeholder="#4F6BED"
-                              value={value}
-                              onChangeText={(nextValue) =>
-                                updateCustomDraft(mode, token, nextValue)
-                              }
-                              autoCapitalize="characters"
-                              autoCorrect={false}
-                            />
-                            <Button
-                              size="sm"
-                              variant="secondary"
-                              onPress={() => applyCustomToken(mode, token)}
-                              isDisabled={!normalized}
-                            >
-                              <Button.Label>{t("common.confirm")}</Button.Label>
-                            </Button>
-                          </View>
-                          <View className="mb-2 flex-row flex-wrap gap-2">
-                            {QUICK_COLOR_SWATCHES.map((color) => {
-                              const isSelected = normalized === color;
-                              return (
-                                <TouchableOpacity
-                                  key={`${mode}-${token}-${color}`}
-                                  accessibilityRole="button"
-                                  accessibilityLabel={color}
-                                  onPress={() => applyCustomSwatch(mode, token, color)}
-                                >
-                                  <View
-                                    style={{
-                                      width: 18,
-                                      height: 18,
-                                      borderRadius: 999,
-                                      backgroundColor: color,
-                                      borderWidth: isSelected ? 2 : 1,
-                                      borderColor: isSelected ? "#ffffff" : "#6b7280",
-                                    }}
-                                  />
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </View>
-                          {!normalized && value.length > 0 && (
-                            <Text className="mb-2 text-xs text-danger">
-                              {t("settings.invalidHexHint")}
-                            </Text>
-                          )}
-                          {index !== CUSTOM_TOKEN_KEYS.length - 1 && <Separator className="my-2" />}
-                        </View>
-                      );
-                    })}
+                    <Text className="mb-2 text-xs text-muted">{t("settings.customThemeBase")}</Text>
+                    <Text className="mb-2 text-xs text-muted">
+                      {t("settings.customThemeOptionalHint")}
+                    </Text>
+                    {renderTokenEditors(mode, CUSTOM_BASE_TOKEN_KEYS)}
+                    <Separator className="my-2" />
+                    {renderTokenEditors(mode, CUSTOM_SEMANTIC_TOKEN_KEYS)}
                   </Card.Body>
                 </Card>
               ))}
@@ -480,6 +517,29 @@ export default function AppearanceSettingsScreen() {
         <SettingsSection title={t("settings.themePreview")}>
           <Card variant="secondary">
             <Card.Body className="gap-3 px-4 py-3">
+              {themeColorMode === "custom" && (
+                <>
+                  <View
+                    className="rounded-xl px-3 py-2"
+                    style={{ backgroundColor: backgroundPreview }}
+                  >
+                    <Text className="text-xs font-medium" style={{ color: foregroundPreview }}>
+                      {t("settings.customThemeBackground")}
+                    </Text>
+                  </View>
+                  <View
+                    className="rounded-xl px-3 py-2"
+                    style={{ backgroundColor: surfacePreview }}
+                  >
+                    <Text
+                      className="text-xs font-medium"
+                      style={{ color: surfaceForegroundPreview }}
+                    >
+                      {t("settings.customThemeSurface")}
+                    </Text>
+                  </View>
+                </>
+              )}
               <View className="flex-row flex-wrap gap-2">
                 {[
                   { color: accentPreview, label: t("settings.customThemeAccent") },

@@ -122,7 +122,7 @@ export default function ObservationSettingsScreen() {
   }));
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__observation" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -156,6 +156,7 @@ export default function ObservationSettingsScreen() {
           />
           <Separator />
           <SettingsRow
+            testID="e2e-action-settings__observation-open-target-sort-by"
             icon="swap-vertical-outline"
             label={t("settings.targetSortBy")}
             value={
@@ -235,6 +236,7 @@ export default function ObservationSettingsScreen() {
         {/* Session Settings */}
         <SettingsSection title={t("settings.sessions")}>
           <SettingsRow
+            testID="e2e-action-settings__observation-open-session-gap"
             icon="time-outline"
             label={t("settings.sessionGap")}
             value={formatMinutes(sessionGapMinutes)}

@@ -346,7 +346,13 @@ export default function GalleryScreen() {
                 />
               </Button>
             ))}
-            <Button size="sm" isIconOnly variant="ghost" onPress={() => router.push("/map")}>
+            <Button
+              testID="e2e-action-tabs__gallery-open-map"
+              size="sm"
+              isIconOnly
+              variant="ghost"
+              onPress={() => router.push("/map")}
+            >
               <Ionicons name="map-outline" size={16} color={mutedColor} />
             </Button>
           </View>
@@ -578,7 +584,12 @@ export default function GalleryScreen() {
             <Button size="sm" variant="outline" onPress={() => setShowSmartAlbum(true)}>
               <Ionicons name="sparkles-outline" size={14} color={successColor} />
             </Button>
-            <Button size="sm" variant="outline" onPress={() => setShowCreateAlbum(true)}>
+            <Button
+              testID="e2e-action-tabs__gallery-open-create-album"
+              size="sm"
+              variant="outline"
+              onPress={() => setShowCreateAlbum(true)}
+            >
               <Ionicons name="add-outline" size={14} color={mutedColor} />
               {!isLandscape && (
                 <Button.Label className="text-xs">{t("gallery.createAlbum")}</Button.Label>
@@ -681,6 +692,7 @@ export default function GalleryScreen() {
                 <Ionicons name="text-outline" size={12} color={mutedColor} />
               </Button>
               <Button
+                testID="e2e-action-tabs__gallery-open-compare"
                 size="sm"
                 variant="outline"
                 onPress={() => {
@@ -811,7 +823,7 @@ export default function GalleryScreen() {
   const timelineKeyExtractor = useCallback((item: TimelineSection) => item.date, []);
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-tabs__gallery" className="flex-1 bg-background">
       {displayFiles.length === 0 ? (
         <FlatList
           data={[]}

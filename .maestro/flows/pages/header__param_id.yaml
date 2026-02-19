@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://header/fits-001
+- assertVisible:
+    id: e2e-screen-header__param_id
+- tapOn:
+    id: e2e-action-header__param_id-group-observation
+- tapOn:
+    id: e2e-action-header__param_id-back

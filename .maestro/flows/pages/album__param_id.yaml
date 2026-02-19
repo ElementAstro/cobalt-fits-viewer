@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://album/album-001
+- assertVisible:
+    id: e2e-screen-album__param_id
+- tapOn:
+    id: e2e-action-album__param_id-open-rename
+- tapOn:
+    id: e2e-action-album__param_id-open-stats

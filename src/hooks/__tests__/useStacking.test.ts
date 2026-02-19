@@ -298,4 +298,74 @@ describe("useStacking", () => {
       }),
     );
   });
+
+  it("prioritizes manual anchors and annotation stars in stacking pipeline", async () => {
+    const { result } = renderHook(() => useStacking());
+    const snapshot = {
+      profile: "balanced" as const,
+      sigmaThreshold: 5,
+      maxStars: 220,
+      minArea: 3,
+      maxArea: 600,
+      borderMargin: 10,
+      meshSize: 64,
+      deblendNLevels: 16,
+      deblendMinContrast: 0.08,
+      filterFwhm: 2.2,
+      maxFwhm: 11,
+      maxEllipticity: 0.65,
+    };
+
+    await act(async () => {
+      await result.current.stackFiles({
+        files: [
+          {
+            filepath: "/tmp/a.fits",
+            filename: "a.fits",
+            starAnnotations: {
+              version: 1,
+              updatedAt: Date.now(),
+              detectionSnapshot: snapshot,
+              points: [
+                { id: "r1", x: 0, y: 0, enabled: true, source: "manual", anchorIndex: 1 },
+                { id: "r2", x: 20, y: 0, enabled: true, source: "manual", anchorIndex: 2 },
+                { id: "r3", x: 0, y: 20, enabled: true, source: "manual", anchorIndex: 3 },
+                { id: "rd", x: 10, y: 10, enabled: true, source: "detected" },
+              ],
+            },
+          },
+          {
+            filepath: "/tmp/b.fits",
+            filename: "b.fits",
+            starAnnotations: {
+              version: 1,
+              updatedAt: Date.now(),
+              detectionSnapshot: snapshot,
+              points: [
+                { id: "t1", x: 2, y: 3, enabled: true, source: "manual", anchorIndex: 1 },
+                { id: "t2", x: 22, y: 3, enabled: true, source: "manual", anchorIndex: 2 },
+                { id: "t3", x: 2, y: 23, enabled: true, source: "manual", anchorIndex: 3 },
+                { id: "td", x: 12, y: 13, enabled: true, source: "detected" },
+              ],
+            },
+          },
+        ],
+        method: "weighted",
+        alignmentMode: "full",
+        enableQualityEval: true,
+      });
+    });
+
+    const qualityOpts = qualityLib.evaluateFrameQualityAsync.mock.calls[0]?.[3];
+    expect(qualityOpts?.starsOverride?.length).toBeGreaterThanOrEqual(3);
+
+    const alignOpts = alignLib.alignFrameAsync.mock.calls[0]?.[5];
+    expect(alignOpts?.manualControlPoints).toEqual(
+      expect.objectContaining({
+        mode: "threeStar",
+      }),
+    );
+    expect(alignOpts?.refStarsOverride?.length).toBeGreaterThanOrEqual(3);
+    expect(alignOpts?.targetStarsOverride?.length).toBeGreaterThanOrEqual(3);
+  });
 });

@@ -171,6 +171,7 @@ export default function ComposeScreen() {
 
   return (
     <ScrollView
+      testID="e2e-screen-compose__index"
       className="flex-1 bg-background"
       contentContainerStyle={{
         paddingHorizontal: horizontalPadding,
@@ -229,7 +230,12 @@ export default function ComposeScreen() {
             >
               <Ionicons name="share-outline" size={14} color={mutedColor} />
             </Button>
-            <Button size="sm" variant="outline" onPress={composer.reset}>
+            <Button
+              testID="e2e-action-compose__index-reset"
+              size="sm"
+              variant="outline"
+              onPress={composer.reset}
+            >
               <Ionicons name="refresh-outline" size={14} color={mutedColor} />
             </Button>
           </View>
@@ -481,6 +487,7 @@ export default function ComposeScreen() {
 
       {/* Compose Button */}
       <Button
+        testID="e2e-action-compose__index-compose"
         variant="primary"
         className="mt-2"
         onPress={handleCompose}

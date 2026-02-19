@@ -286,7 +286,7 @@ export default function BackupScreen() {
   const isOperating = backupInProgress || restoreInProgress;
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-backup__index" className="flex-1 bg-background">
       {/* Header */}
       <View
         className="flex-row items-center gap-3 pb-2"
@@ -336,6 +336,7 @@ export default function BackupScreen() {
               <View className="flex-row gap-2">
                 <View className="flex-1">
                   <Button
+                    testID="e2e-action-backup__index-local-export"
                     variant="primary"
                     size="sm"
                     onPress={handleLocalExport}
@@ -347,6 +348,7 @@ export default function BackupScreen() {
                 </View>
                 <View className="flex-1">
                   <Button
+                    testID="e2e-action-backup__index-local-import"
                     variant="outline"
                     size="sm"
                     onPress={handleLocalImport}
@@ -386,6 +388,7 @@ export default function BackupScreen() {
                   <Text className="text-sm text-foreground">{t("backup.autoBackup")}</Text>
                 </View>
                 <Switch
+                  testID="e2e-action-backup__index-toggle-auto-backup"
                   isSelected={autoBackupEnabled}
                   onSelectedChange={setAutoBackupEnabled}
                   isDisabled={connections.length === 0}
@@ -422,6 +425,7 @@ export default function BackupScreen() {
                     </Text>
                     <View className="flex-row flex-wrap gap-2">
                       <Chip
+                        testID="e2e-action-backup__index-network-wifi"
                         size="sm"
                         variant={autoBackupNetwork === "wifi" ? "primary" : "secondary"}
                         onPress={() => setAutoBackupNetwork("wifi")}
@@ -429,6 +433,7 @@ export default function BackupScreen() {
                         <Chip.Label>{t("backup.networkWifiOnly")}</Chip.Label>
                       </Chip>
                       <Chip
+                        testID="e2e-action-backup__index-network-any"
                         size="sm"
                         variant={autoBackupNetwork === "any" ? "primary" : "secondary"}
                         onPress={() => setAutoBackupNetwork("any")}

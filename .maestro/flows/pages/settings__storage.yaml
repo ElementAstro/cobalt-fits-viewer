@@ -1,0 +1,16 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://settings/storage
+- assertVisible:
+    id: e2e-screen-settings__storage
+- tapOn:
+    id: e2e-action-settings__storage-open-backup
+- assertVisible:
+    id: e2e-screen-backup__index
+- openLink: cobalt://settings/storage
+- assertVisible:
+    id: e2e-screen-settings__storage
+- tapOn:
+    id: e2e-action-settings__storage-open-astrometry
+- assertVisible:
+    id: e2e-screen-astrometry__index

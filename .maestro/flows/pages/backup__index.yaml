@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://backup
+- assertVisible:
+    id: e2e-screen-backup__index
+- tapOn:
+    id: e2e-action-backup__index-network-any
+- tapOn:
+    id: e2e-action-backup__index-network-wifi

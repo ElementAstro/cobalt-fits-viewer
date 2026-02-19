@@ -71,6 +71,18 @@ jest.mock("react-native-gesture-handler", () => {
       numberOfTaps?: number;
     };
   }> = [];
+  const pinchGestures: Array<{
+    handlers: Record<string, unknown>;
+    config: {
+      numberOfTaps?: number;
+    };
+  }> = [];
+  const longPressGestures: Array<{
+    handlers: Record<string, unknown>;
+    config: {
+      numberOfTaps?: number;
+    };
+  }> = [];
 
   const createBuilder = (type: "tap" | "pan" | "pinch" | "longPress") => {
     const builder = {
@@ -116,6 +128,8 @@ jest.mock("react-native-gesture-handler", () => {
 
     if (type === "tap") tapGestures.push(builder);
     if (type === "pan") panGestures.push(builder);
+    if (type === "pinch") pinchGestures.push(builder);
+    if (type === "longPress") longPressGestures.push(builder);
     return builder;
   };
 
@@ -133,9 +147,14 @@ jest.mock("react-native-gesture-handler", () => {
     __resetGestures: () => {
       tapGestures.length = 0;
       panGestures.length = 0;
+      pinchGestures.length = 0;
+      longPressGestures.length = 0;
     },
     __getTapGesture: (tapCount: number) =>
       tapGestures.find((g) => g.config.numberOfTaps === tapCount),
+    __getPanGesture: () => panGestures[0],
+    __getPinchGesture: () => pinchGestures[0],
+    __getLongPressGesture: () => longPressGestures[0],
   };
 });
 
@@ -144,6 +163,29 @@ type GestureMockModule = {
   __getTapGesture: (
     tapCount: number,
   ) => { handlers: { onEnd?: (event: { x: number; y: number }) => void } } | undefined;
+  __getPanGesture: () =>
+    | {
+        handlers: {
+          onStart?: () => void;
+          onUpdate?: (event: { translationX: number; translationY: number }) => void;
+        };
+      }
+    | undefined;
+  __getPinchGesture: () =>
+    | {
+        handlers: {
+          onStart?: (event: { focalX: number; focalY: number; scale?: number }) => void;
+          onUpdate?: (event: { focalX: number; focalY: number; scale: number }) => void;
+        };
+      }
+    | undefined;
+  __getLongPressGesture: () =>
+    | {
+        handlers: {
+          onEnd?: (event: { x: number; y: number }, success?: boolean) => void;
+        };
+      }
+    | undefined;
 };
 
 function triggerLayout(instance: ReturnType<typeof render>, width: number, height: number) {
@@ -302,5 +344,102 @@ describe("FitsCanvas", () => {
     });
 
     expect(onPixelTap).toHaveBeenCalledWith(205, 105);
+  });
+
+  it("maps long-press pixel from render space back to source space", () => {
+    const onPixelLongPress = jest.fn();
+    const view = render(
+      <FitsCanvas
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        sourceWidth={1000}
+        sourceHeight={500}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+        onPixelLongPress={onPixelLongPress}
+      />,
+    );
+    triggerLayout(view, 200, 100);
+
+    const longPress = gestureMock.__getLongPressGesture();
+    expect(longPress?.handlers.onEnd).toBeDefined();
+
+    act(() => {
+      longPress?.handlers.onEnd?.({ x: 40, y: 20 }, true);
+    });
+
+    expect(onPixelLongPress).toHaveBeenCalledWith(205, 105);
+  });
+
+  it("ignores pan updates while pinch gesture is active", () => {
+    const ref = React.createRef<FitsCanvasHandle>();
+    const view = render(
+      <FitsCanvas
+        ref={ref}
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+      />,
+    );
+    triggerLayout(view, 200, 100);
+
+    act(() => {
+      ref.current?.setTransform(0, 0, 2, { animated: false });
+    });
+
+    const panGesture = gestureMock.__getPanGesture();
+    const pinchGesture = gestureMock.__getPinchGesture();
+    expect(panGesture?.handlers.onUpdate).toBeDefined();
+    expect(pinchGesture?.handlers.onStart).toBeDefined();
+
+    act(() => {
+      panGesture?.handlers.onStart?.();
+      pinchGesture?.handlers.onStart?.({ focalX: 100, focalY: 50, scale: 1 });
+    });
+    const before = ref.current?.getTransform();
+
+    act(() => {
+      panGesture?.handlers.onUpdate?.({ translationX: 80, translationY: 40 });
+    });
+    const after = ref.current?.getTransform();
+
+    expect(after?.translateX).toBeCloseTo(before?.translateX ?? 0, 6);
+    expect(after?.translateY).toBeCloseTo(before?.translateY ?? 0, 6);
+  });
+
+  it("applies pinch sensitivity from gesture config", () => {
+    const ref = React.createRef<FitsCanvasHandle>();
+    const view = render(
+      <FitsCanvas
+        ref={ref}
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+        gestureConfig={{ pinchSensitivity: 0.6 }}
+      />,
+    );
+    triggerLayout(view, 200, 100);
+
+    const pinchGesture = gestureMock.__getPinchGesture();
+    expect(pinchGesture?.handlers.onUpdate).toBeDefined();
+
+    act(() => {
+      pinchGesture?.handlers.onStart?.({ focalX: 100, focalY: 50, scale: 1 });
+      pinchGesture?.handlers.onUpdate?.({ focalX: 100, focalY: 50, scale: 1.2 });
+    });
+
+    const transform = ref.current?.getTransform();
+    expect(transform?.scale).toBeCloseTo(Math.pow(1.2, 0.6), 6);
   });
 });

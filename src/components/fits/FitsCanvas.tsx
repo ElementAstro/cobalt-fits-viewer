@@ -39,46 +39,42 @@ import Animated, {
 import {
   clampScale,
   clampTranslation,
+  computeIncrementalPinchTranslation,
   computeFitGeometry,
   computeTranslateBounds,
   remapPointBetweenSpaces,
+  zoomAroundPoint,
 } from "../../lib/viewer/transform";
 
 // --- Constants ---
 const MIN_SCALE = 0.5;
 const MAX_SCALE = 10;
 const DOUBLE_TAP_SCALE = 3;
-const RUBBER_BAND_FACTOR = 0.55;
+const PINCH_SENSITIVITY = 1;
+const PINCH_OVERZOOM_FACTOR = 1.25;
+const PAN_RUBBER_BAND_FACTOR = 0.55;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
 const SPRING_CONFIG = { damping: 20, stiffness: 250, mass: 0.5, overshootClamping: false };
 
 // --- Worklet helpers ---
-function zoomAroundFocalPoint(
-  focalPointX: number,
-  focalPointY: number,
-  currentScale: number,
-  targetScale: number,
-  currentTranslateX: number,
-  currentTranslateY: number,
-): { x: number; y: number } {
+function rubberBand(
+  value: number,
+  min: number,
+  max: number,
+  dimension: number,
+  rubberBandFactor: number,
+): number {
   "worklet";
-  const safeCurrentScale = currentScale <= 0 ? 1 : currentScale;
-  const scaleFactor = targetScale / safeCurrentScale;
-  return {
-    x: focalPointX - (focalPointX - currentTranslateX) * scaleFactor,
-    y: focalPointY - (focalPointY - currentTranslateY) * scaleFactor,
-  };
-}
-
-function rubberBand(value: number, min: number, max: number, dimension: number): number {
-  "worklet";
+  if (rubberBandFactor <= 0) {
+    return Math.max(min, Math.min(max, value));
+  }
   if (value < min) {
     const overscroll = min - value;
-    return min - (1 - 1 / ((overscroll * RUBBER_BAND_FACTOR) / dimension + 1)) * dimension;
+    return min - (1 - 1 / ((overscroll * rubberBandFactor) / dimension + 1)) * dimension;
   }
   if (value > max) {
     const overscroll = value - max;
-    return max + (1 - 1 / ((overscroll * RUBBER_BAND_FACTOR) / dimension + 1)) * dimension;
+    return max + (1 - 1 / ((overscroll * rubberBandFactor) / dimension + 1)) * dimension;
   }
   return value;
 }
@@ -91,12 +87,13 @@ function applyRubberBandTranslation(
   imgH: number,
   cw: number,
   ch: number,
+  rubberBandFactor: number,
 ): { x: number; y: number } {
   "worklet";
   const { maxX, maxY } = computeTranslateBounds(currentScale, imgW, imgH, cw, ch);
   return {
-    x: rubberBand(tx, -maxX, maxX, cw),
-    y: rubberBand(ty, -maxY, maxY, ch),
+    x: rubberBand(tx, -maxX, maxX, cw, rubberBandFactor),
+    y: rubberBand(ty, -maxY, maxY, ch, rubberBandFactor),
   };
 }
 
@@ -119,6 +116,13 @@ export interface TransformSetOptions {
   duration?: number;
 }
 
+export interface FitsCanvasGestureConfig {
+  pinchSensitivity?: number;
+  pinchOverzoomFactor?: number;
+  panRubberBandFactor?: number;
+  wheelZoomSensitivity?: number;
+}
+
 interface FitsCanvasProps {
   rgbaData: Uint8ClampedArray | null;
   width: number;
@@ -130,6 +134,7 @@ interface FitsCanvasProps {
   cursorX: number;
   cursorY: number;
   onPixelTap?: (imageX: number, imageY: number) => void;
+  onPixelLongPress?: (imageX: number, imageY: number) => void;
   onTransformChange?: (transform: CanvasTransform) => void;
   gridColor?: string;
   gridOpacity?: number;
@@ -143,6 +148,7 @@ interface FitsCanvasProps {
   onLongPress?: () => void;
   interactionEnabled?: boolean;
   wheelZoomEnabled?: boolean;
+  gestureConfig?: FitsCanvasGestureConfig;
 }
 
 export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function FitsCanvas(
@@ -157,6 +163,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     cursorX,
     cursorY,
     onPixelTap,
+    onPixelLongPress,
     onTransformChange,
     gridColor: gridColorProp = "#64c8ff",
     gridOpacity: gridOpacityProp = 0.3,
@@ -170,6 +177,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     onLongPress,
     interactionEnabled = true,
     wheelZoomEnabled = false,
+    gestureConfig,
   },
   ref,
 ) {
@@ -184,11 +192,30 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   const translateY = useSharedValue(0);
   const savedTranslateX = useSharedValue(0);
   const savedTranslateY = useSharedValue(0);
+  const panStartTranslateX = useSharedValue(0);
+  const panStartTranslateY = useSharedValue(0);
+  const pinchStartScale = useSharedValue(1);
+  const pinchPrevFocalX = useSharedValue(0);
+  const pinchPrevFocalY = useSharedValue(0);
 
-  // Focal point for pinch
-  const focalX = useSharedValue(0);
-  const focalY = useSharedValue(0);
   const isPinching = useSharedValue(false);
+
+  const pinchSensitivity = useMemo(
+    () => clampScale(gestureConfig?.pinchSensitivity ?? PINCH_SENSITIVITY, 0.6, 1.8),
+    [gestureConfig?.pinchSensitivity],
+  );
+  const pinchOverzoomFactor = useMemo(
+    () => clampScale(gestureConfig?.pinchOverzoomFactor ?? PINCH_OVERZOOM_FACTOR, 1, 1.6),
+    [gestureConfig?.pinchOverzoomFactor],
+  );
+  const panRubberBandFactor = useMemo(
+    () => clampScale(gestureConfig?.panRubberBandFactor ?? PAN_RUBBER_BAND_FACTOR, 0, 0.9),
+    [gestureConfig?.panRubberBandFactor],
+  );
+  const wheelZoomSensitivity = useMemo(
+    () => clampScale(gestureConfig?.wheelZoomSensitivity ?? WHEEL_ZOOM_SENSITIVITY, 0.0005, 0.004),
+    [gestureConfig?.wheelZoomSensitivity],
+  );
 
   // Zoom level for indicator overlay
   const [zoomText, setZoomText] = useState("");
@@ -288,12 +315,18 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       savedScale.value = targetScale;
       savedTranslateX.value = clamped.x;
       savedTranslateY.value = clamped.y;
+      panStartTranslateX.value = clamped.x;
+      panStartTranslateY.value = clamped.y;
+      pinchStartScale.value = targetScale;
     },
     [
       canvasHeight,
       canvasWidth,
       imgHeight,
       imgWidth,
+      panStartTranslateX,
+      panStartTranslateY,
+      pinchStartScale,
       propMaxScale,
       propMinScale,
       savedScale,
@@ -336,6 +369,11 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     translateY.value = 0;
     savedTranslateX.value = 0;
     savedTranslateY.value = 0;
+    panStartTranslateX.value = 0;
+    panStartTranslateY.value = 0;
+    pinchStartScale.value = 1;
+    pinchPrevFocalX.value = 0;
+    pinchPrevFocalY.value = 0;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgWidth, imgHeight]);
 
@@ -364,6 +402,11 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       savedScale.value = nextScale;
       savedTranslateX.value = clamped.x;
       savedTranslateY.value = clamped.y;
+      panStartTranslateX.value = clamped.x;
+      panStartTranslateY.value = clamped.y;
+      pinchStartScale.value = nextScale;
+      pinchPrevFocalX.value = nextCanvasWidth / 2;
+      pinchPrevFocalY.value = nextCanvasHeight / 2;
 
       onTransformChange?.({
         scale: nextScale,
@@ -381,6 +424,11 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       onTransformChange,
       propMaxScale,
       propMinScale,
+      panStartTranslateX,
+      panStartTranslateY,
+      pinchPrevFocalX,
+      pinchPrevFocalY,
+      pinchStartScale,
       savedScale,
       savedTranslateX,
       savedTranslateY,
@@ -412,7 +460,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       if (Math.abs(deltaY) < 0.01) return;
 
       const currentScale = scale.value;
-      const rawScale = currentScale * Math.exp(-deltaY * WHEEL_ZOOM_SENSITIVITY);
+      const rawScale = currentScale * Math.exp(-deltaY * wheelZoomSensitivity);
       const targetScale = clampScale(rawScale, propMinScale, propMaxScale);
       if (Math.abs(targetScale - currentScale) < 0.0001) return;
 
@@ -423,7 +471,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       const focalYOnCanvas =
         nativeEvent.offsetY ?? nativeEvent.locationY ?? nativeEvent.y ?? ch / 2;
 
-      const rawTranslate = zoomAroundFocalPoint(
+      const rawTranslate = zoomAroundPoint(
         focalXOnCanvas,
         focalYOnCanvas,
         currentScale,
@@ -447,6 +495,9 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       savedScale.value = targetScale;
       savedTranslateX.value = clamped.x;
       savedTranslateY.value = clamped.y;
+      panStartTranslateX.value = clamped.x;
+      panStartTranslateY.value = clamped.y;
+      pinchStartScale.value = targetScale;
     },
     [
       wheelZoomEnabled,
@@ -457,10 +508,14 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       savedScale,
       savedTranslateX,
       savedTranslateY,
+      panStartTranslateX,
+      panStartTranslateY,
+      pinchStartScale,
       canvasWidth,
       canvasHeight,
       propMinScale,
       propMaxScale,
+      wheelZoomSensitivity,
       imgWidth,
       imgHeight,
     ],
@@ -471,21 +526,28 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   const panGesture = Gesture.Pan()
     .enabled(interactionEnabled)
     .onStart(() => {
-      savedTranslateX.value = translateX.value;
-      savedTranslateY.value = translateY.value;
+      panStartTranslateX.value = translateX.value;
+      panStartTranslateY.value = translateY.value;
     })
     .onUpdate((e) => {
       if (isPinching.value) {
-        savedTranslateX.value = translateX.value - e.translationX;
-        savedTranslateY.value = translateY.value - e.translationY;
         return;
       }
-      const rawX = savedTranslateX.value + e.translationX;
-      const rawY = savedTranslateY.value + e.translationY;
+      const rawX = panStartTranslateX.value + e.translationX;
+      const rawY = panStartTranslateY.value + e.translationY;
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
       // Apply rubber band effect at boundaries
-      const rb = applyRubberBandTranslation(rawX, rawY, scale.value, imgWidth, imgHeight, cw, ch);
+      const rb = applyRubberBandTranslation(
+        rawX,
+        rawY,
+        scale.value,
+        imgWidth,
+        imgHeight,
+        cw,
+        ch,
+        panRubberBandFactor,
+      );
       translateX.value = rb.x;
       translateY.value = rb.y;
     })
@@ -551,35 +613,45 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     .enabled(interactionEnabled)
     .onStart((e) => {
       isPinching.value = true;
-      savedScale.value = scale.value;
-      savedTranslateX.value = translateX.value;
-      savedTranslateY.value = translateY.value;
-      focalX.value = e.focalX;
-      focalY.value = e.focalY;
+      pinchStartScale.value = scale.value;
+      pinchPrevFocalX.value = e.focalX;
+      pinchPrevFocalY.value = e.focalY;
     })
     .onUpdate((e) => {
       // Allow slight over-zoom with rubber band feel, hard clamp at extremes
-      const rawScale = savedScale.value * e.scale;
-      const newScale = clampScale(rawScale, propMinScale * 0.5, propMaxScale * 1.5);
+      const rawScale = pinchStartScale.value * Math.pow(e.scale, pinchSensitivity);
+      const overzoomMin = propMinScale / pinchOverzoomFactor;
+      const overzoomMax = propMaxScale * pinchOverzoomFactor;
+      const targetScale = clampScale(rawScale, overzoomMin, overzoomMax);
 
-      // Track focal point delta for accurate pinch center
-      const focalDeltaX = e.focalX - focalX.value;
-      const focalDeltaY = e.focalY - focalY.value;
+      const rawTranslate = computeIncrementalPinchTranslation(
+        e.focalX,
+        e.focalY,
+        pinchPrevFocalX.value,
+        pinchPrevFocalY.value,
+        scale.value,
+        targetScale,
+        translateX.value,
+        translateY.value,
+      );
+      const cw = canvasWidth.value;
+      const ch = canvasHeight.value;
+      const rb = applyRubberBandTranslation(
+        rawTranslate.x,
+        rawTranslate.y,
+        targetScale,
+        imgWidth,
+        imgHeight,
+        cw,
+        ch,
+        panRubberBandFactor,
+      );
 
-      // Adjust translation to keep content under focal point stable
-      const scaleFactor = newScale / savedScale.value;
-      const newTx =
-        focalDeltaX +
-        savedTranslateX.value +
-        (savedTranslateX.value - focalX.value) * (scaleFactor - 1);
-      const newTy =
-        focalDeltaY +
-        savedTranslateY.value +
-        (savedTranslateY.value - focalY.value) * (scaleFactor - 1);
-
-      scale.value = newScale;
-      translateX.value = newTx;
-      translateY.value = newTy;
+      scale.value = targetScale;
+      translateX.value = rb.x;
+      translateY.value = rb.y;
+      pinchPrevFocalX.value = e.focalX;
+      pinchPrevFocalY.value = e.focalY;
     })
     .onEnd(() => {
       // Snap scale back to valid range with spring
@@ -603,9 +675,14 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       );
       translateX.value = withSpring(clamped.x, SPRING_CONFIG);
       translateY.value = withSpring(clamped.y, SPRING_CONFIG);
+      panStartTranslateX.value = clamped.x;
+      panStartTranslateY.value = clamped.y;
+      pinchStartScale.value = clampedScale;
       isPinching.value = false;
     })
     .onFinalize(() => {
+      panStartTranslateX.value = translateX.value;
+      panStartTranslateY.value = translateY.value;
       isPinching.value = false;
     });
 
@@ -624,10 +701,13 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         savedScale.value = 1;
         savedTranslateX.value = 0;
         savedTranslateY.value = 0;
+        panStartTranslateX.value = 0;
+        panStartTranslateY.value = 0;
+        pinchStartScale.value = 1;
       } else {
         // Zoom to DOUBLE_TAP_SCALE at tap point, clamped to bounds
         const targetScale = clampScale(propDoubleTapScale, propMinScale, propMaxScale);
-        const rawTranslate = zoomAroundFocalPoint(
+        const rawTranslate = zoomAroundPoint(
           e.x,
           e.y,
           scale.value,
@@ -650,6 +730,9 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         savedScale.value = targetScale;
         savedTranslateX.value = clamped.x;
         savedTranslateY.value = clamped.y;
+        panStartTranslateX.value = clamped.x;
+        panStartTranslateY.value = clamped.y;
+        pinchStartScale.value = targetScale;
       }
     });
 
@@ -693,8 +776,36 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     .enabled(interactionEnabled)
     .minDuration(500)
     .maxDistance(12)
-    .onEnd((_e, success) => {
-      if (success && onLongPress) {
+    .onEnd((e, success) => {
+      if (!success) return;
+
+      if (onPixelLongPress && imgWidth > 0 && imgHeight > 0) {
+        const cw = canvasWidth.value;
+        const ch = canvasHeight.value;
+        const { fitScale, offsetX, offsetY } = computeFitGeometry(imgWidth, imgHeight, cw, ch);
+        if (fitScale > 0) {
+          const localX = (e.x - translateX.value) / scale.value;
+          const localY = (e.y - translateY.value) / scale.value;
+          const pixelX = Math.floor((localX - offsetX) / fitScale);
+          const pixelY = Math.floor((localY - offsetY) / fitScale);
+          if (pixelX >= 0 && pixelX < imgWidth && pixelY >= 0 && pixelY < imgHeight) {
+            const sourceW = sourceWidth ?? imgWidth;
+            const sourceH = sourceHeight ?? imgHeight;
+            const sourcePoint = remapPointBetweenSpaces(
+              { x: pixelX + 0.5, y: pixelY + 0.5 },
+              imgWidth,
+              imgHeight,
+              sourceW,
+              sourceH,
+            );
+            const sourceX = Math.max(0, Math.min(sourceW - 1, Math.floor(sourcePoint.x)));
+            const sourceY = Math.max(0, Math.min(sourceH - 1, Math.floor(sourcePoint.y)));
+            runOnJS(onPixelLongPress)(sourceX, sourceY);
+          }
+        }
+      }
+
+      if (onLongPress) {
         runOnJS(onLongPress)();
       }
     });

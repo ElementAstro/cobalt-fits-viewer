@@ -2,6 +2,7 @@ import { useConverterStore } from "../useConverterStore";
 import {
   DEFAULT_CONVERT_PRESETS,
   DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
   type BatchTask,
   type ConvertPreset,
 } from "../../lib/fits/types";
@@ -27,6 +28,7 @@ const makePreset = (id: string): ConvertPreset => ({
     quality: 77,
     bitDepth: 16,
     dpi: 150,
+    tiff: DEFAULT_TIFF_TARGET_OPTIONS,
     fits: DEFAULT_FITS_TARGET_OPTIONS,
     stretch: "linear",
     colormap: "heat",
@@ -48,6 +50,7 @@ describe("useConverterStore", () => {
         quality: 90,
         bitDepth: 8,
         dpi: 72,
+        tiff: DEFAULT_TIFF_TARGET_OPTIONS,
         fits: DEFAULT_FITS_TARGET_OPTIONS,
         stretch: "asinh",
         colormap: "grayscale",

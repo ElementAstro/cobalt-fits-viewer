@@ -193,6 +193,29 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.customThemeColors.dark.warning).toBe("#AA5500");
     });
 
+    it("setCustomThemeToken supports background/surface overrides", () => {
+      const store = useSettingsStore.getState();
+      store.setCustomThemeToken("background", "#0F172A", "light");
+      store.setCustomThemeToken("surface", "#1E293B", "light");
+
+      const s = useSettingsStore.getState();
+      expect(s.themeColorMode).toBe("custom");
+      expect(s.customThemeColors.light.background).toBe("#0F172A");
+      expect(s.customThemeColors.light.surface).toBe("#1E293B");
+      expect(s.customThemeColors.dark.background).toBe("#0F172A");
+      expect(s.customThemeColors.dark.surface).toBe("#1E293B");
+    });
+
+    it("setCustomThemeToken allows clearing optional background token", () => {
+      const store = useSettingsStore.getState();
+      store.setCustomThemeToken("background", "#0F172A", "light");
+      store.setCustomThemeToken("background", "", "light");
+
+      const s = useSettingsStore.getState();
+      expect(s.customThemeColors.light.background).toBe("");
+      expect(s.customThemeColors.dark.background).toBe("");
+    });
+
     it("setCustomThemeToken ignores invalid hex", () => {
       const before = useSettingsStore.getState().customThemeColors.light.danger;
       useSettingsStore.getState().setCustomThemeToken("danger", "red", "light");
@@ -206,6 +229,15 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.customThemeColors.linked).toBe(false);
       expect(s.customThemeColors.dark.accent).toBe("#123456");
       expect(s.customThemeColors.light.accent).not.toBe("#123456");
+    });
+
+    it("setCustomThemeLinked false allows dark-only base token override", () => {
+      useSettingsStore.getState().setCustomThemeLinked(false);
+      useSettingsStore.getState().setCustomThemeToken("surface", "#223344", "dark");
+      const s = useSettingsStore.getState();
+      expect(s.customThemeColors.linked).toBe(false);
+      expect(s.customThemeColors.dark.surface).toBe("#223344");
+      expect(s.customThemeColors.light.surface).toBe("");
     });
 
     it("resetStyle restores style fields without changing app theme mode", () => {
@@ -277,6 +309,10 @@ describe("useSettingsStore — orientationLock", () => {
         canvasMinScale: 8,
         canvasMaxScale: 2,
         canvasDoubleTapScale: 50,
+        canvasPinchSensitivity: 9,
+        canvasPinchOverzoomFactor: 0,
+        canvasPanRubberBandFactor: -1,
+        canvasWheelZoomSensitivity: 1,
         defaultBlackPoint: 0.95,
         defaultWhitePoint: 0.5,
       });
@@ -286,6 +322,10 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.thumbnailSize).toBe(64);
       expect(s.canvasMaxScale).toBeGreaterThanOrEqual(s.canvasMinScale);
       expect(s.canvasDoubleTapScale).toBeLessThanOrEqual(s.canvasMaxScale);
+      expect(s.canvasPinchSensitivity).toBe(1.8);
+      expect(s.canvasPinchOverzoomFactor).toBe(1);
+      expect(s.canvasPanRubberBandFactor).toBe(0);
+      expect(s.canvasWheelZoomSensitivity).toBe(0.004);
       expect(s.defaultWhitePoint).toBeGreaterThan(s.defaultBlackPoint);
     });
 
@@ -451,6 +491,36 @@ describe("useSettingsStore — orientationLock", () => {
 
       expect(merged.themeColorMode).toBe("accent");
       expect(merged.accentColor).toBe("purple");
+    });
+
+    it("persist merge backfills new custom base tokens for legacy payloads", () => {
+      const merge = useSettingsStore.persist.getOptions().merge;
+      const current = useSettingsStore.getState();
+      const merged = merge?.(
+        {
+          customThemeColors: {
+            linked: false,
+            light: {
+              accent: "#112233",
+              success: "#22C55E",
+              warning: "#F59E0B",
+              danger: "#EF4444",
+            },
+            dark: {
+              accent: "#445566",
+              success: "#22C55E",
+              warning: "#F59E0B",
+              danger: "#EF4444",
+            },
+          },
+        },
+        current,
+      ) as typeof current;
+
+      expect(merged.customThemeColors.light.background).toBe("");
+      expect(merged.customThemeColors.light.surface).toBe("");
+      expect(merged.customThemeColors.dark.background).toBe("");
+      expect(merged.customThemeColors.dark.surface).toBe("");
     });
 
     it("sanitizes frame classification config and report scope", () => {
@@ -626,6 +696,10 @@ describe("useSettingsStore — orientationLock", () => {
       store.setCanvasMinScale(0.8);
       store.setCanvasMaxScale(12);
       store.setCanvasDoubleTapScale(4);
+      store.setCanvasPinchSensitivity(1.45);
+      store.setCanvasPinchOverzoomFactor(1.35);
+      store.setCanvasPanRubberBandFactor(0.7);
+      store.setCanvasWheelZoomSensitivity(0.0024);
       store.setDefaultConverterQuality(88);
       store.setDefaultBlurSigma(2.4);
       store.setDefaultSharpenAmount(2.2);
@@ -651,6 +725,10 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.canvasMinScale).toBe(0.8);
       expect(s.canvasMaxScale).toBe(12);
       expect(s.canvasDoubleTapScale).toBe(4);
+      expect(s.canvasPinchSensitivity).toBe(1.45);
+      expect(s.canvasPinchOverzoomFactor).toBe(1.35);
+      expect(s.canvasPanRubberBandFactor).toBe(0.7);
+      expect(s.canvasWheelZoomSensitivity).toBe(0.0024);
       expect(s.defaultConverterQuality).toBe(88);
       expect(s.defaultBlurSigma).toBe(2.4);
       expect(s.defaultSharpenAmount).toBe(2.2);
@@ -735,6 +813,69 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.themeColorMode).toBe("custom");
       expect(s.customThemeColors.light.accent).toBe("#112233");
       expect(s.customThemeColors.dark.accent).toBe("#445566");
+    });
+
+    it("includes video defaults and supports video setters", () => {
+      const store = useSettingsStore.getState();
+      expect(store.videoAutoplay).toBe(false);
+      expect(store.videoLoopByDefault).toBe(false);
+      expect(store.videoMutedByDefault).toBe(false);
+      expect(store.videoThumbnailTimeMs).toBe(1000);
+      expect(store.videoProcessingConcurrency).toBe(2);
+      expect(store.defaultVideoProfile).toBe("compatibility");
+      expect(store.defaultVideoTargetPreset).toBe("1080p");
+
+      store.setVideoAutoplay(true);
+      store.setVideoLoopByDefault(true);
+      store.setVideoMutedByDefault(true);
+      store.setVideoThumbnailTimeMs(2500);
+      store.setVideoProcessingConcurrency(4);
+      store.setDefaultVideoProfile("balanced");
+      store.setDefaultVideoTargetPreset("720p");
+      store.setVideoCoreEnabled(false);
+      store.setVideoProcessingEnabled(false);
+
+      const s = useSettingsStore.getState();
+      expect(s.videoAutoplay).toBe(true);
+      expect(s.videoLoopByDefault).toBe(true);
+      expect(s.videoMutedByDefault).toBe(true);
+      expect(s.videoThumbnailTimeMs).toBe(2500);
+      expect(s.videoProcessingConcurrency).toBe(4);
+      expect(s.defaultVideoProfile).toBe("balanced");
+      expect(s.defaultVideoTargetPreset).toBe("720p");
+      expect(s.videoCoreEnabled).toBe(false);
+      expect(s.videoProcessingEnabled).toBe(false);
+    });
+
+    it("sanitizes video numeric patch values and persists video fields", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        videoThumbnailTimeMs: -99,
+        videoProcessingConcurrency: 99,
+      });
+
+      const s = useSettingsStore.getState();
+      expect(s.videoThumbnailTimeMs).toBe(0);
+      expect(s.videoProcessingConcurrency).toBe(6);
+
+      const partialize = useSettingsStore.persist.getOptions().partialize;
+      const partial = partialize?.(s) as {
+        videoAutoplay?: boolean;
+        videoLoopByDefault?: boolean;
+        videoMutedByDefault?: boolean;
+        videoThumbnailTimeMs?: number;
+        videoProcessingConcurrency?: number;
+        defaultVideoProfile?: string;
+        defaultVideoTargetPreset?: string;
+        videoCoreEnabled?: boolean;
+        videoProcessingEnabled?: boolean;
+      };
+
+      expect(partial.videoThumbnailTimeMs).toBe(0);
+      expect(partial.videoProcessingConcurrency).toBe(6);
+      expect(partial.defaultVideoProfile).toBe(s.defaultVideoProfile);
+      expect(partial.defaultVideoTargetPreset).toBe(s.defaultVideoTargetPreset);
+      expect(partial.videoCoreEnabled).toBe(s.videoCoreEnabled);
+      expect(partial.videoProcessingEnabled).toBe(s.videoProcessingEnabled);
     });
 
     it("onRehydrateStorage syncs runtime theme from hydrated state", () => {

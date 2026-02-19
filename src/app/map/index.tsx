@@ -116,7 +116,7 @@ export default function MapScreen() {
   const currentPresetConfig = MAP_PRESETS[mapPreset];
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-map__index" className="flex-1 bg-background">
       {/* Header */}
       <View
         className="absolute top-0 z-10 pb-2"
@@ -140,7 +140,13 @@ export default function MapScreen() {
           </View>
           <View className="flex-row items-center gap-1">
             {/* Preset toggle */}
-            <Button size="sm" isIconOnly variant="ghost" onPress={() => setShowPresets((v) => !v)}>
+            <Button
+              testID="e2e-action-map__index-toggle-presets"
+              size="sm"
+              isIconOnly
+              variant="ghost"
+              onPress={() => setShowPresets((v) => !v)}
+            >
               <Ionicons
                 name={currentPresetConfig.icon as keyof typeof Ionicons.glyphMap}
                 size={16}
@@ -161,7 +167,13 @@ export default function MapScreen() {
               />
             </Button>
             {/* Filter toggle */}
-            <Button size="sm" isIconOnly variant="ghost" onPress={() => setShowFilters((v) => !v)}>
+            <Button
+              testID="e2e-action-map__index-toggle-filters"
+              size="sm"
+              isIconOnly
+              variant="ghost"
+              onPress={() => setShowFilters((v) => !v)}
+            >
               <Ionicons
                 name="filter"
                 size={16}

@@ -36,6 +36,10 @@ const mockSettingsState: Record<string, unknown> = {
   stackingMaxEllipticity: 0.55,
   stackingRansacMaxIterations: 180,
   stackingAlignmentInlierThreshold: 2.5,
+  canvasPinchSensitivity: 1.1,
+  canvasPinchOverzoomFactor: 1.3,
+  canvasPanRubberBandFactor: 0.45,
+  canvasWheelZoomSensitivity: 0.0021,
 };
 
 jest.mock("../../lib/storage", () => ({
@@ -350,6 +354,10 @@ describe("useBackup consistency reconciliation", () => {
       expect(settings.stackingDetectSigmaThreshold).toBe(4.5);
       expect(settings.stackingDeblendNLevels).toBe(32);
       expect(settings.stackingAlignmentInlierThreshold).toBe(2.5);
+      expect(settings.canvasPinchSensitivity).toBe(1.1);
+      expect(settings.canvasPinchOverzoomFactor).toBe(1.3);
+      expect(settings.canvasPanRubberBandFactor).toBe(0.45);
+      expect(settings.canvasWheelZoomSensitivity).toBe(0.0021);
     });
 
     const { result } = renderHook(() => useBackup());
@@ -370,6 +378,10 @@ describe("useBackup consistency reconciliation", () => {
         stackingDetectSigmaThreshold: 6.2,
         stackingDeblendMinContrast: 0.12,
         stackingRansacMaxIterations: 220,
+        canvasPinchSensitivity: 1.4,
+        canvasPinchOverzoomFactor: 1.5,
+        canvasPanRubberBandFactor: 0.3,
+        canvasWheelZoomSensitivity: 0.003,
       });
     });
 
@@ -387,6 +399,10 @@ describe("useBackup consistency reconciliation", () => {
         stackingDetectSigmaThreshold: 6.2,
         stackingDeblendMinContrast: 0.12,
         stackingRansacMaxIterations: 220,
+        canvasPinchSensitivity: 1.4,
+        canvasPinchOverzoomFactor: 1.5,
+        canvasPanRubberBandFactor: 0.3,
+        canvasWheelZoomSensitivity: 0.003,
       }),
     );
   });

@@ -174,6 +174,7 @@ export default function ConvertScreen() {
       quality: currentOptions.quality,
       bitDepth: currentOptions.bitDepth,
       fits: currentOptions.fits,
+      tiff: currentOptions.tiff,
       source: {
         sourceType: metadata?.sourceType,
         sourceFormat: metadata?.sourceFormat,
@@ -191,10 +192,24 @@ export default function ConvertScreen() {
     } else {
       Alert.alert(t("common.error"), t("viewer.exportFailed"));
     }
-  }, [rgbaData, dimensions, selectedFile, exportImage, currentOptions, t]);
+  }, [
+    rgbaData,
+    dimensions,
+    selectedFile,
+    exportImage,
+    currentOptions,
+    metadata,
+    sourceBuffer,
+    pixels,
+    rgbChannels,
+    headers,
+    comments,
+    history,
+    t,
+  ]);
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-convert__index" className="flex-1 bg-background">
       <LoadingOverlay visible={isFitsLoading || isExporting} message={t("common.loading")} />
 
       <ScrollView
@@ -207,7 +222,12 @@ export default function ConvertScreen() {
       >
         {/* Header */}
         <View className="flex-row items-center gap-3 mb-4">
-          <Button size="sm" variant="outline" onPress={() => router.back()}>
+          <Button
+            testID="e2e-action-convert__index-back"
+            size="sm"
+            variant="outline"
+            onPress={() => router.back()}
+          >
             <Ionicons name="arrow-back" size={16} color={mutedColor} />
           </Button>
           <View className="flex-1">
@@ -257,7 +277,15 @@ export default function ConvertScreen() {
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View className="flex-row gap-2">
                     {files.map((f) => (
-                      <PressableFeedback key={f.id} onPress={() => setSelectedFileId(f.id)}>
+                      <PressableFeedback
+                        key={f.id}
+                        testID={
+                          f.id === "fits-001"
+                            ? "e2e-action-convert__index-select-file-fits-001"
+                            : `e2e-action-convert__index-select-file-${f.id}`
+                        }
+                        onPress={() => setSelectedFileId(f.id)}
+                      >
                         <Card
                           variant="secondary"
                           className={selectedFileId === f.id ? "border border-success" : ""}
@@ -495,6 +523,7 @@ export default function ConvertScreen() {
 
               {/* Convert Button */}
               <Button
+                testID="e2e-action-convert__index-convert"
                 variant="primary"
                 className="mt-2"
                 onPress={handleConvert}

@@ -11,10 +11,14 @@ type ThemeVariableMap = Record<string, string>;
 export const THEME_COLOR_MODES = ["preset", "accent", "custom"] as const;
 export type ThemeColorMode = (typeof THEME_COLOR_MODES)[number];
 
-export const THEME_EDITABLE_TOKENS = ["accent", "success", "warning", "danger"] as const;
+const THEME_BASE_TOKENS = ["background", "surface"] as const;
+const THEME_SEMANTIC_TOKENS = ["accent", "success", "warning", "danger"] as const;
+export const THEME_EDITABLE_TOKENS = [...THEME_BASE_TOKENS, ...THEME_SEMANTIC_TOKENS] as const;
 export type ThemeEditableToken = (typeof THEME_EDITABLE_TOKENS)[number];
 
 export interface ThemeCustomTokenSet {
+  background: string;
+  surface: string;
   accent: string;
   success: string;
   warning: string;
@@ -200,12 +204,16 @@ export const BASE_THEME_VARIABLES: { light: ThemeVariableMap; dark: ThemeVariabl
 export const DEFAULT_CUSTOM_THEME_COLORS: ThemeCustomColors = {
   linked: true,
   light: {
+    background: "",
+    surface: "",
     accent: "#4F6BED",
     success: "#22C55E",
     warning: "#F59E0B",
     danger: "#EF4444",
   },
   dark: {
+    background: "",
+    surface: "",
     accent: "#4F6BED",
     success: "#22C55E",
     warning: "#F59E0B",
@@ -251,12 +259,37 @@ export function normalizeHexColor(value: unknown): string | null {
   return HEX_COLOR_REGEX.test(normalized) ? normalized : null;
 }
 
+function buildBaseThemeVariables(tokens: ThemeCustomTokenSet) {
+  const variables: ThemeVariableMap = {};
+  const background = normalizeHexColor(tokens.background);
+  const surface = normalizeHexColor(tokens.surface) ?? background;
+
+  if (background) {
+    variables["--background"] = background;
+    variables["--foreground"] = getReadableForeground(background);
+  }
+
+  if (surface) {
+    const surfaceForeground = getReadableForeground(surface);
+    variables["--surface"] = surface;
+    variables["--surface-foreground"] = surfaceForeground;
+    variables["--surface-secondary"] = surface;
+    variables["--surface-secondary-foreground"] = surfaceForeground;
+    variables["--surface-tertiary"] = surface;
+    variables["--surface-tertiary-foreground"] = surfaceForeground;
+    variables["--field-background"] = surface;
+    variables["--field-foreground"] = surfaceForeground;
+  }
+
+  return variables;
+}
+
 export function buildCustomThemeVariables(custom: ThemeCustomColors) {
   const darkTokens = custom.linked ? custom.light : custom.dark;
-  const light: ThemeVariableMap = {};
-  const dark: ThemeVariableMap = {};
+  const light: ThemeVariableMap = buildBaseThemeVariables(custom.light);
+  const dark: ThemeVariableMap = buildBaseThemeVariables(darkTokens);
 
-  for (const token of THEME_EDITABLE_TOKENS) {
+  for (const token of THEME_SEMANTIC_TOKENS) {
     const lightColor = normalizeHexColor(custom.light[token]);
     const darkColor = normalizeHexColor(darkTokens[token]);
     if (!lightColor || !darkColor) continue;

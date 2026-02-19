@@ -119,6 +119,7 @@ export default function TargetDetailScreen() {
   return (
     <>
       <ScrollView
+        testID="e2e-screen-target__param_id"
         className="flex-1 bg-background"
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -167,10 +168,17 @@ export default function TargetDetailScreen() {
                   )}
                 </Chip.Label>
               </Chip>
-              <Button size="sm" isIconOnly variant="outline" onPress={() => setShowPlanSheet(true)}>
+              <Button
+                testID="e2e-action-target__param_id-open-plan"
+                size="sm"
+                isIconOnly
+                variant="outline"
+                onPress={() => setShowPlanSheet(true)}
+              >
                 <Ionicons name="calendar-outline" size={16} color={mutedColor} />
               </Button>
               <Button
+                testID="e2e-action-target__param_id-toggle-favorite"
                 size="sm"
                 isIconOnly
                 variant="outline"

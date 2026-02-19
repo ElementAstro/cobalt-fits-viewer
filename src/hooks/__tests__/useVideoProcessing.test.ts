@@ -113,9 +113,18 @@ const baseRequest: VideoProcessingRequest = {
 };
 
 describe("useVideoProcessing", () => {
+  const renderReadyHook = async () => {
+    const rendered = renderHook(() => useVideoProcessing());
+    await waitFor(() => {
+      expect(rendered.result.current.isEngineAvailable).toBe(true);
+    });
+    return rendered;
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockIdSeq = 1;
+    mockSettings.videoProcessingEnabled = true;
     useVideoTaskStore.setState({ tasks: [] });
     useFitsStore.setState({
       files: [
@@ -153,7 +162,7 @@ describe("useVideoProcessing", () => {
       };
     });
 
-    const { result } = renderHook(() => useVideoProcessing());
+    const { result } = await renderReadyHook();
     let taskId: string | null = null;
     await act(async () => {
       taskId = result.current.enqueueProcessingTask(baseRequest);
@@ -191,7 +200,7 @@ describe("useVideoProcessing", () => {
         }),
     );
 
-    const { result } = renderHook(() => useVideoProcessing());
+    const { result } = await renderReadyHook();
     let taskId: string | null = null;
 
     await act(async () => {
@@ -212,7 +221,8 @@ describe("useVideoProcessing", () => {
     });
   });
 
-  it("retries failed tasks", () => {
+  it("retries failed tasks", async () => {
+    mockSettings.videoProcessingEnabled = false;
     useVideoTaskStore.setState({
       tasks: [
         {
@@ -230,7 +240,7 @@ describe("useVideoProcessing", () => {
         },
       ],
     });
-    const { result } = renderHook(() => useVideoProcessing());
+    const { result } = await renderReadyHook();
     act(() => {
       result.current.retryTask("task-failed");
     });

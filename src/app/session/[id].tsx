@@ -149,6 +149,7 @@ export default function SessionDetailScreen() {
   return (
     <>
       <ScrollView
+        testID="e2e-screen-session__param_id"
         className="flex-1 bg-background"
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -158,7 +159,12 @@ export default function SessionDetailScreen() {
       >
         {/* Top Bar */}
         <View className="flex-row items-center gap-3 mb-4">
-          <Button size="sm" variant="outline" onPress={() => router.back()}>
+          <Button
+            testID="e2e-action-session__param_id-back"
+            size="sm"
+            variant="outline"
+            onPress={() => router.back()}
+          >
             <Ionicons name="arrow-back" size={16} color={mutedColor} />
           </Button>
           <View className="flex-1">
@@ -170,10 +176,20 @@ export default function SessionDetailScreen() {
               {formatDuration(session.duration)}
             </Text>
           </View>
-          <Button size="sm" variant="outline" onPress={handleShare}>
+          <Button
+            testID="e2e-action-session__param_id-share"
+            size="sm"
+            variant="outline"
+            onPress={handleShare}
+          >
             <Ionicons name="share-outline" size={16} color={mutedColor} />
           </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowEditSheet(true)}>
+          <Button
+            testID="e2e-action-session__param_id-open-edit"
+            size="sm"
+            variant="outline"
+            onPress={() => setShowEditSheet(true)}
+          >
             <Ionicons name="create-outline" size={16} color={mutedColor} />
           </Button>
         </View>

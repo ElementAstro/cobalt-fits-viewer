@@ -321,7 +321,9 @@ export function detectSupportedMediaFormatByContent(
   // TIFF
   if (
     equalsBytes(bytes, 0, [0x49, 0x49, 0x2a, 0x00]) ||
-    equalsBytes(bytes, 0, [0x4d, 0x4d, 0x00, 0x2a])
+    equalsBytes(bytes, 0, [0x4d, 0x4d, 0x00, 0x2a]) ||
+    equalsBytes(bytes, 0, [0x49, 0x49, 0x2b, 0x00]) ||
+    equalsBytes(bytes, 0, [0x4d, 0x4d, 0x00, 0x2b])
   ) {
     return FORMAT_ID_LOOKUP.get("tiff") ?? null;
   }

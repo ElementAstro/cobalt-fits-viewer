@@ -12,12 +12,22 @@ import { LOG_TAGS, Logger } from "../lib/logger";
 import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
 import {
   DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
   type ExportFormat,
   type FitsTargetOptions,
+  type TiffTargetOptions,
 } from "../lib/fits/types";
 import { writeFitsImage } from "../lib/fits/writer";
+import {
+  getImageChannels,
+  getImageDimensions,
+  getImagePixels,
+  isRgbCube,
+  loadFitsFromBufferAuto,
+} from "../lib/fits/parser";
 import { gzipFitsBytes, normalizeFitsCompression } from "../lib/fits/compression";
-import { encodeTiff } from "../lib/image/encoders/tiff";
+import { encodeTiff, encodeTiffDocument, type TiffEncodePage } from "../lib/image/encoders/tiff";
+import { createTiffFrameProvider } from "../lib/image/tiff/decoder";
 import { encodeBmp24 } from "../lib/image/encoders/bmp";
 import { splitFilenameExtension } from "../lib/import/fileFormat";
 import {
@@ -109,6 +119,70 @@ function rgbaToRgbChannels(rgba: Uint8ClampedArray): {
   return { r, g, b };
 }
 
+function normalizeToByte(values: Float32Array): Uint8Array {
+  let min = Infinity;
+  let max = -Infinity;
+  for (let i = 0; i < values.length; i++) {
+    const v = values[i];
+    if (!Number.isFinite(v)) continue;
+    if (v < min) min = v;
+    if (v > max) max = v;
+  }
+  if (!Number.isFinite(min) || !Number.isFinite(max) || min === max) {
+    return new Uint8Array(values.length).fill(128);
+  }
+  const output = new Uint8Array(values.length);
+  for (let i = 0; i < values.length; i++) {
+    const normalized = Math.max(0, Math.min(1, (values[i] - min) / (max - min)));
+    output[i] = Math.round(normalized * 255);
+  }
+  return output;
+}
+
+function monoPixelsToRgba(pixels: Float32Array): Uint8ClampedArray {
+  const mono = normalizeToByte(pixels);
+  const rgba = new Uint8ClampedArray(mono.length * 4);
+  for (let i = 0; i < mono.length; i++) {
+    const offset = i * 4;
+    rgba[offset] = mono[i];
+    rgba[offset + 1] = mono[i];
+    rgba[offset + 2] = mono[i];
+    rgba[offset + 3] = 255;
+  }
+  return rgba;
+}
+
+function rgbChannelsToRgba(channels: {
+  r: Float32Array;
+  g: Float32Array;
+  b: Float32Array;
+}): Uint8ClampedArray {
+  const r = normalizeToByte(channels.r);
+  const g = normalizeToByte(channels.g);
+  const b = normalizeToByte(channels.b);
+  const rgba = new Uint8ClampedArray(r.length * 4);
+  for (let i = 0; i < r.length; i++) {
+    const offset = i * 4;
+    rgba[offset] = r[i];
+    rgba[offset + 1] = g[i];
+    rgba[offset + 2] = b[i];
+    rgba[offset + 3] = 255;
+  }
+  return rgba;
+}
+
+function toArrayBuffer(value: ArrayBuffer | Uint8Array): ArrayBuffer {
+  if (value instanceof ArrayBuffer) return value;
+  const copy = new Uint8Array(value.byteLength);
+  copy.set(value);
+  return copy.buffer;
+}
+
+function normalizeTiffBitDepth(value: number | undefined, fallback: 8 | 16 | 32): 8 | 16 | 32 {
+  if (value === 8 || value === 16 || value === 32) return value;
+  return fallback;
+}
+
 export interface ExportSourceContext {
   sourceType?: FitsMetadata["sourceType"];
   sourceFormat?: string;
@@ -130,6 +204,7 @@ export interface ExportRequest {
   quality?: number;
   bitDepth?: 8 | 16 | 32;
   fits?: Partial<FitsTargetOptions>;
+  tiff?: Partial<TiffTargetOptions>;
   source?: ExportSourceContext;
 }
 
@@ -222,15 +297,95 @@ function encodeSkiaImage(
   return bytes;
 }
 
-function encodeFits(request: ExportRequest): Uint8Array {
+async function buildPreservedTiffPages(request: ExportRequest): Promise<TiffEncodePage[] | null> {
+  const source = request.source;
+  const sourceBuffer = source?.originalBuffer;
+  if (!source || !sourceBuffer) return null;
+  const tiffOptions: TiffTargetOptions = {
+    ...DEFAULT_TIFF_TARGET_OPTIONS,
+    ...(request.tiff ?? {}),
+  };
+  if (tiffOptions.multipage !== "preserve") return null;
+
+  if (source.sourceType === "fits") {
+    const fitsObj = loadFitsFromBufferAuto(toArrayBuffer(sourceBuffer));
+    const dims = getImageDimensions(fitsObj);
+    if (!dims) return null;
+
+    if (isRgbCube(fitsObj).isRgb) {
+      const rgb = await getImageChannels(fitsObj);
+      if (!rgb) return null;
+      return [
+        {
+          width: rgb.width,
+          height: rgb.height,
+          channels: { r: rgb.r, g: rgb.g, b: rgb.b },
+          rgba: rgbChannelsToRgba({ r: rgb.r, g: rgb.g, b: rgb.b }),
+          bitDepth: request.bitDepth ?? 32,
+          sampleFormat: "float",
+          colorMode: "rgb",
+        },
+      ];
+    }
+
+    if (!dims.isDataCube || dims.depth <= 1) return null;
+    const pages: TiffEncodePage[] = [];
+    for (let frame = 0; frame < dims.depth; frame++) {
+      const pixels = await getImagePixels(fitsObj, undefined, frame);
+      if (!pixels) continue;
+      pages.push({
+        width: dims.width,
+        height: dims.height,
+        pixels,
+        rgba: monoPixelsToRgba(pixels),
+        bitDepth: request.bitDepth ?? 32,
+        sampleFormat: "float",
+        colorMode: "mono",
+      });
+    }
+    return pages.length > 1 ? pages : null;
+  }
+
+  if (source.sourceType === "raster" && source.sourceFormat === "tiff") {
+    const provider = await createTiffFrameProvider(toArrayBuffer(sourceBuffer), 3);
+    if (provider.pageCount <= 1) return null;
+    const pages: TiffEncodePage[] = [];
+    for (let index = 0; index < provider.pageCount; index++) {
+      const frame = await provider.getFrame(index);
+      pages.push({
+        width: frame.width,
+        height: frame.height,
+        rgba: new Uint8ClampedArray(frame.rgba),
+        pixels: frame.channels ? undefined : frame.pixels,
+        channels: frame.channels ?? undefined,
+        bitDepth: normalizeTiffBitDepth(frame.bitDepth, request.bitDepth ?? 8),
+        sampleFormat: frame.sampleFormat === "float" ? "float" : "uint",
+        colorMode: frame.channels ? "rgb" : "mono",
+      });
+    }
+    return pages.length > 1 ? pages : null;
+  }
+
+  return null;
+}
+
+async function encodeFits(request: ExportRequest): Promise<Uint8Array> {
   const source = request.source;
   const fitsOptions: FitsTargetOptions = {
     ...DEFAULT_FITS_TARGET_OPTIONS,
     ...(request.fits ?? {}),
   };
+  const tiffOptions: TiffTargetOptions = {
+    ...DEFAULT_TIFF_TARGET_OPTIONS,
+    ...(request.tiff ?? {}),
+  };
   const canScientific =
-    source?.sourceType === "fits" &&
-    (!!source.originalBuffer || !!source.scientificPixels || !!source.rgbChannels);
+    !!source &&
+    (source.sourceType === "fits"
+      ? !!source.originalBuffer || !!source.scientificPixels || !!source.rgbChannels
+      : source.sourceType === "raster" && source.sourceFormat === "tiff"
+        ? !!source.originalBuffer || !!source.scientificPixels || !!source.rgbChannels
+        : false);
   const effectiveMode =
     fitsOptions.mode === "scientific" && !canScientific ? "rendered" : fitsOptions.mode;
 
@@ -244,12 +399,67 @@ function encodeFits(request: ExportRequest): Uint8Array {
 
   const sourceFormat = source?.sourceFormat ?? "unknown";
   const targetFormat = fitsOptions.compression === "gzip" ? "fits.gz" : "fits";
+  const history = [...(source?.history ?? [])];
 
   let image: Parameters<typeof writeFitsImage>[0]["image"];
   const preferRgbCube = fitsOptions.colorLayout === "rgbCube3d";
   const useScientificData = effectiveMode === "scientific";
 
-  if (preferRgbCube) {
+  if (
+    useScientificData &&
+    source?.sourceType === "raster" &&
+    source.sourceFormat === "tiff" &&
+    source.originalBuffer &&
+    tiffOptions.multipage === "preserve"
+  ) {
+    const provider = await createTiffFrameProvider(toArrayBuffer(source.originalBuffer), 3);
+    if (provider.pageCount > 1) {
+      const first = await provider.getFrame(0);
+      const width = first.width;
+      const height = first.height;
+      let monoOnly = !first.channels;
+      const cube = new Float32Array(width * height * provider.pageCount);
+      cube.set(first.pixels, 0);
+      for (let frame = 1; frame < provider.pageCount; frame++) {
+        const current = await provider.getFrame(frame);
+        if (current.width !== width || current.height !== height || current.channels) {
+          monoOnly = false;
+          break;
+        }
+        cube.set(current.pixels, frame * width * height);
+      }
+      if (monoOnly) {
+        image = {
+          kind: "monoCube3d",
+          width,
+          height,
+          depth: provider.pageCount,
+          pixels: cube,
+        };
+      } else {
+        const warning =
+          "TIFF multipage structure is not fully representable in FITS, exported first frame.";
+        history.push(warning);
+        Logger.warn(LOG_TAGS.Export, warning);
+        image = {
+          kind: "mono2d",
+          width,
+          height,
+          pixels: first.pixels,
+        };
+      }
+    } else {
+      image = {
+        kind: "mono2d",
+        width: request.width,
+        height: request.height,
+        pixels:
+          useScientificData && source?.scientificPixels
+            ? source.scientificPixels
+            : rgbaToLuma(request.rgbaData),
+      };
+    }
+  } else if (preferRgbCube) {
     const channels =
       useScientificData && source?.rgbChannels
         ? source.rgbChannels
@@ -282,7 +492,7 @@ function encodeFits(request: ExportRequest): Uint8Array {
     preserveWcs: fitsOptions.preserveWcs,
     originalHeaderKeywords: source?.headerKeywords ?? undefined,
     comments: source?.comments ?? undefined,
-    history: source?.history ?? undefined,
+    history,
     metadata: source?.metadata ?? undefined,
     exportMode: effectiveMode,
     sourceFormat,
@@ -303,7 +513,7 @@ function getOutputExtension(request: ExportRequest): string {
   return fitsCompression === "gzip" ? "fits.gz" : "fits";
 }
 
-function encodeRequestBytes(request: ExportRequest): Uint8Array | null {
+async function encodeRequestBytes(request: ExportRequest): Promise<Uint8Array | null> {
   switch (request.format) {
     case "png":
     case "jpeg":
@@ -315,11 +525,25 @@ function encodeRequestBytes(request: ExportRequest): Uint8Array | null {
         request.format,
         request.quality,
       );
-    case "tiff":
+    case "tiff": {
+      const tiffOptions: TiffTargetOptions = {
+        ...DEFAULT_TIFF_TARGET_OPTIONS,
+        ...(request.tiff ?? {}),
+      };
+      const preservedPages = await buildPreservedTiffPages(request);
+      if (preservedPages && preservedPages.length > 1) {
+        return encodeTiffDocument(preservedPages, {
+          bitDepth: request.bitDepth ?? 8,
+          colorMode: "auto",
+          compression: tiffOptions.compression,
+        });
+      }
       return encodeTiff(request.rgbaData, request.width, request.height, {
         bitDepth: request.bitDepth ?? 8,
         colorMode: "auto",
+        compression: tiffOptions.compression,
       });
+    }
     case "bmp":
       return encodeBmp24(request.rgbaData, request.width, request.height);
     case "fits":
@@ -389,7 +613,7 @@ export function useExport(): UseExportReturn {
 
   const createExportFile = useCallback(async (request: ExportRequest): Promise<string | null> => {
     try {
-      const bytes = encodeRequestBytes(request);
+      const bytes = await encodeRequestBytes(request);
       if (!bytes || bytes.length === 0) {
         return null;
       }

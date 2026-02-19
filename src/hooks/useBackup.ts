@@ -180,6 +180,10 @@ export function useBackup() {
           canvasMinScale: s.canvasMinScale,
           canvasMaxScale: s.canvasMaxScale,
           canvasDoubleTapScale: s.canvasDoubleTapScale,
+          canvasPinchSensitivity: s.canvasPinchSensitivity,
+          canvasPinchOverzoomFactor: s.canvasPinchOverzoomFactor,
+          canvasPanRubberBandFactor: s.canvasPanRubberBandFactor,
+          canvasWheelZoomSensitivity: s.canvasWheelZoomSensitivity,
           // Thumbnail overlays
           thumbnailShowFilename: s.thumbnailShowFilename,
           thumbnailShowObject: s.thumbnailShowObject,
@@ -505,6 +509,10 @@ export function useBackup() {
           "canvasMinScale",
           "canvasMaxScale",
           "canvasDoubleTapScale",
+          "canvasPinchSensitivity",
+          "canvasPinchOverzoomFactor",
+          "canvasPanRubberBandFactor",
+          "canvasWheelZoomSensitivity",
           // Thumbnail overlays
           "thumbnailShowFilename",
           "thumbnailShowObject",

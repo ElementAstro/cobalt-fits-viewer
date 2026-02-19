@@ -3,7 +3,11 @@
  */
 
 import type { ConvertPreset, ConvertOptions } from "../fits/types";
-import { DEFAULT_CONVERT_PRESETS, DEFAULT_FITS_TARGET_OPTIONS } from "../fits/types";
+import {
+  DEFAULT_CONVERT_PRESETS,
+  DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
+} from "../fits/types";
 
 /**
  * 获取所有预设（内置 + 用户自定义）
@@ -36,19 +40,61 @@ export function getDefaultOptionsForFormat(
 ): Partial<ConvertOptions> {
   switch (format) {
     case "png":
-      return { quality: 100, bitDepth: 8, dpi: 72, fits: DEFAULT_FITS_TARGET_OPTIONS };
+      return {
+        quality: 100,
+        bitDepth: 8,
+        dpi: 72,
+        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      };
     case "jpeg":
-      return { quality: 85, bitDepth: 8, dpi: 72, fits: DEFAULT_FITS_TARGET_OPTIONS };
+      return {
+        quality: 85,
+        bitDepth: 8,
+        dpi: 72,
+        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      };
     case "webp":
-      return { quality: 80, bitDepth: 8, dpi: 72, fits: DEFAULT_FITS_TARGET_OPTIONS };
+      return {
+        quality: 80,
+        bitDepth: 8,
+        dpi: 72,
+        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      };
     case "tiff":
-      return { quality: 100, bitDepth: 16, dpi: 72, fits: DEFAULT_FITS_TARGET_OPTIONS };
+      return {
+        quality: 100,
+        bitDepth: 16,
+        dpi: 72,
+        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      };
     case "bmp":
-      return { quality: 100, bitDepth: 8, dpi: 72, fits: DEFAULT_FITS_TARGET_OPTIONS };
+      return {
+        quality: 100,
+        bitDepth: 8,
+        dpi: 72,
+        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      };
     case "fits":
-      return { quality: 100, bitDepth: 32, dpi: 72, fits: DEFAULT_FITS_TARGET_OPTIONS };
+      return {
+        quality: 100,
+        bitDepth: 32,
+        dpi: 72,
+        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      };
     default:
-      return { quality: 90, bitDepth: 8, dpi: 72, fits: DEFAULT_FITS_TARGET_OPTIONS };
+      return {
+        quality: 90,
+        bitDepth: 8,
+        dpi: 72,
+        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+        fits: DEFAULT_FITS_TARGET_OPTIONS,
+      };
   }
 }
 

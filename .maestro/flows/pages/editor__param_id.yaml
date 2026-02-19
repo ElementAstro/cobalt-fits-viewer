@@ -1,0 +1,11 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://editor/fits-001
+- assertVisible:
+    id: e2e-screen-editor__param_id
+- tapOn:
+    id: e2e-action-editor__param_id-open-export
+- tapOn:
+    id: e2e-action-editor__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__index

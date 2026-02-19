@@ -356,24 +356,36 @@ function tryBuildDefaultExecutor(): LocalFfmpegExecutor | null {
 
     if (!FFmpegKit || typeof FFmpegKit.executeAsync !== "function") return null;
 
+    type FfmpegKitSession = {
+      getReturnCode?: () => Promise<unknown>;
+    };
+    type FfmpegKitReturnCode = {
+      getValue?: () => unknown;
+    };
+    type FfmpegKitLog = {
+      getMessage?: () => string;
+    };
+
     return (command, options) =>
       new Promise<FfmpegExecutionResult>((resolve, reject) => {
         const logs: string[] = [];
         const execute = () => {
           FFmpegKit.executeAsync(
             command,
-            async (session: any) => {
-              const returnCode = await session.getReturnCode();
+            async (session: FfmpegKitSession) => {
+              const returnCode = await session.getReturnCode?.();
               const success = ReturnCode?.isSuccess?.(returnCode) ?? false;
-              const value = Number(returnCode?.getValue?.() ?? (success ? 0 : 1));
+              const value = Number(
+                (returnCode as FfmpegKitReturnCode | undefined)?.getValue?.() ?? (success ? 0 : 1),
+              );
               resolve({
                 returnCode: Number.isFinite(value) ? value : success ? 0 : 1,
                 logLines: logs,
               });
             },
-            (log: any) => {
+            (log: FfmpegKitLog | string) => {
               const line =
-                typeof log?.getMessage === "function"
+                typeof log !== "string" && typeof log.getMessage === "function"
                   ? String(log.getMessage())
                   : typeof log === "string"
                     ? log

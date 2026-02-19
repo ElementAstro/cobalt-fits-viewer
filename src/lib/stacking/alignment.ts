@@ -12,6 +12,7 @@ import {
   type StarDetectionOptions,
   type StarDetectionRuntime,
 } from "./starDetection";
+import { buildManualTransform, type ManualRegistrationMode } from "./starAnnotationLinkage";
 
 export type AlignmentMode = "none" | "translation" | "full";
 
@@ -25,7 +26,19 @@ export interface AlignmentTransform {
   /** 检测统计信息 */
   detectionCounts?: { ref: number; target: number };
   /** 回退路径 */
-  fallbackUsed?: "none" | "translation" | "identity";
+  fallbackUsed?:
+    | "none"
+    | "translation"
+    | "identity"
+    | "manual-1star"
+    | "manual-2star"
+    | "manual-3star"
+    | "annotated-stars";
+}
+
+export interface ManualControlPoint {
+  x: number;
+  y: number;
 }
 
 export interface AlignmentOptions {
@@ -36,6 +49,13 @@ export interface AlignmentOptions {
   inlierThreshold?: number;
   maxRansacIterations?: number;
   fallbackToTranslation?: boolean;
+  refStarsOverride?: DetectedStar[];
+  targetStarsOverride?: DetectedStar[];
+  manualControlPoints?: {
+    ref: ManualControlPoint[];
+    target: ManualControlPoint[];
+    mode: ManualRegistrationMode;
+  };
 }
 
 function identityTransform(
@@ -49,6 +69,94 @@ function identityTransform(
     detectionCounts,
     fallbackUsed,
   };
+}
+
+function toAnchorPoints(points: ManualControlPoint[], maxCount: number = 3) {
+  return points
+    .slice(0, maxCount)
+    .map((point, index) => ({
+      id: `anchor_${index + 1}`,
+      x: point.x,
+      y: point.y,
+      anchorIndex: (index + 1) as 1 | 2 | 3,
+    }))
+    .filter((point) => Number.isFinite(point.x) && Number.isFinite(point.y));
+}
+
+function manualModeToFallback(mode: ManualRegistrationMode): AlignmentTransform["fallbackUsed"] {
+  if (mode === "oneStar") return "manual-1star";
+  if (mode === "twoStar") return "manual-2star";
+  return "manual-3star";
+}
+
+function resolveStarsSync(
+  refPixels: Float32Array,
+  targetPixels: Float32Array,
+  width: number,
+  height: number,
+  options: AlignmentOptions,
+): { refStars: DetectedStar[]; targetStars: DetectedStar[]; fromOverride: boolean } {
+  const refStarsOverride = options.refStarsOverride;
+  const targetStarsOverride = options.targetStarsOverride;
+  if (
+    refStarsOverride &&
+    targetStarsOverride &&
+    refStarsOverride.length >= 3 &&
+    targetStarsOverride.length >= 3
+  ) {
+    return {
+      refStars: refStarsOverride,
+      targetStars: targetStarsOverride,
+      fromOverride: true,
+    };
+  }
+  return {
+    refStars: detectStars(refPixels, width, height, options.detectionOptions),
+    targetStars: detectStars(targetPixels, width, height, options.detectionOptions),
+    fromOverride: false,
+  };
+}
+
+async function resolveStarsAsync(
+  refPixels: Float32Array,
+  targetPixels: Float32Array,
+  width: number,
+  height: number,
+  options: AlignmentOptions,
+): Promise<{ refStars: DetectedStar[]; targetStars: DetectedStar[]; fromOverride: boolean }> {
+  const refStarsOverride = options.refStarsOverride;
+  const targetStarsOverride = options.targetStarsOverride;
+  if (
+    refStarsOverride &&
+    targetStarsOverride &&
+    refStarsOverride.length >= 3 &&
+    targetStarsOverride.length >= 3
+  ) {
+    return {
+      refStars: refStarsOverride,
+      targetStars: targetStarsOverride,
+      fromOverride: true,
+    };
+  }
+
+  const runtime = options.detectionRuntime;
+  runtime?.onProgress?.(0.01, "detect-ref");
+  const refStars = await detectStarsAsync(
+    refPixels,
+    width,
+    height,
+    options.detectionOptions ?? { profile: "balanced" },
+    runtime,
+  );
+  runtime?.onProgress?.(0.35, "detect-target");
+  const targetStars = await detectStarsAsync(
+    targetPixels,
+    width,
+    height,
+    options.detectionOptions ?? { profile: "balanced" },
+    runtime,
+  );
+  return { refStars, targetStars, fromOverride: false };
 }
 
 /**
@@ -448,8 +556,34 @@ export function alignFrame(
     };
   }
 
-  const refStars = detectStars(refPixels, width, height, options.detectionOptions);
-  const targetStars = detectStars(targetPixels, width, height, options.detectionOptions);
+  const manual = options.manualControlPoints;
+  if (manual) {
+    const refAnchors = toAnchorPoints(manual.ref);
+    const targetAnchors = toAnchorPoints(manual.target);
+    const matrix = buildManualTransform(refAnchors, targetAnchors, manual.mode);
+    const detectionCounts = { ref: refAnchors.length, target: targetAnchors.length };
+    if (matrix) {
+      const manualTransform: AlignmentTransform = {
+        matrix,
+        matchedStars: Math.min(refAnchors.length, targetAnchors.length),
+        rmsError: 0,
+        detectionCounts,
+        fallbackUsed: manualModeToFallback(manual.mode),
+      };
+      return {
+        aligned: applyTransform(targetPixels, width, height, manualTransform),
+        transform: manualTransform,
+      };
+    }
+  }
+
+  const { refStars, targetStars, fromOverride } = resolveStarsSync(
+    refPixels,
+    targetPixels,
+    width,
+    height,
+    options,
+  );
   const detectionCounts = { ref: refStars.length, target: targetStars.length };
 
   const searchRadius = options.searchRadius ?? 20;
@@ -462,7 +596,7 @@ export function alignFrame(
 
   if (mode === "translation") {
     transform = computeTranslation(refStars, targetStars, searchRadius);
-    transform.fallbackUsed = "none";
+    transform.fallbackUsed = fromOverride ? "annotated-stars" : "none";
   } else {
     transform = computeFullAlignment(
       refStars,
@@ -478,6 +612,10 @@ export function alignFrame(
       if (translation.matchedStars >= 3) {
         transform = { ...translation, fallbackUsed: "translation" };
       }
+    }
+
+    if (transform.fallbackUsed === "none" && fromOverride) {
+      transform.fallbackUsed = "annotated-stars";
     }
   }
 
@@ -519,24 +657,35 @@ export async function alignFrameAsync(
   }
 
   const runtime = options.detectionRuntime;
-  runtime?.onProgress?.(0.01, "detect-ref");
-  const refStars = await detectStarsAsync(
-    refPixels,
-    width,
-    height,
-    options.detectionOptions ?? { profile: "balanced" },
-    runtime,
-  );
+  const manual = options.manualControlPoints;
+  if (manual) {
+    const refAnchors = toAnchorPoints(manual.ref);
+    const targetAnchors = toAnchorPoints(manual.target);
+    const matrix = buildManualTransform(refAnchors, targetAnchors, manual.mode);
+    const detectionCounts = { ref: refAnchors.length, target: targetAnchors.length };
+    if (matrix) {
+      runtime?.onProgress?.(0.7, "solve-transform");
+      const manualTransform: AlignmentTransform = {
+        matrix,
+        matchedStars: Math.min(refAnchors.length, targetAnchors.length),
+        rmsError: 0,
+        detectionCounts,
+        fallbackUsed: manualModeToFallback(manual.mode),
+      };
+      runtime?.onProgress?.(0.88, "warp");
+      const aligned = applyTransform(targetPixels, width, height, manualTransform);
+      runtime?.onProgress?.(1, "done");
+      return { aligned, transform: manualTransform };
+    }
+  }
 
-  runtime?.onProgress?.(0.35, "detect-target");
-  const targetStars = await detectStarsAsync(
+  const { refStars, targetStars, fromOverride } = await resolveStarsAsync(
+    refPixels,
     targetPixels,
     width,
     height,
-    options.detectionOptions ?? { profile: "balanced" },
-    runtime,
+    options,
   );
-
   const detectionCounts = { ref: refStars.length, target: targetStars.length };
 
   const searchRadius = options.searchRadius ?? 20;
@@ -550,7 +699,7 @@ export async function alignFrameAsync(
   let transform: AlignmentTransform;
   if (mode === "translation") {
     transform = computeTranslation(refStars, targetStars, searchRadius);
-    transform.fallbackUsed = "none";
+    transform.fallbackUsed = fromOverride ? "annotated-stars" : "none";
   } else {
     transform = computeFullAlignment(
       refStars,
@@ -566,6 +715,10 @@ export async function alignFrameAsync(
       if (translation.matchedStars >= 3) {
         transform = { ...translation, fallbackUsed: "translation" };
       }
+    }
+
+    if (transform.fallbackUsed === "none" && fromOverride) {
+      transform.fallbackUsed = "annotated-stars";
     }
   }
 

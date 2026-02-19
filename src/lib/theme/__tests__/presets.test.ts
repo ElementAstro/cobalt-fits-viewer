@@ -35,16 +35,12 @@ describe("theme presets", () => {
       ...DEFAULT_CUSTOM_THEME_COLORS,
       linked: true,
       light: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.light,
         accent: "#111111",
-        success: "#22C55E",
-        warning: "#F59E0B",
-        danger: "#EF4444",
       },
       dark: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.dark,
         accent: "#FFFFFF",
-        success: "#FFFFFF",
-        warning: "#FFFFFF",
-        danger: "#FFFFFF",
       },
     };
 
@@ -52,6 +48,61 @@ describe("theme presets", () => {
     expect(variables.light["--accent"]).toBe("#111111");
     expect(variables.dark["--accent"]).toBe("#111111");
     expect(variables.light["--accent-foreground"]).toBe("#FFFFFF");
+  });
+
+  it("builds background and surface variables with readable foreground", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_THEME_COLORS,
+      linked: false,
+      light: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.light,
+        background: "#FFFFFF",
+        surface: "#111111",
+      },
+      dark: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.dark,
+        background: "#000000",
+        surface: "#E5E7EB",
+      },
+    };
+
+    const variables = buildCustomThemeVariables(custom);
+    expect(variables.light["--background"]).toBe("#FFFFFF");
+    expect(variables.light["--foreground"]).toBe("#111827");
+    expect(variables.light["--surface"]).toBe("#111111");
+    expect(variables.light["--surface-foreground"]).toBe("#FFFFFF");
+    expect(variables.light["--field-background"]).toBe("#111111");
+    expect(variables.dark["--background"]).toBe("#000000");
+    expect(variables.dark["--surface"]).toBe("#E5E7EB");
+    expect(variables.dark["--surface-foreground"]).toBe("#111827");
+  });
+
+  it("falls back surface to background when surface override is empty", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_THEME_COLORS,
+      linked: true,
+      light: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.light,
+        background: "#123456",
+        surface: "",
+      },
+      dark: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.dark,
+      },
+    };
+
+    const variables = buildCustomThemeVariables(custom);
+    expect(variables.light["--background"]).toBe("#123456");
+    expect(variables.light["--surface"]).toBe("#123456");
+    expect(variables.dark["--surface"]).toBe("#123456");
+  });
+
+  it("does not override base tokens when background and surface are empty", () => {
+    const variables = buildCustomThemeVariables(DEFAULT_CUSTOM_THEME_COLORS);
+    expect(variables.light["--background"]).toBeUndefined();
+    expect(variables.light["--surface"]).toBeUndefined();
+    expect(variables.dark["--background"]).toBeUndefined();
+    expect(variables.dark["--surface"]).toBeUndefined();
   });
 
   it("returns baseline + preset variables", () => {

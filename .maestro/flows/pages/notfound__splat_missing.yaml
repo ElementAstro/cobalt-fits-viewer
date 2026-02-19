@@ -1,0 +1,11 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://this-route-does-not-exist
+- assertVisible:
+    id: e2e-screen-notfound__splat_missing
+- tapOn:
+    id: e2e-action-notfound__splat_missing-go-home
+- assertVisible:
+    id: e2e-screen-tabs__index
+- tapOn:
+    id: files-enter-selection-mode-button

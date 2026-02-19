@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://astrometry
+- assertVisible:
+    id: e2e-screen-astrometry__index
+- tapOn:
+    id: e2e-action-astrometry__index-open-url
+- tapOn:
+    id: e2e-action-astrometry__index-open-file

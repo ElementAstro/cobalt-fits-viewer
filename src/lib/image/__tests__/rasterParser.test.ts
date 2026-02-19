@@ -9,9 +9,16 @@ let mockImageFactoryResult: {
 const mockMakeFromEncoded = jest.fn(() => mockImageFactoryResult);
 const mockFromBytes = jest.fn((bytes: Uint8Array) => ({ bytes }));
 const mockClassifyWithDetail = jest.fn(() => ({ type: "light", source: "filename" }));
+const mockIsTiffLikeBuffer = jest.fn(() => false);
+const mockCreateTiffFrameProvider = jest.fn();
 
 jest.mock("../../gallery/frameClassifier", () => ({
   classifyWithDetail: (...args: any[]) => (mockClassifyWithDetail as any)(...args),
+}));
+
+jest.mock("../tiff/decoder", () => ({
+  isTiffLikeBuffer: (...args: any[]) => (mockIsTiffLikeBuffer as any)(...args),
+  createTiffFrameProvider: (...args: any[]) => (mockCreateTiffFrameProvider as any)(...args),
 }));
 
 jest.mock("@shopify/react-native-skia", () => ({
@@ -27,7 +34,11 @@ jest.mock("@shopify/react-native-skia", () => ({
   ColorType: { RGBA_8888: "RGBA_8888" },
 }));
 
-import { extractRasterMetadata, parseRasterFromBuffer } from "../rasterParser";
+import {
+  extractRasterMetadata,
+  parseRasterFromBuffer,
+  parseRasterFromBufferAsync,
+} from "../rasterParser";
 
 function setMockRasterImage({
   width,
@@ -51,6 +62,7 @@ describe("image rasterParser", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockImageFactoryResult = null;
+    mockIsTiffLikeBuffer.mockReturnValue(false);
   });
 
   it("throws for unsupported or invalid raster content", () => {
@@ -92,9 +104,10 @@ describe("image rasterParser", () => {
     expect(result.rgba).toEqual(new Uint8Array([255, 0, 0, 255, 0, 255, 0, 255]));
     expect(result.pixels[0]).toBeCloseTo(0.2126, 4);
     expect(result.pixels[1]).toBeCloseTo(0.7152, 4);
-    expect(result.channels.r).toEqual(new Float32Array([1, 0]));
-    expect(result.channels.g).toEqual(new Float32Array([0, 1]));
-    expect(result.channels.b).toEqual(new Float32Array([0, 0]));
+    expect(result.channels).not.toBeNull();
+    expect(result.channels?.r).toEqual(new Float32Array([1, 0]));
+    expect(result.channels?.g).toEqual(new Float32Array([0, 1]));
+    expect(result.channels?.b).toEqual(new Float32Array([0, 0]));
   });
 
   it("converts Float32 pixel buffer to bytes before luma conversion", () => {
@@ -117,6 +130,41 @@ describe("image rasterParser", () => {
     expect(result.pixels[1]).toBeCloseTo(0.2126, 4);
   });
 
+  it("uses TIFF async decoder branch when buffer matches TIFF", async () => {
+    mockIsTiffLikeBuffer.mockReturnValue(true);
+    const frame = {
+      index: 0,
+      width: 3,
+      height: 2,
+      bitDepth: 16,
+      sampleFormat: "uint",
+      photometric: 1,
+      compression: 5,
+      orientation: 1,
+      rgba: new Uint8Array(3 * 2 * 4).fill(128),
+      pixels: new Float32Array(6).fill(0.5),
+      channels: null,
+      headers: [{ key: "COMPRESSION", value: 5 }],
+    };
+    mockCreateTiffFrameProvider.mockResolvedValue({
+      pageCount: 2,
+      pages: [],
+      getHeaders: () => frame.headers,
+      getFrame: jest.fn(async () => frame),
+    });
+
+    const result = await parseRasterFromBufferAsync(new ArrayBuffer(16), { frameIndex: 1 });
+    expect(result.width).toBe(3);
+    expect(result.height).toBe(2);
+    expect(result.depth).toBe(2);
+    expect(result.isMultiFrame).toBe(true);
+    expect(result.bitDepth).toBe(16);
+    expect(result.sampleFormat).toBe("uint");
+    expect(result.compression).toBe(5);
+    expect(result.headers).toEqual([{ key: "COMPRESSION", value: 5 }]);
+    expect(mockCreateTiffFrameProvider).toHaveBeenCalled();
+  });
+
   it("extracts raster metadata", () => {
     const meta = extractRasterMetadata(
       { filename: "M42.png", filepath: "/tmp/M42.png", fileSize: 999 },
@@ -133,6 +181,8 @@ describe("image rasterParser", () => {
       naxis3: 1,
       frameType: "light",
       frameTypeSource: "filename",
+      decodeStatus: "ready",
+      decodeError: undefined,
     });
     expect(mockClassifyWithDetail).toHaveBeenCalledWith(undefined, undefined, "M42.png", undefined);
   });

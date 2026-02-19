@@ -1066,7 +1066,7 @@ export default function FilesScreen() {
   );
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-tabs__index" className="flex-1 bg-background">
       <LoadingOverlay
         visible={isImporting}
         message={getPhaseLabel()}

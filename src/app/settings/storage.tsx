@@ -143,7 +143,7 @@ export default function StorageSettingsScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__storage" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -193,6 +193,7 @@ export default function StorageSettingsScreen() {
         {/* Backup */}
         <SettingsSection title={t("settings.backup")}>
           <SettingsRow
+            testID="e2e-action-settings__storage-open-backup"
             icon="cloud-upload-outline"
             label={t("settings.backup")}
             onPress={() => router.push("/backup")}
@@ -202,6 +203,7 @@ export default function StorageSettingsScreen() {
         {/* Plate Solve */}
         <SettingsSection title={t("astrometry.plateSolve")}>
           <SettingsRow
+            testID="e2e-action-settings__storage-open-astrometry"
             icon="planet-outline"
             label={t("astrometry.plateSolve")}
             value={astrometryStatusText}

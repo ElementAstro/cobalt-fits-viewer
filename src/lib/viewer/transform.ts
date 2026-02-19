@@ -79,6 +79,48 @@ export function clampScale(scale: number, minScale: number, maxScale: number) {
   return clamp(scale, safeMin, safeMax);
 }
 
+export function zoomAroundPoint(
+  focalPointX: number,
+  focalPointY: number,
+  currentScale: number,
+  targetScale: number,
+  currentTranslateX: number,
+  currentTranslateY: number,
+): Point {
+  "worklet";
+  const safeCurrentScale = currentScale <= 0 ? 1 : currentScale;
+  const scaleFactor = targetScale / safeCurrentScale;
+  return {
+    x: focalPointX - (focalPointX - currentTranslateX) * scaleFactor,
+    y: focalPointY - (focalPointY - currentTranslateY) * scaleFactor,
+  };
+}
+
+export function computeIncrementalPinchTranslation(
+  focalPointX: number,
+  focalPointY: number,
+  prevFocalPointX: number,
+  prevFocalPointY: number,
+  currentScale: number,
+  targetScale: number,
+  currentTranslateX: number,
+  currentTranslateY: number,
+): Point {
+  "worklet";
+  const zoomed = zoomAroundPoint(
+    focalPointX,
+    focalPointY,
+    currentScale,
+    targetScale,
+    currentTranslateX,
+    currentTranslateY,
+  );
+  return {
+    x: zoomed.x + (focalPointX - prevFocalPointX),
+    y: zoomed.y + (focalPointY - prevFocalPointY),
+  };
+}
+
 export function clampTranslation(
   tx: number,
   ty: number,

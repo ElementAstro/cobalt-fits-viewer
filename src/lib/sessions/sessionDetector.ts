@@ -9,6 +9,23 @@ import type {
   SessionEquipment,
 } from "../fits/types";
 import { dedupeTargetRefs, toTargetRef } from "../targets/targetRefs";
+import { LOG_TAGS, Logger } from "../logger";
+import { toLocalDateKey } from "./planUtils";
+
+function parseDateObsToTimestamp(dateObs: string | undefined, fileId?: string): number | undefined {
+  if (!dateObs) return undefined;
+
+  const timestamp = Date.parse(dateObs);
+  if (!Number.isFinite(timestamp)) {
+    Logger.warn(LOG_TAGS.Sessions, `Invalid DATE-OBS skipped${fileId ? `: ${fileId}` : ""}`, {
+      dateObs,
+      fileId,
+    });
+    return undefined;
+  }
+
+  return timestamp;
+}
 
 /**
  * 从 FITS 元数据自动检测观测会话
@@ -19,11 +36,15 @@ export function detectSessions(
   gapMinutes: number = 120,
 ): ObservationSession[] {
   const filesWithDate = files
-    .filter((f) => f.dateObs)
-    .map((f) => ({
-      ...f,
-      timestamp: new Date(f.dateObs!).getTime(),
-    }))
+    .map((file) => {
+      const timestamp = parseDateObsToTimestamp(file.dateObs, file.id);
+      if (!Number.isFinite(timestamp)) return undefined;
+      return {
+        ...file,
+        timestamp,
+      };
+    })
+    .filter((file): file is FitsMetadata & { timestamp: number } => Boolean(file))
     .sort((a, b) => a.timestamp - b.timestamp);
 
   if (filesWithDate.length === 0) return [];
@@ -52,7 +73,7 @@ export function detectSessions(
     const imageIds = group.map((f) => f.id);
 
     const equipment = extractEquipment(group);
-    const dateStr = new Date(startTime).toISOString().split("T")[0];
+    const dateStr = toLocalDateKey(new Date(startTime));
 
     return {
       id: `session_${dateStr}_${startTime}`,
@@ -93,20 +114,26 @@ export function generateLogEntries(
   sessionId: string,
 ): ObservationLogEntry[] {
   return files
-    .filter((f) => f.dateObs)
-    .sort((a, b) => new Date(a.dateObs!).getTime() - new Date(b.dateObs!).getTime())
-    .map((f) => ({
-      id: `log_${f.id}`,
+    .map((file) => ({
+      file,
+      timestamp: parseDateObsToTimestamp(file.dateObs, file.id),
+    }))
+    .filter((entry): entry is { file: FitsMetadata; timestamp: number } =>
+      Number.isFinite(entry.timestamp),
+    )
+    .sort((a, b) => a.timestamp - b.timestamp)
+    .map(({ file }) => ({
+      id: `log_${file.id}`,
       sessionId,
-      imageId: f.id,
-      dateTime: f.dateObs!,
-      object: f.object ?? "Unknown",
-      filter: f.filter ?? "Unknown",
-      exptime: f.exptime ?? 0,
-      gain: f.gain,
-      telescope: f.telescope,
-      camera: f.instrument ?? f.detector,
-      ccdTemp: f.ccdTemp,
+      imageId: file.id,
+      dateTime: file.dateObs!,
+      object: file.object ?? "Unknown",
+      filter: file.filter ?? "Unknown",
+      exptime: file.exptime ?? 0,
+      gain: file.gain,
+      telescope: file.telescope,
+      camera: file.instrument ?? file.detector,
+      ccdTemp: file.ccdTemp,
     }));
 }
 
@@ -137,8 +164,9 @@ export function getDatesWithObservations(
   const dates = new Set<number>();
 
   for (const file of files) {
-    if (!file.dateObs) continue;
-    const d = new Date(file.dateObs);
+    const timestamp = parseDateObsToTimestamp(file.dateObs, file.id);
+    if (timestamp === undefined) continue;
+    const d = new Date(timestamp);
     if (d.getFullYear() === year && d.getMonth() === month) {
       dates.add(d.getDate());
     }

@@ -90,6 +90,25 @@ export default function CompareScreen() {
   const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
   const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
   const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
+  const settingsPinchSensitivity = useSettingsStore((s) => s.canvasPinchSensitivity);
+  const settingsPinchOverzoomFactor = useSettingsStore((s) => s.canvasPinchOverzoomFactor);
+  const settingsPanRubberBandFactor = useSettingsStore((s) => s.canvasPanRubberBandFactor);
+  const settingsWheelZoomSensitivity = useSettingsStore((s) => s.canvasWheelZoomSensitivity);
+
+  const canvasGestureConfig = useMemo(
+    () => ({
+      pinchSensitivity: settingsPinchSensitivity,
+      pinchOverzoomFactor: settingsPinchOverzoomFactor,
+      panRubberBandFactor: settingsPanRubberBandFactor,
+      wheelZoomSensitivity: settingsWheelZoomSensitivity,
+    }),
+    [
+      settingsPanRubberBandFactor,
+      settingsPinchOverzoomFactor,
+      settingsPinchSensitivity,
+      settingsWheelZoomSensitivity,
+    ],
+  );
 
   const defaultAdjustments = useMemo<ViewerAdjustments>(
     () => ({
@@ -516,6 +535,7 @@ export default function CompareScreen() {
               minScale={settingsMinScale}
               maxScale={settingsMaxScale}
               doubleTapScale={settingsDoubleTapScale}
+              gestureConfig={canvasGestureConfig}
               wheelZoomEnabled
             />
           </Pressable>
@@ -551,13 +571,18 @@ export default function CompareScreen() {
       settingsMinScale,
       settingsMaxScale,
       settingsDoubleTapScale,
+      canvasGestureConfig,
     ],
   );
 
   const showBoth = !!fileA && !!fileB;
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={["top"]}>
+    <SafeAreaView
+      testID="e2e-screen-compare__index"
+      className="flex-1 bg-background"
+      edges={["top"]}
+    >
       <View
         className="flex-row items-center gap-2 py-2"
         style={{ paddingHorizontal: horizontalPadding }}
@@ -568,10 +593,20 @@ export default function CompareScreen() {
         <Text className="flex-1 text-base font-semibold text-foreground">
           {t("gallery.compare")}
         </Text>
-        <Button size="sm" variant="outline" onPress={() => openPicker("A")}>
+        <Button
+          testID="e2e-action-compare__index-open-picker-a"
+          size="sm"
+          variant="outline"
+          onPress={() => openPicker("A")}
+        >
           <Button.Label className="text-[10px]">A</Button.Label>
         </Button>
-        <Button size="sm" variant="outline" onPress={() => openPicker("B")}>
+        <Button
+          testID="e2e-action-compare__index-open-picker-b"
+          size="sm"
+          variant="outline"
+          onPress={() => openPicker("B")}
+        >
           <Button.Label className="text-[10px]">B</Button.Label>
         </Button>
       </View>
@@ -668,13 +703,19 @@ export default function CompareScreen() {
         <View className="flex-row items-center justify-between mb-2">
           <View className="flex-row gap-1">
             <Button
+              testID="e2e-action-compare__index-toggle-linked"
               size="sm"
               variant={linked ? "primary" : "outline"}
               onPress={() => setLinked((v) => !v)}
             >
               <Button.Label className="text-[10px]">{linked ? "Linked" : "Unlinked"}</Button.Label>
             </Button>
-            <Button size="sm" variant="outline" onPress={handleAutoStretch}>
+            <Button
+              testID="e2e-action-compare__index-auto-stretch"
+              size="sm"
+              variant="outline"
+              onPress={handleAutoStretch}
+            >
               <Ionicons name="flash-outline" size={12} color={mutedColor} />
             </Button>
             <Button size="sm" variant="outline" onPress={handleResetActive}>

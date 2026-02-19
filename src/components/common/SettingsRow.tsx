@@ -10,6 +10,7 @@ export interface SettingsRowProps {
   iconColor?: string;
   rightElement?: React.ReactNode;
   disabled?: boolean;
+  testID?: string;
 }
 
 export function SettingsRow({
@@ -20,11 +21,13 @@ export function SettingsRow({
   iconColor,
   rightElement,
   disabled,
+  testID,
 }: SettingsRowProps) {
   const mutedColor = useThemeColor("muted");
 
   return (
     <TouchableOpacity
+      testID={testID}
       onPress={onPress}
       disabled={!onPress || disabled}
       accessibilityRole={onPress ? "button" : "text"}

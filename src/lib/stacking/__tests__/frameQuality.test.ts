@@ -84,6 +84,26 @@ describe("stacking frameQuality", () => {
     expect(qualityToWeights([{ score: 50 } as never, { score: 100 } as never])).toEqual([0.5, 1]);
   });
 
+  it("uses starsOverride without invoking detection", () => {
+    mockEstimateBackground.mockReturnValue({
+      background: new Float32Array([1, 1, 1, 1]),
+      noise: 1,
+    });
+    const stars = [
+      { cx: 1, cy: 1, flux: 40, peak: 40, area: 3, fwhm: 2.1 },
+      { cx: 2, cy: 2, flux: 35, peak: 35, area: 3, fwhm: 2.4 },
+      { cx: 3, cy: 3, flux: 30, peak: 30, area: 3, fwhm: 2.8 },
+    ];
+
+    const metrics = evaluateFrameQuality(new Float32Array([1, 2, 3, 4]), 2, 2, {
+      starsOverride: stars,
+    });
+
+    expect(metrics.starCount).toBe(3);
+    expect(metrics.medianFwhm).toBe(2.4);
+    expect(mockDetectStars).not.toHaveBeenCalled();
+  });
+
   it("evaluates frame asynchronously with progress reporting", async () => {
     mockEstimateBackground.mockReturnValue({
       background: new Float32Array([1, 1, 1, 1]),

@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://sessions
+- assertVisible:
+    id: e2e-screen-tabs__sessions
+- tapOn:
+    id: e2e-action-tabs__sessions-open-create
+- tapOn:
+    id: e2e-action-tabs__sessions-open-plan

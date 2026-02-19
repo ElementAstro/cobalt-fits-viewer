@@ -123,6 +123,27 @@ describe("detectSessions", () => {
     const sessions60 = detectSessions(files, 60);
     expect(sessions60).toHaveLength(1);
   });
+
+  it("skips files with invalid DATE-OBS during detection", () => {
+    const files = [
+      makeFile("f1", "2024-01-15T22:00:00Z"),
+      makeFile("f2", "invalid-date"),
+      makeFile("f3", "2024-01-15T22:30:00Z"),
+    ];
+    const sessions = detectSessions(files, 120);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].imageIds).toEqual(["f1", "f3"]);
+  });
+
+  it("uses local date key derived from session start time", () => {
+    const start = "2024-01-15T23:50:00Z";
+    const sessions = detectSessions([makeFile("f1", start)], 120);
+    expect(sessions).toHaveLength(1);
+
+    const localDate = new Date(start);
+    const expectedDate = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
+    expect(sessions[0].date).toBe(expectedDate);
+  });
 });
 
 // ===== generateLogEntries =====

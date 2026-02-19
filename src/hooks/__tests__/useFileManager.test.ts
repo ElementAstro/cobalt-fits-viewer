@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react-native";
 import type { FitsMetadata, TrashedFitsRecord } from "../../lib/fits/types";
 import { useFileManager } from "../useFileManager";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSessionStore } from "../../stores/useSessionStore";
 import { useTrashStore } from "../../stores/useTrashStore";
 
 jest.mock("../../lib/storage", () => ({
@@ -187,11 +188,16 @@ jest.mock("../../lib/gallery/duplicateDetector", () => ({
 
 jest.mock("../../lib/gallery/albumSync", () => ({
   computeAlbumFileConsistencyPatches: jest.fn(() => []),
+  reconcileAlbumsWithValidFiles: jest.fn((albums) => ({
+    albums,
+    prunedRefs: 0,
+    coverFixes: 0,
+  })),
 }));
 
 jest.mock("../../lib/image/rasterParser", () => ({
   extractRasterMetadata: jest.fn(),
-  parseRasterFromBuffer: jest.fn(),
+  parseRasterFromBufferAsync: jest.fn(),
 }));
 
 jest.mock("../../lib/utils/fileManager", () => ({
@@ -257,7 +263,18 @@ describe("useFileManager", () => {
     extractMetadata: jest.Mock;
   };
   const fileManagerMock = require("../../lib/utils/fileManager") as {
+    importFile: jest.Mock;
     readFileAsArrayBuffer: jest.Mock;
+    renameFitsFile: jest.Mock;
+    moveFileToTrash: jest.Mock;
+    restoreFileFromTrash: jest.Mock;
+  };
+  const rasterParserMock = require("../../lib/image/rasterParser") as {
+    extractRasterMetadata: jest.Mock;
+    parseRasterFromBufferAsync: jest.Mock;
+  };
+  const documentPickerMock = require("expo-document-picker") as {
+    getDocumentAsync: jest.Mock;
   };
   const imagePickerMock = require("expo-image-picker") as {
     requestMediaLibraryPermissionsAsync: jest.Mock;
@@ -279,18 +296,65 @@ describe("useFileManager", () => {
       searchQuery: "",
       filterTags: [],
     });
+    useSessionStore.setState({
+      sessions: [],
+      logEntries: [],
+      plans: [],
+      activeSession: null,
+    });
     sharingMock.isAvailableAsync.mockResolvedValue(true);
     imagePickerMock.requestMediaLibraryPermissionsAsync.mockResolvedValue({ granted: true });
     imagePickerMock.requestCameraPermissionsAsync.mockResolvedValue({ granted: true });
     imagePickerMock.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: [] });
     imagePickerMock.launchCameraAsync.mockResolvedValue({ canceled: true, assets: [] });
     fileManagerMock.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
+    fileManagerMock.importFile.mockImplementation((_uri: string, name: string) => ({
+      uri: `file:///document/fits_files/${name}`,
+      exists: true,
+      delete: jest.fn(),
+      arrayBuffer: jest.fn(async () => new ArrayBuffer(8)),
+    }));
+    fileManagerMock.renameFitsFile.mockReturnValue({
+      success: false,
+      filepath: "",
+      filename: "",
+    });
     parserMock.loadFitsFromBufferAuto.mockReturnValue({ fits: true });
     parserMock.extractMetadata.mockReturnValue({
       frameType: "darkflat",
       frameTypeSource: "header",
       imageTypeRaw: "DarkFlat",
       frameHeaderRaw: "DarkFlat",
+    });
+    rasterParserMock.parseRasterFromBufferAsync.mockResolvedValue({
+      width: 2,
+      height: 2,
+      depth: 1,
+      bitDepth: 8,
+      rgba: new Uint8Array([255, 255, 255, 255]),
+      pixels: new Float32Array([0.5, 0.5, 0.5, 0.5]),
+      channels: null,
+      headers: [],
+      decodeStatus: "ready",
+      decodeError: undefined,
+    });
+    rasterParserMock.extractRasterMetadata.mockReturnValue({
+      filename: "raster.png",
+      filepath: "file:///document/fits_files/raster.png",
+      fileSize: 8,
+      bitpix: 8,
+      naxis: 2,
+      naxis1: 2,
+      naxis2: 2,
+      naxis3: 1,
+      frameType: "light",
+      frameTypeSource: "filename",
+      decodeStatus: "ready",
+      decodeError: undefined,
+    });
+    documentPickerMock.getDocumentAsync.mockResolvedValue({
+      canceled: true,
+      assets: [],
     });
   });
 
@@ -330,6 +394,198 @@ describe("useFileManager", () => {
     expect(actionResult).toEqual({ deleted: 1, failed: 0 });
     expect(useTrashStore.getState().items).toEqual([]);
     expect(thumbnailCacheMock.deleteThumbnails).toHaveBeenCalledWith([stale.file.id]);
+  });
+
+  it("reconciles session metadata when linked files are deleted", () => {
+    const fileA = {
+      ...makeFile("f-a"),
+      sessionId: "session-1",
+      dateObs: "2025-01-01T20:00:00.000Z",
+      object: "M42",
+      telescope: "Telescope A",
+      instrument: "Camera A",
+      filter: "Ha",
+      location: {
+        latitude: 10,
+        longitude: 20,
+        placeName: "Site A",
+      },
+    };
+    const fileB = {
+      ...makeFile("f-b"),
+      sessionId: "session-1",
+      dateObs: "2025-01-01T20:10:00.000Z",
+      object: "M31",
+      telescope: "Telescope B",
+      instrument: "Camera B",
+      filter: "OIII",
+      location: {
+        latitude: 30,
+        longitude: 40,
+        placeName: "Site B",
+      },
+    };
+    useFitsStore.setState({ files: [fileA, fileB] });
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: "session-1",
+          date: "2025-01-01",
+          startTime: 1735761600000,
+          endTime: 1735765200000,
+          duration: 3600,
+          targetRefs: [{ name: "M42" }, { name: "M31" }],
+          imageIds: ["f-a", "f-b"],
+          equipment: { telescope: "Mixed", camera: "Mixed", filters: ["Ha", "OIII"] },
+          location: { latitude: 30, longitude: 40, placeName: "Site B" },
+          createdAt: Date.now(),
+        },
+      ],
+      logEntries: [
+        {
+          id: "log_f-a",
+          sessionId: "session-1",
+          imageId: "f-a",
+          dateTime: "2025-01-01T20:00:00.000Z",
+          object: "M42",
+          filter: "Ha",
+          exptime: 120,
+        },
+        {
+          id: "log_f-b",
+          sessionId: "session-1",
+          imageId: "f-b",
+          dateTime: "2025-01-01T20:10:00.000Z",
+          object: "M31",
+          filter: "OIII",
+          exptime: 120,
+        },
+      ],
+    });
+
+    fileManagerMock.moveFileToTrash.mockImplementation((filepath: string, filename: string) => ({
+      success: true,
+      filepath: filepath.replace("/fits_files/", "/fits_trash/"),
+      filename,
+    }));
+
+    const { result } = renderHook(() => useFileManager());
+    act(() => {
+      result.current.handleDeleteFiles(["f-b"]);
+    });
+
+    const state = useSessionStore.getState();
+    expect(useFitsStore.getState().files.map((file) => file.id)).toEqual(["f-a"]);
+    expect(state.sessions[0].imageIds).toEqual(["f-a"]);
+    expect(state.sessions[0].targetRefs).toEqual([{ name: "M42" }]);
+    expect(state.sessions[0].equipment).toEqual({
+      telescope: "Telescope A",
+      camera: "Camera A",
+      filters: ["Ha"],
+    });
+    expect(state.sessions[0].location).toEqual({
+      latitude: 10,
+      longitude: 20,
+      placeName: "Site A",
+    });
+    expect(state.logEntries.map((entry) => entry.imageId)).toEqual(["f-a"]);
+  });
+
+  it("reconciles session metadata and avoids duplicate logs after restore", () => {
+    const fileA = {
+      ...makeFile("f-a"),
+      sessionId: "session-restore",
+      dateObs: "2025-01-01T20:00:00.000Z",
+      object: "M42",
+      telescope: "Telescope A",
+      instrument: "Camera A",
+      filter: "Ha",
+      location: {
+        latitude: 10,
+        longitude: 20,
+        placeName: "Site A",
+      },
+    };
+    const restoredFile = {
+      ...makeFile("f-b"),
+      sessionId: "session-restore",
+      dateObs: "2025-01-01T20:10:00.000Z",
+      object: "M31",
+      telescope: "Telescope B",
+      instrument: "Camera B",
+      filter: "OIII",
+      location: {
+        latitude: 10,
+        longitude: 20,
+        placeName: "Site A",
+      },
+    };
+    useFitsStore.setState({ files: [fileA] });
+    useSessionStore.setState({
+      sessions: [
+        {
+          id: "session-restore",
+          date: "2025-01-01",
+          startTime: 1735761600000,
+          endTime: 1735765200000,
+          duration: 3600,
+          targetRefs: [{ name: "M42" }],
+          imageIds: ["f-a"],
+          equipment: { telescope: "Telescope A", camera: "Camera A", filters: ["Ha"] },
+          location: { latitude: 10, longitude: 20, placeName: "Site A" },
+          createdAt: Date.now(),
+        },
+      ],
+      logEntries: [
+        {
+          id: "log_f-a",
+          sessionId: "session-restore",
+          imageId: "f-a",
+          dateTime: "2025-01-01T20:00:00.000Z",
+          object: "M42",
+          filter: "Ha",
+          exptime: 120,
+        },
+      ],
+    });
+
+    const trashItem = makeTrash("f-b", {
+      trashId: "trash-f-b",
+      file: restoredFile,
+      originalFilepath: restoredFile.filepath,
+      trashedFilepath: "file:///document/fits_trash/f-b.fits",
+    });
+    useTrashStore.setState({ items: [trashItem] });
+    fileManagerMock.restoreFileFromTrash.mockReturnValue({
+      success: true,
+      filepath: restoredFile.filepath,
+      filename: restoredFile.filename,
+    });
+
+    const { result } = renderHook(() => useFileManager());
+    act(() => {
+      result.current.restoreFromTrash(["trash-f-b"]);
+    });
+
+    const state = useSessionStore.getState();
+    expect(
+      useFitsStore
+        .getState()
+        .files.map((file) => file.id)
+        .sort(),
+    ).toEqual(["f-a", "f-b"]);
+    expect(state.sessions[0].imageIds.sort()).toEqual(["f-a", "f-b"]);
+    expect(state.sessions[0].targetRefs).toEqual([{ name: "M42" }, { name: "M31" }]);
+    expect(state.sessions[0].equipment).toEqual({
+      telescope: "Telescope A",
+      camera: "Camera A",
+      filters: ["Ha", "OIII"],
+    });
+    const logIds = state.logEntries
+      .filter((entry) => entry.sessionId === "session-restore")
+      .map((entry) => entry.id);
+    expect(new Set(logIds).size).toBe(logIds.length);
+    expect(logIds.sort()).toEqual(["log_f-a", "log_f-b"]);
   });
 
   it("reports export failures without double counting when zip/share fails", async () => {
@@ -511,5 +767,77 @@ describe("useFileManager", () => {
     const [, rasterFile] = useFitsStore.getState().files;
     expect(rasterFile.frameType).toBe("darkflat");
     expect(rasterFile.frameTypeSource).toBe("filename");
+  });
+
+  it("keeps TIFF record when decode fails with explicit error", async () => {
+    const importedFile = {
+      uri: "file:///document/fits_files/bad.tiff",
+      exists: true,
+      delete: jest.fn(),
+      arrayBuffer: jest.fn(
+        async () => new Uint8Array([0x49, 0x49, 0x2b, 0x00, 0x08, 0x00, 0x00, 0x00]).buffer,
+      ),
+    };
+    fileManagerMock.importFile.mockReturnValue(importedFile);
+    rasterParserMock.parseRasterFromBufferAsync.mockRejectedValue(
+      new Error("Unsupported TIFF photometric: 6"),
+    );
+    rasterParserMock.extractRasterMetadata.mockImplementation(
+      (
+        fileInfo: { filename: string; filepath: string; fileSize: number },
+        _dims: { width: number; height: number; depth?: number; bitDepth?: number },
+        _cfg: unknown,
+        options?: { decodeStatus?: "ready" | "failed"; decodeError?: string },
+      ) => ({
+        ...fileInfo,
+        bitpix: 8,
+        naxis: 2,
+        naxis1: 0,
+        naxis2: 0,
+        naxis3: 1,
+        frameType: "unknown",
+        frameTypeSource: "filename",
+        decodeStatus: options?.decodeStatus ?? "ready",
+        decodeError: options?.decodeError,
+      }),
+    );
+    documentPickerMock.getDocumentAsync.mockResolvedValue({
+      canceled: false,
+      assets: [
+        { uri: "file:///source/bad.tiff", name: "bad.tiff", size: 8, mimeType: "image/tiff" },
+      ],
+    });
+
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.pickAndImportFile();
+    });
+
+    const [file] = useFitsStore.getState().files;
+    expect(file).toEqual(
+      expect.objectContaining({
+        filename: "bad.tiff",
+        sourceType: "raster",
+        sourceFormat: "tiff",
+        decodeStatus: "failed",
+        decodeError: "Unsupported TIFF photometric: 6",
+      }),
+    );
+    expect(result.current.lastImportResult).toEqual(
+      expect.objectContaining({
+        success: 1,
+        failed: 0,
+      }),
+    );
+    expect(importedFile.delete).not.toHaveBeenCalled();
+    expect(rasterParserMock.extractRasterMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: "bad.tiff" }),
+      expect.objectContaining({ width: 0, height: 0, depth: 1 }),
+      expect.anything(),
+      expect.objectContaining({
+        decodeStatus: "failed",
+        decodeError: "Unsupported TIFF photometric: 6",
+      }),
+    );
   });
 });

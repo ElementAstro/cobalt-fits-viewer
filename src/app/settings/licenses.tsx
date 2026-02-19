@@ -34,7 +34,7 @@ export default function LicensesScreen() {
   };
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__licenses" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -44,7 +44,12 @@ export default function LicensesScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View className="mb-4 flex-row items-center gap-3">
-          <Button size="sm" variant="outline" onPress={() => router.back()}>
+          <Button
+            testID="e2e-action-settings__licenses-back"
+            size="sm"
+            variant="outline"
+            onPress={() => router.back()}
+          >
             <Ionicons name="arrow-back" size={16} color="#888" />
           </Button>
           <Text className="text-xl font-bold text-foreground">{t("settings.licenses")}</Text>
@@ -58,7 +63,11 @@ export default function LicensesScreen() {
               </Text>
               <Text className="mt-1 text-xs text-muted">{t("settings.appLicenseDetail")}</Text>
             </View>
-            <Button variant="outline" onPress={() => openUrl(APP_LICENSE_URL)}>
+            <Button
+              testID="e2e-action-settings__licenses-open-app-license"
+              variant="outline"
+              onPress={() => openUrl(APP_LICENSE_URL)}
+            >
               <Ionicons name="document-text-outline" size={14} color="#888" />
               <Button.Label>{t("settings.openLicense")}</Button.Label>
             </Button>

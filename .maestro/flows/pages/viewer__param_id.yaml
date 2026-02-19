@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://viewer/fits-001
+- assertVisible:
+    id: e2e-screen-viewer__param_id
+- tapOn:
+    id: e2e-action-viewer__param_id-toggle-controls
+- tapOn:
+    id: e2e-action-viewer__param_id-open-more

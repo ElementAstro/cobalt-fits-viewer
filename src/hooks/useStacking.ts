@@ -31,6 +31,13 @@ import {
 } from "../lib/stacking/frameQuality";
 import type { StarDetectionOptions } from "../lib/stacking/starDetection";
 import { LOG_TAGS, Logger } from "../lib/logger";
+import type { StarAnnotationBundle } from "../lib/fits/types";
+import {
+  buildAnchorPairs,
+  pickAnchorPoints,
+  resolveRegistrationMode,
+  toDetectedStars,
+} from "../lib/stacking/starAnnotationLinkage";
 
 export type StackMethod =
   | "average"
@@ -59,7 +66,12 @@ export interface StackingAdvancedOptions {
 }
 
 export interface StackFilesRequest {
-  files: Array<{ filepath: string; filename: string }>;
+  files: Array<{
+    id?: string;
+    filepath: string;
+    filename: string;
+    starAnnotations?: StarAnnotationBundle;
+  }>;
   method: StackMethod;
   sigma?: number;
   calibration?: CalibrationFrames;
@@ -83,7 +95,14 @@ export interface StackResult {
     rmsError: number;
     detectedRefStars?: number;
     detectedTargetStars?: number;
-    fallbackUsed?: "none" | "translation" | "identity";
+    fallbackUsed?:
+      | "none"
+      | "translation"
+      | "identity"
+      | "manual-1star"
+      | "manual-2star"
+      | "manual-3star"
+      | "annotated-stars";
   }>;
   qualityMetrics?: FrameQualityMetrics[];
 }
@@ -119,7 +138,7 @@ async function loadPixelsFromPath(
 }
 
 function normalizeRequest(
-  filesOrRequest: StackFilesRequest | Array<{ filepath: string; filename: string }>,
+  filesOrRequest: StackFilesRequest | StackFilesRequest["files"],
   method?: StackMethod,
   sigma: number = 2.5,
   calibration?: CalibrationFrames,
@@ -161,7 +180,7 @@ export function useStacking() {
 
   const stackFiles = useCallback(
     async (
-      filesOrRequest: StackFilesRequest | Array<{ filepath: string; filename: string }>,
+      filesOrRequest: StackFilesRequest | StackFilesRequest["files"],
       method?: StackMethod,
       sigma: number = 2.5,
       calibration?: CalibrationFrames,
@@ -334,6 +353,13 @@ export function useStacking() {
 
         if (isCancelled()) return;
 
+        const frameAnnotatedStars = request.files.map((file) =>
+          toDetectedStars(file.starAnnotations?.points ?? [], undefined, { maxCount: 50 }),
+        );
+        const frameAnchorPoints = request.files.map((file) =>
+          pickAnchorPoints(file.starAnnotations?.points ?? []),
+        );
+
         let qualityMetrics: FrameQualityMetrics[] | undefined;
         let weights: number[] | undefined;
 
@@ -356,6 +382,10 @@ export function useStacking() {
               refHeight,
               {
                 ...(request.advanced?.quality ?? {}),
+                starsOverride:
+                  frameAnnotatedStars[i] && frameAnnotatedStars[i].length >= 3
+                    ? frameAnnotatedStars[i]
+                    : undefined,
                 detectionOptions: {
                   profile: "balanced",
                   ...(request.advanced?.quality?.detectionOptions ?? {}),
@@ -407,6 +437,25 @@ export function useStacking() {
               refHeight,
               request.alignmentMode ?? "none",
               {
+                manualControlPoints: (() => {
+                  const mode = resolveRegistrationMode(frameAnchorPoints[0], frameAnchorPoints[i]);
+                  if (!mode) return undefined;
+                  const pairs = buildAnchorPairs(frameAnchorPoints[0], frameAnchorPoints[i]);
+                  if (pairs.length === 0) return undefined;
+                  return {
+                    mode,
+                    ref: pairs.map((pair) => ({ x: pair.ref.x, y: pair.ref.y })),
+                    target: pairs.map((pair) => ({ x: pair.target.x, y: pair.target.y })),
+                  };
+                })(),
+                refStarsOverride:
+                  frameAnnotatedStars[0] && frameAnnotatedStars[0].length >= 3
+                    ? frameAnnotatedStars[0]
+                    : undefined,
+                targetStarsOverride:
+                  frameAnnotatedStars[i] && frameAnnotatedStars[i].length >= 3
+                    ? frameAnnotatedStars[i]
+                    : undefined,
                 ...(request.advanced?.alignment ?? {}),
                 detectionOptions: {
                   profile: "balanced",

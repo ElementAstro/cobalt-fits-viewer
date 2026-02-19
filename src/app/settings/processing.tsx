@@ -503,7 +503,7 @@ export default function ProcessingSettingsScreen() {
   }));
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-settings__processing" className="flex-1 bg-background">
       <ScrollView
         contentContainerStyle={{
           paddingHorizontal: horizontalPadding,
@@ -581,6 +581,7 @@ export default function ProcessingSettingsScreen() {
         {/* Stacking Defaults */}
         <SettingsSection title={t("settings.stackingDefaults")}>
           <SettingsRow
+            testID="e2e-action-settings__processing-open-stack-method"
             icon="layers-outline"
             label={t("settings.defaultStackMethod")}
             value={stackMethodLabel(defaultStackMethod)}
@@ -853,6 +854,7 @@ export default function ProcessingSettingsScreen() {
         {/* Converter Defaults */}
         <SettingsSection title={t("settings.converterDefaults")}>
           <SettingsRow
+            testID="e2e-action-settings__processing-open-converter-format"
             icon="image-outline"
             label={t("settings.defaultConverterFormat")}
             value={defaultConverterFormat.toUpperCase()}

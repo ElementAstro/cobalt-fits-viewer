@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://settings/appearance
+- assertVisible:
+    id: e2e-screen-settings__appearance
+- tapOn:
+    id: e2e-action-settings__appearance-open-language
+- tapOn:
+    id: e2e-action-settings__appearance-open-theme

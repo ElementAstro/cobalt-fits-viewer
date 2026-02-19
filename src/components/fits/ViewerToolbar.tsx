@@ -103,7 +103,14 @@ export function ViewerToolbar({
       >
         {/* Left: Back + Nav */}
         <View className="flex-row items-center gap-0.5 shrink-0">
-          <Button size="sm" variant="ghost" isIconOnly onPress={onBack} className="h-8 w-8">
+          <Button
+            testID="e2e-action-viewer__param_id-back"
+            size="sm"
+            variant="ghost"
+            isIconOnly
+            onPress={onBack}
+            className="h-8 w-8"
+          >
             <Ionicons name="arrow-back" size={18} color={mutedColor} />
           </Button>
           <Button
@@ -143,6 +150,7 @@ export function ViewerToolbar({
         <View className="flex-row items-center gap-0.5 shrink-0">
           {/* Astrometry button (always visible due to importance) */}
           <Button
+            testID="e2e-action-viewer__param_id-astrometry"
             size="sm"
             variant={isAstrometryActive ? "primary" : "ghost"}
             isIconOnly
@@ -164,6 +172,7 @@ export function ViewerToolbar({
 
           {/* Controls toggle */}
           <Button
+            testID="e2e-action-viewer__param_id-toggle-controls"
             size="sm"
             variant="ghost"
             isIconOnly
@@ -182,6 +191,7 @@ export function ViewerToolbar({
 
           {/* Fullscreen toggle */}
           <Button
+            testID="e2e-action-viewer__param_id-open-more"
             size="sm"
             variant="ghost"
             isIconOnly

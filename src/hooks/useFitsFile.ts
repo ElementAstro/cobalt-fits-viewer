@@ -24,7 +24,12 @@ import {
   detectSupportedImageFormat,
   toImageSourceFormat,
 } from "../lib/import/fileFormat";
-import { extractRasterMetadata, parseRasterFromBuffer } from "../lib/image/rasterParser";
+import {
+  extractRasterMetadata,
+  parseRasterFromBufferAsync,
+  type RasterDecodeResult,
+} from "../lib/image/rasterParser";
+import type { RasterFrameProvider } from "../lib/image/tiff/decoder";
 import { useSettingsStore } from "../stores/useSettingsStore";
 
 function yieldToMain(): Promise<void> {
@@ -67,6 +72,7 @@ export function useFitsFile(): UseFitsFileReturn {
   const [hduList, setHduList] = useState<
     Array<{ index: number; type: string | null; hasData: boolean }>
   >([]);
+  const [rasterFrameProvider, setRasterFrameProvider] = useState<RasterFrameProvider | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
@@ -81,6 +87,7 @@ export function useFitsFile(): UseFitsFileReturn {
       sourceFormat?: FitsMetadata["sourceFormat"],
     ) => {
       setFits(fitsObj);
+      setRasterFrameProvider(null);
       setSourceBuffer(originalBuffer);
       setRgbChannels(null);
 
@@ -99,6 +106,7 @@ export function useFitsFile(): UseFitsFileReturn {
         sourceType: "fits",
         sourceFormat: sourceFormat ?? "unknown",
         mediaKind: "image",
+        decodeStatus: "ready",
       };
       setMetadata(fullMeta);
       setHeaders(getHeaderKeywords(fitsObj));
@@ -115,36 +123,45 @@ export function useFitsFile(): UseFitsFileReturn {
     [frameClassificationConfig],
   );
 
-  const processRaster = useCallback(
+  const applyRasterDecoded = useCallback(
     (
-      buffer: ArrayBuffer,
+      decoded: RasterDecodeResult,
       filename: string,
       filepath: string,
       fileSize: number,
       originalBuffer: ArrayBuffer,
       sourceFormat?: FitsMetadata["sourceFormat"],
     ) => {
-      const decoded = parseRasterFromBuffer(buffer);
       setFits(null);
-      setHeaders([]);
+      setSourceBuffer(originalBuffer);
+      setHeaders(decoded.headers ?? []);
       setComments([]);
       setHistory([]);
       setHduList([]);
-      setSourceBuffer(originalBuffer);
       setDimensions({
         width: decoded.width,
         height: decoded.height,
-        depth: 1,
-        isDataCube: false,
+        depth: Math.max(1, decoded.depth ?? 1),
+        isDataCube: (decoded.depth ?? 1) > 1,
       });
       setPixels(decoded.pixels);
       setRgbChannels(decoded.channels);
+      setRasterFrameProvider(decoded.frameProvider ?? null);
 
       const detectedFormat = detectSupportedImageFormat(filename);
       const meta = extractRasterMetadata(
         { filename, filepath, fileSize },
-        { width: decoded.width, height: decoded.height },
+        {
+          width: decoded.width,
+          height: decoded.height,
+          depth: decoded.depth,
+          bitDepth: decoded.bitDepth,
+        },
         frameClassificationConfig,
+        {
+          decodeStatus: decoded.decodeStatus ?? "ready",
+          decodeError: decoded.decodeError,
+        },
       );
       const fullMeta: FitsMetadata = {
         ...meta,
@@ -160,6 +177,25 @@ export function useFitsFile(): UseFitsFileReturn {
       setMetadata(fullMeta);
     },
     [frameClassificationConfig],
+  );
+
+  const processRaster = useCallback(
+    async (
+      buffer: ArrayBuffer,
+      filename: string,
+      filepath: string,
+      fileSize: number,
+      originalBuffer: ArrayBuffer,
+      sourceFormat?: FitsMetadata["sourceFormat"],
+    ) => {
+      const decoded = await parseRasterFromBufferAsync(buffer, {
+        frameIndex: 0,
+        cacheSize: 3,
+        preferTiffDecoder: true,
+      });
+      applyRasterDecoded(decoded, filename, filepath, fileSize, originalBuffer, sourceFormat);
+    },
+    [applyRasterDecoded],
   );
 
   const loadFromPath = useCallback(
@@ -195,7 +231,7 @@ export function useFitsFile(): UseFitsFileReturn {
             setRgbChannels(null);
           }
         } else if (detectedFormat.sourceType === "raster") {
-          processRaster(
+          await processRaster(
             buffer,
             filename,
             filepath,
@@ -253,7 +289,7 @@ export function useFitsFile(): UseFitsFileReturn {
             setRgbChannels(null);
           }
         } else if (detectedFormat.sourceType === "raster") {
-          processRaster(
+          await processRaster(
             buffer,
             filename,
             `memory://${filename}`,
@@ -280,22 +316,52 @@ export function useFitsFile(): UseFitsFileReturn {
 
   const loadFrame = useCallback(
     async (frame: number, hduIndex?: number) => {
-      if (!fits) return;
+      if (!fits && !rasterFrameProvider) return;
       setIsLoading(true);
       try {
         await yieldToMain();
-        const dims = getImageDimensions(fits, hduIndex);
-        if (dims) setDimensions(dims);
-        const px = await getImagePixels(fits, hduIndex, frame);
-        setPixels(px);
-        const rgb = isRgbCube(fits, hduIndex);
-        if (rgb.isRgb) {
-          const channels = await getImageChannels(fits, hduIndex);
-          setRgbChannels(channels ? { r: channels.r, g: channels.g, b: channels.b } : null);
-        } else {
-          setRgbChannels(null);
+        if (fits) {
+          const dims = getImageDimensions(fits, hduIndex);
+          if (dims) setDimensions(dims);
+          const px = await getImagePixels(fits, hduIndex, frame);
+          setPixels(px);
+          const rgb = isRgbCube(fits, hduIndex);
+          if (rgb.isRgb) {
+            const channels = await getImageChannels(fits, hduIndex);
+            setRgbChannels(channels ? { r: channels.r, g: channels.g, b: channels.b } : null);
+          } else {
+            setRgbChannels(null);
+          }
+          Logger.debug(LOG_TAGS.FitsFile, `Frame loaded: ${frame}`, { hduIndex });
+          return;
         }
-        Logger.debug(LOG_TAGS.FitsFile, `Frame loaded: ${frame}`, { hduIndex });
+
+        if (rasterFrameProvider) {
+          const loaded = await rasterFrameProvider.getFrame(frame);
+          setHeaders(loaded.headers);
+          setPixels(loaded.pixels);
+          setRgbChannels(loaded.channels);
+          setDimensions({
+            width: loaded.width,
+            height: loaded.height,
+            depth: rasterFrameProvider.pageCount,
+            isDataCube: rasterFrameProvider.pageCount > 1,
+          });
+          setMetadata((current) =>
+            current
+              ? {
+                  ...current,
+                  naxis1: loaded.width,
+                  naxis2: loaded.height,
+                  naxis3: rasterFrameProvider.pageCount,
+                  bitpix: loaded.bitDepth,
+                  decodeStatus: "ready",
+                  decodeError: undefined,
+                }
+              : current,
+          );
+          Logger.debug(LOG_TAGS.FitsFile, `Raster frame loaded: ${frame}`);
+        }
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load frame";
         Logger.error(LOG_TAGS.FitsFile, `Frame load failed: ${frame}`, e);
@@ -304,7 +370,7 @@ export function useFitsFile(): UseFitsFileReturn {
         setIsLoading(false);
       }
     },
-    [fits],
+    [fits, rasterFrameProvider],
   );
 
   const reset = useCallback(() => {
@@ -318,6 +384,7 @@ export function useFitsFile(): UseFitsFileReturn {
     setSourceBuffer(null);
     setDimensions(null);
     setHduList([]);
+    setRasterFrameProvider(null);
     setError(null);
   }, []);
 

@@ -71,6 +71,10 @@ jest.mock("../../../stores/useSettingsStore", () => ({
       canvasMinScale: 0.5,
       canvasMaxScale: 10,
       canvasDoubleTapScale: 3,
+      canvasPinchSensitivity: 1,
+      canvasPinchOverzoomFactor: 1.25,
+      canvasPanRubberBandFactor: 0.55,
+      canvasWheelZoomSensitivity: 0.0015,
     }),
 }));
 
@@ -232,6 +236,21 @@ describe("CompareScreen", () => {
   it("passes legacy /compare?ids query into comparison hook", () => {
     render(<CompareScreen />);
     expect(mockUseImageComparison).toHaveBeenCalledWith({ initialIds: ["a", "b"] });
+  });
+
+  it("passes zoom limits and gestureConfig into FitsCanvas", () => {
+    render(<CompareScreen />);
+    const entries = fitsCanvasMock.__getCanvasEntries();
+    const latest = entries[entries.length - 1];
+    expect(latest.props.minScale).toBe(0.5);
+    expect(latest.props.maxScale).toBe(10);
+    expect(latest.props.doubleTapScale).toBe(3);
+    expect(latest.props.gestureConfig).toEqual({
+      pinchSensitivity: 1,
+      pinchOverzoomFactor: 1.25,
+      panRubberBandFactor: 0.55,
+      wheelZoomSensitivity: 0.0015,
+    });
   });
 
   it("renders blink/side-by-side/split branches", () => {

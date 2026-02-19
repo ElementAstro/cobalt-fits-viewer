@@ -1,0 +1,8 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- assertVisible:
+    id: e2e-screen-tabs__index
+- tapOn:
+    id: files-enter-selection-mode-button
+- tapOn:
+    id: files-select-all-visible-button

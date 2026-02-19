@@ -58,7 +58,7 @@ export default function HeaderDetailScreen() {
   }
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-header__param_id" className="flex-1 bg-background">
       <LoadingOverlay visible={isLoading} />
 
       <ScrollView
@@ -73,7 +73,12 @@ export default function HeaderDetailScreen() {
           <View className="flex-row items-start gap-4">
             <View style={{ width: sidePanelWidth }}>
               <View className="flex-row items-center gap-3 mb-4">
-                <Button size="sm" variant="outline" onPress={() => router.back()}>
+                <Button
+                  testID="e2e-action-header__param_id-back"
+                  size="sm"
+                  variant="outline"
+                  onPress={() => router.back()}
+                >
                   <Ionicons name="arrow-back" size={16} color={mutedColor} />
                 </Button>
                 <View className="flex-1">
@@ -91,6 +96,11 @@ export default function HeaderDetailScreen() {
                       key={group.key}
                       size="sm"
                       variant={selectedGroup === group.key ? "primary" : "secondary"}
+                      testID={
+                        group.key === "observation"
+                          ? "e2e-action-header__param_id-group-observation"
+                          : `e2e-action-header__param_id-group-${group.key}`
+                      }
                       onPress={() => setSelectedGroup(group.key)}
                     >
                       <Chip.Label className="text-[10px]">
@@ -115,7 +125,12 @@ export default function HeaderDetailScreen() {
           <>
             {/* Top Bar */}
             <View className="flex-row items-center gap-3 mb-4">
-              <Button size="sm" variant="outline" onPress={() => router.back()}>
+              <Button
+                testID="e2e-action-header__param_id-back"
+                size="sm"
+                variant="outline"
+                onPress={() => router.back()}
+              >
                 <Ionicons name="arrow-back" size={16} color={mutedColor} />
               </Button>
               <View className="flex-1">
@@ -137,6 +152,11 @@ export default function HeaderDetailScreen() {
                     key={group.key}
                     size="sm"
                     variant={selectedGroup === group.key ? "primary" : "secondary"}
+                    testID={
+                      group.key === "observation"
+                        ? "e2e-action-header__param_id-group-observation"
+                        : `e2e-action-header__param_id-group-${group.key}`
+                    }
                     onPress={() => setSelectedGroup(group.key)}
                   >
                     <Chip.Label className="text-[10px]">

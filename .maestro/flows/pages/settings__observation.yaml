@@ -1,0 +1,9 @@
+---
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://settings/observation
+- assertVisible:
+    id: e2e-screen-settings__observation
+- tapOn:
+    id: e2e-action-settings__observation-open-target-sort-by
+- tapOn:
+    id: e2e-action-settings__observation-open-session-gap

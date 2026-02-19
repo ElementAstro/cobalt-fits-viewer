@@ -23,12 +23,14 @@ import {
   splitFilenameExtension,
   toImageSourceFormat,
 } from "../import/fileFormat";
-import { extractRasterMetadata, parseRasterFromBuffer } from "../image/rasterParser";
-import { encodeTiff } from "../image/encoders/tiff";
+import { extractRasterMetadata, parseRasterFromBufferAsync } from "../image/rasterParser";
+import { encodeTiff, encodeTiffDocument } from "../image/encoders/tiff";
+import type { RasterFrameProvider } from "../image/tiff/decoder";
 import { encodeBmp24 } from "../image/encoders/bmp";
 import { readFileAsArrayBuffer } from "../utils/fileManager";
 import { fitsToRGBA } from "./formatConverter";
 import { getExportDir, getExtension } from "../utils/imageExport";
+import { LOG_TAGS, Logger } from "../logger";
 
 /**
  * 创建批量转换任务
@@ -170,6 +172,8 @@ export async function executeBatchConvert(
       let rgbaData: Uint8ClampedArray | null = null;
       let scientificPixels: Float32Array | null = null;
       let channels: { r: Float32Array; g: Float32Array; b: Float32Array } | null = null;
+      let rasterFrameProvider: RasterFrameProvider | null = null;
+      let rasterFrameCount = 1;
       let headerKeywords = undefined as ReturnType<typeof getHeaderKeywords> | undefined;
       let comments: string[] = [];
       let history: string[] = [];
@@ -208,12 +212,18 @@ export async function executeBatchConvert(
           gamma: options.gamma,
         });
       } else {
-        const decoded = parseRasterFromBuffer(buffer);
+        const decoded = await parseRasterFromBufferAsync(buffer, {
+          frameIndex: 0,
+          cacheSize: 3,
+          preferTiffDecoder: true,
+        });
         width = decoded.width;
         height = decoded.height;
         rgbaData = new Uint8ClampedArray(decoded.rgba);
         scientificPixels = decoded.pixels;
         channels = decoded.channels;
+        rasterFrameProvider = decoded.frameProvider ?? null;
+        rasterFrameCount = decoded.depth ?? 1;
         metadata = {
           ...extractRasterMetadata(
             {
@@ -221,7 +231,12 @@ export async function executeBatchConvert(
               filepath: file.filepath,
               fileSize: buffer.byteLength,
             },
-            { width, height },
+            {
+              width,
+              height,
+              depth: decoded.depth,
+              bitDepth: decoded.bitDepth,
+            },
           ),
         };
       }
@@ -244,49 +259,106 @@ export async function executeBatchConvert(
           );
         } else {
           const needsRgbCube = fitsOptions.colorLayout === "rgbCube3d";
-          const useScientific = fitsOptions.mode === "scientific" && detected.sourceType === "fits";
+          const useScientific =
+            fitsOptions.mode === "scientific" &&
+            (detected.sourceType === "fits" || detected.id === "tiff");
+          const wantsPreserveMultipage =
+            options.tiff?.multipage === "preserve" &&
+            detected.sourceType === "raster" &&
+            detected.id === "tiff" &&
+            rasterFrameProvider &&
+            rasterFrameCount > 1;
 
-          const image = needsRgbCube
-            ? {
-                kind: "rgbCube3d" as const,
-                width,
-                height,
-                ...(useScientific && channels
-                  ? channels
-                  : rgbaToChannels(
-                      rgbaData ??
-                        fitsToRGBA(
-                          scientificPixels ?? new Float32Array(width * height),
-                          width,
-                          height,
-                          {
-                            stretch: options.stretch,
-                            colormap: options.colormap,
-                            blackPoint: options.blackPoint,
-                            whitePoint: options.whitePoint,
-                            gamma: options.gamma,
-                          },
-                        ),
-                    )),
+          let multipageCube:
+            | {
+                kind: "monoCube3d";
+                width: number;
+                height: number;
+                depth: number;
+                pixels: Float32Array;
               }
-            : {
-                kind: "mono2d" as const,
-                width,
-                height,
-                pixels:
-                  useScientific && scientificPixels
-                    ? scientificPixels
-                    : rgbaToLuma(
-                        rgbaData ??
-                          fitsToRGBA(new Float32Array(width * height), width, height, {
-                            stretch: options.stretch,
-                            colormap: options.colormap,
-                            blackPoint: options.blackPoint,
-                            whitePoint: options.whitePoint,
-                            gamma: options.gamma,
-                          }),
-                      ),
+            | undefined;
+
+          if (wantsPreserveMultipage && rasterFrameProvider) {
+            const firstFrame = await rasterFrameProvider.getFrame(0);
+            const planeSize = firstFrame.width * firstFrame.height;
+            const cube = new Float32Array(planeSize * rasterFrameCount);
+            let monoOnly = !firstFrame.channels;
+            cube.set(firstFrame.pixels, 0);
+            for (let frameIndex = 1; frameIndex < rasterFrameCount; frameIndex++) {
+              const frame = await rasterFrameProvider.getFrame(frameIndex);
+              if (
+                frame.width !== firstFrame.width ||
+                frame.height !== firstFrame.height ||
+                frame.channels
+              ) {
+                monoOnly = false;
+                break;
+              }
+              cube.set(frame.pixels, frameIndex * planeSize);
+            }
+            if (monoOnly) {
+              multipageCube = {
+                kind: "monoCube3d",
+                width: firstFrame.width,
+                height: firstFrame.height,
+                depth: rasterFrameCount,
+                pixels: cube,
               };
+            } else {
+              const warning =
+                "Multipage TIFF contains RGB or variable dimensions; exported as single-frame FITS.";
+              history.push(warning);
+              Logger.warn(LOG_TAGS.Export, warning, {
+                filename: file.filename,
+                sourceFormat: detected.id,
+              });
+            }
+          }
+
+          const image = multipageCube
+            ? multipageCube
+            : needsRgbCube
+              ? {
+                  kind: "rgbCube3d" as const,
+                  width,
+                  height,
+                  ...(useScientific && channels
+                    ? channels
+                    : rgbaToChannels(
+                        rgbaData ??
+                          fitsToRGBA(
+                            scientificPixels ?? new Float32Array(width * height),
+                            width,
+                            height,
+                            {
+                              stretch: options.stretch,
+                              colormap: options.colormap,
+                              blackPoint: options.blackPoint,
+                              whitePoint: options.whitePoint,
+                              gamma: options.gamma,
+                            },
+                          ),
+                      )),
+                }
+              : {
+                  kind: "mono2d" as const,
+                  width,
+                  height,
+                  pixels:
+                    useScientific && scientificPixels
+                      ? scientificPixels
+                      : rgbaToLuma(
+                          rgbaData ??
+                            fitsToRGBA(new Float32Array(width * height), width, height, {
+                              stretch: options.stretch,
+                              colormap: options.colormap,
+                              blackPoint: options.blackPoint,
+                              whitePoint: options.whitePoint,
+                              gamma: options.gamma,
+                            }),
+                        ),
+                };
 
           bytes = writeFitsImage({
             image,
@@ -317,9 +389,70 @@ export async function executeBatchConvert(
             bytes = encodeSkia(rgbaData, width, height, options.format, options.quality);
             break;
           case "tiff":
+            if (options.tiff?.multipage === "preserve" && detected.sourceType === "fits") {
+              const fitsObj = loadFitsFromBufferAuto(buffer);
+              const dims = getImageDimensions(fitsObj);
+              const rgb = isRgbCube(fitsObj);
+              if (dims?.isDataCube && dims.depth > 1 && !rgb.isRgb) {
+                const pages = [];
+                for (let frameIndex = 0; frameIndex < dims.depth; frameIndex++) {
+                  const framePixels = await getImagePixels(fitsObj, undefined, frameIndex);
+                  if (!framePixels) continue;
+                  pages.push({
+                    width: dims.width,
+                    height: dims.height,
+                    pixels: framePixels,
+                    bitDepth: options.bitDepth,
+                    sampleFormat: options.bitDepth === 32 ? ("float" as const) : ("uint" as const),
+                  });
+                }
+                if (pages.length > 1) {
+                  bytes = encodeTiffDocument(pages, {
+                    bitDepth: options.bitDepth,
+                    colorMode: "mono",
+                    compression: options.tiff.compression,
+                  });
+                  break;
+                }
+              }
+            }
+
+            if (
+              options.tiff?.multipage === "preserve" &&
+              detected.sourceType === "raster" &&
+              detected.id === "tiff" &&
+              rasterFrameProvider &&
+              rasterFrameCount > 1
+            ) {
+              const pages = [];
+              for (let frameIndex = 0; frameIndex < rasterFrameCount; frameIndex++) {
+                const frame = await rasterFrameProvider.getFrame(frameIndex);
+                pages.push({
+                  width: frame.width,
+                  height: frame.height,
+                  rgba: new Uint8ClampedArray(frame.rgba),
+                  pixels: frame.channels ? undefined : frame.pixels,
+                  channels: frame.channels ?? undefined,
+                  bitDepth: options.bitDepth ?? frame.bitDepth,
+                  sampleFormat:
+                    frame.sampleFormat === "float" ? ("float" as const) : ("uint" as const),
+                  colorMode: frame.channels ? ("rgb" as const) : ("mono" as const),
+                });
+              }
+              if (pages.length > 1) {
+                bytes = encodeTiffDocument(pages, {
+                  bitDepth: options.bitDepth,
+                  colorMode: "auto",
+                  compression: options.tiff.compression,
+                });
+                break;
+              }
+            }
+
             bytes = encodeTiff(rgbaData, width, height, {
               bitDepth: options.bitDepth,
               colorMode: "auto",
+              compression: options.tiff.compression,
             });
             break;
           case "bmp":

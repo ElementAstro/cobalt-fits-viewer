@@ -59,13 +59,12 @@ import {
   splitFilenameExtension,
   toImageSourceFormat,
 } from "../lib/import/fileFormat";
-import { extractRasterMetadata, parseRasterFromBuffer } from "../lib/image/rasterParser";
+import { extractRasterMetadata, parseRasterFromBufferAsync } from "../lib/image/rasterParser";
 import {
   buildMissingLogEntries,
   deriveSessionMetadataFromFiles,
   resolveImportSessionId,
 } from "../lib/sessions/sessionLinking";
-import { mergeSessionLike } from "../lib/sessions/sessionNormalization";
 import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
 
 export interface ImportProgress {
@@ -391,6 +390,83 @@ export function useFileManager() {
     [clearUndoToken],
   );
 
+  const reconcileSessionsFromLinkedFiles = useCallback((sessionIds: string[]) => {
+    const normalizedIds = [
+      ...new Set(sessionIds.map((id) => id?.trim()).filter((id): id is string => Boolean(id))),
+    ];
+    if (normalizedIds.length === 0) return;
+
+    const targetCatalog = useTargetStore.getState().targets;
+    const allFiles = useFitsStore.getState().files;
+    const filesBySessionId = new Map<string, FitsMetadata[]>();
+    for (const sessionId of normalizedIds) {
+      filesBySessionId.set(
+        sessionId,
+        allFiles.filter((file) => file.sessionId === sessionId),
+      );
+    }
+
+    const normalizedIdSet = new Set(normalizedIds);
+    useSessionStore.setState((state) => {
+      const sessions = state.sessions.map((session) => {
+        if (!normalizedIdSet.has(session.id)) return session;
+
+        const linkedFiles = filesBySessionId.get(session.id) ?? [];
+        if (linkedFiles.length === 0) {
+          return {
+            ...session,
+            imageIds: [],
+            targetRefs: [],
+            equipment: {},
+            location: undefined,
+          };
+        }
+
+        const derived = deriveSessionMetadataFromFiles(linkedFiles, targetCatalog);
+        const nextFilters =
+          derived.equipment.filters && derived.equipment.filters.length > 0
+            ? derived.equipment.filters
+            : session.equipment.filters;
+        const nextEquipment = {
+          ...session.equipment,
+          ...derived.equipment,
+          ...(nextFilters && nextFilters.length > 0 ? { filters: nextFilters } : {}),
+        };
+
+        return {
+          ...session,
+          imageIds: derived.imageIds,
+          targetRefs: derived.targetRefs,
+          equipment: nextEquipment,
+          location: derived.location ?? session.location,
+        };
+      });
+
+      const validImageIdsBySession = new Map(
+        sessions.map((session) => [session.id, new Set(session.imageIds)]),
+      );
+      const nextLogEntries = state.logEntries.filter((entry) => {
+        if (!normalizedIdSet.has(entry.sessionId)) return true;
+        const validImageIds = validImageIdsBySession.get(entry.sessionId);
+        return validImageIds ? validImageIds.has(entry.imageId) : false;
+      });
+
+      for (const sessionId of normalizedIds) {
+        const sessionFiles = filesBySessionId.get(sessionId) ?? [];
+        if (sessionFiles.length === 0) continue;
+        const missing = buildMissingLogEntries(sessionFiles, sessionId, nextLogEntries);
+        if (missing.length > 0) {
+          nextLogEntries.push(...missing);
+        }
+      }
+
+      return {
+        sessions,
+        logEntries: nextLogEntries,
+      };
+    });
+  }, []);
+
   const restoreReferences = useCallback(
     (restoredFiles: FitsMetadata[]) => {
       if (restoredFiles.length === 0) return;
@@ -425,59 +501,7 @@ export function useFileManager() {
             .filter((sessionId): sessionId is string => Boolean(sessionId)),
         ),
       ];
-      if (affectedSessionIds.length > 0) {
-        const targetCatalog = useTargetStore.getState().targets;
-        const allFiles = useFitsStore.getState().files;
-        const filesBySessionId = new Map<string, FitsMetadata[]>();
-        for (const sessionId of affectedSessionIds) {
-          filesBySessionId.set(
-            sessionId,
-            allFiles.filter((file) => file.sessionId === sessionId),
-          );
-        }
-
-        useSessionStore.setState((state) => {
-          const sessions = state.sessions.map((session) => {
-            const sessionFiles = filesBySessionId.get(session.id);
-            if (!sessionFiles || sessionFiles.length === 0) return session;
-
-            const derived = deriveSessionMetadataFromFiles(sessionFiles, targetCatalog);
-            const merged = mergeSessionLike(
-              session,
-              {
-                imageIds: derived.imageIds,
-                targetRefs: derived.targetRefs,
-                equipment: derived.equipment,
-                location: derived.location ?? session.location,
-              },
-              targetCatalog,
-            );
-
-            return {
-              ...session,
-              imageIds: merged.imageIds ?? session.imageIds,
-              targetRefs: merged.targetRefs ?? session.targetRefs,
-              equipment: merged.equipment ?? session.equipment,
-              location: merged.location ?? session.location,
-            };
-          });
-
-          const nextLogEntries = [...state.logEntries];
-          for (const sessionId of affectedSessionIds) {
-            const sessionFiles = filesBySessionId.get(sessionId) ?? [];
-            if (sessionFiles.length === 0) continue;
-            const missing = buildMissingLogEntries(sessionFiles, sessionId, nextLogEntries);
-            if (missing.length > 0) {
-              nextLogEntries.push(...missing);
-            }
-          }
-
-          return {
-            sessions,
-            logEntries: nextLogEntries,
-          };
-        });
-      }
+      reconcileSessionsFromLinkedFiles(affectedSessionIds);
 
       for (const file of restoredFiles) {
         try {
@@ -508,7 +532,7 @@ export function useFileManager() {
       }
       reconcileTargetGraph();
     },
-    [reconcileTargetGraph, updateFile, upsertAndLinkFileTarget],
+    [reconcileSessionsFromLinkedFiles, reconcileTargetGraph, updateFile, upsertAndLinkFileTarget],
   );
 
   const processAndImportFile = useCallback(
@@ -648,15 +672,69 @@ export function useFileManager() {
             }
           });
         } else if (detectedFormat.sourceType === "raster") {
-          const decoded = parseRasterFromBuffer(buffer);
+          let decoded: Awaited<ReturnType<typeof parseRasterFromBufferAsync>>;
+          try {
+            decoded = await parseRasterFromBufferAsync(buffer, {
+              frameIndex: 0,
+              cacheSize: 3,
+              preferTiffDecoder: true,
+            });
+          } catch (decodeError) {
+            if (detectedFormat.id !== "tiff") {
+              throw decodeError;
+            }
+            const decodeMessage =
+              decodeError instanceof Error ? decodeError.message : "TIFF decode failed";
+            const partialMeta = extractRasterMetadata(
+              {
+                filename: finalName,
+                filepath: importedUri,
+                fileSize: size ?? buffer.byteLength,
+              },
+              { width: 0, height: 0, depth: 1, bitDepth: 8 },
+              frameClassificationConfig,
+              {
+                decodeStatus: "failed",
+                decodeError: decodeMessage,
+              },
+            );
+
+            fullMeta = {
+              ...partialMeta,
+              id: fileId,
+              importDate: Date.now(),
+              isFavorite: false,
+              tags: [],
+              albumIds: [],
+              sessionId,
+              location,
+              thumbnailUri: undefined,
+              hash,
+              sourceType: "raster",
+              sourceFormat: toImageSourceFormat(detectedFormat),
+              mediaKind: "image",
+            };
+            addFile(fullMeta);
+            return { status: "imported" };
+          }
+
           const partialMeta = extractRasterMetadata(
             {
               filename: finalName,
               filepath: importedUri,
               fileSize: size ?? buffer.byteLength,
             },
-            { width: decoded.width, height: decoded.height },
+            {
+              width: decoded.width,
+              height: decoded.height,
+              depth: decoded.depth,
+              bitDepth: decoded.bitDepth,
+            },
             frameClassificationConfig,
+            {
+              decodeStatus: decoded.decodeStatus ?? "ready",
+              decodeError: decoded.decodeError,
+            },
           );
 
           fullMeta = {
@@ -1301,9 +1379,13 @@ export function useFileManager() {
   }, [importFromUrl, processAndImportFile]);
 
   const cleanupReferences = useCallback(
-    (fileIds: string[]) => {
+    (fileIds: string[], removedFiles: FitsMetadata[] = []) => {
       if (fileIds.length === 0) return;
       const idSet = new Set(fileIds);
+      const sessionsWithRemovedImages = useSessionStore
+        .getState()
+        .sessions.filter((session) => session.imageIds.some((imageId) => idSet.has(imageId)))
+        .map((session) => session.id);
 
       useAlbumStore.setState((state) => ({
         albums: state.albums.map((album) => {
@@ -1334,6 +1416,16 @@ export function useFileManager() {
         logEntries: state.logEntries.filter((entry) => !idSet.has(entry.imageId)),
       }));
 
+      const affectedSessionIds = [
+        ...new Set([
+          ...removedFiles
+            .map((file) => file.sessionId)
+            .filter((sessionId): sessionId is string => Boolean(sessionId)),
+          ...sessionsWithRemovedImages,
+        ]),
+      ];
+      reconcileSessionsFromLinkedFiles(affectedSessionIds);
+
       useAlbumStore.getState().reconcileWithFiles(useFitsStore.getState().files.map((f) => f.id));
       const syncedAlbums = useAlbumStore.getState().albums;
       const syncedFiles = useFitsStore.getState().files;
@@ -1343,7 +1435,7 @@ export function useFileManager() {
       }
       reconcileTargetGraph();
     },
-    [reconcileTargetGraph, updateFile],
+    [reconcileSessionsFromLinkedFiles, reconcileTargetGraph, updateFile],
   );
 
   const handleSoftDeleteFiles = useCallback(
@@ -1385,7 +1477,10 @@ export function useFileManager() {
 
       if (removedIds.length > 0) {
         removeFiles(removedIds);
-        cleanupReferences(removedIds);
+        cleanupReferences(
+          removedIds,
+          trashRecords.map((record) => record.file),
+        );
         useFileGroupStore.getState().removeFileMappings(removedIds);
         addTrashItems(trashRecords);
       }

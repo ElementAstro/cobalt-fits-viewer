@@ -9,6 +9,7 @@ export interface SettingsCategoryCardProps {
   description: string;
   onPress: () => void;
   badge?: string;
+  testID?: string;
 }
 
 export function SettingsCategoryCard({
@@ -17,6 +18,7 @@ export function SettingsCategoryCard({
   description,
   onPress,
   badge,
+  testID,
 }: SettingsCategoryCardProps) {
   const accentColor = useThemeColor("accent");
   const mutedColor = useThemeColor("muted");
@@ -29,7 +31,12 @@ export function SettingsCategoryCard({
 
   return (
     <Card variant="secondary" className="rounded-xl">
-      <TouchableOpacity onPress={handlePress} accessibilityRole="button" accessibilityLabel={title}>
+      <TouchableOpacity
+        testID={testID}
+        onPress={handlePress}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+      >
         <Card.Body className="px-4 py-3">
           <View className="flex-row items-center gap-3">
             <View

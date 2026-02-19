@@ -169,4 +169,73 @@ describe("stacking alignment", () => {
     expect(transform.matchedStars).toBe(0);
     expect(transform.detectionCounts).toEqual({ ref: 2, target: 1 });
   });
+
+  it("alignFrame uses star overrides without calling detector", () => {
+    const refPixels = new Float32Array(100).fill(1);
+    const targetPixels = new Float32Array(100).fill(2);
+    const refStars = [star(10, 10), star(20, 10), star(15, 20), star(30, 30)];
+    const targetStars = [star(13, 8), star(23, 8), star(18, 18), star(33, 28)];
+
+    const result = alignFrame(refPixels, targetPixels, 100, 100, "full", {
+      refStarsOverride: refStars,
+      targetStarsOverride: targetStars,
+    });
+
+    expect(result.transform.matchedStars).toBeGreaterThanOrEqual(3);
+    expect(result.transform.fallbackUsed).toBe("annotated-stars");
+    expect(mockDetectStars).not.toHaveBeenCalled();
+  });
+
+  it("alignFrame supports one/two/three-star manual control points", () => {
+    const refPixels = new Float32Array(64).fill(1);
+    const targetPixels = new Float32Array(64).fill(2);
+
+    const one = alignFrame(refPixels, targetPixels, 8, 8, "full", {
+      manualControlPoints: {
+        mode: "oneStar",
+        ref: [{ x: 2, y: 2 }],
+        target: [{ x: 4, y: 1 }],
+      },
+    });
+    expect(one.transform.fallbackUsed).toBe("manual-1star");
+    expect(one.transform.matrix).toEqual([1, 0, 2, 0, 1, -1]);
+
+    const two = alignFrame(refPixels, targetPixels, 8, 8, "full", {
+      manualControlPoints: {
+        mode: "twoStar",
+        ref: [
+          { x: 0, y: 0 },
+          { x: 1, y: 0 },
+        ],
+        target: [
+          { x: 2, y: 3 },
+          { x: 4, y: 3 },
+        ],
+      },
+    });
+    expect(two.transform.fallbackUsed).toBe("manual-2star");
+    expect(two.transform.matrix[0]).toBeCloseTo(2, 6);
+    expect(two.transform.matrix[2]).toBeCloseTo(2, 6);
+    expect(two.transform.matrix[5]).toBeCloseTo(3, 6);
+
+    const three = alignFrame(refPixels, targetPixels, 8, 8, "full", {
+      manualControlPoints: {
+        mode: "threeStar",
+        ref: [
+          { x: 0, y: 0 },
+          { x: 1, y: 0 },
+          { x: 0, y: 1 },
+        ],
+        target: [
+          { x: 1, y: 2 },
+          { x: 3, y: 1 },
+          { x: 2, y: 5 },
+        ],
+      },
+    });
+    expect(three.transform.fallbackUsed).toBe("manual-3star");
+    expect(three.transform.matrix[0]).toBeCloseTo(2, 6);
+    expect(three.transform.matrix[1]).toBeCloseTo(1, 6);
+    expect(three.transform.matrix[2]).toBeCloseTo(1, 6);
+  });
 });

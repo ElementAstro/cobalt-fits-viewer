@@ -1,0 +1,35 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+- runFlow: ../flows/pages/root__index.yaml
+- runFlow: ../flows/pages/tabs__index.yaml
+- runFlow: ../flows/pages/tabs__gallery.yaml
+- runFlow: ../flows/pages/tabs__targets.yaml
+- runFlow: ../flows/pages/tabs__sessions.yaml
+- runFlow: ../flows/pages/tabs__settings.yaml
+- runFlow: ../flows/pages/notfound__splat_missing.yaml
+- runFlow: ../flows/pages/album__param_id.yaml
+- runFlow: ../flows/pages/astrometry__index.yaml
+- runFlow: ../flows/pages/astrometry__result__param_id.yaml
+- runFlow: ../flows/pages/backup__index.yaml
+- runFlow: ../flows/pages/compare__index.yaml
+- runFlow: ../flows/pages/compose__index.yaml
+- runFlow: ../flows/pages/convert__batch.yaml
+- runFlow: ../flows/pages/convert__index.yaml
+- runFlow: ../flows/pages/editor__param_id.yaml
+- runFlow: ../flows/pages/header__param_id.yaml
+- runFlow: ../flows/pages/map__index.yaml
+- runFlow: ../flows/pages/session__param_id.yaml
+- runFlow: ../flows/pages/settings__about.yaml
+- runFlow: ../flows/pages/settings__appearance.yaml
+- runFlow: ../flows/pages/settings__gallery.yaml
+- runFlow: ../flows/pages/settings__index.yaml
+- runFlow: ../flows/pages/settings__licenses.yaml
+- runFlow: ../flows/pages/settings__observation.yaml
+- runFlow: ../flows/pages/settings__processing.yaml
+- runFlow: ../flows/pages/settings__storage.yaml
+- runFlow: ../flows/pages/settings__viewer.yaml
+- runFlow: ../flows/pages/stacking__index.yaml
+- runFlow: ../flows/pages/target__param_id.yaml
+- runFlow: ../flows/pages/target__stats.yaml
+- runFlow: ../flows/pages/video__param_id.yaml
+- runFlow: ../flows/pages/viewer__param_id.yaml

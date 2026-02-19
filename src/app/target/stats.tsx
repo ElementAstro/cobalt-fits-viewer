@@ -20,13 +20,18 @@ export default function TargetStatsScreen() {
   const { statistics, monthlyStats } = useTargetStatistics();
 
   return (
-    <View className="flex-1 bg-background">
+    <View testID="e2e-screen-target__stats" className="flex-1 bg-background">
       {/* Header */}
       <View
         className="flex-row items-center gap-3 pb-4"
         style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
       >
-        <Button size="sm" variant="outline" onPress={() => router.back()}>
+        <Button
+          testID="e2e-action-target__stats-back"
+          size="sm"
+          variant="outline"
+          onPress={() => router.back()}
+        >
           <Ionicons name="arrow-back" size={16} color={mutedColor} />
         </Button>
         <Text className="text-lg font-bold text-foreground flex-1">

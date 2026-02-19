@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useShallow } from "zustand/shallow";
 import { zustandMMKVStorage } from "../lib/storage";
+import { LOG_TAGS, Logger } from "../lib/logger";
 import type { ObservationSession, ObservationLogEntry, ObservationPlan } from "../lib/fits/types";
 import {
   mergeSessionLike,
@@ -13,6 +14,7 @@ import {
   type ObservationSessionWriteInput,
   type SessionLikeInput,
 } from "../lib/sessions/sessionNormalization";
+import { useFitsStore } from "./useFitsStore";
 
 interface ActiveSessionState {
   id: string;
@@ -65,15 +67,42 @@ interface SessionStoreState {
 
 type LegacyObservationSession = SessionLikeInput;
 
+function toLocalDateKey(timestamp: number): string | undefined {
+  if (!Number.isFinite(timestamp)) return undefined;
+  const date = new Date(timestamp);
+  if (!Number.isFinite(date.getTime())) return undefined;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
 function migrateSession(session: LegacyObservationSession): ObservationSession {
   const normalized = normalizeSessionLike(session, {
     forceTargetRefs: true,
     forceImageIds: true,
   });
-  return {
+  const migrated = {
     ...(normalized as ObservationSession),
     equipment: normalized.equipment ?? {},
   };
+
+  const derivedDate = toLocalDateKey(migrated.startTime);
+  if (derivedDate) {
+    migrated.date = derivedDate;
+  }
+
+  if (Number.isFinite(migrated.startTime) && Number.isFinite(migrated.endTime)) {
+    if (migrated.endTime < migrated.startTime) {
+      Logger.warn(
+        LOG_TAGS.Sessions,
+        `Session has invalid time range during migration: ${migrated.id}`,
+        {
+          startTime: migrated.startTime,
+          endTime: migrated.endTime,
+        },
+      );
+    }
+  }
+
+  return migrated;
 }
 
 function migratePlan(plan: ObservationPlan): ObservationPlan {
@@ -184,19 +213,42 @@ export const useSessionStore = create<SessionStoreState>()(
           ],
         })),
 
-      removeSession: (id) =>
+      removeSession: (id) => {
         set((state) => ({
           sessions: state.sessions.filter((s) => s.id !== id),
           logEntries: state.logEntries.filter((e) => e.sessionId !== id),
-        })),
+        }));
 
-      removeMultipleSessions: (ids) =>
+        useFitsStore.setState((state) => ({
+          files: state.files.map((file) =>
+            file.sessionId === id ? { ...file, sessionId: undefined } : file,
+          ),
+        }));
+      },
+
+      removeMultipleSessions: (ids) => {
+        const idSet = new Set(ids);
         set((state) => ({
-          sessions: state.sessions.filter((s) => !ids.includes(s.id)),
-          logEntries: state.logEntries.filter((e) => !ids.includes(e.sessionId)),
-        })),
+          sessions: state.sessions.filter((s) => !idSet.has(s.id)),
+          logEntries: state.logEntries.filter((e) => !idSet.has(e.sessionId)),
+        }));
 
-      clearAllSessions: () => set({ sessions: [], logEntries: [] }),
+        if (idSet.size === 0) return;
+        useFitsStore.setState((state) => ({
+          files: state.files.map((file) =>
+            file.sessionId && idSet.has(file.sessionId) ? { ...file, sessionId: undefined } : file,
+          ),
+        }));
+      },
+
+      clearAllSessions: () => {
+        set({ sessions: [], logEntries: [] });
+        useFitsStore.setState((state) => ({
+          files: state.files.map((file) =>
+            file.sessionId ? { ...file, sessionId: undefined } : file,
+          ),
+        }));
+      },
 
       updateSession: (id, updates) =>
         set((state) => ({
@@ -247,6 +299,17 @@ export const useSessionStore = create<SessionStoreState>()(
             otherIds.includes(e.sessionId) ? { ...e, sessionId: merged.id } : e,
           ),
         }));
+
+        if (otherIds.length > 0) {
+          const otherIdSet = new Set(otherIds);
+          useFitsStore.setState((state) => ({
+            files: state.files.map((file) =>
+              file.sessionId && otherIdSet.has(file.sessionId)
+                ? { ...file, sessionId: merged.id }
+                : file,
+            ),
+          }));
+        }
       },
 
       addLogEntry: (entry) => set((state) => ({ logEntries: [...state.logEntries, entry] })),
@@ -307,7 +370,7 @@ export const useSessionStore = create<SessionStoreState>()(
         activeSession: state.activeSession,
         plans: state.plans,
       }),
-      version: 2,
+      version: 3,
       migrate: (persistedState, _version) => {
         const state = persistedState as Partial<SessionStoreState> & {
           sessions?: LegacyObservationSession[];

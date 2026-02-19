@@ -1,6 +1,7 @@
 import "../global.css";
 
 import { useCallback, useEffect, useState, type PropsWithChildren } from "react";
+import { Text } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -24,6 +25,8 @@ import { useTargetGroupStore } from "../stores/useTargetGroupStore";
 import { useSessionStore } from "../stores/useSessionStore";
 import { OnboardingScreen } from "../components/common/OnboardingScreen";
 import { reconcileAllStores } from "../lib/targets/targetIntegrity";
+import { bootstrapE2EFullScenario } from "../e2e/bootstrap";
+import { isE2EMode } from "../e2e/env";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -81,11 +84,18 @@ function TargetIntegrityProvider({ children }: { children: React.ReactNode }) {
 }
 
 function OnboardingGate({ children }: PropsWithChildren) {
+  const e2eMode = isE2EMode();
   const [hydrated, setHydrated] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // Wait for zustand persist (AsyncStorage) to finish hydrating
   useEffect(() => {
+    if (e2eMode) {
+      setShowOnboarding(false);
+      setHydrated(true);
+      return;
+    }
+
     const unsub = useOnboardingStore.persist.onFinishHydration(() => {
       const completed = useOnboardingStore.getState().hasCompletedOnboarding;
       setShowOnboarding(!completed);
@@ -100,11 +110,15 @@ function OnboardingGate({ children }: PropsWithChildren) {
     }
 
     return unsub;
-  }, []);
+  }, [e2eMode]);
 
   const handleComplete = useCallback(() => {
     setShowOnboarding(false);
   }, []);
+
+  if (e2eMode) {
+    return <>{children}</>;
+  }
 
   // While waiting for hydration, render nothing (splash is still visible)
   if (!hydrated) {
@@ -125,6 +139,7 @@ const ORIENTATION_LOCK_MAP = {
 } as const;
 
 export default function RootLayout() {
+  const e2eMode = isE2EMode();
   const { theme } = useUniwind();
   const { fontsLoaded, fontError } = useFontLoader();
   const orientationLock = useSettingsStore((s) => s.orientationLock);
@@ -133,6 +148,7 @@ export default function RootLayout() {
   const logConsoleOutput = useSettingsStore((s) => s.logConsoleOutput);
   const logPersistEnabled = useSettingsStore((s) => s.logPersistEnabled);
   const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [e2eReady, setE2eReady] = useState(!e2eMode);
 
   useEffect(() => {
     cleanOldExports();
@@ -171,7 +187,20 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError, settingsHydrated]);
 
-  if ((!fontsLoaded && !fontError) || !settingsHydrated) {
+  useEffect(() => {
+    if (!e2eMode || !settingsHydrated) return;
+    let cancelled = false;
+    void bootstrapE2EFullScenario().finally(() => {
+      if (!cancelled) {
+        setE2eReady(true);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [e2eMode, settingsHydrated]);
+
+  if ((!fontsLoaded && !fontError) || !settingsHydrated || !e2eReady) {
     return null;
   }
 
@@ -186,6 +215,19 @@ export default function RootLayout() {
                   <OnboardingGate>
                     <StatusBar style={theme === "dark" ? "light" : "dark"} />
                     <Stack screenOptions={{ headerShown: false }} />
+                    {e2eMode ? (
+                      <Text
+                        testID="e2e-bootstrap-ready"
+                        style={{
+                          position: "absolute",
+                          width: 0,
+                          height: 0,
+                          opacity: 0,
+                        }}
+                      >
+                        ready
+                      </Text>
+                    ) : null}
                     <UpdateBanner />
                   </OnboardingGate>
                 </AnimatedSplashScreen>

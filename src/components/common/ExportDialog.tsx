@@ -5,10 +5,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import {
   DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
   type ExportFormat,
   type FitsCompression,
   type FitsExportMode,
   type FitsTargetOptions,
+  type TiffCompression,
+  type TiffTargetOptions,
 } from "../../lib/fits/types";
 import { supportsQuality } from "../../lib/converter/convertPresets";
 import { estimateFileSize } from "../../lib/converter/formatConverter";
@@ -21,9 +24,18 @@ interface ExportDialogProps {
   width?: number;
   height?: number;
   onFormatChange: (format: ExportFormat) => void;
-  onExport: (quality: number, fits?: Partial<FitsTargetOptions>) => void;
-  onShare: (quality: number, fits?: Partial<FitsTargetOptions>) => void;
-  onSaveToDevice: (quality: number, fits?: Partial<FitsTargetOptions>) => void;
+  onExport: (
+    quality: number,
+    options?: { fits?: Partial<FitsTargetOptions>; tiff?: Partial<TiffTargetOptions> },
+  ) => void;
+  onShare: (
+    quality: number,
+    options?: { fits?: Partial<FitsTargetOptions>; tiff?: Partial<TiffTargetOptions> },
+  ) => void;
+  onSaveToDevice: (
+    quality: number,
+    options?: { fits?: Partial<FitsTargetOptions>; tiff?: Partial<TiffTargetOptions> },
+  ) => void;
   onPrint?: () => void;
   onPrintToPdf?: () => void;
   fitsScientificAvailable?: boolean;
@@ -33,6 +45,12 @@ interface ExportDialogProps {
 const FORMATS: ExportFormat[] = ["png", "jpeg", "webp", "tiff", "bmp", "fits"];
 const QUALITY_PRESETS = [60, 75, 85, 95, 100];
 const FITS_BITPIX_PRESETS: Array<FitsTargetOptions["bitpix"]> = [8, 16, 32, -32, -64];
+const TIFF_COMPRESSION_PRESETS: TiffCompression[] = ["lzw", "deflate", "none"];
+const TIFF_COMPRESSION_LABEL_KEYS: Record<TiffCompression, string> = {
+  lzw: "converter.tiffCompressionLzw",
+  deflate: "converter.tiffCompressionDeflate",
+  none: "converter.tiffCompressionNone",
+};
 
 export function ExportDialog({
   visible,
@@ -59,9 +77,13 @@ export function ExportDialog({
   const [fitsBitpix, setFitsBitpix] = useState<FitsTargetOptions["bitpix"]>(
     DEFAULT_FITS_TARGET_OPTIONS.bitpix,
   );
+  const [tiffCompression, setTiffCompression] = useState<TiffCompression>(
+    DEFAULT_TIFF_TARGET_OPTIONS.compression,
+  );
 
   const showQuality = supportsQuality(format);
   const showFitsOptions = format === "fits";
+  const showTiffOptions = format === "tiff";
 
   useEffect(() => {
     if (format === "jpeg") setQuality(85);
@@ -83,6 +105,12 @@ export function ExportDialog({
         colorLayout: DEFAULT_FITS_TARGET_OPTIONS.colorLayout,
       }
     : undefined;
+  const tiffOptions: Partial<TiffTargetOptions> | undefined = showTiffOptions
+    ? {
+        compression: tiffCompression,
+        multipage: DEFAULT_TIFF_TARGET_OPTIONS.multipage,
+      }
+    : undefined;
 
   const estimatedSize =
     width && height
@@ -91,6 +119,10 @@ export function ExportDialog({
           quality,
           bitDepth: 8,
           dpi: 72,
+          tiff: {
+            ...DEFAULT_TIFF_TARGET_OPTIONS,
+            ...(tiffOptions ?? {}),
+          },
           fits: {
             ...DEFAULT_FITS_TARGET_OPTIONS,
             ...(fitsOptions ?? {}),
@@ -230,20 +262,53 @@ export function ExportDialog({
             </View>
           )}
 
+          {showTiffOptions && (
+            <View className="mb-4 gap-3">
+              <View>
+                <Text className="text-xs font-semibold text-muted mb-2">
+                  {t("converter.tiffCompression")}
+                </Text>
+                <View className="flex-row gap-2">
+                  {TIFF_COMPRESSION_PRESETS.map((comp) => (
+                    <Chip
+                      key={comp}
+                      size="sm"
+                      variant={tiffCompression === comp ? "primary" : "secondary"}
+                      onPress={() => setTiffCompression(comp)}
+                    >
+                      <Chip.Label className="text-[9px] uppercase">
+                        {t(TIFF_COMPRESSION_LABEL_KEYS[comp])}
+                      </Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
+
           {estimatedSize != null && (
             <Text className="text-[10px] text-muted mb-3">≈ {formatBytes(estimatedSize)}</Text>
           )}
 
           <View className="gap-2">
-            <Button variant="primary" onPress={() => onExport(quality, fitsOptions)}>
+            <Button
+              variant="primary"
+              onPress={() => onExport(quality, { fits: fitsOptions, tiff: tiffOptions })}
+            >
               <Ionicons name="download-outline" size={16} color="#fff" />
               <Button.Label>{t("converter.convert")}</Button.Label>
             </Button>
-            <Button variant="outline" onPress={() => onSaveToDevice(quality, fitsOptions)}>
+            <Button
+              variant="outline"
+              onPress={() => onSaveToDevice(quality, { fits: fitsOptions, tiff: tiffOptions })}
+            >
               <Ionicons name="phone-portrait-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.save")}</Button.Label>
             </Button>
-            <Button variant="outline" onPress={() => onShare(quality, fitsOptions)}>
+            <Button
+              variant="outline"
+              onPress={() => onShare(quality, { fits: fitsOptions, tiff: tiffOptions })}
+            >
               <Ionicons name="share-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.share")}</Button.Label>
             </Button>
