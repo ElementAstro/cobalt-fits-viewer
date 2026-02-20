@@ -12,6 +12,7 @@ import * as ImagePicker from "expo-image-picker";
 import { File, Directory, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import { convertHiPSToFITS } from "fitsjs-ng";
 import { LOG_TAGS, Logger } from "../lib/logger";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
@@ -37,7 +38,7 @@ import { computeQuickHash, findDuplicateOnImport } from "../lib/gallery/duplicat
 import { classifyWithDetail } from "../lib/gallery/frameClassifier";
 import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
 import {
-  loadFitsFromBufferAuto,
+  loadScientificFitsFromBuffer,
   extractMetadata,
   getImagePixels,
   getImageDimensions,
@@ -55,17 +56,20 @@ import {
   detectSupportedImageFormat,
   detectSupportedImageFormatByMimeType,
   getPrimaryExtensionForFormat,
+  isDistributedXisfFilename,
   replaceFilenameExtension,
   splitFilenameExtension,
   toImageSourceFormat,
 } from "../lib/import/fileFormat";
 import { extractRasterMetadata, parseRasterFromBufferAsync } from "../lib/image/rasterParser";
+import { parseHiPSCutoutRequest } from "../lib/import/hipsUrl";
 import {
   buildMissingLogEntries,
   deriveSessionMetadataFromFiles,
   resolveImportSessionId,
 } from "../lib/sessions/sessionLinking";
 import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
+import { normalizeGeoLocation } from "../lib/map/geo";
 
 export interface ImportProgress {
   phase:
@@ -364,7 +368,7 @@ export function useFileManager() {
 
   const fetchLocationForImport = useCallback(async () => {
     const loc = await LocationService.getCurrentLocation();
-    return loc ?? undefined;
+    return normalizeGeoLocation(loc) ?? undefined;
   }, []);
 
   const clearUndoToken = useCallback((token: string) => {
@@ -536,7 +540,14 @@ export function useFileManager() {
   );
 
   const processAndImportFile = useCallback(
-    async (uri: string, name: string, size?: number): Promise<ImportFileOutcome> => {
+    async (
+      uri: string,
+      name: string,
+      size?: number,
+      options?: {
+        sourceFormatOverride?: FitsMetadata["sourceFormat"];
+      },
+    ): Promise<ImportFileOutcome> => {
       let importedFile: File | null = null;
       try {
         importedFile = importFile(uri, name);
@@ -550,6 +561,20 @@ export function useFileManager() {
           payload: buffer,
         });
         if (!detectedFormat) {
+          if (isDistributedXisfFilename(finalName)) {
+            Logger.info(
+              LOG_TAGS.FileManager,
+              `Skipping unsupported distributed XISF file: ${name}`,
+            );
+            if (importedFile.exists) {
+              importedFile.delete();
+            }
+            return {
+              status: "unsupported",
+              reason:
+                "Distributed XISF (.xish + .xisb) is not supported. Please import a monolithic .xisf file.",
+            };
+          }
           Logger.info(LOG_TAGS.FileManager, `Skipping unsupported file: ${name}`);
           if (importedFile.exists) {
             importedFile.delete();
@@ -599,7 +624,10 @@ export function useFileManager() {
         const capturedVideoThumbTimeMs = videoThumbnailTimeMs;
 
         if (detectedFormat.sourceType === "fits") {
-          const fitsObj = loadFitsFromBufferAuto(buffer);
+          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
+            filename: finalName,
+            detectedFormat,
+          });
           const partialMeta = extractMetadata(
             fitsObj,
             {
@@ -622,7 +650,7 @@ export function useFileManager() {
             thumbnailUri: undefined,
             hash,
             sourceType: "fits",
-            sourceFormat: toImageSourceFormat(detectedFormat),
+            sourceFormat: options?.sourceFormatOverride ?? toImageSourceFormat(detectedFormat),
             mediaKind: "image",
           };
 
@@ -788,7 +816,7 @@ export function useFileManager() {
               useFitsStore.getState().updateFile(fileId, updates);
             }
           });
-        } else {
+        } else if (detectedFormat.sourceType === "video") {
           const classifiedVideoFrame = classifyWithDetail(
             undefined,
             undefined,
@@ -856,6 +884,49 @@ export function useFileManager() {
               useFitsStore.getState().updateFile(fileId, { thumbnailUri: thumbUri });
             }
           });
+        } else {
+          const classifiedAudioFrame = classifyWithDetail(
+            undefined,
+            undefined,
+            finalName,
+            frameClassificationConfig,
+          );
+          let audioMeta: VideoMetadataSnapshot = {};
+          try {
+            audioMeta = await extractVideoMetadata(importedUri);
+          } catch {
+            // Metadata extraction is best-effort.
+          }
+          const durationMs =
+            typeof audioMeta.durationMs === "number" && Number.isFinite(audioMeta.durationMs)
+              ? audioMeta.durationMs
+              : undefined;
+
+          fullMeta = {
+            id: fileId,
+            filename: finalName,
+            filepath: importedUri,
+            fileSize: size ?? buffer.byteLength,
+            importDate: Date.now(),
+            frameType: classifiedAudioFrame.type,
+            frameTypeSource: classifiedAudioFrame.source,
+            isFavorite: false,
+            tags: [],
+            albumIds: [],
+            sessionId,
+            location,
+            thumbnailUri: undefined,
+            hash,
+            sourceType: "audio",
+            sourceFormat: toImageSourceFormat(detectedFormat),
+            mediaKind: "audio",
+            durationMs,
+            audioCodec: audioMeta.audioCodec,
+            bitrateKbps: audioMeta.bitrateKbps,
+            hasAudioTrack: true,
+          };
+
+          addFile(fullMeta);
         }
 
         if (autoGroupByObject) {
@@ -1207,40 +1278,77 @@ export function useFileManager() {
       cancelRef.current = false;
 
       try {
-        const parsed = new URL(trimmed);
-        const rawName = decodeUriComponentSafe(parsed.pathname.split("/").pop() ?? "").trim();
-        const safeNameBase = rawName || `download_${Date.now()}`;
-        const safeName = sanitizeImportFilename(safeNameBase);
+        const hipsRequest = parseHiPSCutoutRequest(trimmed);
+        if (hipsRequest) {
+          const safeName = sanitizeImportFilename(hipsRequest.suggestedFilename);
+          setImportProgress({
+            phase: "downloading",
+            percent: 0,
+            currentFile: safeName,
+            current: 0,
+            total: 1,
+          });
 
-        setImportProgress({
-          phase: "downloading",
-          percent: 0,
-          currentFile: safeName,
-          current: 0,
-          total: 1,
-        });
+          const fitsBuffer = await convertHiPSToFITS(hipsRequest.hipsInput, hipsRequest.options);
+          const fitsBytes = new Uint8Array(fitsBuffer);
+          const destFile = new File(Paths.cache, safeName);
+          if (destFile.exists) {
+            destFile.delete();
+          }
+          destFile.write(fitsBytes);
 
-        const destFile = new File(Paths.cache, safeName);
+          setImportProgress({
+            phase: "importing",
+            percent: 50,
+            currentFile: safeName,
+            current: 1,
+            total: 1,
+          });
 
-        await File.downloadFileAsync(trimmed, destFile);
+          const outcome = await processAndImportFile(destFile.uri, safeName, fitsBytes.byteLength, {
+            sourceFormatOverride: "hips",
+          });
+          setLastImportResult(buildSingleImportResult(safeName, outcome));
 
-        setImportProgress({
-          phase: "importing",
-          percent: 50,
-          currentFile: safeName,
-          current: 1,
-          total: 1,
-        });
+          if (destFile.exists) {
+            destFile.delete();
+          }
+        } else {
+          const parsed = new URL(trimmed);
+          const rawName = decodeUriComponentSafe(parsed.pathname.split("/").pop() ?? "").trim();
+          const safeNameBase = rawName || `download_${Date.now()}`;
+          const safeName = sanitizeImportFilename(safeNameBase);
 
-        const outcome = await processAndImportFile(
-          destFile.uri,
-          safeName,
-          destFile.size ?? undefined,
-        );
-        setLastImportResult(buildSingleImportResult(safeName, outcome));
+          setImportProgress({
+            phase: "downloading",
+            percent: 0,
+            currentFile: safeName,
+            current: 0,
+            total: 1,
+          });
 
-        if (destFile.exists) {
-          destFile.delete();
+          const destFile = new File(Paths.cache, safeName);
+
+          await File.downloadFileAsync(trimmed, destFile);
+
+          setImportProgress({
+            phase: "importing",
+            percent: 50,
+            currentFile: safeName,
+            current: 1,
+            total: 1,
+          });
+
+          const outcome = await processAndImportFile(
+            destFile.uri,
+            safeName,
+            destFile.size ?? undefined,
+          );
+          setLastImportResult(buildSingleImportResult(safeName, outcome));
+
+          if (destFile.exists) {
+            destFile.delete();
+          }
         }
       } catch (err) {
         setImportError(err instanceof Error ? err.message : "Download failed");
@@ -1811,7 +1919,9 @@ export function useFileManager() {
 
         if (isFitsSource) {
           const buffer = await readFileAsArrayBuffer(file.filepath);
-          const fitsObj = loadFitsFromBufferAuto(buffer);
+          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
+            filename: file.filename,
+          });
           const partial = extractMetadata(
             fitsObj,
             {

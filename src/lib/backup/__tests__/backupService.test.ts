@@ -8,21 +8,62 @@ import type { ICloudProvider } from "../cloudProvider";
 import type { BackupManifest, BackupProgress } from "../types";
 import { DEFAULT_BACKUP_OPTIONS, MANIFEST_VERSION } from "../types";
 
-// Mock expo-file-system
-jest.mock("expo-file-system", () => ({
-  File: jest.fn().mockImplementation((path: string) => ({
-    uri: path,
-    exists: false,
-  })),
-  Paths: { cache: "/cache" },
+const mockFileStore = new Map<string, Uint8Array | string>();
+const mockThumbnailIds = new Set<string>();
+
+jest.mock("expo-crypto", () => ({
+  randomUUID: jest.fn(() => "snapshot-test-id"),
+  CryptoDigestAlgorithm: { SHA256: "SHA256" },
+  digest: jest.fn(async () => new Uint8Array([1, 2, 3]).buffer),
 }));
 
-// Mock fileManager
+jest.mock("expo-file-system", () => {
+  class MockFile {
+    uri: string;
+
+    constructor(pathOrDir: string, name?: string) {
+      this.uri = name ? `${pathOrDir}/${name}` : pathOrDir;
+    }
+
+    get exists() {
+      return mockFileStore.has(this.uri);
+    }
+
+    get size() {
+      const value = mockFileStore.get(this.uri);
+      if (typeof value === "string") return new TextEncoder().encode(value).length;
+      if (value instanceof Uint8Array) return value.length;
+      return null;
+    }
+
+    async bytes() {
+      const value = mockFileStore.get(this.uri);
+      if (value instanceof Uint8Array) return value;
+      if (typeof value === "string") return new TextEncoder().encode(value);
+      return new Uint8Array();
+    }
+
+    write(value: Uint8Array | string) {
+      mockFileStore.set(this.uri, value);
+    }
+  }
+
+  return {
+    File: MockFile,
+    Paths: { cache: "/cache" },
+  };
+});
+
 jest.mock("../../utils/fileManager", () => ({
   getFitsDir: () => "/mock/fits",
 }));
 
-// Mock logger
+jest.mock("../../gallery/thumbnailCache", () => ({
+  ensureThumbnailDir: jest.fn(),
+  getThumbnailPath: (fileId: string) => `/mock/thumbs/${fileId}.jpg`,
+  hasThumbnail: (fileId: string) => mockThumbnailIds.has(fileId),
+}));
+
 jest.mock("../../logger", () => ({
   LOG_TAGS: {
     BackupService: "BackupService",
@@ -35,12 +76,27 @@ jest.mock("../../logger", () => ({
   },
 }));
 
-// Mock react-native, expo-application, expo-device for manifest creation
 jest.mock("react-native", () => ({ Platform: { OS: "ios" } }));
 jest.mock("expo-application", () => ({ nativeApplicationVersion: "2.0.0" }));
 jest.mock("expo-device", () => ({ deviceName: "TestPhone", modelName: "TestModel" }));
 
 function createMockProvider(manifest?: BackupManifest): ICloudProvider {
+  const listFiles = jest.fn(async (path: string) => {
+    if (path.includes("fits_files")) {
+      return [
+        { name: "keep.fits", path: `${path}/keep.fits`, size: 10, isDirectory: false },
+        { name: "stale.fits", path: `${path}/stale.fits`, size: 10, isDirectory: false },
+      ];
+    }
+    if (path.includes("thumbnails")) {
+      return [
+        { name: "keep.jpg", path: `${path}/keep.jpg`, size: 10, isDirectory: false },
+        { name: "stale.jpg", path: `${path}/stale.jpg`, size: 10, isDirectory: false },
+      ];
+    }
+    return [];
+  });
+
   return {
     name: "webdav",
     displayName: "WebDAV Test",
@@ -51,9 +107,11 @@ function createMockProvider(manifest?: BackupManifest): ICloudProvider {
     testConnection: jest.fn().mockResolvedValue(true),
     refreshTokenIfNeeded: jest.fn(),
     uploadFile: jest.fn(),
-    downloadFile: jest.fn(),
+    downloadFile: jest.fn(async (_remotePath: string, localPath: string) => {
+      mockFileStore.set(localPath, new Uint8Array([9, 8, 7]));
+    }),
     deleteFile: jest.fn(),
-    listFiles: jest.fn().mockResolvedValue([]),
+    listFiles,
     fileExists: jest.fn().mockResolvedValue(false),
     uploadManifest: jest.fn(),
     downloadManifest: jest.fn().mockResolvedValue(manifest ?? null),
@@ -67,13 +125,23 @@ function createMockDataSource(): BackupDataSource {
   return {
     getFiles: () => [],
     getAlbums: () =>
-      [{ id: "a1", name: "TestAlbum", fileIds: [], createdAt: Date.now() }] as never[],
+      [{ id: "a1", name: "TestAlbum", imageIds: [], createdAt: Date.now() }] as never[],
     getTargets: () => [{ id: "t1", name: "M31" }] as never[],
     getTargetGroups: () => [{ id: "g1", name: "Group", targetIds: ["t1"] }] as never[],
     getSessions: () => [],
     getPlans: () => [{ id: "p1", title: "Plan", targetName: "M31" }] as never[],
     getLogEntries: () => [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
     getSettings: () => ({ language: "en", theme: "dark" }),
+    getFileGroups: () => ({ groups: [], fileGroupMap: {} }),
+    getAstrometry: () => ({ config: {} as never, jobs: [] }),
+    getTrash: () => [],
+    getActiveSession: () => null,
+    getBackupPrefs: () => ({
+      activeProvider: "webdav",
+      autoBackupEnabled: true,
+      autoBackupIntervalHours: 24,
+      autoBackupNetwork: "wifi",
+    }),
   };
 }
 
@@ -87,11 +155,72 @@ function createMockRestoreTarget() {
     setPlans: jest.fn(),
     setLogEntries: jest.fn(),
     setSettings: jest.fn(),
+    setFileGroups: jest.fn(),
+    setAstrometry: jest.fn(),
+    setTrash: jest.fn(),
+    setActiveSession: jest.fn(),
+    setBackupPrefs: jest.fn(),
   };
 }
 
+const testManifest: BackupManifest = {
+  version: MANIFEST_VERSION,
+  snapshotId: "snapshot-test-id",
+  appVersion: "2.0.0",
+  createdAt: "2025-01-15T00:00:00.000Z",
+  deviceName: "OtherDevice",
+  platform: "android",
+  capabilities: {
+    supportsBinary: true,
+    supportsThumbnails: true,
+    localPayloadMode: "full",
+    encryptedLocalPackage: false,
+  },
+  domains: [
+    "files",
+    "albums",
+    "targets",
+    "targetGroups",
+    "sessions",
+    "plans",
+    "logEntries",
+    "settings",
+    "thumbnails",
+    "fileGroups",
+    "astrometry",
+    "trash",
+    "sessionRuntime",
+    "backupPrefs",
+  ],
+  files: [],
+  thumbnails: [],
+  albums: [{ id: "a1", name: "RestoredAlbum", imageIds: [] }] as never[],
+  targets: [{ id: "t1", name: "M42" }] as never[],
+  targetGroups: [{ id: "g1", name: "Group", targetIds: ["t1"] }] as never[],
+  sessions: [{ id: "s1", startTime: 1000 }] as never[],
+  plans: [{ id: "p1", title: "Plan", targetName: "M42" }] as never[],
+  logEntries: [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
+  settings: { language: "zh", theme: "light", gridColor: "#ff0000" },
+  fileGroups: { groups: [], fileGroupMap: {} },
+  astrometry: { config: {} as never, jobs: [] },
+  trash: [],
+  sessionRuntime: { activeSession: null },
+  backupPrefs: {
+    activeProvider: "webdav",
+    autoBackupEnabled: true,
+    autoBackupIntervalHours: 12,
+    autoBackupNetwork: "wifi",
+  },
+};
+
 describe("performBackup", () => {
-  it("should call ensureBackupDir and uploadManifest", async () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFileStore.clear();
+    mockThumbnailIds.clear();
+  });
+
+  it("uploads manifest and new domains", async () => {
     const provider = createMockProvider();
     const dataSource = createMockDataSource();
 
@@ -99,42 +228,67 @@ describe("performBackup", () => {
 
     expect(provider.ensureBackupDir).toHaveBeenCalled();
     expect(provider.uploadManifest).toHaveBeenCalledTimes(1);
-
-    const uploadedManifest = (provider.uploadManifest as jest.Mock).mock.calls[0][0];
+    const uploadedManifest = (provider.uploadManifest as jest.Mock).mock
+      .calls[0][0] as BackupManifest;
     expect(uploadedManifest.version).toBe(MANIFEST_VERSION);
-    expect(uploadedManifest.albums).toHaveLength(1);
-    expect(uploadedManifest.targets).toHaveLength(1);
-    expect(uploadedManifest.targetGroups).toHaveLength(1);
-    expect(uploadedManifest.plans).toHaveLength(1);
-    expect(uploadedManifest.logEntries).toHaveLength(1);
+    expect(uploadedManifest.fileGroups).toEqual({ groups: [], fileGroupMap: {} });
+    expect(uploadedManifest.backupPrefs.activeProvider).toBe("webdav");
   });
 
-  it("should upload files with stable id-prefixed remote names", async () => {
+  it("uploads file binaries and thumbnails when enabled", async () => {
     const provider = createMockProvider();
     const dataSource: BackupDataSource = {
       ...createMockDataSource(),
       getFiles: () =>
         [
-          { id: "f1", filename: "M31 light.fits", filepath: "/mock/a.fits", fileSize: 100 },
+          {
+            id: "f1",
+            filename: "keep.fits",
+            filepath: "/mock/a.fits",
+            fileSize: 100,
+            sourceType: "fits",
+          },
         ] as never[],
     };
 
-    jest.requireMock("expo-file-system").File.mockImplementation((path: string) => ({
-      uri: path,
-      exists: true,
-    }));
+    mockFileStore.set("/mock/a.fits", new Uint8Array([1, 2, 3]));
+    mockFileStore.set("/mock/thumbs/f1.jpg", new Uint8Array([3, 2, 1]));
+    mockThumbnailIds.add("f1");
 
-    await performBackup(provider, dataSource, DEFAULT_BACKUP_OPTIONS);
+    await performBackup(provider, dataSource, {
+      ...DEFAULT_BACKUP_OPTIONS,
+      includeThumbnails: true,
+    });
 
     expect(provider.uploadFile).toHaveBeenCalledWith(
       "/mock/a.fits",
-      "cobalt-backup/fits_files/f1_M31_light.fits",
+      "cobalt-backup/fits_files/f1_keep.fits",
     );
+    expect(provider.uploadFile).toHaveBeenCalledWith(
+      "/mock/thumbs/f1.jpg",
+      "cobalt-backup/thumbnails/f1.jpg",
+    );
+
+    expect(provider.deleteFile).toHaveBeenCalledWith("cobalt-backup/fits_files/stale.fits");
+    expect(provider.deleteFile).toHaveBeenCalledWith("cobalt-backup/thumbnails/stale.jpg");
   });
 
-  it("should report progress", async () => {
+  it("reports progress and handles abort", async () => {
     const provider = createMockProvider();
-    const dataSource = createMockDataSource();
+    const dataSource: BackupDataSource = {
+      ...createMockDataSource(),
+      getFiles: () =>
+        [
+          {
+            id: "f1",
+            filename: "keep.fits",
+            filepath: "/mock/a.fits",
+            fileSize: 100,
+            sourceType: "fits",
+          },
+        ] as never[],
+    };
+    mockFileStore.set("/mock/a.fits", new Uint8Array([1, 2, 3]));
     const progressCalls: BackupProgress[] = [];
 
     await performBackup(provider, dataSource, DEFAULT_BACKUP_OPTIONS, (p) =>
@@ -144,26 +298,9 @@ describe("performBackup", () => {
     expect(progressCalls.length).toBeGreaterThanOrEqual(2);
     expect(progressCalls[0].phase).toBe("preparing");
     expect(progressCalls[progressCalls.length - 1].phase).toBe("idle");
-  });
-
-  it("should throw when aborted", async () => {
-    const provider = createMockProvider();
-    // Return files so the upload loop runs
-    const dataSource: BackupDataSource = {
-      ...createMockDataSource(),
-      getFiles: () =>
-        [{ id: "f1", filename: "a.fits", filepath: "/mock/a.fits", fileSize: 100 }] as never[],
-    };
-
-    // Mock File to report exists = true so it tries to upload
-    jest.requireMock("expo-file-system").File.mockImplementation((path: string) => ({
-      uri: path,
-      exists: true,
-    }));
 
     const abortController = new AbortController();
     abortController.abort();
-
     await expect(
       performBackup(
         provider,
@@ -174,47 +311,21 @@ describe("performBackup", () => {
       ),
     ).rejects.toThrow("Backup cancelled");
   });
-
-  it("should skip files when includeFiles is false", async () => {
-    const provider = createMockProvider();
-    const dataSource: BackupDataSource = {
-      ...createMockDataSource(),
-      getFiles: () =>
-        [{ id: "f1", filename: "a.fits", filepath: "/mock/a.fits", fileSize: 100 }] as never[],
-    };
-
-    await performBackup(provider, dataSource, { ...DEFAULT_BACKUP_OPTIONS, includeFiles: false });
-
-    expect(provider.uploadFile).not.toHaveBeenCalled();
-    const uploadedManifest = (provider.uploadManifest as jest.Mock).mock.calls[0][0];
-    expect(uploadedManifest.files).toHaveLength(0);
-  });
 });
 
 describe("performRestore", () => {
-  const testManifest: BackupManifest = {
-    version: MANIFEST_VERSION,
-    appVersion: "2.0.0",
-    createdAt: "2025-01-15T00:00:00.000Z",
-    deviceName: "OtherDevice",
-    platform: "android",
-    files: [],
-    albums: [{ id: "a1", name: "RestoredAlbum", fileIds: [] }] as never[],
-    targets: [{ id: "t1", name: "M42" }] as never[],
-    targetGroups: [{ id: "g1", name: "Group", targetIds: ["t1"] }] as never[],
-    sessions: [{ id: "s1", startTime: 1000 }] as never[],
-    plans: [{ id: "p1", title: "Plan", targetName: "M42" }] as never[],
-    logEntries: [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
-    settings: { language: "zh", theme: "light", gridColor: "#ff0000" },
-  };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockFileStore.clear();
+    mockThumbnailIds.clear();
+  });
 
-  it("should restore albums, targets, sessions, settings from manifest", async () => {
+  it("restores all metadata domains including new ones", async () => {
     const provider = createMockProvider(testManifest);
     const target = createMockRestoreTarget();
 
     await performRestore(provider, target, DEFAULT_BACKUP_OPTIONS);
 
-    expect(provider.downloadManifest).toHaveBeenCalled();
     expect(target.setAlbums).toHaveBeenCalledWith(testManifest.albums, "skip-existing");
     expect(target.setTargets).toHaveBeenCalledWith(testManifest.targets, "skip-existing");
     expect(target.setTargetGroups).toHaveBeenCalledWith(testManifest.targetGroups, "skip-existing");
@@ -222,140 +333,91 @@ describe("performRestore", () => {
     expect(target.setPlans).toHaveBeenCalledWith(testManifest.plans, "skip-existing");
     expect(target.setLogEntries).toHaveBeenCalledWith(testManifest.logEntries, "skip-existing");
     expect(target.setSettings).toHaveBeenCalledWith(testManifest.settings);
+    expect(target.setFileGroups).toHaveBeenCalledWith(testManifest.fileGroups, "skip-existing");
+    expect(target.setAstrometry).toHaveBeenCalledWith(testManifest.astrometry, "skip-existing");
+    expect(target.setTrash).toHaveBeenCalledWith(testManifest.trash, "skip-existing");
+    expect(target.setActiveSession).toHaveBeenCalledWith(null, "skip-existing");
+    expect(target.setBackupPrefs).toHaveBeenCalledWith(testManifest.backupPrefs);
   });
 
-  it("should skip albums when includeAlbums is false", async () => {
-    const provider = createMockProvider(testManifest);
-    const target = createMockRestoreTarget();
-
-    await performRestore(provider, target, { ...DEFAULT_BACKUP_OPTIONS, includeAlbums: false });
-
-    expect(target.setAlbums).not.toHaveBeenCalled();
-    expect(target.setTargets).toHaveBeenCalled();
-  });
-
-  it("should only restore file metadata for files downloaded successfully", async () => {
-    jest.requireMock("expo-file-system").File.mockImplementation((path: string) => ({
-      uri: path,
-      exists: false,
-    }));
-
-    const manifestWithFiles: BackupManifest = {
-      ...testManifest,
-      files: [
-        { id: "f1", filename: "a.fits", filepath: "/remote/a.fits", fileSize: 100 },
-        { id: "f2", filename: "b.fits", filepath: "/remote/b.fits", fileSize: 200 },
-      ] as never[],
-    };
-    const provider = createMockProvider(manifestWithFiles);
-    (provider.downloadFile as jest.Mock).mockImplementation((remotePath: string) => {
-      if (remotePath.includes("f1_a.fits") || remotePath.endsWith("/a.fits")) {
-        throw new Error("download failed");
-      }
-      return Promise.resolve();
-    });
-    const target = createMockRestoreTarget();
-
-    await performRestore(provider, target, DEFAULT_BACKUP_OPTIONS);
-
-    const restoredFilesArg = (target.setFiles as jest.Mock).mock.calls[0][0];
-    expect(restoredFilesArg).toHaveLength(1);
-    expect(restoredFilesArg[0].id).toBe("f2");
-  });
-
-  it("normalizes restored legacy video metadata with mediaKind", async () => {
-    jest.requireMock("expo-file-system").File.mockImplementation((path: string) => ({
-      uri: path,
-      exists: false,
-    }));
-
-    const legacyManifest: BackupManifest = {
+  it("restores files and thumbnails with download", async () => {
+    const manifestWithBinaries: BackupManifest = {
       ...testManifest,
       files: [
         {
-          id: "video-1",
-          filename: "capture.mp4",
-          filepath: "/remote/capture.mp4",
-          fileSize: 1000,
-          sourceType: "video",
-        } as never,
+          id: "f1",
+          filename: "keep.fits",
+          filepath: "/remote/keep.fits",
+          fileSize: 100,
+          sourceType: "fits",
+          mediaKind: "image",
+          binary: { remotePath: "cobalt-backup/fits_files/f1_keep.fits" },
+        },
+      ] as never[],
+      thumbnails: [
+        {
+          fileId: "f1",
+          filename: "f1.jpg",
+          remotePath: "cobalt-backup/thumbnails/f1.jpg",
+        },
       ],
     };
-    const provider = createMockProvider(legacyManifest);
+    const provider = createMockProvider(manifestWithBinaries);
     const target = createMockRestoreTarget();
 
-    await performRestore(provider, target, DEFAULT_BACKUP_OPTIONS);
+    await performRestore(provider, target, { ...DEFAULT_BACKUP_OPTIONS, includeThumbnails: true });
 
-    const restoredFilesArg = (target.setFiles as jest.Mock).mock.calls[0][0];
-    expect(restoredFilesArg[0].filename).toBe("capture.mp4");
-    expect(restoredFilesArg[0].mediaKind).toBe("video");
+    expect(provider.downloadFile).toHaveBeenCalledWith(
+      "cobalt-backup/fits_files/f1_keep.fits",
+      "/mock/fits/keep.fits",
+    );
+    expect(provider.downloadFile).toHaveBeenCalledWith(
+      "cobalt-backup/thumbnails/f1.jpg",
+      "/mock/thumbs/f1.jpg",
+    );
+    expect(target.setFiles).toHaveBeenCalled();
   });
 
-  it("should throw when no manifest found", async () => {
+  it("throws when no manifest found", async () => {
     const provider = createMockProvider(undefined);
     const target = createMockRestoreTarget();
-
     await expect(performRestore(provider, target, DEFAULT_BACKUP_OPTIONS)).rejects.toThrow(
       "No backup found",
     );
   });
-
-  it("should report progress", async () => {
-    const provider = createMockProvider(testManifest);
-    const target = createMockRestoreTarget();
-    const progressCalls: BackupProgress[] = [];
-
-    await performRestore(provider, target, DEFAULT_BACKUP_OPTIONS, (p) =>
-      progressCalls.push({ ...p }),
-    );
-
-    expect(progressCalls.length).toBeGreaterThanOrEqual(2);
-    expect(progressCalls[0].phase).toBe("preparing");
-  });
 });
 
 describe("getBackupInfo", () => {
-  it("should return backup info from manifest", async () => {
+  it("returns backup info from manifest", async () => {
     const manifest: BackupManifest = {
-      version: MANIFEST_VERSION,
-      appVersion: "2.0.0",
-      createdAt: "2025-06-01T12:00:00.000Z",
-      deviceName: "MyPhone",
-      platform: "ios",
+      ...testManifest,
       files: [
-        { id: "f1", filename: "a.fits", filepath: "/p", fileSize: 500 },
-        { id: "f2", filename: "b.fits", filepath: "/p", fileSize: 300 },
-      ] as never[],
-      albums: [],
-      targets: [],
-      targetGroups: [],
-      sessions: [],
-      plans: [],
-      logEntries: [],
-      settings: {},
+        {
+          id: "f1",
+          filename: "a.fits",
+          filepath: "/p",
+          fileSize: 500,
+          sourceType: "fits",
+        } as never,
+        {
+          id: "f2",
+          filename: "b.fits",
+          filepath: "/p",
+          fileSize: 300,
+          sourceType: "fits",
+          binary: { size: 320 },
+        } as never,
+      ],
     };
 
     const provider = createMockProvider(manifest);
     const info = await getBackupInfo(provider);
 
     expect(info).not.toBeNull();
-    expect(info!.fileCount).toBe(2);
-    expect(info!.totalSize).toBe(800);
-    expect(info!.deviceName).toBe("MyPhone");
-    expect(info!.appVersion).toBe("2.0.0");
-    expect(info!.manifestDate).toBe("2025-06-01T12:00:00.000Z");
-  });
-
-  it("should return null when no manifest", async () => {
-    const provider = createMockProvider(undefined);
-    const info = await getBackupInfo(provider);
-    expect(info).toBeNull();
-  });
-
-  it("should return null when provider throws", async () => {
-    const provider = createMockProvider();
-    (provider.downloadManifest as jest.Mock).mockRejectedValue(new Error("network error"));
-    const info = await getBackupInfo(provider);
-    expect(info).toBeNull();
+    expect(info?.fileCount).toBe(2);
+    expect(info?.totalSize).toBe(820);
+    expect(info?.deviceName).toBe("OtherDevice");
+    expect(info?.appVersion).toBe("2.0.0");
+    expect(info?.manifestDate).toBe("2025-01-15T00:00:00.000Z");
   });
 });

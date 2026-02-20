@@ -38,9 +38,25 @@ export function createPreset(
 export function getDefaultOptionsForFormat(
   format: ConvertOptions["format"],
 ): Partial<ConvertOptions> {
+  const processingDefaults: Partial<ConvertOptions> = {
+    stretch: "asinh",
+    colormap: "grayscale",
+    blackPoint: 0,
+    whitePoint: 1,
+    gamma: 1,
+    brightness: 0,
+    contrast: 1,
+    mtfMidtone: 0.25,
+    curvePreset: "linear",
+    outputBlack: 0,
+    outputWhite: 1,
+    includeAnnotations: false,
+    includeWatermark: false,
+  };
   switch (format) {
     case "png":
       return {
+        ...processingDefaults,
         quality: 100,
         bitDepth: 8,
         dpi: 72,
@@ -49,6 +65,7 @@ export function getDefaultOptionsForFormat(
       };
     case "jpeg":
       return {
+        ...processingDefaults,
         quality: 85,
         bitDepth: 8,
         dpi: 72,
@@ -57,6 +74,7 @@ export function getDefaultOptionsForFormat(
       };
     case "webp":
       return {
+        ...processingDefaults,
         quality: 80,
         bitDepth: 8,
         dpi: 72,
@@ -65,6 +83,7 @@ export function getDefaultOptionsForFormat(
       };
     case "tiff":
       return {
+        ...processingDefaults,
         quality: 100,
         bitDepth: 16,
         dpi: 72,
@@ -73,6 +92,7 @@ export function getDefaultOptionsForFormat(
       };
     case "bmp":
       return {
+        ...processingDefaults,
         quality: 100,
         bitDepth: 8,
         dpi: 72,
@@ -81,6 +101,7 @@ export function getDefaultOptionsForFormat(
       };
     case "fits":
       return {
+        ...processingDefaults,
         quality: 100,
         bitDepth: 32,
         dpi: 72,
@@ -89,6 +110,7 @@ export function getDefaultOptionsForFormat(
       };
     default:
       return {
+        ...processingDefaults,
         quality: 90,
         bitDepth: 8,
         dpi: 72,

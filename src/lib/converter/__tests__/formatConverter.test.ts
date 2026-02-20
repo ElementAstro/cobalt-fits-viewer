@@ -3,6 +3,7 @@
  */
 
 import { applyStretch, fitsToRGBA, fitsToRGBAChunked } from "../formatConverter";
+import { MATPLOTLIB_LISTED_COLORMAPS } from "../mplListedColormaps";
 
 // ===== Helpers =====
 
@@ -268,5 +269,51 @@ describe("viewer tone adjustments", () => {
     for (let i = 0; i < sync.length; i += 97) {
       expect(chunked[i]).toBe(sync[i]);
     }
+  });
+});
+
+describe("matplotlib listed colormap LUT", () => {
+  it("standard profile matches official viridis sample points", () => {
+    const data = MATPLOTLIB_LISTED_COLORMAPS.viridis;
+    const values = new Float32Array([0, 32 / 255, 128 / 255, 224 / 255, 1]);
+    const rgba = fitsToRGBA(values, values.length, 1, {
+      stretch: "linear",
+      colormap: "viridis",
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      profile: "standard",
+    });
+
+    const sampleIndices = [0, 32, 128, 224, 255];
+    for (let i = 0; i < sampleIndices.length; i++) {
+      const lutIndex = sampleIndices[i] * 3;
+      const off = i * 4;
+      expect(rgba[off]).toBe(data[lutIndex]);
+      expect(rgba[off + 1]).toBe(data[lutIndex + 1]);
+      expect(rgba[off + 2]).toBe(data[lutIndex + 2]);
+    }
+  });
+
+  it("legacy and standard profile differ for listed colormaps", () => {
+    const pixels = makePixels(16, "gradient");
+    const standard = fitsToRGBA(pixels, 4, 4, {
+      stretch: "linear",
+      colormap: "plasma",
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      profile: "standard",
+    });
+    const legacy = fitsToRGBA(pixels, 4, 4, {
+      stretch: "linear",
+      colormap: "plasma",
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      profile: "legacy",
+    });
+
+    expect(Array.from(standard.slice(0, 16))).not.toEqual(Array.from(legacy.slice(0, 16)));
   });
 });

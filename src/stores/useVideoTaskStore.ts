@@ -16,7 +16,9 @@ export interface VideoTaskRecord {
   startedAt?: number;
   finishedAt?: number;
   outputUris: string[];
+  outputFileIds?: string[];
   error?: string;
+  engineErrorCode?: string;
   retries: number;
   logLines: string[];
 }
@@ -26,8 +28,13 @@ interface VideoTaskStoreState {
   enqueueTask: (request: VideoProcessingRequest) => string;
   updateTask: (id: string, patch: Partial<VideoTaskRecord>) => void;
   markRunning: (id: string) => void;
-  markCompleted: (id: string, outputUris: string[], logLines?: string[]) => void;
-  markFailed: (id: string, error: string, logLines?: string[]) => void;
+  markCompleted: (
+    id: string,
+    outputUris: string[],
+    outputFileIds?: string[],
+    logLines?: string[],
+  ) => void;
+  markFailed: (id: string, error: string, logLines?: string[], engineErrorCode?: string) => void;
   markCancelled: (id: string) => void;
   retryTask: (id: string) => void;
   removeTask: (id: string) => void;
@@ -51,6 +58,7 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
           durationMs: request.sourceDurationMs,
           createdAt: now,
           outputUris: [],
+          outputFileIds: [],
           retries: 0,
           logLines: [],
         };
@@ -72,12 +80,13 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
                   status: "running",
                   startedAt: task.startedAt ?? Date.now(),
                   error: undefined,
+                  engineErrorCode: undefined,
                 }
               : task,
           ),
         })),
 
-      markCompleted: (id, outputUris, logLines = []) =>
+      markCompleted: (id, outputUris, outputFileIds = [], logLines = []) =>
         set((state) => ({
           tasks: state.tasks.map((task) =>
             task.id === id
@@ -87,14 +96,16 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
                   progress: 1,
                   finishedAt: Date.now(),
                   outputUris,
+                  outputFileIds,
                   error: undefined,
+                  engineErrorCode: undefined,
                   logLines: logLines.length ? logLines : task.logLines,
                 }
               : task,
           ),
         })),
 
-      markFailed: (id, error, logLines = []) =>
+      markFailed: (id, error, logLines = [], engineErrorCode) =>
         set((state) => ({
           tasks: state.tasks.map((task) =>
             task.id === id
@@ -103,6 +114,7 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
                   status: "failed",
                   finishedAt: Date.now(),
                   error,
+                  engineErrorCode,
                   logLines: logLines.length ? logLines : task.logLines,
                 }
               : task,
@@ -134,7 +146,9 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
                   startedAt: undefined,
                   finishedAt: undefined,
                   error: undefined,
+                  engineErrorCode: undefined,
                   outputUris: [],
+                  outputFileIds: [],
                   retries: task.retries + 1,
                 }
               : task,

@@ -73,8 +73,8 @@ describe("ffmpeg command builder", () => {
     expect(command).toContain(
       "\"scale='min(iw,1920)':'min(ih,1080)':force_original_aspect_ratio=decrease\"",
     );
+    expect(command).toContain('"-c:v" "h264_videotoolbox"');
     expect(command).toContain('"-b:v" "3200k"');
-    expect(command).toContain('"-crf" "24"');
     expect(command).toContain('"file:///out/compress.mp4"');
   });
 
@@ -93,9 +93,58 @@ describe("ffmpeg command builder", () => {
       "file:///out/transcode.mp4",
     );
 
-    expect(command).toContain('"-c:v" "libx265"');
+    expect(command).toContain('"-c:v" "hevc_videotoolbox"');
     expect(command).toContain('"-b:v" "1800k"');
     expect(command).toContain('"file:///out/transcode.mp4"');
+  });
+
+  it("falls back from hevc to h264 encoder when requested", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "transcode",
+        profile: "quality",
+        transcode: {
+          videoCodec: "hevc",
+        },
+      },
+      "file:///out/transcode_fallback.mp4",
+      undefined,
+      {
+        encoderSelection: {
+          requestedCodec: "hevc",
+          videoEncoder: "h264_mediacodec",
+          effectiveCodec: "h264",
+        },
+      },
+    );
+
+    expect(command).toContain('"-c:v" "h264_mediacodec"');
+    expect(command).toContain('"file:///out/transcode_fallback.mp4"');
+  });
+
+  it("supports mpeg4 fallback command in LGPL mode", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "compress",
+        profile: "compatibility",
+        compress: {},
+      },
+      "file:///out/mpeg4_fallback.mp4",
+      undefined,
+      {
+        encoderSelection: {
+          requestedCodec: "h264",
+          videoEncoder: "mpeg4",
+          effectiveCodec: "mpeg4",
+        },
+      },
+    );
+
+    expect(command).toContain('"-c:v" "mpeg4"');
+    expect(command).toContain('"-q:v"');
+    expect(command).toContain('"-movflags" "+faststart"');
   });
 
   it("builds merge command with concat list", () => {

@@ -34,6 +34,7 @@ import { QuickLookModal } from "../../components/common/QuickLookModal";
 import { formatFileSize } from "../../lib/utils/fileManager";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
+import { routeForMedia } from "../../lib/media/routing";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 const ListItemSeparator = () => <View className="h-2" />;
@@ -607,9 +608,7 @@ export default function FilesScreen() {
   };
 
   const routeForFile = useCallback((file: FitsMetadata) => {
-    return file.mediaKind === "video" || file.sourceType === "video"
-      ? `/video/${file.id}`
-      : `/viewer/${file.id}`;
+    return routeForMedia(file);
   }, []);
 
   const renderFileItem = useCallback(

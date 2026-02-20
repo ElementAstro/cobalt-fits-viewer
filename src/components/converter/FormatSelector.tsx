@@ -37,7 +37,11 @@ export function FormatSelector({ selected, onSelect }: FormatSelectorProps) {
       {FORMAT_OPTIONS.map((fmt) => (
         <RadioGroup.Item key={fmt.key} value={fmt.key}>
           {({ isSelected }) => (
-            <Card variant="secondary" className={isSelected ? "border border-success" : ""}>
+            <Card
+              testID={`e2e-action-format-selector-${fmt.key}`}
+              variant="secondary"
+              className={isSelected ? "border border-success" : ""}
+            >
               <Card.Body className="flex-row items-center justify-between p-3">
                 <View className="flex-row items-center gap-3">
                   <View

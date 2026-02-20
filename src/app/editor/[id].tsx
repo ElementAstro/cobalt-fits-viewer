@@ -1,6 +1,6 @@
 import { View, Text, ScrollView, Alert, TextInput } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button, Card, PressableFeedback, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -18,21 +18,26 @@ import { CropOverlay } from "../../components/fits/CropOverlay";
 import { StarAnnotationOverlay } from "../../components/fits/StarAnnotationOverlay";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
 import { ExportDialog } from "../../components/common/ExportDialog";
+import type { ExportRenderOptions } from "../../lib/converter/exportDecorations";
 import type {
   ExportFormat,
   FitsTargetOptions,
   TiffTargetOptions,
-  StarAnnotationBundle,
+  ProcessingPipelineSnapshot,
+  StarAnnotationBundleV2,
   StarAnnotationDetectionSnapshot,
   StarAnnotationPoint,
+  StarAnnotationStaleReason,
 } from "../../lib/fits/types";
 import type { ImageEditOperation } from "../../lib/utils/imageOperations";
-import { detectStars, type DetectedStar } from "../../lib/stacking/starDetection";
+import { detectStarsAsync, type DetectedStar } from "../../lib/stacking/starDetection";
 import {
   createManualStarAnnotationPoint,
   mergeDetectedWithManual,
   sanitizeStarAnnotations,
 } from "../../lib/stacking/starAnnotationLinkage";
+import { transformStarAnnotationPoints } from "../../lib/stacking/starAnnotationGeometry";
+import type { EditorOperationEvent } from "../../hooks/useImageEditor";
 
 type EditorTool =
   | "crop"
@@ -59,12 +64,22 @@ type EditorTool =
   | "binarize"
   | "rescale"
   | "deconvolution"
+  | "dbe"
+  | "multiscaleDenoise"
+  | "localContrast"
+  | "starReduction"
+  | "deconvolutionAuto"
+  | "scnr"
+  | "colorCalibration"
+  | "saturation"
+  | "colorBalance"
   | "pixelMath"
   | null;
 
 type EditorExportOptions = {
   fits?: Partial<FitsTargetOptions>;
   tiff?: Partial<TiffTargetOptions>;
+  render?: ExportRenderOptions;
 };
 
 const GEOMETRY_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -81,6 +96,10 @@ const ADJUST_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyp
   { key: "levels", icon: "analytics-outline" },
   { key: "curves", icon: "trending-up-outline" },
   { key: "mtf", icon: "color-wand-outline" },
+  { key: "saturation", icon: "color-fill-outline" },
+  { key: "colorBalance", icon: "color-filter-outline" },
+  { key: "colorCalibration", icon: "flask-outline" },
+  { key: "scnr", icon: "leaf-outline" },
   { key: "invert", icon: "contrast-outline" },
   { key: "histogram", icon: "bar-chart-outline" },
 ];
@@ -89,9 +108,14 @@ const PROCESS_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.gly
   { key: "blur", icon: "water-outline" },
   { key: "sharpen", icon: "sparkles-outline" },
   { key: "denoise", icon: "layers-outline" },
+  { key: "dbe", icon: "planet-outline" },
+  { key: "multiscaleDenoise", icon: "layers-outline" },
+  { key: "localContrast", icon: "contrast-outline" },
+  { key: "starReduction", icon: "star-outline" },
   { key: "clahe", icon: "grid-outline" },
   { key: "hdr", icon: "aperture-outline" },
   { key: "deconvolution", icon: "flashlight-outline" },
+  { key: "deconvolutionAuto", icon: "flash-outline" },
   { key: "morphology", icon: "shapes-outline" },
   { key: "background", icon: "globe-outline" },
 ];
@@ -107,12 +131,53 @@ const MASK_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphM
 const ADVANCED_TOOLS: { key: string; icon: keyof typeof Ionicons.glyphMap; route?: Href }[] = [
   { key: "calibration", icon: "flask-outline" },
   { key: "stacking", icon: "copy-outline", route: "/stacking" },
-  { key: "compose", icon: "color-palette-outline", route: "/compose" },
+  { key: "compose", icon: "color-palette-outline", route: "/compose/advanced" },
   { key: "statistics", icon: "stats-chart-outline" },
   { key: "starDetect", icon: "star-outline" },
 ];
 
 const STAR_POINT_TAP_RADIUS = 12;
+const GEOMETRY_OPS = new Set([
+  "rotate90cw",
+  "rotate90ccw",
+  "rotate180",
+  "flipH",
+  "flipV",
+  "crop",
+  "rotateArbitrary",
+]);
+const NON_GEOMETRY_OPS = new Set([
+  "invert",
+  "blur",
+  "sharpen",
+  "denoise",
+  "histogramEq",
+  "brightness",
+  "contrast",
+  "gamma",
+  "levels",
+  "backgroundExtract",
+  "mtf",
+  "curves",
+  "clahe",
+  "hdr",
+  "morphology",
+  "starMask",
+  "rangeMask",
+  "binarize",
+  "rescale",
+  "deconvolution",
+  "dbe",
+  "multiscaleDenoise",
+  "localContrast",
+  "starReduction",
+  "deconvolutionAuto",
+  "scnr",
+  "colorCalibration",
+  "saturation",
+  "colorBalance",
+  "pixelMath",
+]);
 const EMPTY_TRANSFORM: CanvasTransform = {
   scale: 1,
   translateX: 0,
@@ -120,6 +185,14 @@ const EMPTY_TRANSFORM: CanvasTransform = {
   canvasWidth: 0,
   canvasHeight: 0,
 };
+
+function computeDetectionChunkRows(width: number, height: number) {
+  const megaPixels = (width * height) / 1_000_000;
+  if (megaPixels >= 12) return 8;
+  if (megaPixels >= 8) return 10;
+  if (megaPixels >= 4) return 14;
+  return 24;
+}
 
 export default function EditorDetailScreen() {
   useKeepAwake();
@@ -138,6 +211,7 @@ export default function EditorDetailScreen() {
   const defaultSharpenAmount = useSettingsStore((s) => s.defaultSharpenAmount);
   const defaultDenoiseRadius = useSettingsStore((s) => s.defaultDenoiseRadius);
   const editorMaxUndo = useSettingsStore((s) => s.editorMaxUndo);
+  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
   const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
   const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
   const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
@@ -151,16 +225,45 @@ export default function EditorDetailScreen() {
   const settingsDetectMinArea = useSettingsStore((s) => s.stackingDetectMinArea);
   const settingsDetectMaxArea = useSettingsStore((s) => s.stackingDetectMaxArea);
   const settingsDetectBorderMargin = useSettingsStore((s) => s.stackingDetectBorderMargin);
+  const settingsDetectSigmaClipIters = useSettingsStore((s) => s.stackingDetectSigmaClipIters);
+  const settingsDetectApplyMatchedFilter = useSettingsStore(
+    (s) => s.stackingDetectApplyMatchedFilter,
+  );
+  const settingsDetectConnectivity = useSettingsStore((s) => s.stackingDetectConnectivity);
   const settingsBackgroundMeshSize = useSettingsStore((s) => s.stackingBackgroundMeshSize);
   const settingsDeblendNLevels = useSettingsStore((s) => s.stackingDeblendNLevels);
   const settingsDeblendMinContrast = useSettingsStore((s) => s.stackingDeblendMinContrast);
   const settingsFilterFwhm = useSettingsStore((s) => s.stackingFilterFwhm);
+  const settingsDetectMinFwhm = useSettingsStore((s) => s.stackingDetectMinFwhm);
   const settingsMaxFwhm = useSettingsStore((s) => s.stackingMaxFwhm);
   const settingsMaxEllipticity = useSettingsStore((s) => s.stackingMaxEllipticity);
+  const settingsDetectMinSharpness = useSettingsStore((s) => s.stackingDetectMinSharpness);
+  const settingsDetectMaxSharpness = useSettingsStore((s) => s.stackingDetectMaxSharpness);
+  const settingsDetectPeakMax = useSettingsStore((s) => s.stackingDetectPeakMax);
+  const settingsDetectSnrMin = useSettingsStore((s) => s.stackingDetectSnrMin);
   const { pixels, dimensions, isLoading: fitsLoading, loadFromPath } = useFitsFile();
-  const editor = useImageEditor({ maxHistory: editorMaxUndo });
+  const annotationHistoryRef = useRef<Map<number, StarAnnotationBundleV2>>(new Map());
+  const activeAnnotationRef = useRef<StarAnnotationBundleV2 | null>(null);
+  const loadedFileIdRef = useRef<string | null>(null);
+  const detectAbortRef = useRef<AbortController | null>(null);
+  const handleEditorOperationRef = useRef<((event: EditorOperationEvent) => void) | null>(null);
+  const handleRecipeChange = useCallback(
+    (nextRecipe: ProcessingPipelineSnapshot) => {
+      if (!file?.id) return;
+      updateFile(file.id, { editorRecipe: nextRecipe });
+    },
+    [file?.id, updateFile],
+  );
+  const editor = useImageEditor({
+    maxHistory: editorMaxUndo,
+    profile: imageProcessingProfile,
+    onRecipeChange: handleRecipeChange,
+    onOperation: (event) => {
+      handleEditorOperationRef.current?.(event);
+    },
+  });
   const haptics = useHapticFeedback();
-  const { isExporting, exportImage, shareImage, saveImage } = useExport();
+  const { isExporting, exportImageDetailed, shareImage, saveImage } = useExport();
 
   const [showExport, setShowExport] = useState(false);
   const [exportFormat, setExportFormat] = useState<ExportFormat>(defaultExportFormat);
@@ -190,14 +293,28 @@ export default function EditorDetailScreen() {
     minArea: settingsDetectMinArea,
     maxArea: settingsDetectMaxArea,
     borderMargin: settingsDetectBorderMargin,
+    sigmaClipIters: settingsDetectSigmaClipIters,
+    applyMatchedFilter: settingsDetectApplyMatchedFilter,
+    connectivity: settingsDetectConnectivity,
     meshSize: settingsBackgroundMeshSize,
     deblendNLevels: settingsDeblendNLevels,
     deblendMinContrast: settingsDeblendMinContrast,
     filterFwhm: settingsFilterFwhm,
+    minFwhm: settingsDetectMinFwhm,
     maxFwhm: settingsMaxFwhm,
+    minSharpness: settingsDetectMinSharpness,
+    maxSharpness: settingsDetectMaxSharpness,
+    peakMax: settingsDetectPeakMax > 0 ? settingsDetectPeakMax : undefined,
+    snrMin: settingsDetectSnrMin,
     maxEllipticity: settingsMaxEllipticity,
   });
   const [starAnnotationsStale, setStarAnnotationsStale] = useState(false);
+  const [starAnnotationsStaleReason, setStarAnnotationsStaleReason] = useState<
+    StarAnnotationStaleReason | undefined
+  >(undefined);
+  const [isDetectingStars, setIsDetectingStars] = useState(false);
+  const [starDetectionProgress, setStarDetectionProgress] = useState(0);
+  const [starDetectionStage, setStarDetectionStage] = useState("idle");
   const [pendingAnchorIndex, setPendingAnchorIndex] = useState<1 | 2 | 3 | null>(null);
 
   // New tool state
@@ -219,6 +336,26 @@ export default function EditorDetailScreen() {
   const [deconvPsfSigma, setDeconvPsfSigma] = useState(2.0);
   const [deconvIterations, setDeconvIterations] = useState(20);
   const [deconvRegularization, setDeconvRegularization] = useState(0.1);
+  const [dbeSamplesX, setDbeSamplesX] = useState(12);
+  const [dbeSamplesY, setDbeSamplesY] = useState(8);
+  const [dbeSigma, setDbeSigma] = useState(2.5);
+  const [multiscaleLayers, setMultiscaleLayers] = useState(4);
+  const [multiscaleThreshold, setMultiscaleThreshold] = useState(2.5);
+  const [localContrastSigma, setLocalContrastSigma] = useState(8);
+  const [localContrastAmount, setLocalContrastAmount] = useState(0.35);
+  const [starReductionScale, setStarReductionScale] = useState(1.2);
+  const [starReductionStrength, setStarReductionStrength] = useState(0.6);
+  const [deconvAutoIterations, setDeconvAutoIterations] = useState(20);
+  const [deconvAutoRegularization, setDeconvAutoRegularization] = useState(0.1);
+  const [scnrMethod, setScnrMethod] = useState<"averageNeutral" | "maximumNeutral">(
+    "averageNeutral",
+  );
+  const [scnrAmount, setScnrAmount] = useState(0.5);
+  const [colorCalibrationPercentile, setColorCalibrationPercentile] = useState(0.92);
+  const [saturationAmount, setSaturationAmount] = useState(0);
+  const [colorBalanceRedGain, setColorBalanceRedGain] = useState(1);
+  const [colorBalanceGreenGain, setColorBalanceGreenGain] = useState(1);
+  const [colorBalanceBlueGain, setColorBalanceBlueGain] = useState(1);
   const [pixelMathExpr, setPixelMathExpr] = useState("$T");
   const [activeToolGroup, setActiveToolGroup] = useState<
     "geometry" | "adjust" | "process" | "mask"
@@ -243,10 +380,21 @@ export default function EditorDetailScreen() {
   // Initialize editor when pixels are ready
   useEffect(() => {
     if (pixels && dimensions) {
-      editor.initialize(pixels, dimensions.width, dimensions.height, "linear", "grayscale");
+      editor.initialize(
+        pixels,
+        dimensions.width,
+        dimensions.height,
+        "linear",
+        "grayscale",
+        file?.editorRecipe ?? null,
+      );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixels, dimensions]);
+  }, [pixels, dimensions, file?.editorRecipe]);
+
+  useEffect(() => {
+    editor.setProfile(imageProcessingProfile);
+  }, [editor, imageProcessingProfile]);
 
   const buildDetectionSnapshot = useCallback(
     (): StarAnnotationDetectionSnapshot => ({
@@ -256,11 +404,19 @@ export default function EditorDetailScreen() {
       minArea: settingsDetectMinArea,
       maxArea: settingsDetectMaxArea,
       borderMargin: settingsDetectBorderMargin,
+      sigmaClipIters: settingsDetectSigmaClipIters,
+      applyMatchedFilter: settingsDetectApplyMatchedFilter,
+      connectivity: settingsDetectConnectivity,
       meshSize: settingsBackgroundMeshSize,
       deblendNLevels: settingsDeblendNLevels,
       deblendMinContrast: settingsDeblendMinContrast,
       filterFwhm: settingsFilterFwhm,
+      minFwhm: settingsDetectMinFwhm,
       maxFwhm: settingsMaxFwhm,
+      minSharpness: settingsDetectMinSharpness,
+      maxSharpness: settingsDetectMaxSharpness,
+      peakMax: settingsDetectPeakMax > 0 ? settingsDetectPeakMax : undefined,
+      snrMin: settingsDetectSnrMin,
       maxEllipticity: settingsMaxEllipticity,
     }),
     [
@@ -270,11 +426,19 @@ export default function EditorDetailScreen() {
       settingsDetectMinArea,
       settingsDetectMaxArea,
       settingsDetectBorderMargin,
+      settingsDetectSigmaClipIters,
+      settingsDetectApplyMatchedFilter,
+      settingsDetectConnectivity,
       settingsBackgroundMeshSize,
       settingsDeblendNLevels,
       settingsDeblendMinContrast,
       settingsFilterFwhm,
+      settingsDetectMinFwhm,
       settingsMaxFwhm,
+      settingsDetectMinSharpness,
+      settingsDetectMaxSharpness,
+      settingsDetectPeakMax,
+      settingsDetectSnrMin,
       settingsMaxEllipticity,
     ],
   );
@@ -294,32 +458,19 @@ export default function EditorDetailScreen() {
           roundness: point.metrics?.roundness,
           ellipticity: point.metrics?.ellipticity,
           sharpness: point.metrics?.sharpness,
+          theta: point.metrics?.theta,
+          flags: point.metrics?.flags,
         }),
       );
     setDetectedStars(derived);
   }, []);
 
   const persistStarAnnotations = useCallback(
-    (
-      nextPoints: StarAnnotationPoint[],
-      nextSnapshot: StarAnnotationDetectionSnapshot,
-      nextStale: boolean,
-    ) => {
+    (bundle: StarAnnotationBundleV2) => {
       if (!file?.id) return;
-      const payload: Partial<StarAnnotationBundle> = {
-        version: 1,
-        updatedAt: Date.now(),
-        detectionSnapshot: nextSnapshot,
-        points: nextPoints,
-        stale: nextStale,
-      };
-      const sanitized = sanitizeStarAnnotations(payload, {
-        width: dimensions?.width,
-        height: dimensions?.height,
-      });
-      updateFile(file.id, { starAnnotations: sanitized });
+      updateFile(file.id, { starAnnotations: bundle });
     },
-    [dimensions?.height, dimensions?.width, file?.id, updateFile],
+    [file?.id, updateFile],
   );
 
   const applyStarAnnotationState = useCallback(
@@ -327,82 +478,252 @@ export default function EditorDetailScreen() {
       nextPoints: StarAnnotationPoint[],
       nextSnapshot: StarAnnotationDetectionSnapshot,
       nextStale: boolean,
+      nextStaleReason?: StarAnnotationStaleReason,
+      options?: {
+        width?: number;
+        height?: number;
+        historyIndex?: number;
+        persist?: boolean;
+      },
     ) => {
+      const targetWidth = options?.width ?? editor.current?.width ?? dimensions?.width;
+      const targetHeight = options?.height ?? editor.current?.height ?? dimensions?.height;
       const sanitized = sanitizeStarAnnotations(
         {
-          version: 1,
+          version: 2,
           updatedAt: Date.now(),
           detectionSnapshot: nextSnapshot,
           points: nextPoints,
           stale: nextStale,
+          staleReason: nextStale ? nextStaleReason : undefined,
         },
         {
-          width: dimensions?.width,
-          height: dimensions?.height,
+          width: targetWidth,
+          height: targetHeight,
         },
       );
       setStarPoints(sanitized.points);
       setStarSnapshot(sanitized.detectionSnapshot);
       setStarAnnotationsStale(!!sanitized.stale);
+      setStarAnnotationsStaleReason(sanitized.staleReason);
       updateDetectedStarsFromPoints(sanitized.points);
-      persistStarAnnotations(sanitized.points, sanitized.detectionSnapshot, !!sanitized.stale);
+      activeAnnotationRef.current = sanitized;
+
+      const historyIndex =
+        options?.historyIndex != null
+          ? options.historyIndex
+          : editor.historyIndex >= 0
+            ? editor.historyIndex
+            : undefined;
+      if (historyIndex != null && historyIndex >= 0) {
+        annotationHistoryRef.current.set(historyIndex, sanitized);
+      }
+
+      if (options?.persist !== false) {
+        persistStarAnnotations(sanitized);
+      }
     },
-    [dimensions?.height, dimensions?.width, persistStarAnnotations, updateDetectedStarsFromPoints],
+    [
+      dimensions?.height,
+      dimensions?.width,
+      editor,
+      persistStarAnnotations,
+      updateDetectedStarsFromPoints,
+    ],
   );
 
   useEffect(() => {
+    if (loadedFileIdRef.current !== (file?.id ?? null)) {
+      annotationHistoryRef.current.clear();
+      loadedFileIdRef.current = file?.id ?? null;
+    }
+  }, [file?.id]);
+
+  useEffect(() => {
     if (!file?.id) return;
+    const currentWidth = editor.current?.width ?? dimensions?.width;
+    const currentHeight = editor.current?.height ?? dimensions?.height;
+    const historyIndex = editor.historyIndex >= 0 ? editor.historyIndex : 0;
     if (file.starAnnotations) {
       const sanitized = sanitizeStarAnnotations(file.starAnnotations, {
-        width: dimensions?.width,
-        height: dimensions?.height,
+        width: currentWidth,
+        height: currentHeight,
       });
       setStarPoints(sanitized.points);
       setStarSnapshot(sanitized.detectionSnapshot);
       setStarAnnotationsStale(!!sanitized.stale);
+      setStarAnnotationsStaleReason(sanitized.staleReason);
       updateDetectedStarsFromPoints(sanitized.points);
+      activeAnnotationRef.current = sanitized;
+      annotationHistoryRef.current.set(historyIndex, sanitized);
       return;
     }
-    setStarPoints([]);
-    setStarSnapshot(buildDetectionSnapshot());
-    setStarAnnotationsStale(false);
+    const snapshot = buildDetectionSnapshot();
+    applyStarAnnotationState([], snapshot, false, undefined, {
+      width: currentWidth,
+      height: currentHeight,
+      historyIndex,
+      persist: false,
+    });
     setDetectedStars([]);
   }, [
+    applyStarAnnotationState,
     buildDetectionSnapshot,
     dimensions?.height,
     dimensions?.width,
+    editor,
     file?.id,
     file?.starAnnotations,
     updateDetectedStarsFromPoints,
   ]);
 
-  const detectAndMergeStars = useCallback(() => {
-    if (!editor.current) return;
+  const detectAndMergeStars = useCallback(async () => {
+    if (!editor.current || isDetectingStars) return;
+    detectAbortRef.current?.abort();
+    const controller = new AbortController();
+    detectAbortRef.current = controller;
     const snapshot = buildDetectionSnapshot();
-    const stars = detectStars(editor.current.pixels, editor.current.width, editor.current.height, {
-      profile: snapshot.profile,
-      sigmaThreshold: snapshot.sigmaThreshold,
-      maxStars: snapshot.maxStars,
-      minArea: snapshot.minArea,
-      maxArea: snapshot.maxArea,
-      borderMargin: snapshot.borderMargin,
-      meshSize: snapshot.meshSize,
-      deblendNLevels: snapshot.deblendNLevels,
-      deblendMinContrast: snapshot.deblendMinContrast,
-      filterFwhm: snapshot.filterFwhm,
-      maxFwhm: snapshot.maxFwhm,
-      maxEllipticity: snapshot.maxEllipticity,
-    });
+    const width = editor.current.width;
+    const height = editor.current.height;
+    setIsDetectingStars(true);
+    setStarDetectionProgress(0);
+    setStarDetectionStage("start");
 
-    const merged = mergeDetectedWithManual(starPoints, stars, {
-      maxDetectedPoints: snapshot.maxStars,
-      preserveDetectedDisabled: true,
-      matchRadiusPx: 4,
-    });
-    applyStarAnnotationState(merged, snapshot, false);
-    setPendingAnchorIndex(null);
-    setIsStarAnnotationMode(true);
-  }, [applyStarAnnotationState, buildDetectionSnapshot, editor, starPoints]);
+    try {
+      const stars = await detectStarsAsync(
+        editor.current.pixels,
+        width,
+        height,
+        {
+          profile: snapshot.profile,
+          sigmaThreshold: snapshot.sigmaThreshold,
+          maxStars: snapshot.maxStars,
+          minArea: snapshot.minArea,
+          maxArea: snapshot.maxArea,
+          borderMargin: snapshot.borderMargin,
+          sigmaClipIters: snapshot.sigmaClipIters,
+          applyMatchedFilter: snapshot.applyMatchedFilter,
+          connectivity: snapshot.connectivity,
+          meshSize: snapshot.meshSize,
+          deblendNLevels: snapshot.deblendNLevels,
+          deblendMinContrast: snapshot.deblendMinContrast,
+          filterFwhm: snapshot.filterFwhm,
+          minFwhm: snapshot.minFwhm,
+          maxFwhm: snapshot.maxFwhm,
+          maxEllipticity: snapshot.maxEllipticity,
+          minSharpness: snapshot.minSharpness,
+          maxSharpness: snapshot.maxSharpness,
+          peakMax: snapshot.peakMax,
+          snrMin: snapshot.snrMin,
+        },
+        {
+          signal: controller.signal,
+          chunkRows: computeDetectionChunkRows(width, height),
+          onProgress: (progress, stage) => {
+            setStarDetectionProgress(Math.round(Math.max(0, Math.min(1, progress)) * 100));
+            setStarDetectionStage(stage);
+          },
+        },
+      );
+
+      if (controller.signal.aborted) return;
+      const merged = mergeDetectedWithManual(starPoints, stars, {
+        maxDetectedPoints: snapshot.maxStars,
+        preserveDetectedDisabled: true,
+        matchRadiusPx: 4,
+      });
+      applyStarAnnotationState(merged, snapshot, false, undefined, {
+        width,
+        height,
+      });
+      setPendingAnchorIndex(null);
+      setIsStarAnnotationMode(true);
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) {
+        Alert.alert(t("common.error"), t("editor.reDetectStars"));
+      }
+    } finally {
+      if (detectAbortRef.current === controller) {
+        detectAbortRef.current = null;
+      }
+      setIsDetectingStars(false);
+      setStarDetectionProgress(0);
+      setStarDetectionStage("idle");
+    }
+  }, [applyStarAnnotationState, buildDetectionSnapshot, editor, isDetectingStars, starPoints, t]);
+
+  const cancelStarDetection = useCallback(() => {
+    detectAbortRef.current?.abort();
+  }, []);
+
+  const handleEditorOperation = useCallback(
+    (event: EditorOperationEvent) => {
+      const timeline = annotationHistoryRef.current;
+      const source =
+        timeline.get(event.previousHistoryIndex) ??
+        activeAnnotationRef.current ??
+        timeline.get(event.historyIndex);
+      if (!source) return;
+
+      if (event.type === "apply") {
+        let nextPoints = source.points;
+        let nextStale = !!source.stale;
+        let nextStaleReason = source.staleReason;
+        if (event.op && GEOMETRY_OPS.has(event.op.type)) {
+          const transformed = transformStarAnnotationPoints(
+            source.points,
+            event.before.width,
+            event.before.height,
+            event.op,
+          );
+          nextPoints = transformed.points;
+          if (!transformed.transformed) {
+            nextStale = true;
+            nextStaleReason = transformed.staleReason ?? "unsupported-transform";
+          }
+        } else if (event.op && !NON_GEOMETRY_OPS.has(event.op.type)) {
+          nextStale = true;
+          nextStaleReason = "unsupported-transform";
+        }
+
+        applyStarAnnotationState(nextPoints, source.detectionSnapshot, nextStale, nextStaleReason, {
+          width: event.after.width,
+          height: event.after.height,
+          historyIndex: event.historyIndex,
+        });
+        return;
+      }
+
+      const restore = timeline.get(event.historyIndex);
+      if (!restore) return;
+      applyStarAnnotationState(
+        restore.points,
+        restore.detectionSnapshot,
+        !!restore.stale,
+        restore.staleReason,
+        {
+          width: event.after.width,
+          height: event.after.height,
+          historyIndex: event.historyIndex,
+        },
+      );
+    },
+    [applyStarAnnotationState],
+  );
+
+  useEffect(() => {
+    handleEditorOperationRef.current = handleEditorOperation;
+    return () => {
+      handleEditorOperationRef.current = null;
+    };
+  }, [handleEditorOperation]);
+
+  useEffect(
+    () => () => {
+      detectAbortRef.current?.abort();
+    },
+    [],
+  );
 
   const findNearestPoint = useCallback(
     (x: number, y: number) => {
@@ -450,7 +771,12 @@ export default function EditorDetailScreen() {
             : starPoints.map((point) =>
                 point.id === nearest.id ? { ...point, enabled: !point.enabled } : point,
               );
-        applyStarAnnotationState(nextPoints, starSnapshot, starAnnotationsStale);
+        applyStarAnnotationState(
+          nextPoints,
+          starSnapshot,
+          starAnnotationsStale,
+          starAnnotationsStaleReason,
+        );
         setPendingAnchorIndex(null);
         return;
       }
@@ -460,7 +786,12 @@ export default function EditorDetailScreen() {
         pendingAnchorIndex != null
           ? upsertAnchor([...starPoints, manualPoint], manualPoint.id, pendingAnchorIndex)
           : [...starPoints, manualPoint];
-      applyStarAnnotationState(nextPoints, starSnapshot, starAnnotationsStale);
+      applyStarAnnotationState(
+        nextPoints,
+        starSnapshot,
+        starAnnotationsStale,
+        starAnnotationsStaleReason,
+      );
       setPendingAnchorIndex(null);
     },
     [
@@ -469,6 +800,7 @@ export default function EditorDetailScreen() {
       isStarAnnotationMode,
       pendingAnchorIndex,
       starAnnotationsStale,
+      starAnnotationsStaleReason,
       starPoints,
       starSnapshot,
       upsertAnchor,
@@ -481,7 +813,12 @@ export default function EditorDetailScreen() {
       const nearest = findNearestPoint(x, y);
       if (!nearest || nearest.source !== "manual") return;
       const nextPoints = starPoints.filter((point) => point.id !== nearest.id);
-      applyStarAnnotationState(nextPoints, starSnapshot, starAnnotationsStale);
+      applyStarAnnotationState(
+        nextPoints,
+        starSnapshot,
+        starAnnotationsStale,
+        starAnnotationsStaleReason,
+      );
       setPendingAnchorIndex(null);
     },
     [
@@ -489,15 +826,11 @@ export default function EditorDetailScreen() {
       findNearestPoint,
       isStarAnnotationMode,
       starAnnotationsStale,
+      starAnnotationsStaleReason,
       starPoints,
       starSnapshot,
     ],
   );
-
-  const markStarAnnotationsStale = useCallback(() => {
-    if (starPoints.length === 0) return;
-    applyStarAnnotationState(starPoints, starSnapshot, true);
-  }, [applyStarAnnotationState, starPoints, starSnapshot]);
 
   const handleToolPress = useCallback(
     (tool: EditorTool & string) => {
@@ -642,6 +975,46 @@ export default function EditorDetailScreen() {
           regularization: deconvRegularization,
         };
         break;
+      case "dbe":
+        op = { type: "dbe", samplesX: dbeSamplesX, samplesY: dbeSamplesY, sigma: dbeSigma };
+        break;
+      case "multiscaleDenoise":
+        op = {
+          type: "multiscaleDenoise",
+          layers: multiscaleLayers,
+          threshold: multiscaleThreshold,
+        };
+        break;
+      case "localContrast":
+        op = { type: "localContrast", sigma: localContrastSigma, amount: localContrastAmount };
+        break;
+      case "starReduction":
+        op = { type: "starReduction", scale: starReductionScale, strength: starReductionStrength };
+        break;
+      case "deconvolutionAuto":
+        op = {
+          type: "deconvolutionAuto",
+          iterations: deconvAutoIterations,
+          regularization: deconvAutoRegularization,
+        };
+        break;
+      case "scnr":
+        op = { type: "scnr", method: scnrMethod, amount: scnrAmount };
+        break;
+      case "colorCalibration":
+        op = { type: "colorCalibration", percentile: colorCalibrationPercentile };
+        break;
+      case "saturation":
+        op = { type: "saturation", amount: saturationAmount };
+        break;
+      case "colorBalance":
+        op = {
+          type: "colorBalance",
+          redGain: colorBalanceRedGain,
+          greenGain: colorBalanceGreenGain,
+          blueGain: colorBalanceBlueGain,
+        };
+        break;
       case "pixelMath":
         op = { type: "pixelMath", expression: pixelMathExpr };
         break;
@@ -650,7 +1023,6 @@ export default function EditorDetailScreen() {
     if (op) {
       haptics.impact();
       editor.applyEdit(op);
-      markStarAnnotationsStale();
     }
     setActiveTool(null);
   }, [
@@ -686,18 +1058,34 @@ export default function EditorDetailScreen() {
     deconvPsfSigma,
     deconvIterations,
     deconvRegularization,
+    dbeSamplesX,
+    dbeSamplesY,
+    dbeSigma,
+    multiscaleLayers,
+    multiscaleThreshold,
+    localContrastSigma,
+    localContrastAmount,
+    starReductionScale,
+    starReductionStrength,
+    deconvAutoIterations,
+    deconvAutoRegularization,
+    scnrMethod,
+    scnrAmount,
+    colorCalibrationPercentile,
+    saturationAmount,
+    colorBalanceRedGain,
+    colorBalanceGreenGain,
+    colorBalanceBlueGain,
     pixelMathExpr,
     curvesPreset,
     haptics,
-    markStarAnnotationsStale,
   ]);
 
   const handleQuickAction = useCallback(
     (op: ImageEditOperation) => {
       editor.applyEdit(op);
-      markStarAnnotationsStale();
     },
-    [editor, markStarAnnotationsStale],
+    [editor],
   );
 
   const handleEditorExport = useCallback(
@@ -706,7 +1094,7 @@ export default function EditorDetailScreen() {
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
-      const path = await exportImage({
+      const detailed = await exportImageDetailed({
         rgbaData: editor.rgbaData,
         width: editor.current.width,
         height: editor.current.height,
@@ -715,15 +1103,36 @@ export default function EditorDetailScreen() {
         quality,
         fits: { ...options?.fits, mode: "rendered" },
         tiff: options?.tiff,
+        renderOptions: options?.render,
+        source: {
+          sourceType: file?.sourceType,
+          sourceFormat: file?.sourceFormat,
+          sourceFileId: file?.id,
+          starAnnotations: starPoints,
+        },
       });
-      if (path) {
-        Alert.alert(t("common.success"), t("viewer.exportSuccess"));
+      if (detailed.path) {
+        const fallbackMessage =
+          detailed.diagnostics.fallbackApplied && detailed.diagnostics.fallbackReasonMessageKey
+            ? `\n${t(detailed.diagnostics.fallbackReasonMessageKey)}`
+            : "";
+        Alert.alert(t("common.success"), `${t("viewer.exportSuccess")}${fallbackMessage}`);
       } else {
         Alert.alert(t("common.error"), t("viewer.exportFailed"));
       }
       setShowExport(false);
     },
-    [editor, exportImage, file?.filename, exportFormat, t],
+    [
+      editor,
+      exportImageDetailed,
+      file?.filename,
+      file?.id,
+      file?.sourceFormat,
+      file?.sourceType,
+      exportFormat,
+      t,
+      starPoints,
+    ],
   );
 
   const handleEditorShare = useCallback(
@@ -742,13 +1151,30 @@ export default function EditorDetailScreen() {
           quality,
           fits: { ...options?.fits, mode: "rendered" },
           tiff: options?.tiff,
+          renderOptions: options?.render,
+          source: {
+            sourceType: file?.sourceType,
+            sourceFormat: file?.sourceFormat,
+            sourceFileId: file?.id,
+            starAnnotations: starPoints,
+          },
         });
       } catch {
         Alert.alert(t("common.error"), t("share.failed"));
       }
       setShowExport(false);
     },
-    [editor, shareImage, file?.filename, exportFormat, t],
+    [
+      editor,
+      shareImage,
+      file?.filename,
+      file?.id,
+      file?.sourceFormat,
+      file?.sourceType,
+      exportFormat,
+      t,
+      starPoints,
+    ],
   );
 
   const handleEditorSave = useCallback(
@@ -766,6 +1192,13 @@ export default function EditorDetailScreen() {
         quality,
         fits: { ...options?.fits, mode: "rendered" },
         tiff: options?.tiff,
+        renderOptions: options?.render,
+        source: {
+          sourceType: file?.sourceType,
+          sourceFormat: file?.sourceFormat,
+          sourceFileId: file?.id,
+          starAnnotations: starPoints,
+        },
       });
       if (uri) {
         Alert.alert(t("common.success"), t("viewer.savedToDevice"));
@@ -774,7 +1207,17 @@ export default function EditorDetailScreen() {
       }
       setShowExport(false);
     },
-    [editor, saveImage, file?.filename, exportFormat, t],
+    [
+      editor,
+      saveImage,
+      file?.filename,
+      file?.id,
+      file?.sourceFormat,
+      file?.sourceType,
+      exportFormat,
+      t,
+      starPoints,
+    ],
   );
 
   if (!file) {
@@ -935,7 +1378,6 @@ export default function EditorDetailScreen() {
                 containerHeight={canvasLayout.height}
                 onCropConfirm={(x, y, w, h) => {
                   editor.applyEdit({ type: "crop", x, y, width: w, height: h });
-                  markStarAnnotationsStale();
                   setShowCrop(false);
                   setActiveTool(null);
                 }}
@@ -1320,6 +1762,199 @@ export default function EditorDetailScreen() {
                   </View>
                 )}
 
+                {activeTool === "dbe" && (
+                  <View>
+                    <SimpleSlider
+                      label="Samples X"
+                      value={dbeSamplesX}
+                      min={4}
+                      max={24}
+                      step={1}
+                      onValueChange={(v) => setDbeSamplesX(Math.round(v))}
+                    />
+                    <SimpleSlider
+                      label="Samples Y"
+                      value={dbeSamplesY}
+                      min={4}
+                      max={24}
+                      step={1}
+                      onValueChange={(v) => setDbeSamplesY(Math.round(v))}
+                    />
+                    <SimpleSlider
+                      label="Sigma"
+                      value={dbeSigma}
+                      min={1}
+                      max={5}
+                      step={0.1}
+                      onValueChange={setDbeSigma}
+                    />
+                  </View>
+                )}
+
+                {activeTool === "multiscaleDenoise" && (
+                  <View>
+                    <SimpleSlider
+                      label="Layers"
+                      value={multiscaleLayers}
+                      min={1}
+                      max={8}
+                      step={1}
+                      onValueChange={(v) => setMultiscaleLayers(Math.round(v))}
+                    />
+                    <SimpleSlider
+                      label="Threshold"
+                      value={multiscaleThreshold}
+                      min={0.5}
+                      max={6}
+                      step={0.1}
+                      onValueChange={setMultiscaleThreshold}
+                    />
+                  </View>
+                )}
+
+                {activeTool === "localContrast" && (
+                  <View>
+                    <SimpleSlider
+                      label="Sigma"
+                      value={localContrastSigma}
+                      min={1}
+                      max={20}
+                      step={0.5}
+                      onValueChange={setLocalContrastSigma}
+                    />
+                    <SimpleSlider
+                      label="Amount"
+                      value={localContrastAmount}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onValueChange={setLocalContrastAmount}
+                    />
+                  </View>
+                )}
+
+                {activeTool === "starReduction" && (
+                  <View>
+                    <SimpleSlider
+                      label="Scale"
+                      value={starReductionScale}
+                      min={0.5}
+                      max={4}
+                      step={0.1}
+                      onValueChange={setStarReductionScale}
+                    />
+                    <SimpleSlider
+                      label="Strength"
+                      value={starReductionStrength}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onValueChange={setStarReductionStrength}
+                    />
+                  </View>
+                )}
+
+                {activeTool === "deconvolutionAuto" && (
+                  <View>
+                    <SimpleSlider
+                      label="Iterations"
+                      value={deconvAutoIterations}
+                      min={5}
+                      max={80}
+                      step={1}
+                      onValueChange={(v) => setDeconvAutoIterations(Math.round(v))}
+                    />
+                    <SimpleSlider
+                      label="Regularization"
+                      value={deconvAutoRegularization}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onValueChange={setDeconvAutoRegularization}
+                    />
+                  </View>
+                )}
+
+                {activeTool === "scnr" && (
+                  <View>
+                    <SimpleSlider
+                      label="Amount"
+                      value={scnrAmount}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onValueChange={setScnrAmount}
+                    />
+                    <View className="flex-row gap-2 mt-1">
+                      <Button
+                        size="sm"
+                        variant={scnrMethod === "averageNeutral" ? "primary" : "outline"}
+                        onPress={() => setScnrMethod("averageNeutral")}
+                      >
+                        <Button.Label className="text-[9px]">Average</Button.Label>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={scnrMethod === "maximumNeutral" ? "primary" : "outline"}
+                        onPress={() => setScnrMethod("maximumNeutral")}
+                      >
+                        <Button.Label className="text-[9px]">Maximum</Button.Label>
+                      </Button>
+                    </View>
+                  </View>
+                )}
+
+                {activeTool === "colorCalibration" && (
+                  <SimpleSlider
+                    label="Reference Percentile"
+                    value={colorCalibrationPercentile}
+                    min={0.5}
+                    max={0.99}
+                    step={0.01}
+                    onValueChange={setColorCalibrationPercentile}
+                  />
+                )}
+
+                {activeTool === "saturation" && (
+                  <SimpleSlider
+                    label="Amount"
+                    value={saturationAmount}
+                    min={-1}
+                    max={2}
+                    step={0.05}
+                    onValueChange={setSaturationAmount}
+                  />
+                )}
+
+                {activeTool === "colorBalance" && (
+                  <View>
+                    <SimpleSlider
+                      label="Red Gain"
+                      value={colorBalanceRedGain}
+                      min={0}
+                      max={4}
+                      step={0.05}
+                      onValueChange={setColorBalanceRedGain}
+                    />
+                    <SimpleSlider
+                      label="Green Gain"
+                      value={colorBalanceGreenGain}
+                      min={0}
+                      max={4}
+                      step={0.05}
+                      onValueChange={setColorBalanceGreenGain}
+                    />
+                    <SimpleSlider
+                      label="Blue Gain"
+                      value={colorBalanceBlueGain}
+                      min={0}
+                      max={4}
+                      step={0.05}
+                      onValueChange={setColorBalanceBlueGain}
+                    />
+                  </View>
+                )}
+
                 {/* PixelMath parameters */}
                 {activeTool === "pixelMath" && (
                   <View>
@@ -1342,6 +1977,7 @@ export default function EditorDetailScreen() {
                 {activeTool === "rotate" && (
                   <View className="flex-row gap-2 mt-1">
                     <Button
+                      testID="e2e-action-editor__param_id-rotate90cw"
                       size="sm"
                       variant="outline"
                       onPress={() => handleQuickAction({ type: "rotate90cw" })}
@@ -1349,6 +1985,7 @@ export default function EditorDetailScreen() {
                       <Button.Label className="text-[9px]">90° CW</Button.Label>
                     </Button>
                     <Button
+                      testID="e2e-action-editor__param_id-rotate90ccw"
                       size="sm"
                       variant="outline"
                       onPress={() => handleQuickAction({ type: "rotate90ccw" })}
@@ -1356,6 +1993,7 @@ export default function EditorDetailScreen() {
                       <Button.Label className="text-[9px]">90° CCW</Button.Label>
                     </Button>
                     <Button
+                      testID="e2e-action-editor__param_id-rotate180"
                       size="sm"
                       variant="outline"
                       onPress={() => handleQuickAction({ type: "rotate180" })}
@@ -1367,6 +2005,7 @@ export default function EditorDetailScreen() {
                 {activeTool === "flip" && (
                   <View className="flex-row gap-2 mt-1">
                     <Button
+                      testID="e2e-action-editor__param_id-flip-h"
                       size="sm"
                       variant="outline"
                       onPress={() => handleQuickAction({ type: "flipH" })}
@@ -1374,6 +2013,7 @@ export default function EditorDetailScreen() {
                       <Button.Label className="text-[9px]">Horizontal</Button.Label>
                     </Button>
                     <Button
+                      testID="e2e-action-editor__param_id-flip-v"
                       size="sm"
                       variant="outline"
                       onPress={() => handleQuickAction({ type: "flipV" })}
@@ -1402,6 +2042,7 @@ export default function EditorDetailScreen() {
                     size="sm"
                     variant="outline"
                     onPress={() => {
+                      cancelStarDetection();
                       setIsStarAnnotationMode(false);
                       setPendingAnchorIndex(null);
                     }}
@@ -1410,7 +2051,10 @@ export default function EditorDetailScreen() {
                   </Button>
                 </View>
 
-                <Text className="mt-2 text-[10px] text-muted">
+                <Text
+                  testID="e2e-text-editor__param_id-star-counts"
+                  className="mt-2 text-[10px] text-muted"
+                >
                   {t("editor.detectedStars" as TranslationKey)}: {detectedStarCount} ·{" "}
                   {t("editor.manualStars" as TranslationKey)}: {manualStarCount} ·{" "}
                   {t("editor.enabledStars" as TranslationKey)}: {enabledStarCount}
@@ -1420,16 +2064,37 @@ export default function EditorDetailScreen() {
                   <View className="mt-2 rounded-md bg-warning/15 px-2 py-1">
                     <Text className="text-[9px] text-warning">
                       {t("editor.annotationStale" as TranslationKey)}
+                      {starAnnotationsStaleReason ? ` (${starAnnotationsStaleReason})` : ""}
+                    </Text>
+                  </View>
+                )}
+
+                {isDetectingStars && (
+                  <View className="mt-2 rounded-md bg-success/10 px-2 py-1">
+                    <Text className="text-[9px] text-success">
+                      {t("editor.reDetectStars" as TranslationKey)} · {starDetectionStage} ·{" "}
+                      {starDetectionProgress}%
                     </Text>
                   </View>
                 )}
 
                 <View className="mt-2 flex-row flex-wrap gap-1.5">
-                  <Button size="sm" variant="outline" onPress={detectAndMergeStars}>
+                  <Button
+                    testID="e2e-action-editor__param_id-redetect-stars"
+                    size="sm"
+                    variant="outline"
+                    onPress={detectAndMergeStars}
+                    isDisabled={isDetectingStars}
+                  >
                     <Button.Label className="text-[9px]">
                       {t("editor.reDetectStars" as TranslationKey)}
                     </Button.Label>
                   </Button>
+                  {isDetectingStars && (
+                    <Button size="sm" variant="outline" onPress={cancelStarDetection}>
+                      <Button.Label className="text-[9px]">{t("common.cancel")}</Button.Label>
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant={pendingAnchorIndex === 1 ? "primary" : "outline"}
@@ -1465,7 +2130,12 @@ export default function EditorDetailScreen() {
                         ...point,
                         anchorIndex: undefined,
                       }));
-                      applyStarAnnotationState(cleared, starSnapshot, starAnnotationsStale);
+                      applyStarAnnotationState(
+                        cleared,
+                        starSnapshot,
+                        starAnnotationsStale,
+                        starAnnotationsStaleReason,
+                      );
                       setPendingAnchorIndex(null);
                     }}
                   >
@@ -1538,7 +2208,11 @@ export default function EditorDetailScreen() {
             ).map((tool) => {
               const isActive = activeTool === tool.key;
               return (
-                <PressableFeedback key={tool.key} onPress={() => handleToolPress(tool.key)}>
+                <PressableFeedback
+                  key={tool.key}
+                  testID={`e2e-action-editor__param_id-tool-${tool.key}`}
+                  onPress={() => handleToolPress(tool.key)}
+                >
                   <View
                     className={`items-center justify-center px-3 py-2 rounded-lg ${isActive ? "bg-success/10" : ""}`}
                   >
@@ -1567,11 +2241,17 @@ export default function EditorDetailScreen() {
             {ADVANCED_TOOLS.map((tool) => (
               <PressableFeedback
                 key={tool.key}
+                testID={`e2e-action-editor__param_id-advanced-${tool.key}`}
                 onPress={() => {
                   if (tool.route) {
-                    router.push(tool.route);
+                    if (tool.key === "compose" && id) {
+                      router.push(`/compose/advanced?sourceId=${id}`);
+                    } else {
+                      router.push(tool.route);
+                    }
                   } else if (tool.key === "starDetect") {
                     if (isStarAnnotationMode) {
+                      cancelStarDetection();
                       setIsStarAnnotationMode(false);
                       setPendingAnchorIndex(null);
                       return;

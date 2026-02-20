@@ -82,4 +82,51 @@ describe("VideoProcessingSheet", () => {
       }),
     );
   });
+
+  it("keeps operation when remove-audio toggle is enabled", () => {
+    const onSubmit = jest.fn();
+
+    render(
+      <VideoProcessingSheet
+        visible
+        file={baseVideoFile}
+        defaultProfile="compatibility"
+        defaultPreset="1080p"
+        onSubmit={onSubmit}
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent(screen.getByTestId("remove-audio-switch"), "onSelectedChange", true);
+    fireEvent.press(screen.getByText("Queue Task"));
+
+    expect(onSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operation: "trim",
+        removeAudio: true,
+      }),
+    );
+  });
+
+  it("blocks invalid trim range before submit", () => {
+    const onSubmit = jest.fn();
+
+    render(
+      <VideoProcessingSheet
+        visible
+        file={baseVideoFile}
+        defaultProfile="compatibility"
+        defaultPreset="1080p"
+        onSubmit={onSubmit}
+        onClose={jest.fn()}
+      />,
+    );
+
+    fireEvent.changeText(screen.getByPlaceholderText("Start ms"), "1000");
+    fireEvent.changeText(screen.getByPlaceholderText("End ms"), "800");
+    fireEvent.press(screen.getByText("Queue Task"));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("Trim range is invalid.")).toBeTruthy();
+  });
 });

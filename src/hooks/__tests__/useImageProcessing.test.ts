@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react-native";
 import { InteractionManager } from "react-native";
 import { useImageProcessing } from "../useImageProcessing";
 import { createDeferred, flushPromises } from "./helpers/testUtils";
+import type { ProcessingPipelineSnapshot } from "../../lib/fits/types";
 
 jest.mock("../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(),
@@ -13,6 +14,12 @@ jest.mock("../../lib/utils/pixelMath", () => ({
   calculateHistogram: jest.fn(),
   calculateRegionHistogram: jest.fn(),
 }));
+jest.mock("../../lib/processing/executor", () => ({
+  executeProcessingPipeline: jest.fn(),
+}));
+jest.mock("../../lib/processing/recipe", () => ({
+  normalizeProcessingPipelineSnapshot: jest.fn(),
+}));
 
 const converterLib = jest.requireMock("../../lib/converter/formatConverter") as {
   fitsToRGBA: jest.Mock;
@@ -23,6 +30,12 @@ const pixelMathLib = jest.requireMock("../../lib/utils/pixelMath") as {
   calculateStats: jest.Mock;
   calculateHistogram: jest.Mock;
   calculateRegionHistogram: jest.Mock;
+};
+const executorLib = jest.requireMock("../../lib/processing/executor") as {
+  executeProcessingPipeline: jest.Mock;
+};
+const recipeLib = jest.requireMock("../../lib/processing/recipe") as {
+  normalizeProcessingPipelineSnapshot: jest.Mock;
 };
 type InteractionTask = Parameters<typeof InteractionManager.runAfterInteractions>[0];
 
@@ -59,6 +72,17 @@ describe("useImageProcessing", () => {
     pixelMathLib.calculateStats.mockReturnValue({ min: 0, max: 10, mean: 5 });
     pixelMathLib.calculateHistogram.mockReturnValue({ bins: [1, 2] });
     pixelMathLib.calculateRegionHistogram.mockReturnValue({ bins: [9, 9] });
+    recipeLib.normalizeProcessingPipelineSnapshot.mockImplementation((recipe, profile) => ({
+      version: 2,
+      savedAt: Date.now(),
+      profile: profile ?? "standard",
+      scientificNodes: recipe?.scientificNodes ?? [],
+      colorNodes: recipe?.colorNodes ?? [],
+    }));
+    executorLib.executeProcessingPipeline.mockReturnValue({
+      scientificOutput: { pixels: new Float32Array([0]), width: 2, height: 2 },
+      colorOutput: { rgbaData: new Uint8ClampedArray([7, 8, 9, 255]), width: 2, height: 2 },
+    });
   });
 
   it("processes small image synchronously and updates dimensions", () => {
@@ -105,6 +129,41 @@ describe("useImageProcessing", () => {
 
     expect(result.current.rgbaData).toEqual(new Uint8ClampedArray([9, 8, 7, 6]));
     expect(result.current.isProcessing).toBe(false);
+  });
+
+  it("uses dual-stage executor when recipe nodes exist", () => {
+    const { result } = renderHook(() => useImageProcessing());
+    const recipe: ProcessingPipelineSnapshot = {
+      version: 2,
+      savedAt: Date.now(),
+      profile: "standard" as const,
+      scientificNodes: [{ id: "n1", operationId: "invert", enabled: true, params: {} }],
+      colorNodes: [],
+    };
+
+    act(() => {
+      result.current.processImage(
+        new Float32Array([0, 1, 2, 3]),
+        2,
+        2,
+        "linear",
+        "grayscale",
+        0,
+        1,
+        1,
+        0,
+        1,
+        0,
+        1,
+        0.5,
+        "linear",
+        { profile: "standard", recipe },
+      );
+    });
+
+    expect(executorLib.executeProcessingPipeline).toHaveBeenCalled();
+    expect(converterLib.fitsToRGBA).not.toHaveBeenCalled();
+    expect(result.current.rgbaData).toEqual(new Uint8ClampedArray([7, 8, 9, 255]));
   });
 
   it("runs preview-first path and keeps error state on chunk failure", async () => {

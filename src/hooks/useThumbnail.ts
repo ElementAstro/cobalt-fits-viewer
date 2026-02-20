@@ -15,7 +15,11 @@ import {
   generateAndSaveThumbnail,
 } from "../lib/gallery/thumbnailCache";
 import { useSettingsStore } from "../stores/useSettingsStore";
-import { loadFitsFromBufferAuto, getImageDimensions, getImagePixels } from "../lib/fits/parser";
+import {
+  loadScientificFitsFromBuffer,
+  getImageDimensions,
+  getImagePixels,
+} from "../lib/fits/parser";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
 import { parseRasterFromBuffer } from "../lib/image/rasterParser";
 import type { FitsMetadata } from "../lib/fits/types";
@@ -151,7 +155,9 @@ export function useThumbnail() {
         let uri: string | null = null;
 
         const tryFits = async () => {
-          const fitsObj = loadFitsFromBufferAuto(buffer);
+          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
+            filename: file.filename,
+          });
           const dims = getImageDimensions(fitsObj);
           const pixels = await getImagePixels(fitsObj);
           if (!dims || !pixels) return null;
@@ -213,6 +219,8 @@ export function useThumbnail() {
           } catch {
             uri = null;
           }
+        } else if (file.sourceType === "audio") {
+          uri = null;
         } else {
           try {
             uri = await tryRaster();

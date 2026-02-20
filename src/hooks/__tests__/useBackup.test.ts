@@ -28,12 +28,21 @@ const mockSettingsState: Record<string, unknown> = {
   stackingDetectMinArea: 3,
   stackingDetectMaxArea: 900,
   stackingDetectBorderMargin: 8,
+  stackingDetectSigmaClipIters: 3,
+  stackingDetectApplyMatchedFilter: true,
+  stackingDetectConnectivity: 8,
   stackingBackgroundMeshSize: 48,
   stackingDeblendNLevels: 32,
   stackingDeblendMinContrast: 0.05,
   stackingFilterFwhm: 2.0,
+  stackingDetectMinFwhm: 0.7,
   stackingMaxFwhm: 10,
   stackingMaxEllipticity: 0.55,
+  stackingDetectMinSharpness: 0.2,
+  stackingDetectMaxSharpness: 12,
+  stackingDetectPeakMax: 6000,
+  stackingDetectSnrMin: 2.5,
+  stackingUseAnnotatedForAlignment: true,
   stackingRansacMaxIterations: 180,
   stackingAlignmentInlierThreshold: 2.5,
   canvasPinchSensitivity: 1.1,
@@ -60,6 +69,8 @@ jest.mock("../../stores/useSettingsStore", () => ({
   useSettingsStore: {
     getState: () => mockSettingsState,
   },
+  getSettingsBackupData: (state: Record<string, unknown>) => ({ ...state }),
+  normalizeSettingsBackupPatch: (patch: Record<string, unknown>) => patch,
 }));
 
 jest.mock("../../lib/backup/backupService", () => ({
@@ -259,6 +270,7 @@ describe("useBackup consistency reconciliation", () => {
       autoBackupEnabled: false,
       autoBackupIntervalHours: 24,
       autoBackupNetwork: "wifi",
+      lastAutoBackupAttempt: 0,
       lastAutoBackupCheck: 0,
       lastError: null,
     });
@@ -353,6 +365,15 @@ describe("useBackup consistency reconciliation", () => {
       expect(settings.stackingDetectionProfile).toBe("accurate");
       expect(settings.stackingDetectSigmaThreshold).toBe(4.5);
       expect(settings.stackingDeblendNLevels).toBe(32);
+      expect(settings.stackingDetectSigmaClipIters).toBe(3);
+      expect(settings.stackingDetectApplyMatchedFilter).toBe(true);
+      expect(settings.stackingDetectConnectivity).toBe(8);
+      expect(settings.stackingDetectMinFwhm).toBe(0.7);
+      expect(settings.stackingDetectMinSharpness).toBe(0.2);
+      expect(settings.stackingDetectMaxSharpness).toBe(12);
+      expect(settings.stackingDetectPeakMax).toBe(6000);
+      expect(settings.stackingDetectSnrMin).toBe(2.5);
+      expect(settings.stackingUseAnnotatedForAlignment).toBe(true);
       expect(settings.stackingAlignmentInlierThreshold).toBe(2.5);
       expect(settings.canvasPinchSensitivity).toBe(1.1);
       expect(settings.canvasPinchOverzoomFactor).toBe(1.3);
@@ -376,6 +397,15 @@ describe("useBackup consistency reconciliation", () => {
       (restoreTarget as { setSettings: (settings: Record<string, unknown>) => void }).setSettings({
         stackingDetectionProfile: "fast",
         stackingDetectSigmaThreshold: 6.2,
+        stackingDetectSigmaClipIters: 4,
+        stackingDetectApplyMatchedFilter: false,
+        stackingDetectConnectivity: 4,
+        stackingDetectMinFwhm: 0.9,
+        stackingDetectMinSharpness: 0.4,
+        stackingDetectMaxSharpness: 20,
+        stackingDetectPeakMax: 5000,
+        stackingDetectSnrMin: 3,
+        stackingUseAnnotatedForAlignment: false,
         stackingDeblendMinContrast: 0.12,
         stackingRansacMaxIterations: 220,
         canvasPinchSensitivity: 1.4,
@@ -397,6 +427,15 @@ describe("useBackup consistency reconciliation", () => {
       expect.objectContaining({
         stackingDetectionProfile: "fast",
         stackingDetectSigmaThreshold: 6.2,
+        stackingDetectSigmaClipIters: 4,
+        stackingDetectApplyMatchedFilter: false,
+        stackingDetectConnectivity: 4,
+        stackingDetectMinFwhm: 0.9,
+        stackingDetectMinSharpness: 0.4,
+        stackingDetectMaxSharpness: 20,
+        stackingDetectPeakMax: 5000,
+        stackingDetectSnrMin: 3,
+        stackingUseAnnotatedForAlignment: false,
         stackingDeblendMinContrast: 0.12,
         stackingRansacMaxIterations: 220,
         canvasPinchSensitivity: 1.4,

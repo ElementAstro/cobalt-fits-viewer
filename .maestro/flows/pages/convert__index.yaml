@@ -6,4 +6,11 @@
 - tapOn:
     id: e2e-action-convert__index-select-file-fits-001
 - tapOn:
+    id: e2e-action-format-selector-fits
+- tapOn:
+    id: e2e-action-convert__index-fits-mode-scientific
+- tapOn:
+    id: e2e-action-convert__index-toggle-watermark
+- tapOn:
     id: e2e-action-convert__index-convert
+- assertVisible: Scientific FITS cannot embed annotations/watermark. Export switched to rendered mode.

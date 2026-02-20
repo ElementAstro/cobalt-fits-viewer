@@ -2,14 +2,23 @@
  * 备份/恢复 Hook
  */
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import * as Network from "expo-network";
+import { Platform } from "react-native";
 import { useBackupStore } from "../stores/useBackupStore";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useAlbumStore } from "../stores/useAlbumStore";
 import { useTargetStore } from "../stores/useTargetStore";
 import { useTargetGroupStore } from "../stores/useTargetGroupStore";
 import { useSessionStore } from "../stores/useSessionStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
+import {
+  useSettingsStore,
+  getSettingsBackupData,
+  normalizeSettingsBackupPatch,
+} from "../stores/useSettingsStore";
+import { useFileGroupStore } from "../stores/useFileGroupStore";
+import { useAstrometryStore } from "../stores/useAstrometryStore";
+import { useTrashStore } from "../stores/useTrashStore";
 import {
   performBackup,
   performRestore,
@@ -37,15 +46,14 @@ import type {
 } from "../lib/backup/types";
 import { DEFAULT_BACKUP_OPTIONS } from "../lib/backup/types";
 import type { BackupDataSource, RestoreTarget } from "../lib/backup/backupService";
-import * as Network from "expo-network";
 import { normalizeTargetMatch } from "../lib/targets/targetRelations";
 import { reconcileAllStores } from "../lib/targets/targetIntegrity";
 import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
 import { resolveTargetId, resolveTargetName } from "../lib/targets/targetRefs";
 import { mergeSessionLike } from "../lib/sessions/sessionNormalization";
 
-// Provider singletons
 const providers: Partial<Record<CloudProvider, ICloudProvider>> = {};
+let hasAttemptedProviderRehydrate = false;
 
 function getOrCreateProvider(type: CloudProvider): ICloudProvider {
   if (!providers[type]) {
@@ -67,6 +75,8 @@ function getOrCreateProvider(type: CloudProvider): ICloudProvider {
   return providers[type]!;
 }
 
+type ConnectMode = "interactive" | "rehydrate";
+
 export function useBackup() {
   const abortRef = useRef<AbortController | null>(null);
 
@@ -80,10 +90,14 @@ export function useBackup() {
     setRestoreInProgress,
     setProgress,
     setLastError,
+    setActiveProvider,
     addConnection,
     removeConnection,
     updateConnection,
     resetProgress,
+    setAutoBackupEnabled,
+    setAutoBackupIntervalHours,
+    setAutoBackupNetwork,
   } = useBackupStore();
 
   const fitsStore = useFitsStore;
@@ -92,10 +106,10 @@ export function useBackup() {
   const targetGroupStore = useTargetGroupStore;
   const sessionStore = useSessionStore;
   const settingsStore = useSettingsStore;
+  const fileGroupStore = useFileGroupStore;
+  const astrometryStore = useAstrometryStore;
+  const trashStore = useTrashStore;
 
-  /**
-   * 构建数据源
-   */
   const buildDataSource = useCallback((): BackupDataSource => {
     return {
       getFiles: () => fitsStore.getState().files,
@@ -105,123 +119,39 @@ export function useBackup() {
       getSessions: () => sessionStore.getState().sessions,
       getPlans: () => sessionStore.getState().plans,
       getLogEntries: () => sessionStore.getState().logEntries,
-      getSettings: () => {
-        const s = settingsStore.getState();
+      getSettings: () => getSettingsBackupData(settingsStore.getState()),
+      getFileGroups: () => ({
+        groups: fileGroupStore.getState().groups,
+        fileGroupMap: fileGroupStore.getState().fileGroupMap,
+      }),
+      getAstrometry: () => ({
+        config: astrometryStore.getState().config,
+        jobs: astrometryStore.getState().jobs,
+      }),
+      getTrash: () => trashStore.getState().items,
+      getActiveSession: () => sessionStore.getState().activeSession,
+      getBackupPrefs: () => {
+        const state = useBackupStore.getState();
         return {
-          // Viewer defaults
-          defaultStretch: s.defaultStretch,
-          defaultColormap: s.defaultColormap,
-          defaultGridColumns: s.defaultGridColumns,
-          thumbnailQuality: s.thumbnailQuality,
-          thumbnailSize: s.thumbnailSize,
-          defaultExportFormat: s.defaultExportFormat,
-          // Target / session / location
-          autoGroupByObject: s.autoGroupByObject,
-          autoDetectDuplicates: s.autoDetectDuplicates,
-          autoTagLocation: s.autoTagLocation,
-          mapPreset: s.mapPreset,
-          mapShowOverlays: s.mapShowOverlays,
-          sessionGapMinutes: s.sessionGapMinutes,
-          calendarSyncEnabled: s.calendarSyncEnabled,
-          defaultReminderMinutes: s.defaultReminderMinutes,
-          // Display / theme
-          language: s.language,
-          theme: s.theme,
-          orientationLock: s.orientationLock,
-          hapticsEnabled: s.hapticsEnabled,
-          confirmDestructiveActions: s.confirmDestructiveActions,
-          autoCheckUpdates: s.autoCheckUpdates,
-          themeColorMode: s.themeColorMode,
-          accentColor: s.accentColor,
-          activePreset: s.activePreset,
-          customThemeColors: s.customThemeColors,
-          fontFamily: s.fontFamily,
-          monoFontFamily: s.monoFontFamily,
-          // Viewer overlay defaults
-          defaultShowGrid: s.defaultShowGrid,
-          defaultShowCrosshair: s.defaultShowCrosshair,
-          defaultShowPixelInfo: s.defaultShowPixelInfo,
-          defaultShowMinimap: s.defaultShowMinimap,
-          defaultBlackPoint: s.defaultBlackPoint,
-          defaultWhitePoint: s.defaultWhitePoint,
-          defaultGamma: s.defaultGamma,
-          // Histogram
-          defaultHistogramMode: s.defaultHistogramMode,
-          histogramHeight: s.histogramHeight,
-          pixelInfoDecimalPlaces: s.pixelInfoDecimalPlaces,
-          // Gallery sorting
-          defaultGallerySortBy: s.defaultGallerySortBy,
-          defaultGallerySortOrder: s.defaultGallerySortOrder,
-          // Stacking
-          defaultStackMethod: s.defaultStackMethod,
-          defaultSigmaValue: s.defaultSigmaValue,
-          defaultAlignmentMode: s.defaultAlignmentMode,
-          defaultEnableQuality: s.defaultEnableQuality,
-          stackingDetectionProfile: s.stackingDetectionProfile,
-          stackingDetectSigmaThreshold: s.stackingDetectSigmaThreshold,
-          stackingDetectMaxStars: s.stackingDetectMaxStars,
-          stackingDetectMinArea: s.stackingDetectMinArea,
-          stackingDetectMaxArea: s.stackingDetectMaxArea,
-          stackingDetectBorderMargin: s.stackingDetectBorderMargin,
-          stackingBackgroundMeshSize: s.stackingBackgroundMeshSize,
-          stackingDeblendNLevels: s.stackingDeblendNLevels,
-          stackingDeblendMinContrast: s.stackingDeblendMinContrast,
-          stackingFilterFwhm: s.stackingFilterFwhm,
-          stackingMaxFwhm: s.stackingMaxFwhm,
-          stackingMaxEllipticity: s.stackingMaxEllipticity,
-          stackingRansacMaxIterations: s.stackingRansacMaxIterations,
-          stackingAlignmentInlierThreshold: s.stackingAlignmentInlierThreshold,
-          // Grid/crosshair styles
-          gridColor: s.gridColor,
-          gridOpacity: s.gridOpacity,
-          crosshairColor: s.crosshairColor,
-          crosshairOpacity: s.crosshairOpacity,
-          // Canvas
-          canvasMinScale: s.canvasMinScale,
-          canvasMaxScale: s.canvasMaxScale,
-          canvasDoubleTapScale: s.canvasDoubleTapScale,
-          canvasPinchSensitivity: s.canvasPinchSensitivity,
-          canvasPinchOverzoomFactor: s.canvasPinchOverzoomFactor,
-          canvasPanRubberBandFactor: s.canvasPanRubberBandFactor,
-          canvasWheelZoomSensitivity: s.canvasWheelZoomSensitivity,
-          // Thumbnail overlays
-          thumbnailShowFilename: s.thumbnailShowFilename,
-          thumbnailShowObject: s.thumbnailShowObject,
-          thumbnailShowFilter: s.thumbnailShowFilter,
-          thumbnailShowExposure: s.thumbnailShowExposure,
-          // File list / converter / editor
-          fileListStyle: s.fileListStyle,
-          defaultConverterFormat: s.defaultConverterFormat,
-          defaultConverterQuality: s.defaultConverterQuality,
-          batchNamingRule: s.batchNamingRule,
-          defaultBlurSigma: s.defaultBlurSigma,
-          defaultSharpenAmount: s.defaultSharpenAmount,
-          defaultDenoiseRadius: s.defaultDenoiseRadius,
-          editorMaxUndo: s.editorMaxUndo,
-          // Timeline / session display
-          timelineGrouping: s.timelineGrouping,
-          sessionShowExposureCount: s.sessionShowExposureCount,
-          sessionShowTotalExposure: s.sessionShowTotalExposure,
-          sessionShowFilters: s.sessionShowFilters,
-          // Target sorting
-          targetSortBy: s.targetSortBy,
-          targetSortOrder: s.targetSortOrder,
-          // Compose
-          defaultComposePreset: s.defaultComposePreset,
-          composeRedWeight: s.composeRedWeight,
-          composeGreenWeight: s.composeGreenWeight,
-          composeBlueWeight: s.composeBlueWeight,
-          // Performance
-          imageProcessingDebounce: s.imageProcessingDebounce,
-          useHighQualityPreview: s.useHighQualityPreview,
+          activeProvider: state.activeProvider,
+          autoBackupEnabled: state.autoBackupEnabled,
+          autoBackupIntervalHours: state.autoBackupIntervalHours,
+          autoBackupNetwork: state.autoBackupNetwork,
         };
       },
     };
-  }, [fitsStore, albumStore, targetStore, targetGroupStore, sessionStore, settingsStore]);
+  }, [
+    fitsStore,
+    albumStore,
+    targetStore,
+    targetGroupStore,
+    sessionStore,
+    settingsStore,
+    fileGroupStore,
+    astrometryStore,
+    trashStore,
+  ]);
 
-  /**
-   * 构建恢复目标
-   */
   const buildRestoreTarget = useCallback((): RestoreTarget => {
     const resolveStrategy = (
       strategy: RestoreConflictStrategy | undefined,
@@ -239,7 +169,6 @@ export function useBackup() {
           }
 
           if (mode === "skip-existing") continue;
-
           if (mode === "overwrite-existing") {
             store.updateFile(file.id, file);
             continue;
@@ -249,12 +178,7 @@ export function useBackup() {
           const mergedAlbumIds = [
             ...new Set([...(existing.albumIds ?? []), ...(file.albumIds ?? [])]),
           ];
-
-          store.updateFile(file.id, {
-            ...file,
-            tags: mergedTags,
-            albumIds: mergedAlbumIds,
-          });
+          store.updateFile(file.id, { ...file, tags: mergedTags, albumIds: mergedAlbumIds });
         }
       },
       setAlbums: (albums, strategy) => {
@@ -268,7 +192,6 @@ export function useBackup() {
           }
 
           if (mode === "skip-existing") continue;
-
           if (mode === "overwrite-existing") {
             store.updateAlbum(album.id, album);
             continue;
@@ -302,12 +225,8 @@ export function useBackup() {
           }
 
           if (mode === "skip-existing") continue;
-
           if (mode === "overwrite-existing") {
-            store.updateTarget(existing.id, {
-              ...target,
-              id: existing.id,
-            });
+            store.updateTarget(existing.id, { ...target, id: existing.id });
             continue;
           }
 
@@ -338,19 +257,14 @@ export function useBackup() {
         for (const group of groups) {
           const existing = store.groups.find((g) => g.id === group.id);
           if (!existing) {
-            store.upsertGroup({
-              ...group,
-              targetIds: [...new Set(group.targetIds ?? [])],
-            });
+            store.upsertGroup({ ...group, targetIds: [...new Set(group.targetIds ?? [])] });
             continue;
           }
-
           if (mode === "skip-existing") continue;
           if (mode === "overwrite-existing") {
             store.updateGroup(existing.id, group);
             continue;
           }
-
           store.updateGroup(existing.id, {
             ...group,
             targetIds: [...new Set([...(existing.targetIds ?? []), ...(group.targetIds ?? [])])],
@@ -366,14 +280,11 @@ export function useBackup() {
             store.addSession(session);
             continue;
           }
-
           if (mode === "skip-existing") continue;
-
           if (mode === "overwrite-existing") {
             store.updateSession(session.id, session);
             continue;
           }
-
           const merged = mergeSessionLike(existing, session, targetStore.getState().targets);
           store.updateSession(session.id, merged);
         }
@@ -433,130 +344,121 @@ export function useBackup() {
         }
       },
       setSettings: (settings) => {
-        const s = settings as Record<string, unknown>;
-        // Bulk-apply all known settings keys via zustand setState
-        // This ensures every backed-up setting is restored, not just a subset
-        const knownKeys = [
-          // Viewer defaults
-          "defaultStretch",
-          "defaultColormap",
-          "defaultGridColumns",
-          "thumbnailQuality",
-          "thumbnailSize",
-          "defaultExportFormat",
-          // Target / session / location
-          "autoGroupByObject",
-          "autoDetectDuplicates",
-          "autoTagLocation",
-          "mapPreset",
-          "mapShowOverlays",
-          "sessionGapMinutes",
-          "calendarSyncEnabled",
-          "defaultReminderMinutes",
-          // Display / theme
-          "language",
-          "theme",
-          "orientationLock",
-          "hapticsEnabled",
-          "confirmDestructiveActions",
-          "autoCheckUpdates",
-          "themeColorMode",
-          "accentColor",
-          "activePreset",
-          "customThemeColors",
-          "fontFamily",
-          "monoFontFamily",
-          // Viewer overlay defaults
-          "defaultShowGrid",
-          "defaultShowCrosshair",
-          "defaultShowPixelInfo",
-          "defaultShowMinimap",
-          "defaultBlackPoint",
-          "defaultWhitePoint",
-          "defaultGamma",
-          // Histogram
-          "defaultHistogramMode",
-          "histogramHeight",
-          "pixelInfoDecimalPlaces",
-          // Gallery sorting
-          "defaultGallerySortBy",
-          "defaultGallerySortOrder",
-          // Stacking
-          "defaultStackMethod",
-          "defaultSigmaValue",
-          "defaultAlignmentMode",
-          "defaultEnableQuality",
-          "stackingDetectionProfile",
-          "stackingDetectSigmaThreshold",
-          "stackingDetectMaxStars",
-          "stackingDetectMinArea",
-          "stackingDetectMaxArea",
-          "stackingDetectBorderMargin",
-          "stackingBackgroundMeshSize",
-          "stackingDeblendNLevels",
-          "stackingDeblendMinContrast",
-          "stackingFilterFwhm",
-          "stackingMaxFwhm",
-          "stackingMaxEllipticity",
-          "stackingRansacMaxIterations",
-          "stackingAlignmentInlierThreshold",
-          // Grid/crosshair styles
-          "gridColor",
-          "gridOpacity",
-          "crosshairColor",
-          "crosshairOpacity",
-          // Canvas
-          "canvasMinScale",
-          "canvasMaxScale",
-          "canvasDoubleTapScale",
-          "canvasPinchSensitivity",
-          "canvasPinchOverzoomFactor",
-          "canvasPanRubberBandFactor",
-          "canvasWheelZoomSensitivity",
-          // Thumbnail overlays
-          "thumbnailShowFilename",
-          "thumbnailShowObject",
-          "thumbnailShowFilter",
-          "thumbnailShowExposure",
-          // File list / converter / editor
-          "fileListStyle",
-          "defaultConverterFormat",
-          "defaultConverterQuality",
-          "batchNamingRule",
-          "defaultBlurSigma",
-          "defaultSharpenAmount",
-          "defaultDenoiseRadius",
-          "editorMaxUndo",
-          // Timeline / session display
-          "timelineGrouping",
-          "sessionShowExposureCount",
-          "sessionShowTotalExposure",
-          "sessionShowFilters",
-          // Target sorting
-          "targetSortBy",
-          "targetSortOrder",
-          // Compose
-          "defaultComposePreset",
-          "composeRedWeight",
-          "composeGreenWeight",
-          "composeBlueWeight",
-          // Performance
-          "imageProcessingDebounce",
-          "useHighQualityPreview",
-        ] as const;
-        const patch: Record<string, unknown> = {};
-        for (const key of knownKeys) {
-          if (s[key] !== undefined) {
-            patch[key] = s[key];
+        const patch = normalizeSettingsBackupPatch(settings);
+        if (Object.keys(patch).length > 0) {
+          settingsStore.getState().applySettingsPatch(patch);
+        }
+      },
+      setFileGroups: (data, strategy) => {
+        const mode = resolveStrategy(strategy);
+        const state = fileGroupStore.getState();
+        if (mode === "overwrite-existing") {
+          useFileGroupStore.setState(
+            {
+              groups: data.groups,
+              fileGroupMap: data.fileGroupMap,
+            },
+            false,
+          );
+          return;
+        }
+
+        const nextGroups = [...state.groups];
+        const seenGroups = new Set(nextGroups.map((group) => group.id));
+        for (const group of data.groups) {
+          if (!seenGroups.has(group.id)) {
+            nextGroups.push(group);
+            seenGroups.add(group.id);
+          } else if (mode === "merge") {
+            const idx = nextGroups.findIndex((g) => g.id === group.id);
+            if (idx >= 0) nextGroups[idx] = { ...nextGroups[idx], ...group };
           }
         }
-        if (Object.keys(patch).length > 0) {
-          const applyPatch = settingsStore.getState().applySettingsPatch;
-          applyPatch(patch as Parameters<typeof applyPatch>[0]);
+
+        const nextMap: Record<string, string[]> = { ...state.fileGroupMap };
+        for (const [fileId, groupIds] of Object.entries(data.fileGroupMap)) {
+          if (!nextMap[fileId]) {
+            nextMap[fileId] = [...groupIds];
+            continue;
+          }
+          if (mode === "merge") {
+            nextMap[fileId] = [...new Set([...(nextMap[fileId] ?? []), ...groupIds])];
+          }
+        }
+
+        useFileGroupStore.setState({ groups: nextGroups, fileGroupMap: nextMap }, false);
+      },
+      setAstrometry: (data, strategy) => {
+        const mode = resolveStrategy(strategy);
+        const state = astrometryStore.getState();
+        if (mode === "overwrite-existing") {
+          useAstrometryStore.setState({ config: data.config, jobs: data.jobs }, false);
+          return;
+        }
+
+        const jobMap = new Map(state.jobs.map((job) => [job.id, job]));
+        for (const job of data.jobs) {
+          if (!jobMap.has(job.id)) {
+            jobMap.set(job.id, job);
+          } else if (mode === "merge") {
+            jobMap.set(job.id, { ...jobMap.get(job.id)!, ...job });
+          }
+        }
+
+        useAstrometryStore.setState(
+          {
+            config: mode === "merge" ? { ...state.config, ...data.config } : state.config,
+            jobs: [...jobMap.values()],
+          },
+          false,
+        );
+      },
+      setTrash: (items, strategy) => {
+        const mode = resolveStrategy(strategy);
+        if (mode === "overwrite-existing") {
+          useTrashStore.setState({ items: [...items] }, false);
+          return;
+        }
+        const current = trashStore.getState().items;
+        const map = new Map(current.map((item) => [item.trashId, item]));
+        for (const item of items) {
+          if (!map.has(item.trashId) || mode === "merge") {
+            map.set(item.trashId, item);
+          }
+        }
+        useTrashStore.setState({ items: [...map.values()] }, false);
+      },
+      setActiveSession: (activeSession, strategy) => {
+        const mode = resolveStrategy(strategy);
+        const current = sessionStore.getState().activeSession;
+        if (mode === "skip-existing" && current) return;
+        if (mode === "merge" && current) return;
+        useSessionStore.setState({ activeSession }, false);
+      },
+      setBackupPrefs: (prefs) => {
+        setAutoBackupEnabled(prefs.autoBackupEnabled);
+        setAutoBackupIntervalHours(prefs.autoBackupIntervalHours);
+        setAutoBackupNetwork(prefs.autoBackupNetwork);
+        if (prefs.activeProvider) {
+          setActiveProvider(prefs.activeProvider);
         }
       },
     };
-  }, [fitsStore, albumStore, targetStore, targetGroupStore, sessionStore, settingsStore]);
+  }, [
+    fitsStore,
+    albumStore,
+    targetStore,
+    targetGroupStore,
+    sessionStore,
+    settingsStore,
+    fileGroupStore,
+    astrometryStore,
+    trashStore,
+    setAutoBackupEnabled,
+    setAutoBackupIntervalHours,
+    setAutoBackupNetwork,
+    setActiveProvider,
+  ]);
 
   const reconcileAlbumFileConsistency = useCallback(() => {
     const currentFiles = fitsStore.getState().files;
@@ -574,23 +476,29 @@ export function useBackup() {
     }
   }, [albumStore, fitsStore]);
 
-  /**
-   * 连接到云服务
-   */
   const connectProvider = useCallback(
-    async (providerType: CloudProvider, config?: CloudProviderConfig): Promise<boolean> => {
+    async (
+      providerType: CloudProvider,
+      config?: CloudProviderConfig,
+      mode: ConnectMode = "interactive",
+    ): Promise<boolean> => {
       try {
+        if (Platform.OS === "web" && providerType !== "webdav") {
+          setLastError("Provider is not supported on web");
+          return false;
+        }
+
         let resolvedConfig = config;
 
-        // For OAuth providers without pre-existing tokens, initiate OAuth flow
-        if (!resolvedConfig?.accessToken) {
+        if (mode === "interactive" && !resolvedConfig?.accessToken) {
           if (providerType === "onedrive") {
             resolvedConfig = await authenticateOneDrive();
           } else if (providerType === "dropbox") {
             resolvedConfig = await authenticateDropbox();
+          } else if (providerType === "google-drive") {
+            // Explicit marker so provider can decide whether interactive auth is allowed.
+            resolvedConfig = { provider: "google-drive" };
           }
-          // google-drive handles its own sign-in inside connect()
-          // webdav requires config with url/username/password
         }
 
         const provider = getOrCreateProvider(providerType);
@@ -606,53 +514,82 @@ export function useBackup() {
           userEmail: userInfo?.email,
           quotaUsed: quota?.used,
           quotaTotal: quota?.total,
+          lastBackupDate: useBackupStore.getState().getConnection(providerType)?.lastBackupDate,
         });
 
+        if (mode === "interactive" || !useBackupStore.getState().activeProvider) {
+          setActiveProvider(providerType);
+        }
         return true;
       } catch (error) {
         setLastError(error instanceof Error ? error.message : "Connection failed");
         return false;
       }
     },
-    [addConnection, setLastError],
+    [addConnection, setLastError, setActiveProvider],
   );
 
-  /**
-   * 断开云服务
-   */
+  useEffect(() => {
+    if (hasAttemptedProviderRehydrate) return;
+    const persistedConnections = connections
+      .filter((conn) => conn.connected)
+      .map((conn) => conn.provider);
+    if (persistedConnections.length === 0) return;
+
+    hasAttemptedProviderRehydrate = true;
+    const orderedProviders =
+      activeProvider && persistedConnections.includes(activeProvider)
+        ? [
+            activeProvider,
+            ...persistedConnections.filter((provider) => provider !== activeProvider),
+          ]
+        : persistedConnections;
+
+    void (async () => {
+      for (const provider of orderedProviders) {
+        await connectProvider(provider, undefined, "rehydrate");
+      }
+    })();
+  }, [connections, activeProvider, connectProvider]);
+
   const disconnectProvider = useCallback(
     async (providerType: CloudProvider): Promise<void> => {
       try {
         const provider = getOrCreateProvider(providerType);
         await provider.disconnect();
+      } catch {
+        // ignore disconnect errors
+      } finally {
         removeConnection(providerType);
         delete providers[providerType];
-      } catch {
-        removeConnection(providerType);
+        const remaining = useBackupStore
+          .getState()
+          .connections.filter((conn) => conn.provider !== providerType && conn.connected);
+        setActiveProvider(remaining[0]?.provider ?? null);
       }
     },
-    [removeConnection],
+    [removeConnection, setActiveProvider],
   );
 
-  /**
-   * 执行备份
-   */
   const backup = useCallback(
     async (
       providerType: CloudProvider,
       options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
     ): Promise<{ success: boolean; error?: string }> => {
-      if (backupInProgress || restoreInProgress)
+      if (backupInProgress || restoreInProgress) {
         return { success: false, error: "Operation in progress" };
+      }
 
       const provider = getOrCreateProvider(providerType);
       if (!provider.isConnected()) {
-        const msg = "Provider not connected";
-        setLastError(msg);
-        return { success: false, error: msg };
+        const rehydrateOk = await connectProvider(providerType, undefined, "rehydrate");
+        if (!rehydrateOk || !provider.isConnected()) {
+          const msg = "Provider not connected";
+          setLastError(msg);
+          return { success: false, error: msg };
+        }
       }
 
-      // Check network connectivity
       try {
         const networkState = await Network.getNetworkStateAsync();
         if (!networkState.isConnected || !networkState.isInternetReachable) {
@@ -661,7 +598,7 @@ export function useBackup() {
           return { success: false, error: msg };
         }
       } catch {
-        /* proceed if check fails */
+        // proceed if check fails
       }
 
       const abortController = new AbortController();
@@ -670,7 +607,6 @@ export function useBackup() {
       try {
         setBackupInProgress(true);
         setLastError(null);
-
         const dataSource = buildDataSource();
 
         await performBackup(
@@ -681,10 +617,8 @@ export function useBackup() {
           abortController.signal,
         );
 
-        updateConnection(providerType, {
-          lastBackupDate: Date.now(),
-        });
-
+        updateConnection(providerType, { lastBackupDate: Date.now() });
+        setActiveProvider(providerType);
         resetProgress();
         return { success: true };
       } catch (error) {
@@ -700,34 +634,36 @@ export function useBackup() {
     [
       backupInProgress,
       restoreInProgress,
+      connectProvider,
       buildDataSource,
       setBackupInProgress,
       setProgress,
       setLastError,
       updateConnection,
+      setActiveProvider,
       resetProgress,
     ],
   );
 
-  /**
-   * 执行恢复
-   */
   const restore = useCallback(
     async (
       providerType: CloudProvider,
       options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
     ): Promise<{ success: boolean; error?: string }> => {
-      if (backupInProgress || restoreInProgress)
+      if (backupInProgress || restoreInProgress) {
         return { success: false, error: "Operation in progress" };
+      }
 
       const provider = getOrCreateProvider(providerType);
       if (!provider.isConnected()) {
-        const msg = "Provider not connected";
-        setLastError(msg);
-        return { success: false, error: msg };
+        const rehydrateOk = await connectProvider(providerType, undefined, "rehydrate");
+        if (!rehydrateOk || !provider.isConnected()) {
+          const msg = "Provider not connected";
+          setLastError(msg);
+          return { success: false, error: msg };
+        }
       }
 
-      // Check network connectivity
       try {
         const networkState = await Network.getNetworkStateAsync();
         if (!networkState.isConnected || !networkState.isInternetReachable) {
@@ -736,7 +672,7 @@ export function useBackup() {
           return { success: false, error: msg };
         }
       } catch {
-        /* proceed if check fails */
+        // proceed if check fails
       }
 
       const abortController = new AbortController();
@@ -745,7 +681,6 @@ export function useBackup() {
       try {
         setRestoreInProgress(true);
         setLastError(null);
-
         const restoreTarget = buildRestoreTarget();
 
         await performRestore(
@@ -758,6 +693,7 @@ export function useBackup() {
 
         reconcileAlbumFileConsistency();
         reconcileAllStores();
+        setActiveProvider(providerType);
         resetProgress();
         return { success: true };
       } catch (error) {
@@ -773,25 +709,21 @@ export function useBackup() {
     [
       backupInProgress,
       restoreInProgress,
+      connectProvider,
       buildRestoreTarget,
       reconcileAlbumFileConsistency,
       setRestoreInProgress,
       setProgress,
       setLastError,
+      setActiveProvider,
       resetProgress,
     ],
   );
 
-  /**
-   * 取消操作
-   */
   const cancelOperation = useCallback(() => {
     abortRef.current?.abort();
   }, []);
 
-  /**
-   * 获取备份信息
-   */
   const getBackupInfo = useCallback(
     async (providerType: CloudProvider): Promise<BackupInfo | null> => {
       const provider = getOrCreateProvider(providerType);
@@ -801,37 +733,28 @@ export function useBackup() {
     [],
   );
 
-  /**
-   * 测试连接
-   */
   const testConnection = useCallback(async (providerType: CloudProvider): Promise<boolean> => {
     const provider = getOrCreateProvider(providerType);
     return provider.testConnection();
   }, []);
 
-  /**
-   * 导出本地备份
-   */
   const localExport = useCallback(
     async (
       options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
     ): Promise<{ success: boolean; error?: string }> => {
-      if (backupInProgress || restoreInProgress)
+      if (backupInProgress || restoreInProgress) {
         return { success: false, error: "Operation in progress" };
+      }
 
       try {
         setBackupInProgress(true);
         setLastError(null);
-
         const dataSource = buildDataSource();
         const result = await exportLocalBackup(dataSource, options, (p: BackupProgress) =>
           setProgress(p),
         );
-
         resetProgress();
-        if (!result.success) {
-          setLastError(result.error ?? "Export failed");
-        }
+        if (!result.success) setLastError(result.error ?? "Export failed");
         return result;
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Export failed";
@@ -853,9 +776,6 @@ export function useBackup() {
     ],
   );
 
-  /**
-   * 选择并预览本地备份文件（不执行恢复）
-   */
   const previewLocalImport = useCallback(async (): Promise<{
     success: boolean;
     cancelled?: boolean;
@@ -864,26 +784,14 @@ export function useBackup() {
   }> => {
     try {
       const result = await previewLocalBackup();
-      if (!result.success) {
+      if (!result.success || !result.preview) {
         return {
           success: false,
           cancelled: result.cancelled,
           error: result.error,
         };
       }
-
-      if (!result.manifest || !result.summary) {
-        return { success: false, error: "Invalid backup file format" };
-      }
-
-      return {
-        success: true,
-        preview: {
-          fileName: result.fileName ?? "backup.json",
-          manifest: result.manifest,
-          summary: result.summary,
-        },
-      };
+      return { success: true, preview: result.preview };
     } catch (error) {
       return {
         success: false,
@@ -892,21 +800,18 @@ export function useBackup() {
     }
   }, []);
 
-  /**
-   * 从本地文件导入备份
-   */
   const localImport = useCallback(
     async (
       options: BackupOptions = DEFAULT_BACKUP_OPTIONS,
       preview?: LocalBackupPreview,
     ): Promise<{ success: boolean; error?: string }> => {
-      if (backupInProgress || restoreInProgress)
+      if (backupInProgress || restoreInProgress) {
         return { success: false, error: "Operation in progress" };
+      }
 
       try {
         setRestoreInProgress(true);
         setLastError(null);
-
         const restoreTarget = buildRestoreTarget();
         const result = await importLocalBackup(
           restoreTarget,
@@ -914,15 +819,12 @@ export function useBackup() {
           (p: BackupProgress) => setProgress(p),
           preview,
         );
-
         if (result.success) {
           reconcileAlbumFileConsistency();
           reconcileAllStores();
         }
         resetProgress();
-        if (!result.success) {
-          setLastError(result.error ?? "Import failed");
-        }
+        if (!result.success) setLastError(result.error ?? "Import failed");
         return result;
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Import failed";
@@ -946,14 +848,12 @@ export function useBackup() {
   );
 
   return {
-    // State
     connections,
     activeProvider,
     backupInProgress,
     restoreInProgress,
     progress,
 
-    // Actions
     connectProvider,
     disconnectProvider,
     backup,

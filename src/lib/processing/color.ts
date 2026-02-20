@@ -1,3 +1,6 @@
+import type { ProcessingParamValue } from "../fits/types";
+import type { ProcessingRGBAState } from "./types";
+
 function clampByte(value: number) {
   if (!Number.isFinite(value)) return 0;
   if (value <= 0) return 0;
@@ -96,4 +99,56 @@ export function applyColorBalanceRGBA(
     result[i + 2] = clampByte(rgbaData[i + 2] * bGain);
   }
   return result;
+}
+
+function asNumber(params: Record<string, ProcessingParamValue>, key: string, fallback: number) {
+  const value = params[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function asString(params: Record<string, ProcessingParamValue>, key: string, fallback: string) {
+  const value = params[key];
+  return typeof value === "string" ? value : fallback;
+}
+
+export type ColorImageOperationId = "scnr" | "colorCalibration" | "saturation" | "colorBalance";
+
+export function applyColorOperation(
+  input: ProcessingRGBAState,
+  operationId: ColorImageOperationId,
+  params: Record<string, ProcessingParamValue>,
+): ProcessingRGBAState {
+  switch (operationId) {
+    case "scnr":
+      return {
+        ...input,
+        rgbaData: applySCNRRGBA(
+          input.rgbaData,
+          asString(params, "method", "averageNeutral") === "maximumNeutral"
+            ? "maximumNeutral"
+            : "averageNeutral",
+          asNumber(params, "amount", 1),
+        ),
+      };
+    case "colorCalibration":
+      return {
+        ...input,
+        rgbaData: applyColorCalibrationRGBA(input.rgbaData, asNumber(params, "percentile", 0.92)),
+      };
+    case "saturation":
+      return {
+        ...input,
+        rgbaData: applySaturationRGBA(input.rgbaData, asNumber(params, "amount", 0)),
+      };
+    case "colorBalance":
+      return {
+        ...input,
+        rgbaData: applyColorBalanceRGBA(
+          input.rgbaData,
+          asNumber(params, "redGain", 1),
+          asNumber(params, "greenGain", 1),
+          asNumber(params, "blueGain", 1),
+        ),
+      };
+  }
 }

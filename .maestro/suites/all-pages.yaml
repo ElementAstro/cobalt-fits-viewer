@@ -13,6 +13,7 @@ appId: com.maxqian888sorganization.cobaltfitsviewer
 - runFlow: ../flows/pages/backup__index.yaml
 - runFlow: ../flows/pages/compare__index.yaml
 - runFlow: ../flows/pages/compose__index.yaml
+- runFlow: ../flows/pages/compose__advanced.yaml
 - runFlow: ../flows/pages/convert__batch.yaml
 - runFlow: ../flows/pages/convert__index.yaml
 - runFlow: ../flows/pages/editor__param_id.yaml

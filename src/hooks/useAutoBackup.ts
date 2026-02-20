@@ -11,6 +11,7 @@ import { useBackup } from "./useBackup";
 import { LOG_TAGS, Logger } from "../lib/logger";
 
 const TAG = LOG_TAGS.AutoBackup;
+const AUTO_BACKUP_FAILURE_COOLDOWN_MS = 15 * 60 * 1000;
 
 export function useAutoBackup() {
   const runningRef = useRef(false);
@@ -18,6 +19,8 @@ export function useAutoBackup() {
   const autoBackupEnabled = useBackupStore((s) => s.autoBackupEnabled);
   const autoBackupIntervalHours = useBackupStore((s) => s.autoBackupIntervalHours);
   const autoBackupNetwork = useBackupStore((s) => s.autoBackupNetwork);
+  const lastAutoBackupAttempt = useBackupStore((s) => s.lastAutoBackupAttempt);
+  const setLastAutoBackupAttempt = useBackupStore((s) => s.setLastAutoBackupAttempt);
   const lastAutoBackupCheck = useBackupStore((s) => s.lastAutoBackupCheck);
   const setLastAutoBackupCheck = useBackupStore((s) => s.setLastAutoBackupCheck);
   const connections = useBackupStore((s) => s.connections);
@@ -37,6 +40,7 @@ export function useAutoBackup() {
       const now = Date.now();
       const intervalMs = autoBackupIntervalHours * 60 * 60 * 1000;
       if (now - lastAutoBackupCheck < intervalMs) return;
+      if (now - lastAutoBackupAttempt < AUTO_BACKUP_FAILURE_COOLDOWN_MS) return;
 
       // Find a connected provider to backup to
       const providerType = activeProvider ?? connections.find((c) => c.connected)?.provider;
@@ -66,9 +70,10 @@ export function useAutoBackup() {
       Logger.info(TAG, `Starting auto backup to ${providerType}`);
 
       try {
-        setLastAutoBackupCheck(now);
+        setLastAutoBackupAttempt(now);
         const result = await backup(providerType);
         if (result.success) {
+          setLastAutoBackupCheck(Date.now());
           Logger.info(TAG, "Auto backup completed successfully");
         } else {
           Logger.warn(TAG, `Auto backup failed: ${result.error}`);
@@ -97,6 +102,8 @@ export function useAutoBackup() {
     autoBackupEnabled,
     autoBackupIntervalHours,
     autoBackupNetwork,
+    lastAutoBackupAttempt,
+    setLastAutoBackupAttempt,
     lastAutoBackupCheck,
     setLastAutoBackupCheck,
     connections,

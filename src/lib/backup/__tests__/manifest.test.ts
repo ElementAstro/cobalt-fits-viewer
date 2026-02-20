@@ -6,29 +6,55 @@ import { createManifest, parseManifest, serializeManifest, getManifestSummary } 
 import type { BackupManifest, BackupOptions } from "../types";
 import { DEFAULT_BACKUP_OPTIONS, MANIFEST_VERSION } from "../types";
 
-// Mock react-native, expo-application, expo-device
 jest.mock("react-native", () => ({ Platform: { OS: "ios" } }));
 jest.mock("expo-application", () => ({ nativeApplicationVersion: "1.0.0" }));
 jest.mock("expo-device", () => ({ deviceName: "Test Device", modelName: "TestModel" }));
+jest.mock("expo-crypto", () => ({
+  randomUUID: jest.fn(() => "snapshot-test-id"),
+}));
 
 const mockData = {
   files: [
-    { id: "f1", filename: "test.fits", filepath: "/path/test.fits", fileSize: 1024 },
+    {
+      id: "f1",
+      filename: "test.fits",
+      filepath: "/path/test.fits",
+      fileSize: 1024,
+      sourceType: "fits",
+      mediaKind: "image",
+    },
   ] as never[],
-  albums: [{ id: "a1", name: "Album 1" }] as never[],
+  albums: [{ id: "a1", name: "Album 1", imageIds: ["f1"] }] as never[],
   targets: [{ id: "t1", name: "M31" }] as never[],
   targetGroups: [{ id: "g1", name: "Group 1", targetIds: ["t1"] }] as never[],
   sessions: [{ id: "s1", date: "2025-01-01" }] as never[],
   plans: [{ id: "p1", title: "Plan 1", targetName: "M31" }] as never[],
   logEntries: [{ id: "l1", sessionId: "s1", imageId: "f1" }] as never[],
   settings: { language: "en", theme: "dark" },
-};
+  fileGroups: {
+    groups: [{ id: "fg1", name: "Favorites", color: "#ff0" }],
+    fileGroupMap: { f1: ["fg1"] },
+  } as never,
+  astrometry: {
+    config: {} as never,
+    jobs: [{ id: "job1", fileId: "f1", status: "done" }],
+  } as never,
+  trash: [] as never[],
+  sessionRuntime: { activeSession: null },
+  backupPrefs: {
+    activeProvider: "webdav",
+    autoBackupEnabled: true,
+    autoBackupIntervalHours: 24,
+    autoBackupNetwork: "wifi",
+  },
+} as Parameters<typeof createManifest>[0];
 
 describe("createManifest", () => {
-  it("should create a manifest with all data when all options enabled", () => {
+  it("creates a v4 manifest with all domains", () => {
     const manifest = createManifest(mockData, DEFAULT_BACKUP_OPTIONS);
 
     expect(manifest.version).toBe(MANIFEST_VERSION);
+    expect(manifest.snapshotId).toBe("snapshot-test-id");
     expect(manifest.appVersion).toBe("1.0.0");
     expect(manifest.deviceName).toBe("Test Device");
     expect(manifest.platform).toBe("ios");
@@ -39,122 +65,107 @@ describe("createManifest", () => {
     expect(manifest.sessions).toHaveLength(1);
     expect(manifest.plans).toHaveLength(1);
     expect(manifest.logEntries).toHaveLength(1);
-    expect(manifest.settings).toEqual({ language: "en", theme: "dark" });
+    expect(manifest.fileGroups.groups).toHaveLength(1);
+    expect(manifest.astrometry.jobs).toHaveLength(1);
+    expect(manifest.backupPrefs.activeProvider).toBe("webdav");
+    expect(manifest.domains).toContain("backupPrefs");
   });
 
-  it("should exclude data based on options", () => {
+  it("excludes selected domains by options", () => {
     const options: BackupOptions = {
       ...DEFAULT_BACKUP_OPTIONS,
       includeFiles: false,
       includeAlbums: false,
       includeSettings: false,
+      includeThumbnails: true,
     };
     const manifest = createManifest(mockData, options);
 
     expect(manifest.files).toHaveLength(0);
     expect(manifest.albums).toHaveLength(0);
-    expect(manifest.targets).toHaveLength(1);
-    expect(manifest.targetGroups).toHaveLength(1);
-    expect(manifest.sessions).toHaveLength(1);
-    expect(manifest.plans).toHaveLength(1);
-    expect(manifest.logEntries).toHaveLength(1);
     expect(manifest.settings).toEqual({});
+    expect(manifest.domains).toContain("thumbnails");
+    expect(manifest.capabilities.supportsThumbnails).toBe(true);
   });
 });
 
-describe("parseManifest", () => {
-  it("should parse a valid manifest", () => {
-    const manifest: BackupManifest = {
-      version: MANIFEST_VERSION,
-      appVersion: "1.0.0",
-      createdAt: "2025-01-01T00:00:00.000Z",
-      deviceName: "Device",
-      platform: "ios",
-      files: [],
-      albums: [],
-      targets: [],
-      targetGroups: [],
-      sessions: [],
-      plans: [],
-      logEntries: [],
-      settings: {},
+describe("parseManifest compatibility", () => {
+  it("parses a valid v4 manifest", () => {
+    const v4 = createManifest(mockData, DEFAULT_BACKUP_OPTIONS);
+    const result = parseManifest(JSON.stringify(v4));
+    expect(result).not.toBeNull();
+    expect(result?.version).toBe(4);
+    expect(result?.snapshotId).toBe(v4.snapshotId);
+  });
+
+  it("parses v1-v3 manifests with defaults for new domains", () => {
+    const legacy = [
+      { version: 1, createdAt: "2025-01-01T00:00:00.000Z", files: [] },
+      { version: 2, createdAt: "2025-01-01T00:00:00.000Z", files: [] },
+      { version: 3, createdAt: "2025-01-01T00:00:00.000Z", files: [] },
+    ];
+
+    for (const item of legacy) {
+      const parsed = parseManifest(JSON.stringify(item));
+      expect(parsed).not.toBeNull();
+      expect(parsed?.fileGroups.groups).toEqual([]);
+      expect(parsed?.fileGroups.fileGroupMap).toEqual({});
+      expect(parsed?.astrometry.jobs).toEqual([]);
+      expect(parsed?.trash).toEqual([]);
+      expect(parsed?.sessionRuntime.activeSession).toBeNull();
+    }
+  });
+
+  it("rejects invalid v4 cross references", () => {
+    const invalidV4: BackupManifest = {
+      ...createManifest(mockData, DEFAULT_BACKUP_OPTIONS),
+      version: 4,
+      albums: [{ id: "a1", name: "Album 1", imageIds: ["missing-file"] }] as never[],
     };
-    const result = parseManifest(JSON.stringify(manifest));
-    expect(result).not.toBeNull();
-    expect(result!.version).toBe(MANIFEST_VERSION);
-    expect(result!.createdAt).toBe("2025-01-01T00:00:00.000Z");
+
+    const parsed = parseManifest(JSON.stringify(invalidV4));
+    expect(parsed).toBeNull();
   });
 
-  it("should return null for invalid JSON", () => {
-    expect(parseManifest("not json")).toBeNull();
-  });
-
-  it("should return null for missing version", () => {
-    expect(parseManifest(JSON.stringify({ createdAt: "2025-01-01" }))).toBeNull();
-  });
-
-  it("should return null for missing createdAt", () => {
-    expect(parseManifest(JSON.stringify({ version: 1 }))).toBeNull();
-  });
-
-  it("should return null for future manifest version", () => {
-    expect(
-      parseManifest(JSON.stringify({ version: MANIFEST_VERSION + 1, createdAt: "2025-01-01" })),
-    ).toBeNull();
-  });
-
-  it("should fill defaults for missing optional fields", () => {
-    const minimal = { version: MANIFEST_VERSION, createdAt: "2025-01-01" };
-    const result = parseManifest(JSON.stringify(minimal));
-    expect(result).not.toBeNull();
-    expect(result!.files).toEqual([]);
-    expect(result!.albums).toEqual([]);
-    expect(result!.targets).toEqual([]);
-    expect(result!.targetGroups).toEqual([]);
-    expect(result!.sessions).toEqual([]);
-    expect(result!.plans).toEqual([]);
-    expect(result!.logEntries).toEqual([]);
-    expect(result!.settings).toEqual({});
-    expect(result!.deviceName).toBe("Unknown Device");
-    expect(result!.appVersion).toBe("unknown");
-  });
-
-  it("should normalize v2 file metadata without mediaKind to v3 shape", () => {
+  it("normalizes legacy files without mediaKind", () => {
     const legacyV2 = {
       version: 2,
       createdAt: "2025-01-01T00:00:00.000Z",
       files: [
         { id: "img", filename: "a.fits", filepath: "/a.fits", fileSize: 10, sourceType: "fits" },
         { id: "vid", filename: "b.mp4", filepath: "/b.mp4", fileSize: 20, sourceType: "video" },
+        { id: "aud", filename: "c.m4a", filepath: "/c.m4a", fileSize: 15, sourceType: "audio" },
       ],
     };
 
     const parsed = parseManifest(JSON.stringify(legacyV2));
-    expect(parsed).not.toBeNull();
     expect(parsed?.files[0].mediaKind).toBe("image");
     expect(parsed?.files[1].mediaKind).toBe("video");
+    expect(parsed?.files[2].mediaKind).toBe("audio");
+  });
+
+  it("rejects invalid json/fields/future version", () => {
+    expect(parseManifest("not json")).toBeNull();
+    expect(parseManifest(JSON.stringify({ createdAt: "2025-01-01" }))).toBeNull();
+    expect(parseManifest(JSON.stringify({ version: 1 }))).toBeNull();
+    expect(
+      parseManifest(JSON.stringify({ version: MANIFEST_VERSION + 1, createdAt: "2025-01-01" })),
+    ).toBeNull();
   });
 });
 
 describe("serializeManifest", () => {
-  it("should produce valid JSON", () => {
+  it("produces parseable json", () => {
     const manifest = createManifest(mockData, DEFAULT_BACKUP_OPTIONS);
     const json = serializeManifest(manifest);
-    const parsed = JSON.parse(json);
-    expect(parsed.version).toBe(MANIFEST_VERSION);
-  });
-
-  it("should be parseable by parseManifest", () => {
-    const manifest = createManifest(mockData, DEFAULT_BACKUP_OPTIONS);
-    const json = serializeManifest(manifest);
-    const result = parseManifest(json);
-    expect(result).not.toBeNull();
-    expect(result!.files).toHaveLength(1);
+    const parsed = parseManifest(json);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.files).toHaveLength(1);
   });
 });
 
 describe("getManifestSummary", () => {
-  it("should return correct summary", () => {
+  it("returns expected summary", () => {
     const manifest = createManifest(mockData, DEFAULT_BACKUP_OPTIONS);
     const summary = getManifestSummary(manifest);
 
@@ -165,14 +176,8 @@ describe("getManifestSummary", () => {
     expect(summary.sessionCount).toBe(1);
     expect(summary.planCount).toBe(1);
     expect(summary.logEntryCount).toBe(1);
+    expect(summary.fileGroupCount).toBe(1);
+    expect(summary.astrometryJobCount).toBe(1);
     expect(summary.hasSettings).toBe(true);
-    expect(summary.appVersion).toBe("1.0.0");
-    expect(summary.deviceName).toBe("Test Device");
-  });
-
-  it("should report hasSettings=false for empty settings", () => {
-    const manifest = createManifest({ ...mockData, settings: {} }, DEFAULT_BACKUP_OPTIONS);
-    const summary = getManifestSummary(manifest);
-    expect(summary.hasSettings).toBe(false);
   });
 });

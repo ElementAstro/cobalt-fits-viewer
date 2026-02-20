@@ -206,6 +206,7 @@ export function ViewerToolbar({
 
           {/* More menu */}
           <Button
+            testID="e2e-action-viewer__param_id-open-menu"
             size="sm"
             variant="ghost"
             isIconOnly
@@ -232,6 +233,11 @@ export function ViewerToolbar({
             {moreActions.map((action, i) => (
               <Pressable
                 key={i}
+                testID={
+                  action.label === t("common.share")
+                    ? "e2e-action-viewer__param_id-export"
+                    : undefined
+                }
                 onPress={() => {
                   haptics.selection();
                   setShowMoreMenu(false);

@@ -68,7 +68,7 @@ export interface FrameClassificationConfig {
 }
 
 // ===== 文件来源类型 =====
-export type ImageSourceType = "fits" | "raster" | "video";
+export type ImageSourceType = "fits" | "raster" | "video" | "audio";
 export type ImageSourceFormat =
   | "fits"
   | "fit"
@@ -76,6 +76,9 @@ export type ImageSourceFormat =
   | "fz"
   | "fits.gz"
   | "fit.gz"
+  | "xisf"
+  | "ser"
+  | "hips"
   | "png"
   | "jpeg"
   | "webp"
@@ -91,6 +94,10 @@ export type ImageSourceFormat =
   | "mkv"
   | "avi"
   | "3gp"
+  | "mp3"
+  | "aac"
+  | "m4a"
+  | "wav"
   | "unknown";
 
 // ===== HDU 数据类型 =====
@@ -107,7 +114,9 @@ export interface GeoLocation {
   country?: string;
 }
 
-export interface StarAnnotationDetectionSnapshot {
+export type StarAnnotationDetectionConnectivity = 4 | 8;
+
+export interface StarAnnotationDetectionSnapshotV1 {
   profile: "fast" | "balanced" | "accurate";
   sigmaThreshold: number;
   maxStars: number;
@@ -122,6 +131,19 @@ export interface StarAnnotationDetectionSnapshot {
   maxEllipticity: number;
 }
 
+export interface StarAnnotationDetectionSnapshotV2 extends StarAnnotationDetectionSnapshotV1 {
+  sigmaClipIters: number;
+  applyMatchedFilter: boolean;
+  connectivity: StarAnnotationDetectionConnectivity;
+  minFwhm: number;
+  minSharpness: number;
+  maxSharpness: number;
+  peakMax?: number;
+  snrMin: number;
+}
+
+export type StarAnnotationDetectionSnapshot = StarAnnotationDetectionSnapshotV2;
+
 export interface StarAnnotationMetrics {
   flux?: number;
   peak?: number;
@@ -131,6 +153,8 @@ export interface StarAnnotationMetrics {
   roundness?: number;
   ellipticity?: number;
   sharpness?: number;
+  theta?: number;
+  flags?: number;
 }
 
 export interface StarAnnotationPoint {
@@ -143,13 +167,34 @@ export interface StarAnnotationPoint {
   metrics?: StarAnnotationMetrics;
 }
 
-export interface StarAnnotationBundle {
+export type StarAnnotationStaleReason =
+  | "geometry-changed"
+  | "unsupported-transform"
+  | "dimension-mismatch"
+  | "manual";
+
+export interface StarAnnotationBundleV1 {
   version: 1;
   updatedAt: number;
-  detectionSnapshot: StarAnnotationDetectionSnapshot;
+  detectionSnapshot: StarAnnotationDetectionSnapshotV1;
   points: StarAnnotationPoint[];
   stale?: boolean;
 }
+
+export interface StarAnnotationBundleV2 {
+  version: 2;
+  updatedAt: number;
+  detectionSnapshot: StarAnnotationDetectionSnapshotV2;
+  points: StarAnnotationPoint[];
+  stale?: boolean;
+  staleReason?: StarAnnotationStaleReason;
+  imageGeometry: {
+    width: number;
+    height: number;
+  };
+}
+
+export type StarAnnotationBundle = StarAnnotationBundleV1 | StarAnnotationBundleV2;
 
 // ===== FITS 文件元数据 =====
 export interface FitsMetadata {
@@ -201,7 +246,7 @@ export interface FitsMetadata {
   hash?: string;
   decodeStatus?: "ready" | "failed";
   decodeError?: string;
-  mediaKind?: "image" | "video";
+  mediaKind?: "image" | "video" | "audio";
   durationMs?: number;
   frameRate?: number;
   videoWidth?: number;
@@ -221,7 +266,8 @@ export interface FitsMetadata {
     | "merge"
     | "extract-audio"
     | "mute"
-    | "cover";
+    | "cover"
+    | "compose-advanced";
 
   // 质量评分
   qualityScore?: number; // 0-100
@@ -243,6 +289,7 @@ export interface FitsMetadata {
 }
 
 export type ProcessingExecutionMode = "preview" | "full";
+export type ProcessingAlgorithmProfile = "standard" | "legacy";
 
 export type ProcessingOperationId =
   | "rotate90cw"
@@ -301,7 +348,13 @@ export interface ProcessingNode {
 export interface ProcessingPipelineSnapshot {
   version: number;
   savedAt: number;
-  nodes: ProcessingNode[];
+  profile: ProcessingAlgorithmProfile;
+  scientificNodes: ProcessingNode[];
+  colorNodes: ProcessingNode[];
+  /**
+   * @deprecated Legacy snapshot format. Kept for migration compatibility.
+   */
+  nodes?: ProcessingNode[];
 }
 
 export interface TrashedFitsRecord {
@@ -662,10 +715,16 @@ export interface ConvertOptions {
   blackPoint: number;
   whitePoint: number;
   gamma: number;
+  brightness?: number;
+  contrast?: number;
+  mtfMidtone?: number;
+  curvePreset?: ViewerCurvePreset;
+  profile?: ProcessingAlgorithmProfile;
   outputBlack: number;
   outputWhite: number;
   includeAnnotations: boolean;
   includeWatermark: boolean;
+  watermarkText?: string;
 }
 
 export interface ConvertPreset {
@@ -692,6 +751,10 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       blackPoint: 0,
       whitePoint: 1,
       gamma: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
       outputBlack: 0,
       outputWhite: 1,
       includeAnnotations: false,
@@ -714,6 +777,10 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       blackPoint: 0,
       whitePoint: 1,
       gamma: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
       outputBlack: 0,
       outputWhite: 1,
       includeAnnotations: true,
@@ -736,6 +803,10 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       blackPoint: 0,
       whitePoint: 1,
       gamma: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
       outputBlack: 0,
       outputWhite: 1,
       includeAnnotations: false,
@@ -780,6 +851,8 @@ export interface BatchTask {
   total: number;
   completed: number;
   failed: number;
+  skipped?: number;
+  warnings?: string[];
   createdAt: number;
   startedAt?: number;
   finishedAt?: number;

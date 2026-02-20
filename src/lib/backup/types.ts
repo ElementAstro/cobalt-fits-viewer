@@ -10,19 +10,97 @@ import type {
   TargetGroup,
   ObservationPlan,
   ObservationLogEntry,
+  FileGroup,
+  TrashedFitsRecord,
 } from "../fits/types";
+import type { AstrometryConfig, AstrometryJob } from "../astrometry/types";
 
 // ===== 云服务提供商 =====
 export type CloudProvider = "google-drive" | "onedrive" | "dropbox" | "webdav";
 
+export interface BackupBinaryInfo {
+  remotePath?: string;
+  size?: number;
+  contentHash?: string;
+  hashAlgorithm?: "SHA-256";
+}
+
+export interface BackupFileRecord extends FitsMetadata {
+  binary?: BackupBinaryInfo;
+}
+
+export interface BackupThumbnailRecord {
+  fileId: string;
+  filename: string;
+  remotePath: string;
+  size?: number;
+  contentHash?: string;
+  hashAlgorithm?: "SHA-256";
+}
+
+export interface BackupAstrometryState {
+  config: AstrometryConfig;
+  jobs: AstrometryJob[];
+}
+
+export interface BackupFileGroupState {
+  groups: FileGroup[];
+  fileGroupMap: Record<string, string[]>;
+}
+
+export interface BackupSessionRuntimeState {
+  activeSession: {
+    id: string;
+    startedAt: number;
+    pausedAt?: number;
+    totalPausedMs: number;
+    notes: { timestamp: number; text: string }[];
+    status: "running" | "paused";
+  } | null;
+}
+
+export interface BackupPrefs {
+  activeProvider: CloudProvider | null;
+  autoBackupEnabled: boolean;
+  autoBackupIntervalHours: number;
+  autoBackupNetwork: "wifi" | "any";
+}
+
+export interface BackupCapabilities {
+  supportsBinary: boolean;
+  supportsThumbnails: boolean;
+  localPayloadMode: "full" | "metadata-only";
+  encryptedLocalPackage: boolean;
+}
+
+export type BackupDomain =
+  | "files"
+  | "albums"
+  | "targets"
+  | "targetGroups"
+  | "sessions"
+  | "plans"
+  | "logEntries"
+  | "settings"
+  | "thumbnails"
+  | "fileGroups"
+  | "astrometry"
+  | "trash"
+  | "sessionRuntime"
+  | "backupPrefs";
+
 // ===== 备份 Manifest =====
 export interface BackupManifest {
   version: number;
+  snapshotId: string;
   appVersion: string;
   createdAt: string;
   deviceName: string;
   platform: string;
-  files: FitsMetadata[];
+  capabilities: BackupCapabilities;
+  domains: BackupDomain[];
+  files: BackupFileRecord[];
+  thumbnails: BackupThumbnailRecord[];
   albums: Album[];
   targets: Target[];
   targetGroups: TargetGroup[];
@@ -30,6 +108,11 @@ export interface BackupManifest {
   plans: ObservationPlan[];
   logEntries: ObservationLogEntry[];
   settings: Record<string, unknown>;
+  fileGroups: BackupFileGroupState;
+  astrometry: BackupAstrometryState;
+  trash: TrashedFitsRecord[];
+  sessionRuntime: BackupSessionRuntimeState;
+  backupPrefs: BackupPrefs;
 }
 
 // ===== Provider 配置 =====
@@ -73,6 +156,11 @@ export interface BackupOptions {
   includeTargets: boolean;
   includeSessions: boolean;
   includeThumbnails: boolean;
+  localPayloadMode: "full" | "metadata-only";
+  localEncryption: {
+    enabled: boolean;
+    password?: string;
+  };
   restoreConflictStrategy?: RestoreConflictStrategy;
 }
 
@@ -83,6 +171,10 @@ export const DEFAULT_BACKUP_OPTIONS: BackupOptions = {
   includeTargets: true,
   includeSessions: true,
   includeThumbnails: false,
+  localPayloadMode: "full",
+  localEncryption: {
+    enabled: false,
+  },
   restoreConflictStrategy: "skip-existing",
 };
 
@@ -123,9 +215,16 @@ export interface BackupStoreState {
   autoBackupEnabled: boolean;
   autoBackupIntervalHours: number;
   autoBackupNetwork: "wifi" | "any";
+  lastAutoBackupAttempt: number;
   lastAutoBackupCheck: number;
   // 错误
   lastError: string | null;
+}
+
+export interface CloudProviderCapabilities {
+  supportsConditionalWrite?: boolean;
+  supportsResumableUpload?: boolean;
+  supportsContentHash?: boolean;
 }
 
 // ===== Provider 显示信息 =====
@@ -159,4 +258,4 @@ export const BACKUP_DIR = "cobalt-backup";
 export const MANIFEST_FILENAME = "manifest.json";
 export const FITS_SUBDIR = "fits_files";
 export const THUMBNAIL_SUBDIR = "thumbnails";
-export const MANIFEST_VERSION = 3;
+export const MANIFEST_VERSION = 4;

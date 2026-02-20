@@ -5,7 +5,11 @@
 
 import { useState, useCallback, useRef } from "react";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import { loadFitsFromBufferAuto, getImagePixels, getImageDimensions } from "../lib/fits/parser";
+import {
+  loadScientificFitsFromBuffer,
+  getImagePixels,
+  getImageDimensions,
+} from "../lib/fits/parser";
 import {
   stackAverage,
   stackMedian,
@@ -34,8 +38,10 @@ import { LOG_TAGS, Logger } from "../lib/logger";
 import type { StarAnnotationBundle } from "../lib/fits/types";
 import {
   buildAnchorPairs,
+  evaluateStarAnnotationUsability,
   pickAnchorPoints,
   resolveRegistrationMode,
+  sanitizeStarAnnotations,
   toDetectedStars,
 } from "../lib/stacking/starAnnotationLinkage";
 
@@ -63,6 +69,10 @@ export interface StackingAdvancedOptions {
   detection?: StarDetectionOptions;
   alignment?: Omit<AlignmentOptions, "detectionOptions" | "detectionRuntime">;
   quality?: FrameQualityOptions;
+  annotation?: {
+    useAnnotatedForAlignment?: boolean;
+    stalePolicy?: "auto-fallback-detect";
+  };
 }
 
 export interface StackFilesRequest {
@@ -105,6 +115,18 @@ export interface StackResult {
       | "annotated-stars";
   }>;
   qualityMetrics?: FrameQualityMetrics[];
+  annotationDiagnostics?: Array<{
+    filename: string;
+    usable: boolean;
+    usedForAlignment: boolean;
+    usedForQuality: boolean;
+    reason?: "missing" | "stale" | "dimension-mismatch" | "insufficient-points";
+    warning?: string;
+    stale: boolean;
+    staleReason?: "geometry-changed" | "unsupported-transform" | "dimension-mismatch" | "manual";
+    enabledPointCount: number;
+    anchorCount: number;
+  }>;
 }
 
 export interface StackProgress {
@@ -127,7 +149,7 @@ async function loadPixelsFromPath(
 ): Promise<{ pixels: Float32Array; width: number; height: number } | null> {
   try {
     const buffer = await readFileAsArrayBuffer(filepath);
-    const fits = loadFitsFromBufferAuto(buffer);
+    const fits = await loadScientificFitsFromBuffer(buffer, { filename: filepath });
     const dims = getImageDimensions(fits);
     const pixels = await getImagePixels(fits);
     if (!dims || !pixels) return null;
@@ -146,6 +168,17 @@ function normalizeRequest(
   enableQualityEval: boolean = false,
   advanced?: StackingAdvancedOptions,
 ): StackFilesRequest {
+  const normalizeAdvanced = (
+    value: StackingAdvancedOptions | undefined,
+  ): StackingAdvancedOptions => ({
+    ...value,
+    annotation: {
+      useAnnotatedForAlignment: true,
+      stalePolicy: "auto-fallback-detect",
+      ...value?.annotation,
+    },
+  });
+
   if (Array.isArray(filesOrRequest)) {
     return {
       files: filesOrRequest,
@@ -154,14 +187,16 @@ function normalizeRequest(
       calibration,
       alignmentMode,
       enableQualityEval,
-      advanced,
+      advanced: normalizeAdvanced(advanced),
     };
   }
+  const mergedAdvanced = normalizeAdvanced(filesOrRequest.advanced);
   return {
     sigma: 2.5,
     alignmentMode: "none",
     enableQualityEval: false,
     ...filesOrRequest,
+    advanced: mergedAdvanced,
   };
 }
 
@@ -311,7 +346,9 @@ export function useStacking() {
           await yieldToUI();
 
           const buffer = await readFileAsArrayBuffer(request.files[i].filepath);
-          const fits = loadFitsFromBufferAuto(buffer);
+          const fits = await loadScientificFitsFromBuffer(buffer, {
+            filename: request.files[i].filename,
+          });
           const dims = getImageDimensions(fits);
           let pixels = await getImagePixels(fits);
 
@@ -353,12 +390,69 @@ export function useStacking() {
 
         if (isCancelled()) return;
 
-        const frameAnnotatedStars = request.files.map((file) =>
-          toDetectedStars(file.starAnnotations?.points ?? [], undefined, { maxCount: 50 }),
+        const useAnnotatedForAlignment =
+          request.advanced?.annotation?.useAnnotatedForAlignment ?? true;
+
+        const frameAnnotationBundles = request.files.map((file) =>
+          file.starAnnotations
+            ? sanitizeStarAnnotations(file.starAnnotations, {
+                width: refWidth,
+                height: refHeight,
+              })
+            : null,
         );
-        const frameAnchorPoints = request.files.map((file) =>
-          pickAnchorPoints(file.starAnnotations?.points ?? []),
+
+        const frameAnnotationUsability = request.files.map((file) =>
+          evaluateStarAnnotationUsability(file.starAnnotations, {
+            width: refWidth,
+            height: refHeight,
+            minEnabledPoints: 3,
+          }),
         );
+
+        const frameAnnotatedStars = frameAnnotationBundles.map((bundle, index) => {
+          const usable = useAnnotatedForAlignment && frameAnnotationUsability[index].usable;
+          if (!bundle || !usable) return [];
+          return toDetectedStars(bundle.points, undefined, { maxCount: 50 });
+        });
+        const frameAnchorPoints = frameAnnotationBundles.map((bundle, index) => {
+          const usable = useAnnotatedForAlignment && frameAnnotationUsability[index].usable;
+          if (!bundle || !usable) return [];
+          return pickAnchorPoints(bundle.points);
+        });
+
+        const annotationDiagnostics: NonNullable<StackResult["annotationDiagnostics"]> =
+          request.files.map((file, index) => {
+            const usage = frameAnnotationUsability[index];
+            const used = useAnnotatedForAlignment && usage.usable;
+            let warning: string | undefined;
+            if (useAnnotatedForAlignment && usage.reason === "stale") {
+              warning = "annotation-stale-fallback-detect";
+            } else if (useAnnotatedForAlignment && usage.reason === "dimension-mismatch") {
+              warning = "annotation-dimension-mismatch-fallback-detect";
+            } else if (useAnnotatedForAlignment && usage.reason === "insufficient-points") {
+              warning = "annotation-insufficient-points-fallback-detect";
+            }
+            if (warning) {
+              Logger.warn(LOG_TAGS.Stacking, "Annotation unavailable; fallback to detection", {
+                filename: file.filename,
+                reason: usage.reason,
+                staleReason: usage.staleReason,
+              });
+            }
+            return {
+              filename: file.filename,
+              usable: usage.usable,
+              usedForAlignment: used,
+              usedForQuality: used,
+              reason: usage.reason,
+              warning,
+              stale: usage.stale,
+              staleReason: usage.staleReason,
+              enabledPointCount: usage.enabledPointCount,
+              anchorCount: usage.anchorCount,
+            };
+          });
 
         let qualityMetrics: FrameQualityMetrics[] | undefined;
         let weights: number[] | undefined;
@@ -569,6 +663,7 @@ export function useStacking() {
           alignmentMode: request.alignmentMode ?? "none",
           alignmentResults: alignmentResults.length > 0 ? alignmentResults : undefined,
           qualityMetrics,
+          annotationDiagnostics,
         };
 
         setResult(stackResult);

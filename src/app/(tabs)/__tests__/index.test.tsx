@@ -426,4 +426,25 @@ describe("FilesScreen", () => {
     fireEvent.press(screen.getByText("capture.mp4"));
     expect(mockPush).toHaveBeenCalledWith("/video/video-1");
   });
+
+  it("routes audio files to media workspace", () => {
+    useFitsStore.setState({
+      files: [
+        makeFile({
+          id: "audio-1",
+          filename: "recording.m4a",
+          sourceType: "audio",
+          mediaKind: "audio",
+          sourceFormat: "m4a",
+          frameType: "unknown",
+        }),
+      ],
+      selectedIds: [],
+      isSelectionMode: false,
+    });
+
+    render(<FilesScreen />);
+    fireEvent.press(screen.getByText("recording.m4a"));
+    expect(mockPush).toHaveBeenCalledWith("/video/audio-1");
+  });
 });

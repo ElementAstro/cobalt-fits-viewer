@@ -5,7 +5,7 @@ jest.mock("../../lib/utils/fileManager", () => ({
   readFileAsArrayBuffer: jest.fn(),
 }));
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBufferAuto: jest.fn(),
+  loadScientificFitsFromBuffer: jest.fn(),
   getImagePixels: jest.fn(),
   getImageDimensions: jest.fn(),
 }));
@@ -69,7 +69,7 @@ const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
   readFileAsArrayBuffer: jest.Mock;
 };
 const parserLib = jest.requireMock("../../lib/fits/parser") as {
-  loadFitsFromBufferAuto: jest.Mock;
+  loadScientificFitsFromBuffer: jest.Mock;
   getImagePixels: jest.Mock;
   getImageDimensions: jest.Mock;
 };
@@ -94,7 +94,7 @@ describe("useStacking", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    parserLib.loadFitsFromBufferAuto.mockReturnValue({ fits: true });
+    parserLib.loadScientificFitsFromBuffer.mockResolvedValue({ fits: true });
     parserLib.getImageDimensions.mockReturnValue({ width: 2, height: 2 });
     parserLib.getImagePixels
       .mockResolvedValueOnce(new Float32Array([1, 2, 3, 4]))
@@ -248,12 +248,20 @@ describe("useStacking", () => {
             minArea: 4,
             maxArea: 888,
             borderMargin: 9,
+            sigmaClipIters: 3,
+            applyMatchedFilter: true,
+            connectivity: 8,
             meshSize: 48,
             deblendNLevels: 20,
             deblendMinContrast: 0.06,
             filterFwhm: 2.1,
+            minFwhm: 0.7,
             maxFwhm: 9.5,
             maxEllipticity: 0.6,
+            minSharpness: 0.2,
+            maxSharpness: 12,
+            peakMax: 9000,
+            snrMin: 2.2,
           },
           alignment: {
             inlierThreshold: 2.5,
@@ -273,12 +281,20 @@ describe("useStacking", () => {
         minArea: 4,
         maxArea: 888,
         borderMargin: 9,
+        sigmaClipIters: 3,
+        applyMatchedFilter: true,
+        connectivity: 8,
         meshSize: 48,
         deblendNLevels: 20,
         deblendMinContrast: 0.06,
         filterFwhm: 2.1,
+        minFwhm: 0.7,
         maxFwhm: 9.5,
         maxEllipticity: 0.6,
+        minSharpness: 0.2,
+        maxSharpness: 12,
+        peakMax: 9000,
+        snrMin: 2.2,
       }),
     );
 
@@ -295,12 +311,149 @@ describe("useStacking", () => {
         profile: "accurate",
         sigmaThreshold: 4.4,
         maxStars: 333,
+        sigmaClipIters: 3,
+        applyMatchedFilter: true,
+        connectivity: 8,
+        minFwhm: 0.7,
+        minSharpness: 0.2,
+        maxSharpness: 12,
+        peakMax: 9000,
+        snrMin: 2.2,
       }),
     );
   });
 
+  it("does not use annotations when useAnnotatedForAlignment is false", async () => {
+    const { result } = renderHook(() => useStacking());
+
+    const annotation = {
+      version: 2 as const,
+      updatedAt: Date.now(),
+      stale: false,
+      imageGeometry: { width: 2, height: 2 },
+      detectionSnapshot: { profile: "balanced" as const },
+      points: [
+        { id: "a1", x: 0, y: 0, enabled: true, source: "manual" as const, anchorIndex: 1 as const },
+        { id: "a2", x: 1, y: 0, enabled: true, source: "manual" as const, anchorIndex: 2 as const },
+        { id: "a3", x: 0, y: 1, enabled: true, source: "manual" as const, anchorIndex: 3 as const },
+      ],
+    } as any;
+
+    await act(async () => {
+      await result.current.stackFiles({
+        files: [
+          { filepath: "/tmp/a.fits", filename: "a.fits", starAnnotations: annotation },
+          { filepath: "/tmp/b.fits", filename: "b.fits", starAnnotations: annotation },
+        ],
+        method: "weighted",
+        alignmentMode: "full",
+        enableQualityEval: true,
+        advanced: {
+          annotation: { useAnnotatedForAlignment: false, stalePolicy: "auto-fallback-detect" },
+        },
+      });
+    });
+
+    const alignOpts = alignLib.alignFrameAsync.mock.calls[0]?.[5];
+    expect(alignOpts?.refStarsOverride).toBeUndefined();
+    expect(alignOpts?.targetStarsOverride).toBeUndefined();
+    expect(alignOpts?.manualControlPoints).toBeUndefined();
+
+    const qualityOpts = qualityLib.evaluateFrameQualityAsync.mock.calls[0]?.[3];
+    expect(qualityOpts?.starsOverride).toBeUndefined();
+    expect(
+      result.current.result?.annotationDiagnostics?.every((item) => !item.usedForAlignment),
+    ).toBe(true);
+  });
+
+  it("falls back to detection when annotations are stale", async () => {
+    const { result } = renderHook(() => useStacking());
+    const staleAnnotation = {
+      version: 2 as const,
+      updatedAt: Date.now(),
+      stale: true,
+      staleReason: "geometry-changed" as const,
+      imageGeometry: { width: 2, height: 2 },
+      detectionSnapshot: { profile: "balanced" as const },
+      points: [
+        { id: "a1", x: 0, y: 0, enabled: true, source: "manual" as const, anchorIndex: 1 as const },
+        { id: "a2", x: 1, y: 0, enabled: true, source: "manual" as const, anchorIndex: 2 as const },
+        { id: "a3", x: 0, y: 1, enabled: true, source: "manual" as const, anchorIndex: 3 as const },
+      ],
+    } as any;
+
+    await act(async () => {
+      await result.current.stackFiles({
+        files: [
+          { filepath: "/tmp/a.fits", filename: "a.fits", starAnnotations: staleAnnotation },
+          { filepath: "/tmp/b.fits", filename: "b.fits", starAnnotations: staleAnnotation },
+        ],
+        method: "weighted",
+        alignmentMode: "full",
+        enableQualityEval: true,
+      });
+    });
+
+    expect(result.current.result?.annotationDiagnostics?.[0]).toEqual(
+      expect.objectContaining({
+        usable: false,
+        reason: "stale",
+        warning: "annotation-stale-fallback-detect",
+      }),
+    );
+    const alignOpts = alignLib.alignFrameAsync.mock.calls[0]?.[5];
+    expect(alignOpts?.refStarsOverride).toBeUndefined();
+    const qualityOpts = qualityLib.evaluateFrameQualityAsync.mock.calls[0]?.[3];
+    expect(qualityOpts?.starsOverride).toBeUndefined();
+  });
+
+  it("falls back to detection when annotation points are insufficient", async () => {
+    const { result } = renderHook(() => useStacking());
+    const weakAnnotation = {
+      version: 2 as const,
+      updatedAt: Date.now(),
+      stale: false,
+      imageGeometry: { width: 2, height: 2 },
+      detectionSnapshot: { profile: "balanced" as const },
+      points: [
+        { id: "a1", x: 0, y: 0, enabled: true, source: "manual" as const },
+        { id: "a2", x: 1, y: 1, enabled: true, source: "manual" as const },
+      ],
+    } as any;
+
+    await act(async () => {
+      await result.current.stackFiles({
+        files: [
+          { filepath: "/tmp/a.fits", filename: "a.fits", starAnnotations: weakAnnotation },
+          { filepath: "/tmp/b.fits", filename: "b.fits", starAnnotations: weakAnnotation },
+        ],
+        method: "weighted",
+        alignmentMode: "full",
+        enableQualityEval: true,
+      });
+    });
+
+    expect(result.current.result?.annotationDiagnostics?.[0]).toEqual(
+      expect.objectContaining({
+        usable: false,
+        reason: "insufficient-points",
+        warning: "annotation-insufficient-points-fallback-detect",
+      }),
+    );
+    const alignOpts = alignLib.alignFrameAsync.mock.calls[0]?.[5];
+    expect(alignOpts?.refStarsOverride).toBeUndefined();
+    const qualityOpts = qualityLib.evaluateFrameQualityAsync.mock.calls[0]?.[3];
+    expect(qualityOpts?.starsOverride).toBeUndefined();
+  });
+
   it("prioritizes manual anchors and annotation stars in stacking pipeline", async () => {
     const { result } = renderHook(() => useStacking());
+    parserLib.getImageDimensions
+      .mockReturnValueOnce({ width: 40, height: 40 })
+      .mockReturnValueOnce({ width: 40, height: 40 });
+    parserLib.getImagePixels
+      .mockResolvedValueOnce(new Float32Array(40 * 40).fill(1))
+      .mockResolvedValueOnce(new Float32Array(40 * 40).fill(1));
     const snapshot = {
       profile: "balanced" as const,
       sigmaThreshold: 5,

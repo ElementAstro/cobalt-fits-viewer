@@ -47,6 +47,15 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.stackingDetectionProfile).toBe("balanced");
       expect(s.stackingDetectSigmaThreshold).toBe(5);
       expect(s.stackingDetectMaxStars).toBe(220);
+      expect(s.stackingDetectSigmaClipIters).toBe(2);
+      expect(s.stackingDetectApplyMatchedFilter).toBe(true);
+      expect(s.stackingDetectConnectivity).toBe(8);
+      expect(s.stackingDetectMinFwhm).toBe(0.6);
+      expect(s.stackingDetectMinSharpness).toBe(0.25);
+      expect(s.stackingDetectMaxSharpness).toBe(18);
+      expect(s.stackingDetectPeakMax).toBe(0);
+      expect(s.stackingDetectSnrMin).toBe(2);
+      expect(s.stackingUseAnnotatedForAlignment).toBe(true);
       expect(s.stackingDeblendNLevels).toBe(16);
       expect(s.stackingAlignmentInlierThreshold).toBe(3);
     });
@@ -57,6 +66,12 @@ describe("useSettingsStore — orientationLock", () => {
         true,
       );
       expect(s.reportFrameTypes).toEqual(["light"]);
+    });
+
+    it("has processing profile defaults", () => {
+      const s = useSettingsStore.getState();
+      expect(s.imageProcessingProfile).toBe("standard");
+      expect(s.viewerApplyEditorRecipe).toBe(true);
     });
   });
 
@@ -116,6 +131,24 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.logMaxEntries).toBe(5000);
       expect(s.logConsoleOutput).toBe(false);
       expect(s.logPersistEnabled).toBe(false);
+    });
+  });
+
+  describe("processing profile settings", () => {
+    it("updates imageProcessingProfile", () => {
+      const store = useSettingsStore.getState();
+      store.setImageProcessingProfile("legacy");
+      expect(useSettingsStore.getState().imageProcessingProfile).toBe("legacy");
+      store.setImageProcessingProfile("standard");
+      expect(useSettingsStore.getState().imageProcessingProfile).toBe("standard");
+    });
+
+    it("updates viewerApplyEditorRecipe", () => {
+      const store = useSettingsStore.getState();
+      store.setViewerApplyEditorRecipe(false);
+      expect(useSettingsStore.getState().viewerApplyEditorRecipe).toBe(false);
+      store.setViewerApplyEditorRecipe(true);
+      expect(useSettingsStore.getState().viewerApplyEditorRecipe).toBe(true);
     });
   });
 
@@ -292,12 +325,30 @@ describe("useSettingsStore — orientationLock", () => {
         stackingDetectionProfile?: string;
         stackingDetectSigmaThreshold?: number;
         stackingDetectMaxStars?: number;
+        stackingDetectSigmaClipIters?: number;
+        stackingDetectApplyMatchedFilter?: boolean;
+        stackingDetectConnectivity?: number;
+        stackingDetectMinFwhm?: number;
+        stackingDetectMinSharpness?: number;
+        stackingDetectMaxSharpness?: number;
+        stackingDetectPeakMax?: number;
+        stackingDetectSnrMin?: number;
+        stackingUseAnnotatedForAlignment?: boolean;
         stackingDeblendNLevels?: number;
         stackingAlignmentInlierThreshold?: number;
       };
       expect(partial.stackingDetectionProfile).toBe("balanced");
       expect(partial.stackingDetectSigmaThreshold).toBe(5);
       expect(partial.stackingDetectMaxStars).toBe(220);
+      expect(partial.stackingDetectSigmaClipIters).toBe(2);
+      expect(partial.stackingDetectApplyMatchedFilter).toBe(true);
+      expect(partial.stackingDetectConnectivity).toBe(8);
+      expect(partial.stackingDetectMinFwhm).toBe(0.6);
+      expect(partial.stackingDetectMinSharpness).toBe(0.25);
+      expect(partial.stackingDetectMaxSharpness).toBe(18);
+      expect(partial.stackingDetectPeakMax).toBe(0);
+      expect(partial.stackingDetectSnrMin).toBe(2);
+      expect(partial.stackingUseAnnotatedForAlignment).toBe(true);
       expect(partial.stackingDeblendNLevels).toBe(16);
       expect(partial.stackingAlignmentInlierThreshold).toBe(3);
     });
@@ -335,9 +386,16 @@ describe("useSettingsStore — orientationLock", () => {
         stackingDetectMaxStars: 99999,
         stackingDetectMinArea: 500,
         stackingDetectMaxArea: 40,
+        stackingDetectSigmaClipIters: 99,
+        stackingDetectConnectivity: 99,
+        stackingDetectMinFwhm: -5,
         stackingDeblendNLevels: 0,
         stackingDeblendMinContrast: -1,
         stackingFilterFwhm: 99,
+        stackingDetectMinSharpness: -1,
+        stackingDetectMaxSharpness: -1,
+        stackingDetectPeakMax: -1,
+        stackingDetectSnrMin: -1,
         stackingMaxEllipticity: 5,
         stackingRansacMaxIterations: 2,
         stackingAlignmentInlierThreshold: 99,
@@ -347,9 +405,16 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.stackingDetectSigmaThreshold).toBe(20);
       expect(s.stackingDetectMaxStars).toBe(2000);
       expect(s.stackingDetectMinArea).toBeLessThanOrEqual(s.stackingDetectMaxArea);
+      expect(s.stackingDetectSigmaClipIters).toBe(10);
+      expect(s.stackingDetectConnectivity).toBe(8);
+      expect(s.stackingDetectMinFwhm).toBe(0.1);
       expect(s.stackingDeblendNLevels).toBe(1);
       expect(s.stackingDeblendMinContrast).toBe(0);
       expect(s.stackingFilterFwhm).toBe(15);
+      expect(s.stackingDetectMinSharpness).toBe(0);
+      expect(s.stackingDetectMaxSharpness).toBeGreaterThanOrEqual(s.stackingDetectMinSharpness);
+      expect(s.stackingDetectPeakMax).toBe(0);
+      expect(s.stackingDetectSnrMin).toBe(0);
       expect(s.stackingMaxEllipticity).toBe(1);
       expect(s.stackingRansacMaxIterations).toBe(10);
       expect(s.stackingAlignmentInlierThreshold).toBe(20);
@@ -599,6 +664,9 @@ describe("useSettingsStore — orientationLock", () => {
       store.setDefaultStackMethod("median");
       store.setDefaultAlignmentMode("full");
       store.setDefaultEnableQuality(true);
+      store.setStackingDetectApplyMatchedFilter(false);
+      store.setStackingDetectConnectivity(4);
+      store.setStackingUseAnnotatedForAlignment(false);
       store.setUseHighQualityPreview(false);
       store.setGridColor("#abcdef");
       store.setCrosshairColor("#fedcba");
@@ -656,6 +724,9 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.defaultStackMethod).toBe("median");
       expect(s.defaultAlignmentMode).toBe("full");
       expect(s.defaultEnableQuality).toBe(true);
+      expect(s.stackingDetectApplyMatchedFilter).toBe(false);
+      expect(s.stackingDetectConnectivity).toBe(4);
+      expect(s.stackingUseAnnotatedForAlignment).toBe(false);
       expect(s.useHighQualityPreview).toBe(false);
       expect(s.gridColor).toBe("#abcdef");
       expect(s.crosshairColor).toBe("#fedcba");
@@ -700,6 +771,12 @@ describe("useSettingsStore — orientationLock", () => {
       store.setCanvasPinchOverzoomFactor(1.35);
       store.setCanvasPanRubberBandFactor(0.7);
       store.setCanvasWheelZoomSensitivity(0.0024);
+      store.setStackingDetectSigmaClipIters(3);
+      store.setStackingDetectMinFwhm(0.9);
+      store.setStackingDetectMaxSharpness(9.8);
+      store.setStackingDetectMinSharpness(0.4);
+      store.setStackingDetectPeakMax(4321);
+      store.setStackingDetectSnrMin(2.7);
       store.setDefaultConverterQuality(88);
       store.setDefaultBlurSigma(2.4);
       store.setDefaultSharpenAmount(2.2);
@@ -729,6 +806,12 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.canvasPinchOverzoomFactor).toBe(1.35);
       expect(s.canvasPanRubberBandFactor).toBe(0.7);
       expect(s.canvasWheelZoomSensitivity).toBe(0.0024);
+      expect(s.stackingDetectSigmaClipIters).toBe(3);
+      expect(s.stackingDetectMinFwhm).toBe(0.9);
+      expect(s.stackingDetectMinSharpness).toBe(0.4);
+      expect(s.stackingDetectMaxSharpness).toBe(9.8);
+      expect(s.stackingDetectPeakMax).toBe(4321);
+      expect(s.stackingDetectSnrMin).toBe(2.7);
       expect(s.defaultConverterQuality).toBe(88);
       expect(s.defaultBlurSigma).toBe(2.4);
       expect(s.defaultSharpenAmount).toBe(2.2);
@@ -887,6 +970,13 @@ describe("useSettingsStore — orientationLock", () => {
       });
       expect(Uniwind.setTheme).toHaveBeenCalledWith("light");
       expect(Uniwind.updateCSSVariables).toHaveBeenCalled();
+    });
+
+    it("applySettingsPatch sanitizes invalid imageProcessingProfile enum", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        imageProcessingProfile: "invalid" as unknown as "standard",
+      });
+      expect(useSettingsStore.getState().imageProcessingProfile).toBe("standard");
     });
   });
 });

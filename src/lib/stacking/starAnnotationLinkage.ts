@@ -1,7 +1,9 @@
 import type {
   StarAnnotationBundle,
+  StarAnnotationBundleV2,
   StarAnnotationDetectionSnapshot,
   StarAnnotationPoint,
+  StarAnnotationStaleReason,
 } from "../fits/types";
 import type { DetectedStar } from "./starDetection";
 
@@ -45,6 +47,8 @@ type StarAnnotationBundleInput = Omit<
 > & {
   detectionSnapshot?: Partial<StarAnnotationDetectionSnapshot> | null;
   points?: StarAnnotationPoint[] | null;
+  staleReason?: StarAnnotationStaleReason;
+  imageGeometry?: { width: number; height: number } | null;
 };
 
 const DEFAULT_DETECTION_SNAPSHOT: StarAnnotationDetectionSnapshot = {
@@ -58,8 +62,15 @@ const DEFAULT_DETECTION_SNAPSHOT: StarAnnotationDetectionSnapshot = {
   deblendNLevels: 16,
   deblendMinContrast: 0.08,
   filterFwhm: 2.2,
+  sigmaClipIters: 2,
+  applyMatchedFilter: true,
+  connectivity: 8,
+  minFwhm: 0.6,
   maxFwhm: 11,
   maxEllipticity: 0.65,
+  minSharpness: 0.25,
+  maxSharpness: 18,
+  snrMin: 2,
 };
 
 const EPS = 1e-8;
@@ -105,6 +116,27 @@ function normalizeDetectionSnapshot(
       input.profile === "fast" || input.profile === "accurate" || input.profile === "balanced"
         ? input.profile
         : DEFAULT_DETECTION_SNAPSHOT.profile,
+  };
+}
+
+function normalizeGeometry(value: unknown, fallback: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.max(1, Math.trunc(value));
+}
+
+function inferGeometryFromPoints(points: StarAnnotationPoint[]) {
+  if (points.length === 0) {
+    return { width: 1, height: 1 };
+  }
+  let maxX = 0;
+  let maxY = 0;
+  for (const point of points) {
+    if (Number.isFinite(point.x)) maxX = Math.max(maxX, point.x);
+    if (Number.isFinite(point.y)) maxY = Math.max(maxY, point.y);
+  }
+  return {
+    width: Math.max(1, Math.ceil(maxX + 1)),
+    height: Math.max(1, Math.ceil(maxY + 1)),
   };
 }
 
@@ -310,6 +342,8 @@ export function mergeDetectedWithManual(
         roundness: star.roundness,
         ellipticity: star.ellipticity,
         sharpness: star.sharpness,
+        theta: star.theta,
+        flags: star.flags,
       },
     };
 
@@ -367,6 +401,8 @@ export function toDetectedStars(
       roundness: point.metrics?.roundness,
       ellipticity: point.metrics?.ellipticity,
       sharpness: point.metrics?.sharpness,
+      theta: point.metrics?.theta,
+      flags: point.metrics?.flags,
     });
   }
 
@@ -377,11 +413,11 @@ export function toDetectedStars(
 export function sanitizeStarAnnotations(
   input: StarAnnotationBundleInput | null | undefined,
   options: SanitizeStarAnnotationOptions = {},
-): StarAnnotationBundle {
+): StarAnnotationBundleV2 {
   const dedupeRadius = Math.max(0, options.dedupeRadius ?? 0.5);
   const maxPoints = Math.max(1, Math.min(10000, options.maxPoints ?? 3000));
-  const width = options.width;
-  const height = options.height;
+  const width = options.width ?? input?.imageGeometry?.width;
+  const height = options.height ?? input?.imageGeometry?.height;
   const seen: Array<{ x: number; y: number; source: StarAnnotationPoint["source"] }> = [];
 
   const points = (input?.points ?? [])
@@ -411,11 +447,106 @@ export function sanitizeStarAnnotations(
     })
     .slice(0, maxPoints);
 
+  const normalizedPoints = ensureUniqueAnchors(points);
+  const inferredGeometry = inferGeometryFromPoints(normalizedPoints);
+  const geometry = {
+    width: normalizeGeometry(width, inferredGeometry.width),
+    height: normalizeGeometry(height, inferredGeometry.height),
+  };
+
+  const stale = !!input?.stale;
+  const staleReason = stale ? (input?.staleReason ?? "manual") : undefined;
+
   return {
-    version: 1,
+    version: 2,
     updatedAt: Math.max(0, Math.trunc(input?.updatedAt ?? Date.now())),
     detectionSnapshot: normalizeDetectionSnapshot(input?.detectionSnapshot),
-    points: ensureUniqueAnchors(points),
-    stale: !!input?.stale,
+    points: normalizedPoints,
+    stale,
+    staleReason,
+    imageGeometry: geometry,
+  };
+}
+
+export interface StarAnnotationUsability {
+  usable: boolean;
+  reason?: "missing" | "stale" | "dimension-mismatch" | "insufficient-points";
+  enabledPointCount: number;
+  anchorCount: number;
+  stale: boolean;
+  staleReason?: StarAnnotationStaleReason;
+}
+
+export interface EvaluateStarAnnotationUsabilityOptions {
+  width?: number;
+  height?: number;
+  minEnabledPoints?: number;
+}
+
+export function evaluateStarAnnotationUsability(
+  input: StarAnnotationBundleInput | null | undefined,
+  options: EvaluateStarAnnotationUsabilityOptions = {},
+): StarAnnotationUsability {
+  if (!input) {
+    return {
+      usable: false,
+      reason: "missing",
+      enabledPointCount: 0,
+      anchorCount: 0,
+      stale: false,
+    };
+  }
+
+  const sanitized = sanitizeStarAnnotations(input);
+  const enabledPoints = sanitized.points.filter((point) => point.enabled);
+  const minEnabledPoints = Math.max(1, options.minEnabledPoints ?? 3);
+  const anchorCount = pickAnchorPoints(sanitized.points).length;
+
+  if (options.width && options.height) {
+    const expectsGeometryCheck = input.version === 2 && !!input.imageGeometry;
+    if (
+      expectsGeometryCheck &&
+      (sanitized.imageGeometry.width !== Math.trunc(options.width) ||
+        sanitized.imageGeometry.height !== Math.trunc(options.height))
+    ) {
+      return {
+        usable: false,
+        reason: "dimension-mismatch",
+        enabledPointCount: enabledPoints.length,
+        anchorCount,
+        stale: sanitized.stale ?? false,
+        staleReason: sanitized.staleReason,
+      };
+    }
+  }
+
+  if (sanitized.stale) {
+    return {
+      usable: false,
+      reason: "stale",
+      enabledPointCount: enabledPoints.length,
+      anchorCount,
+      stale: true,
+      staleReason: sanitized.staleReason,
+    };
+  }
+
+  if (enabledPoints.length < minEnabledPoints) {
+    return {
+      usable: false,
+      reason: "insufficient-points",
+      enabledPointCount: enabledPoints.length,
+      anchorCount,
+      stale: false,
+      staleReason: sanitized.staleReason,
+    };
+  }
+
+  return {
+    usable: true,
+    enabledPointCount: enabledPoints.length,
+    anchorCount,
+    stale: false,
+    staleReason: sanitized.staleReason,
   };
 }

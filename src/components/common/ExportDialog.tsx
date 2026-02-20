@@ -11,11 +11,19 @@ import {
   type FitsExportMode,
   type FitsTargetOptions,
   type TiffCompression,
+  type TiffMultipageMode,
   type TiffTargetOptions,
 } from "../../lib/fits/types";
 import { supportsQuality } from "../../lib/converter/convertPresets";
 import { estimateFileSize } from "../../lib/converter/formatConverter";
 import { formatBytes } from "../../lib/utils/format";
+import type { ExportRenderOptions } from "../../lib/converter/exportDecorations";
+
+export interface ExportDialogActionOptions {
+  fits?: Partial<FitsTargetOptions>;
+  tiff?: Partial<TiffTargetOptions>;
+  render?: ExportRenderOptions;
+}
 
 interface ExportDialogProps {
   visible: boolean;
@@ -24,18 +32,9 @@ interface ExportDialogProps {
   width?: number;
   height?: number;
   onFormatChange: (format: ExportFormat) => void;
-  onExport: (
-    quality: number,
-    options?: { fits?: Partial<FitsTargetOptions>; tiff?: Partial<TiffTargetOptions> },
-  ) => void;
-  onShare: (
-    quality: number,
-    options?: { fits?: Partial<FitsTargetOptions>; tiff?: Partial<TiffTargetOptions> },
-  ) => void;
-  onSaveToDevice: (
-    quality: number,
-    options?: { fits?: Partial<FitsTargetOptions>; tiff?: Partial<TiffTargetOptions> },
-  ) => void;
+  onExport: (quality: number, options?: ExportDialogActionOptions) => void;
+  onShare: (quality: number, options?: ExportDialogActionOptions) => void;
+  onSaveToDevice: (quality: number, options?: ExportDialogActionOptions) => void;
   onPrint?: () => void;
   onPrintToPdf?: () => void;
   fitsScientificAvailable?: boolean;
@@ -80,6 +79,11 @@ export function ExportDialog({
   const [tiffCompression, setTiffCompression] = useState<TiffCompression>(
     DEFAULT_TIFF_TARGET_OPTIONS.compression,
   );
+  const [tiffMultipage, setTiffMultipage] = useState<TiffMultipageMode>(
+    DEFAULT_TIFF_TARGET_OPTIONS.multipage,
+  );
+  const [includeAnnotations, setIncludeAnnotations] = useState(false);
+  const [includeWatermark, setIncludeWatermark] = useState(false);
 
   const showQuality = supportsQuality(format);
   const showFitsOptions = format === "fits";
@@ -108,9 +112,16 @@ export function ExportDialog({
   const tiffOptions: Partial<TiffTargetOptions> | undefined = showTiffOptions
     ? {
         compression: tiffCompression,
-        multipage: DEFAULT_TIFF_TARGET_OPTIONS.multipage,
+        multipage: tiffMultipage,
       }
     : undefined;
+  const renderOptions: ExportRenderOptions | undefined =
+    includeAnnotations || includeWatermark
+      ? {
+          includeAnnotations,
+          includeWatermark,
+        }
+      : undefined;
 
   const estimatedSize =
     width && height
@@ -162,6 +173,7 @@ export function ExportDialog({
             {FORMATS.map((fmt) => (
               <Chip
                 key={fmt}
+                testID={`e2e-action-export-dialog-format-${fmt}`}
                 size="sm"
                 variant={format === fmt ? "primary" : "secondary"}
                 onPress={() => onFormatChange(fmt)}
@@ -218,7 +230,10 @@ export function ExportDialog({
                   </Chip>
                 </View>
                 {!fitsScientificAvailable && (
-                  <Text className="text-[10px] text-muted mt-1">
+                  <Text
+                    testID="e2e-text-export-dialog-fits-unavailable"
+                    className="text-[10px] text-muted mt-1"
+                  >
                     {t("converter.fitsScientificUnavailable")}
                   </Text>
                 )}
@@ -283,8 +298,58 @@ export function ExportDialog({
                   ))}
                 </View>
               </View>
+
+              <View>
+                <Text className="text-xs font-semibold text-muted mb-2">
+                  {t("converter.multipage")}
+                </Text>
+                <View className="flex-row gap-2">
+                  {(["preserve", "firstFrame"] as const).map((mode) => (
+                    <Chip
+                      key={mode}
+                      size="sm"
+                      variant={tiffMultipage === mode ? "primary" : "secondary"}
+                      onPress={() => setTiffMultipage(mode)}
+                    >
+                      <Chip.Label className="text-[9px]">
+                        {mode === "preserve"
+                          ? t("converter.multipagePreserve")
+                          : t("converter.multipageFirstFrame")}
+                      </Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </View>
             </View>
           )}
+
+          <View className="mb-4 gap-3">
+            <View>
+              <Text className="text-xs font-semibold text-muted mb-2">
+                {t("converter.exportDecorations")}
+              </Text>
+              <View className="flex-row gap-2">
+                <Chip
+                  testID="e2e-action-export-dialog-toggle-annotations"
+                  size="sm"
+                  variant={includeAnnotations ? "primary" : "secondary"}
+                  onPress={() => setIncludeAnnotations((prev) => !prev)}
+                >
+                  <Chip.Label className="text-[9px]">
+                    {t("converter.includeAnnotations")}
+                  </Chip.Label>
+                </Chip>
+                <Chip
+                  testID="e2e-action-export-dialog-toggle-watermark"
+                  size="sm"
+                  variant={includeWatermark ? "primary" : "secondary"}
+                  onPress={() => setIncludeWatermark((prev) => !prev)}
+                >
+                  <Chip.Label className="text-[9px]">{t("converter.includeWatermark")}</Chip.Label>
+                </Chip>
+              </View>
+            </View>
+          </View>
 
           {estimatedSize != null && (
             <Text className="text-[10px] text-muted mb-3">≈ {formatBytes(estimatedSize)}</Text>
@@ -292,22 +357,33 @@ export function ExportDialog({
 
           <View className="gap-2">
             <Button
+              testID="e2e-action-export-dialog-export"
               variant="primary"
-              onPress={() => onExport(quality, { fits: fitsOptions, tiff: tiffOptions })}
+              onPress={() =>
+                onExport(quality, { fits: fitsOptions, tiff: tiffOptions, render: renderOptions })
+              }
             >
               <Ionicons name="download-outline" size={16} color="#fff" />
               <Button.Label>{t("converter.convert")}</Button.Label>
             </Button>
             <Button
               variant="outline"
-              onPress={() => onSaveToDevice(quality, { fits: fitsOptions, tiff: tiffOptions })}
+              onPress={() =>
+                onSaveToDevice(quality, {
+                  fits: fitsOptions,
+                  tiff: tiffOptions,
+                  render: renderOptions,
+                })
+              }
             >
               <Ionicons name="phone-portrait-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.save")}</Button.Label>
             </Button>
             <Button
               variant="outline"
-              onPress={() => onShare(quality, { fits: fitsOptions, tiff: tiffOptions })}
+              onPress={() =>
+                onShare(quality, { fits: fitsOptions, tiff: tiffOptions, render: renderOptions })
+              }
             >
               <Ionicons name="share-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.share")}</Button.Label>

@@ -3,6 +3,10 @@
 - openLink: cobalt://stacking
 - assertVisible:
     id: e2e-screen-stacking__index
+- assertVisible:
+    id: e2e-action-stacking__index-toggle-use-annotated
+- tapOn:
+    id: e2e-action-stacking__index-toggle-use-annotated
 - tapOn:
     id: e2e-action-stacking__index-reset
 - tapOn:

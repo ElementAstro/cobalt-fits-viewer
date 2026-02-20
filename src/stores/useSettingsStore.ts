@@ -12,6 +12,7 @@ import type {
   ColormapType,
   ExportFormat,
   FrameClassificationConfig,
+  ProcessingAlgorithmProfile,
 } from "../lib/fits/types";
 import type { LogLevel } from "../lib/logger";
 import {
@@ -35,7 +36,7 @@ import {
 } from "../lib/theme/presets";
 import type { FontFamilyKey, MonoFontKey } from "../lib/theme/fonts";
 
-interface SettingsStoreState {
+export interface SettingsStoreState {
   // 查看器默认设置
   defaultStretch: StretchType;
   defaultColormap: ColormapType;
@@ -127,12 +128,21 @@ interface SettingsStoreState {
   stackingDetectMinArea: number;
   stackingDetectMaxArea: number;
   stackingDetectBorderMargin: number;
+  stackingDetectSigmaClipIters: number;
+  stackingDetectApplyMatchedFilter: boolean;
+  stackingDetectConnectivity: 4 | 8;
   stackingBackgroundMeshSize: number;
   stackingDeblendNLevels: number;
   stackingDeblendMinContrast: number;
   stackingFilterFwhm: number;
+  stackingDetectMinFwhm: number;
   stackingMaxFwhm: number;
   stackingMaxEllipticity: number;
+  stackingDetectMinSharpness: number;
+  stackingDetectMaxSharpness: number;
+  stackingDetectPeakMax: number;
+  stackingDetectSnrMin: number;
+  stackingUseAnnotatedForAlignment: boolean;
   stackingRansacMaxIterations: number;
   stackingAlignmentInlierThreshold: number;
 
@@ -188,8 +198,18 @@ interface SettingsStoreState {
   composeRedWeight: number;
   composeGreenWeight: number;
   composeBlueWeight: number;
+  advancedComposeRegistrationMode: "none" | "translation" | "full";
+  advancedComposeFramingMode: "first" | "min" | "cog";
+  advancedComposeAutoLinearMatch: boolean;
+  advancedComposeAutoBrightnessBalance: boolean;
+  advancedComposePreviewScale: number;
+  advancedComposePixelMathR: string;
+  advancedComposePixelMathG: string;
+  advancedComposePixelMathB: string;
 
   // 性能配置
+  imageProcessingProfile: ProcessingAlgorithmProfile;
+  viewerApplyEditorRecipe: boolean;
   imageProcessingDebounce: number;
   useHighQualityPreview: boolean;
   videoAutoplay: boolean;
@@ -264,14 +284,25 @@ interface SettingsStoreState {
   setStackingDetectMinArea: (value: number) => void;
   setStackingDetectMaxArea: (value: number) => void;
   setStackingDetectBorderMargin: (value: number) => void;
+  setStackingDetectSigmaClipIters: (value: number) => void;
+  setStackingDetectApplyMatchedFilter: (value: boolean) => void;
+  setStackingDetectConnectivity: (value: 4 | 8) => void;
   setStackingBackgroundMeshSize: (value: number) => void;
   setStackingDeblendNLevels: (value: number) => void;
   setStackingDeblendMinContrast: (value: number) => void;
   setStackingFilterFwhm: (value: number) => void;
+  setStackingDetectMinFwhm: (value: number) => void;
   setStackingMaxFwhm: (value: number) => void;
   setStackingMaxEllipticity: (value: number) => void;
+  setStackingDetectMinSharpness: (value: number) => void;
+  setStackingDetectMaxSharpness: (value: number) => void;
+  setStackingDetectPeakMax: (value: number) => void;
+  setStackingDetectSnrMin: (value: number) => void;
+  setStackingUseAnnotatedForAlignment: (value: boolean) => void;
   setStackingRansacMaxIterations: (value: number) => void;
   setStackingAlignmentInlierThreshold: (value: number) => void;
+  setImageProcessingProfile: (profile: ProcessingAlgorithmProfile) => void;
+  setViewerApplyEditorRecipe: (value: boolean) => void;
   setImageProcessingDebounce: (ms: number) => void;
   setUseHighQualityPreview: (value: boolean) => void;
   setVideoAutoplay: (value: boolean) => void;
@@ -319,6 +350,14 @@ interface SettingsStoreState {
   setComposeRedWeight: (v: number) => void;
   setComposeGreenWeight: (v: number) => void;
   setComposeBlueWeight: (v: number) => void;
+  setAdvancedComposeRegistrationMode: (v: "none" | "translation" | "full") => void;
+  setAdvancedComposeFramingMode: (v: "first" | "min" | "cog") => void;
+  setAdvancedComposeAutoLinearMatch: (v: boolean) => void;
+  setAdvancedComposeAutoBrightnessBalance: (v: boolean) => void;
+  setAdvancedComposePreviewScale: (v: number) => void;
+  setAdvancedComposePixelMathR: (v: string) => void;
+  setAdvancedComposePixelMathG: (v: string) => void;
+  setAdvancedComposePixelMathB: (v: string) => void;
   applySettingsPatch: (patch: Record<string, unknown>) => void;
   resetToDefaults: () => void;
 }
@@ -352,7 +391,7 @@ type SettingsActionKeys = {
     : never;
 }[keyof SettingsStoreState];
 
-type SettingsDataState = Omit<SettingsStoreState, SettingsActionKeys>;
+export type SettingsDataState = Omit<SettingsStoreState, SettingsActionKeys>;
 
 const DEFAULT_SETTINGS: SettingsDataState = {
   defaultStretch: "asinh",
@@ -407,12 +446,21 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   stackingDetectMinArea: 3,
   stackingDetectMaxArea: 600,
   stackingDetectBorderMargin: 10,
+  stackingDetectSigmaClipIters: 2,
+  stackingDetectApplyMatchedFilter: true,
+  stackingDetectConnectivity: 8,
   stackingBackgroundMeshSize: 64,
   stackingDeblendNLevels: 16,
   stackingDeblendMinContrast: 0.08,
   stackingFilterFwhm: 2.2,
+  stackingDetectMinFwhm: 0.6,
   stackingMaxFwhm: 11,
   stackingMaxEllipticity: 0.65,
+  stackingDetectMinSharpness: 0.25,
+  stackingDetectMaxSharpness: 18,
+  stackingDetectPeakMax: 0,
+  stackingDetectSnrMin: 2,
+  stackingUseAnnotatedForAlignment: true,
   stackingRansacMaxIterations: 100,
   stackingAlignmentInlierThreshold: 3,
   gridColor: "#64c8ff",
@@ -448,6 +496,16 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   composeRedWeight: 1.0,
   composeGreenWeight: 1.0,
   composeBlueWeight: 1.0,
+  advancedComposeRegistrationMode: "full",
+  advancedComposeFramingMode: "cog",
+  advancedComposeAutoLinearMatch: true,
+  advancedComposeAutoBrightnessBalance: true,
+  advancedComposePreviewScale: 0.35,
+  advancedComposePixelMathR: "R",
+  advancedComposePixelMathG: "G",
+  advancedComposePixelMathB: "B",
+  imageProcessingProfile: "standard",
+  viewerApplyEditorRecipe: true,
   imageProcessingDebounce: 150,
   useHighQualityPreview: true,
   videoAutoplay: false,
@@ -466,15 +524,21 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   reportFrameTypes: ["light"],
 };
 
-const SETTINGS_DATA_KEYS = Object.keys(DEFAULT_SETTINGS) as Array<keyof SettingsDataState>;
+export const SETTINGS_DATA_KEYS = Object.keys(DEFAULT_SETTINGS) as Array<keyof SettingsDataState>;
 
-function pickSettingsData(
+export function pickSettingsData(
   state: Pick<SettingsStoreState, keyof SettingsDataState>,
 ): SettingsDataState {
   return SETTINGS_DATA_KEYS.reduce((acc, key) => {
     (acc as Record<string, unknown>)[key] = state[key];
     return acc;
   }, {} as SettingsDataState);
+}
+
+export function getSettingsBackupData(
+  state: Pick<SettingsStoreState, keyof SettingsDataState>,
+): Record<string, unknown> {
+  return pickSettingsData(state);
 }
 
 function toFiniteNumber(value: unknown): number | undefined {
@@ -586,12 +650,18 @@ function sanitizeSettingsPatch(
     { key: "stackingDetectMinArea", min: 1, max: 100, integer: true },
     { key: "stackingDetectMaxArea", min: 10, max: 10000, integer: true },
     { key: "stackingDetectBorderMargin", min: 0, max: 200, integer: true },
+    { key: "stackingDetectSigmaClipIters", min: 0, max: 10, integer: true },
     { key: "stackingBackgroundMeshSize", min: 8, max: 512, integer: true },
     { key: "stackingDeblendNLevels", min: 1, max: 64, integer: true },
     { key: "stackingDeblendMinContrast", min: 0, max: 1 },
     { key: "stackingFilterFwhm", min: 0.3, max: 15 },
+    { key: "stackingDetectMinFwhm", min: 0.1, max: 15 },
     { key: "stackingMaxFwhm", min: 0.5, max: 30 },
     { key: "stackingMaxEllipticity", min: 0, max: 1 },
+    { key: "stackingDetectMinSharpness", min: 0, max: 100 },
+    { key: "stackingDetectMaxSharpness", min: 0, max: 100 },
+    { key: "stackingDetectPeakMax", min: 0, max: 1000000000 },
+    { key: "stackingDetectSnrMin", min: 0, max: 100 },
     { key: "stackingRansacMaxIterations", min: 10, max: 1000, integer: true },
     { key: "stackingAlignmentInlierThreshold", min: 0.5, max: 20 },
     { key: "gridOpacity", min: 0, max: 1 },
@@ -611,6 +681,7 @@ function sanitizeSettingsPatch(
     { key: "composeRedWeight", min: 0, max: 4 },
     { key: "composeGreenWeight", min: 0, max: 4 },
     { key: "composeBlueWeight", min: 0, max: 4 },
+    { key: "advancedComposePreviewScale", min: 0.1, max: 1 },
     { key: "imageProcessingDebounce", min: 0, max: 2000, integer: true },
     { key: "videoThumbnailTimeMs", min: 0, max: 300000, integer: true },
     { key: "videoProcessingConcurrency", min: 1, max: 6, integer: true },
@@ -642,6 +713,7 @@ function sanitizeSettingsPatch(
     defaultStackMethod: ["average", "median", "sigma", "min", "max", "winsorized", "weighted"],
     defaultAlignmentMode: ["none", "translation", "full"],
     stackingDetectionProfile: ["fast", "balanced", "accurate"],
+    stackingDetectConnectivity: [4, 8],
     fileListStyle: ["grid", "list", "compact"],
     defaultExportFormat: ["png", "jpeg", "webp", "tiff", "bmp", "fits"],
     defaultConverterFormat: ["png", "jpeg", "tiff", "webp", "bmp", "fits"],
@@ -650,6 +722,9 @@ function sanitizeSettingsPatch(
     targetSortBy: ["name", "date", "frames", "exposure", "favorite"],
     targetSortOrder: ["asc", "desc"],
     defaultComposePreset: ["rgb", "sho", "hoo", "lrgb", "custom"],
+    advancedComposeRegistrationMode: ["none", "translation", "full"],
+    advancedComposeFramingMode: ["first", "min", "cog"],
+    imageProcessingProfile: ["standard", "legacy"],
     defaultVideoProfile: ["compatibility", "balanced", "quality"],
     defaultVideoTargetPreset: ["1080p", "720p", "custom"],
     logMinLevel: ["debug", "info", "warn", "error"],
@@ -801,6 +876,48 @@ function sanitizeSettingsPatch(
     }
   }
 
+  const hasDetectMinFwhm = typeof sanitized.stackingDetectMinFwhm === "number";
+  const hasDetectMaxFwhm = typeof sanitized.stackingMaxFwhm === "number";
+  if (hasDetectMinFwhm || hasDetectMaxFwhm) {
+    const minFwhm = hasDetectMinFwhm
+      ? sanitized.stackingDetectMinFwhm
+      : current.stackingDetectMinFwhm;
+    const maxFwhm = hasDetectMaxFwhm ? sanitized.stackingMaxFwhm : current.stackingMaxFwhm;
+    if (typeof minFwhm === "number" && typeof maxFwhm === "number" && minFwhm > maxFwhm) {
+      if (hasDetectMinFwhm && !hasDetectMaxFwhm) {
+        sanitized.stackingMaxFwhm = minFwhm;
+      } else if (!hasDetectMinFwhm && hasDetectMaxFwhm) {
+        sanitized.stackingDetectMinFwhm = maxFwhm;
+      } else {
+        sanitized.stackingMaxFwhm = minFwhm;
+      }
+    }
+  }
+
+  const hasDetectMinSharpness = typeof sanitized.stackingDetectMinSharpness === "number";
+  const hasDetectMaxSharpness = typeof sanitized.stackingDetectMaxSharpness === "number";
+  if (hasDetectMinSharpness || hasDetectMaxSharpness) {
+    const minSharpness = hasDetectMinSharpness
+      ? sanitized.stackingDetectMinSharpness
+      : current.stackingDetectMinSharpness;
+    const maxSharpness = hasDetectMaxSharpness
+      ? sanitized.stackingDetectMaxSharpness
+      : current.stackingDetectMaxSharpness;
+    if (
+      typeof minSharpness === "number" &&
+      typeof maxSharpness === "number" &&
+      minSharpness > maxSharpness
+    ) {
+      if (hasDetectMinSharpness && !hasDetectMaxSharpness) {
+        sanitized.stackingDetectMaxSharpness = minSharpness;
+      } else if (!hasDetectMinSharpness && hasDetectMaxSharpness) {
+        sanitized.stackingDetectMinSharpness = maxSharpness;
+      } else {
+        sanitized.stackingDetectMaxSharpness = minSharpness;
+      }
+    }
+  }
+
   const effectiveAccent = (sanitized.accentColor ?? current.accentColor) as AccentColorKey | null;
   const effectivePreset = (sanitized.activePreset ?? current.activePreset) as StylePresetKey;
 
@@ -831,6 +948,12 @@ function sanitizeSettingsPatch(
   }
 
   return sanitized;
+}
+
+export function normalizeSettingsBackupPatch(
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  return sanitizeSettingsPatch(patch, DEFAULT_SETTINGS);
 }
 
 const THEME_SYNC_KEYS: Array<keyof SettingsDataState> = [
@@ -1007,6 +1130,11 @@ export const useSettingsStore = create<SettingsStoreState>()(
         get().applySettingsPatch({ stackingDetectMaxArea: value }),
       setStackingDetectBorderMargin: (value) =>
         get().applySettingsPatch({ stackingDetectBorderMargin: value }),
+      setStackingDetectSigmaClipIters: (value) =>
+        get().applySettingsPatch({ stackingDetectSigmaClipIters: value }),
+      setStackingDetectApplyMatchedFilter: (value) =>
+        set({ stackingDetectApplyMatchedFilter: value }),
+      setStackingDetectConnectivity: (value) => set({ stackingDetectConnectivity: value }),
       setStackingBackgroundMeshSize: (value) =>
         get().applySettingsPatch({ stackingBackgroundMeshSize: value }),
       setStackingDeblendNLevels: (value) =>
@@ -1014,13 +1142,26 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setStackingDeblendMinContrast: (value) =>
         get().applySettingsPatch({ stackingDeblendMinContrast: value }),
       setStackingFilterFwhm: (value) => get().applySettingsPatch({ stackingFilterFwhm: value }),
+      setStackingDetectMinFwhm: (value) =>
+        get().applySettingsPatch({ stackingDetectMinFwhm: value }),
       setStackingMaxFwhm: (value) => get().applySettingsPatch({ stackingMaxFwhm: value }),
       setStackingMaxEllipticity: (value) =>
         get().applySettingsPatch({ stackingMaxEllipticity: value }),
+      setStackingDetectMinSharpness: (value) =>
+        get().applySettingsPatch({ stackingDetectMinSharpness: value }),
+      setStackingDetectMaxSharpness: (value) =>
+        get().applySettingsPatch({ stackingDetectMaxSharpness: value }),
+      setStackingDetectPeakMax: (value) =>
+        get().applySettingsPatch({ stackingDetectPeakMax: value }),
+      setStackingDetectSnrMin: (value) => get().applySettingsPatch({ stackingDetectSnrMin: value }),
+      setStackingUseAnnotatedForAlignment: (value) =>
+        set({ stackingUseAnnotatedForAlignment: value }),
       setStackingRansacMaxIterations: (value) =>
         get().applySettingsPatch({ stackingRansacMaxIterations: value }),
       setStackingAlignmentInlierThreshold: (value) =>
         get().applySettingsPatch({ stackingAlignmentInlierThreshold: value }),
+      setImageProcessingProfile: (profile) => set({ imageProcessingProfile: profile }),
+      setViewerApplyEditorRecipe: (value) => set({ viewerApplyEditorRecipe: value }),
       setImageProcessingDebounce: (ms) => get().applySettingsPatch({ imageProcessingDebounce: ms }),
       setUseHighQualityPreview: (value) => set({ useHighQualityPreview: value }),
       setVideoAutoplay: (value) => set({ videoAutoplay: value }),
@@ -1078,6 +1219,16 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setComposeRedWeight: (v) => get().applySettingsPatch({ composeRedWeight: v }),
       setComposeGreenWeight: (v) => get().applySettingsPatch({ composeGreenWeight: v }),
       setComposeBlueWeight: (v) => get().applySettingsPatch({ composeBlueWeight: v }),
+      setAdvancedComposeRegistrationMode: (v) => set({ advancedComposeRegistrationMode: v }),
+      setAdvancedComposeFramingMode: (v) => set({ advancedComposeFramingMode: v }),
+      setAdvancedComposeAutoLinearMatch: (v) => set({ advancedComposeAutoLinearMatch: v }),
+      setAdvancedComposeAutoBrightnessBalance: (v) =>
+        set({ advancedComposeAutoBrightnessBalance: v }),
+      setAdvancedComposePreviewScale: (v) =>
+        get().applySettingsPatch({ advancedComposePreviewScale: v }),
+      setAdvancedComposePixelMathR: (v) => set({ advancedComposePixelMathR: v }),
+      setAdvancedComposePixelMathG: (v) => set({ advancedComposePixelMathG: v }),
+      setAdvancedComposePixelMathB: (v) => set({ advancedComposePixelMathB: v }),
 
       applySettingsPatch: (patch) => {
         const current = get() as SettingsDataState;

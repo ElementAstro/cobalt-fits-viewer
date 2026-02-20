@@ -6,6 +6,7 @@ import {
   isSessionDuplicate,
 } from "../sessionDetector";
 import type { ObservationSession } from "../../fits/types";
+import { Logger } from "../../logger";
 
 const makeFile = (
   id: string,
@@ -125,6 +126,7 @@ describe("detectSessions", () => {
   });
 
   it("skips files with invalid DATE-OBS during detection", () => {
+    const warnSpy = jest.spyOn(Logger, "warn").mockImplementation(() => {});
     const files = [
       makeFile("f1", "2024-01-15T22:00:00Z"),
       makeFile("f2", "invalid-date"),
@@ -133,6 +135,8 @@ describe("detectSessions", () => {
     const sessions = detectSessions(files, 120);
     expect(sessions).toHaveLength(1);
     expect(sessions[0].imageIds).toEqual(["f1", "f3"]);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 
   it("uses local date key derived from session start time", () => {
@@ -178,6 +182,21 @@ describe("generateLogEntries", () => {
   it("returns empty for empty input", () => {
     expect(generateLogEntries([], "s1")).toEqual([]);
   });
+
+  it("silently skips files with invalid DATE-OBS", () => {
+    const warnSpy = jest.spyOn(Logger, "warn").mockImplementation(() => {});
+    const files = [
+      makeFile("f1", "2024-01-15T22:00:00Z"),
+      makeFile("f2", "invalid-date"),
+      makeFile("f3", "2024-01-15T23:00:00Z"),
+    ];
+    const entries = generateLogEntries(files, "s1");
+    expect(entries).toHaveLength(2);
+    expect(entries[0].imageId).toBe("f1");
+    expect(entries[1].imageId).toBe("f3");
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
 });
 
 // ===== getDatesWithObservations =====
@@ -212,6 +231,15 @@ describe("getDatesWithObservations", () => {
     ];
     const dates = getDatesWithObservations(files, 2024, 0);
     expect(dates).toEqual([5, 10, 20]);
+  });
+
+  it("silently skips invalid DATE-OBS values", () => {
+    const warnSpy = jest.spyOn(Logger, "warn").mockImplementation(() => {});
+    const files = [makeFile("f1", "invalid-date"), makeFile("f2", "2024-01-10T12:00:00Z")];
+    const dates = getDatesWithObservations(files, 2024, 0);
+    expect(dates).toEqual([10]);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
 

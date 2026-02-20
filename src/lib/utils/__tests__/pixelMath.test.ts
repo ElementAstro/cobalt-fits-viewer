@@ -7,6 +7,8 @@ import {
   calculateRegionHistogram,
   calculateStats,
   computeAutoStretch,
+  computePercentile,
+  computeZScale,
 } from "../pixelMath";
 
 // ===== Helpers =====
@@ -198,5 +200,45 @@ describe("computeAutoStretch", () => {
     expect(result.blackPoint).toBe(0);
     expect(result.whitePoint).toBe(1);
     expect(result.midtone).toBe(0.5);
+  });
+});
+
+describe("zscale and percentile intervals", () => {
+  it("computeZScale handles outliers robustly", () => {
+    const base = makePixels(64, 64, "gradient");
+    base[5] = 10000;
+    base[50] = -5000;
+    const { z1, z2 } = computeZScale(base);
+    expect(Number.isFinite(z1)).toBe(true);
+    expect(Number.isFinite(z2)).toBe(true);
+    expect(z1).toBeLessThan(z2);
+    expect(z2).toBeLessThan(10000);
+    expect(z1).toBeGreaterThan(-5000);
+  });
+
+  it("computeZScale returns fallback on empty/NaN-only input", () => {
+    const empty = computeZScale(new Float32Array(0));
+    expect(empty).toEqual({ z1: 0, z2: 1 });
+
+    const nanOnly = new Float32Array([NaN, NaN, NaN]);
+    const result = computeZScale(nanOnly);
+    expect(result).toEqual({ z1: 0, z2: 1 });
+  });
+
+  it("computePercentile aligns low/high percentile bounds", () => {
+    const pixels = new Float32Array([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    const { z1, z2 } = computePercentile(pixels, 10, 90);
+    expect(z1).toBeGreaterThanOrEqual(0.8);
+    expect(z1).toBeLessThanOrEqual(1.2);
+    expect(z2).toBeGreaterThanOrEqual(7.8);
+    expect(z2).toBeLessThanOrEqual(8.2);
+  });
+
+  it("computePercentile tolerates reversed inputs and NaNs", () => {
+    const pixels = new Float32Array([NaN, 0, 1, 2, 3, 4, 5, NaN]);
+    const r = computePercentile(pixels, 95, 5);
+    expect(r.z1).toBeLessThanOrEqual(r.z2);
+    expect(Number.isFinite(r.z1)).toBe(true);
+    expect(Number.isFinite(r.z2)).toBe(true);
   });
 });

@@ -78,4 +78,29 @@ describe("QuickLookModal", () => {
     expect(screen.getByTestId("quicklook-video-view")).toBeTruthy();
     expect(screen.queryByText("common.edit")).toBeNull();
   });
+
+  it("renders audio quicklook card and hides image editor action for audio files", () => {
+    render(
+      <QuickLookModal
+        visible
+        file={{
+          ...baseFile,
+          id: "a1",
+          filename: "recording.m4a",
+          sourceType: "audio",
+          mediaKind: "audio",
+          sourceFormat: "m4a",
+          durationMs: 5400,
+          audioCodec: "aac",
+        }}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("quicklook-video-view")).toBeNull();
+    expect(screen.getByText("Audio codec")).toBeTruthy();
+    expect(screen.queryByText("common.edit")).toBeNull();
+  });
 });

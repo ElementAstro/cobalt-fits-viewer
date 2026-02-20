@@ -31,6 +31,7 @@ export interface TargetIntegrityReport {
   fixedFiles: number;
   fixedGroups: number;
   fixedSessions: number;
+  fixedSessionLinks: number;
   fixedPlans: number;
   fixedLogEntries: number;
   downgradedTargetRefs: number;
@@ -231,6 +232,88 @@ function reconcileSessions(
   });
 }
 
+function pickLatestSession(sessions: ObservationSession[]): ObservationSession {
+  return [...sessions].sort((a, b) => {
+    const aStart = Number.isFinite(a.startTime) ? a.startTime : Number.NEGATIVE_INFINITY;
+    const bStart = Number.isFinite(b.startTime) ? b.startTime : Number.NEGATIVE_INFINITY;
+    if (aStart !== bStart) return bStart - aStart;
+    const aCreated = Number.isFinite(a.createdAt) ? a.createdAt : Number.NEGATIVE_INFINITY;
+    const bCreated = Number.isFinite(b.createdAt) ? b.createdAt : Number.NEGATIVE_INFINITY;
+    return bCreated - aCreated;
+  })[0];
+}
+
+function reconcileSessionLinks(
+  sessions: ObservationSession[],
+  files: FitsMetadata[],
+  report: TargetIntegrityReport,
+) {
+  const sessionById = new Map(sessions.map((session) => [session.id, session]));
+  const validFileIds = new Set(files.map((file) => file.id));
+
+  const fileSessionCandidates = new Map<string, ObservationSession[]>();
+  for (const session of sessions) {
+    const seen = new Set<string>();
+    for (const imageId of session.imageIds) {
+      if (!validFileIds.has(imageId) || seen.has(imageId)) continue;
+      seen.add(imageId);
+      const bucket = fileSessionCandidates.get(imageId);
+      if (bucket) {
+        bucket.push(session);
+      } else {
+        fileSessionCandidates.set(imageId, [session]);
+      }
+    }
+  }
+
+  const fileSessionAssignment = new Map<string, string | undefined>();
+  for (const file of files) {
+    let sessionId = file.sessionId && sessionById.has(file.sessionId) ? file.sessionId : undefined;
+    if (!sessionId) {
+      const candidates = fileSessionCandidates.get(file.id) ?? [];
+      if (candidates.length === 1) {
+        sessionId = candidates[0].id;
+      } else if (candidates.length > 1) {
+        sessionId = pickLatestSession(candidates).id;
+      }
+    }
+    fileSessionAssignment.set(file.id, sessionId);
+  }
+
+  const imageIdsBySession = new Map<string, string[]>();
+  for (const file of files) {
+    const sessionId = fileSessionAssignment.get(file.id);
+    if (!sessionId) continue;
+    const imageIds = imageIdsBySession.get(sessionId) ?? [];
+    imageIds.push(file.id);
+    imageIdsBySession.set(sessionId, imageIds);
+  }
+
+  let fixedSessionLinks = 0;
+  const reconciledFiles = files.map((file) => {
+    const nextSessionId = fileSessionAssignment.get(file.id);
+    if (file.sessionId === nextSessionId) return file;
+    fixedSessionLinks += 1;
+    return {
+      ...file,
+      sessionId: nextSessionId,
+    };
+  });
+
+  const reconciledSessions = sessions.map((session) => {
+    const nextImageIds = imageIdsBySession.get(session.id) ?? [];
+    if (sameStringArray(session.imageIds, nextImageIds)) return session;
+    fixedSessionLinks += 1;
+    return {
+      ...session,
+      imageIds: nextImageIds,
+    };
+  });
+
+  report.fixedSessionLinks += fixedSessionLinks;
+  return { reconciledSessions, reconciledFiles };
+}
+
 function reconcilePlans(
   plans: ObservationPlan[],
   targets: Target[],
@@ -258,16 +341,42 @@ function reconcilePlans(
 function reconcileLogEntries(
   entries: ObservationLogEntry[],
   validSessionIds: Set<string>,
-  validFileIds: Set<string>,
+  files: FitsMetadata[],
   report: TargetIntegrityReport,
 ) {
-  const filtered = entries.filter(
-    (entry) => validSessionIds.has(entry.sessionId) && validFileIds.has(entry.imageId),
-  );
-  if (filtered.length !== entries.length) {
-    report.fixedLogEntries += entries.length - filtered.length;
+  const fileById = new Map(files.map((file) => [file.id, file]));
+  const reconciled: ObservationLogEntry[] = [];
+  let fixedLogEntries = 0;
+
+  for (const entry of entries) {
+    if (!validSessionIds.has(entry.sessionId)) {
+      fixedLogEntries += 1;
+      continue;
+    }
+    const file = fileById.get(entry.imageId);
+    if (!file) {
+      fixedLogEntries += 1;
+      continue;
+    }
+
+    if (
+      file.sessionId &&
+      validSessionIds.has(file.sessionId) &&
+      file.sessionId !== entry.sessionId
+    ) {
+      fixedLogEntries += 1;
+      reconciled.push({
+        ...entry,
+        sessionId: file.sessionId,
+      });
+      continue;
+    }
+
+    reconciled.push(entry);
   }
-  return filtered;
+
+  report.fixedLogEntries += fixedLogEntries;
+  return reconciled;
 }
 
 export function validateTargetIntegrity(input: TargetIntegrityInput): {
@@ -277,6 +386,7 @@ export function validateTargetIntegrity(input: TargetIntegrityInput): {
   const errors: string[] = [];
   const targetById = new Map(input.targets.map((target) => [target.id, target]));
   const fileById = new Map(input.files.map((file) => [file.id, file]));
+  const sessionById = new Map(input.sessions?.map((session) => [session.id, session]) ?? []);
 
   for (const file of input.files) {
     if (!file.targetId) continue;
@@ -303,6 +413,31 @@ export function validateTargetIntegrity(input: TargetIntegrityInput): {
     }
   }
 
+  for (const file of input.files) {
+    if (!file.sessionId) continue;
+    const session = sessionById.get(file.sessionId);
+    if (!session) {
+      errors.push(`File ${file.id} references missing session ${file.sessionId}`);
+      continue;
+    }
+    if (!session.imageIds.includes(file.id)) {
+      errors.push(`File ${file.id} sessionId does not match session.imageIds`);
+    }
+  }
+
+  for (const session of input.sessions ?? []) {
+    for (const imageId of session.imageIds) {
+      const file = fileById.get(imageId);
+      if (!file) {
+        errors.push(`Session ${session.id} references missing file ${imageId}`);
+        continue;
+      }
+      if (file.sessionId !== session.id) {
+        errors.push(`Session ${session.id} and file ${file.id} are not bidirectionally linked`);
+      }
+    }
+  }
+
   return {
     valid: errors.length === 0,
     errors,
@@ -315,6 +450,7 @@ export function reconcileAll(input: TargetIntegrityInput): TargetIntegrityPatch 
     fixedFiles: 0,
     fixedGroups: 0,
     fixedSessions: 0,
+    fixedSessionLinks: 0,
     fixedPlans: 0,
     fixedLogEntries: 0,
     downgradedTargetRefs: 0,
@@ -331,16 +467,22 @@ export function reconcileAll(input: TargetIntegrityInput): TargetIntegrityPatch 
     report,
   );
   const validTargetIds = new Set(reconciledTargets.map((target) => target.id));
-  const validFileIds = new Set(reconciledFiles.map((file) => file.id));
-
   const reconciledGroups = reconcileGroups(groups, validTargetIds, report);
-  const reconciledSessions = reconcileSessions(sessions, validFileIds, reconciledTargets, report);
+  const { reconciledSessions: sessionLinkedSessions, reconciledFiles: sessionLinkedFiles } =
+    reconcileSessionLinks(sessions, reconciledFiles, report);
+  const validFileIds = new Set(sessionLinkedFiles.map((file) => file.id));
+  const reconciledSessions = reconcileSessions(
+    sessionLinkedSessions,
+    validFileIds,
+    reconciledTargets,
+    report,
+  );
   const reconciledPlans = reconcilePlans(plans, reconciledTargets, report);
   const validSessionIds = new Set(reconciledSessions.map((session) => session.id));
   const reconciledLogEntries = reconcileLogEntries(
     logEntries,
     validSessionIds,
-    validFileIds,
+    sessionLinkedFiles,
     report,
   );
 
@@ -349,12 +491,13 @@ export function reconcileAll(input: TargetIntegrityInput): TargetIntegrityPatch 
     report.fixedFiles > 0 ||
     report.fixedGroups > 0 ||
     report.fixedSessions > 0 ||
+    report.fixedSessionLinks > 0 ||
     report.fixedPlans > 0 ||
     report.fixedLogEntries > 0;
 
   const validation = validateTargetIntegrity({
     targets: reconciledTargets,
-    files: reconciledFiles,
+    files: sessionLinkedFiles,
     groups: reconciledGroups,
     sessions: reconciledSessions,
     plans: reconciledPlans,
@@ -363,7 +506,7 @@ export function reconcileAll(input: TargetIntegrityInput): TargetIntegrityPatch 
 
   return {
     targets: reconciledTargets,
-    files: reconciledFiles,
+    files: sessionLinkedFiles,
     groups: reconciledGroups,
     sessions: reconciledSessions,
     plans: reconciledPlans,

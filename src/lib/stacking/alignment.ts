@@ -34,6 +34,8 @@ export interface AlignmentTransform {
     | "manual-2star"
     | "manual-3star"
     | "annotated-stars";
+  /** 覆盖来源使用情况 */
+  overrideUsage?: "none" | "ref" | "target" | "both";
 }
 
 export interface ManualControlPoint {
@@ -61,6 +63,7 @@ export interface AlignmentOptions {
 function identityTransform(
   detectionCounts?: { ref: number; target: number },
   fallbackUsed: AlignmentTransform["fallbackUsed"] = "identity",
+  overrideUsage: AlignmentTransform["overrideUsage"] = "none",
 ): AlignmentTransform {
   return {
     matrix: [1, 0, 0, 0, 1, 0],
@@ -68,6 +71,7 @@ function identityTransform(
     rmsError: Infinity,
     detectionCounts,
     fallbackUsed,
+    overrideUsage,
   };
 }
 
@@ -89,31 +93,40 @@ function manualModeToFallback(mode: ManualRegistrationMode): AlignmentTransform[
   return "manual-3star";
 }
 
+function hasUsableOverride(stars: DetectedStar[] | undefined): stars is DetectedStar[] {
+  return !!stars && stars.length >= 3;
+}
+
+function resolveOverrideUsage(useRefOverride: boolean, useTargetOverride: boolean) {
+  if (useRefOverride && useTargetOverride) return "both";
+  if (useRefOverride) return "ref";
+  if (useTargetOverride) return "target";
+  return "none";
+}
+
 function resolveStarsSync(
   refPixels: Float32Array,
   targetPixels: Float32Array,
   width: number,
   height: number,
   options: AlignmentOptions,
-): { refStars: DetectedStar[]; targetStars: DetectedStar[]; fromOverride: boolean } {
+): {
+  refStars: DetectedStar[];
+  targetStars: DetectedStar[];
+  overrideUsage: AlignmentTransform["overrideUsage"];
+} {
   const refStarsOverride = options.refStarsOverride;
   const targetStarsOverride = options.targetStarsOverride;
-  if (
-    refStarsOverride &&
-    targetStarsOverride &&
-    refStarsOverride.length >= 3 &&
-    targetStarsOverride.length >= 3
-  ) {
-    return {
-      refStars: refStarsOverride,
-      targetStars: targetStarsOverride,
-      fromOverride: true,
-    };
-  }
+  const useRefOverride = hasUsableOverride(refStarsOverride);
+  const useTargetOverride = hasUsableOverride(targetStarsOverride);
   return {
-    refStars: detectStars(refPixels, width, height, options.detectionOptions),
-    targetStars: detectStars(targetPixels, width, height, options.detectionOptions),
-    fromOverride: false,
+    refStars: useRefOverride
+      ? refStarsOverride
+      : detectStars(refPixels, width, height, options.detectionOptions),
+    targetStars: useTargetOverride
+      ? targetStarsOverride
+      : detectStars(targetPixels, width, height, options.detectionOptions),
+    overrideUsage: resolveOverrideUsage(useRefOverride, useTargetOverride),
   };
 }
 
@@ -123,40 +136,47 @@ async function resolveStarsAsync(
   width: number,
   height: number,
   options: AlignmentOptions,
-): Promise<{ refStars: DetectedStar[]; targetStars: DetectedStar[]; fromOverride: boolean }> {
+): Promise<{
+  refStars: DetectedStar[];
+  targetStars: DetectedStar[];
+  overrideUsage: AlignmentTransform["overrideUsage"];
+}> {
   const refStarsOverride = options.refStarsOverride;
   const targetStarsOverride = options.targetStarsOverride;
-  if (
-    refStarsOverride &&
-    targetStarsOverride &&
-    refStarsOverride.length >= 3 &&
-    targetStarsOverride.length >= 3
-  ) {
-    return {
-      refStars: refStarsOverride,
-      targetStars: targetStarsOverride,
-      fromOverride: true,
-    };
-  }
+  const useRefOverride = hasUsableOverride(refStarsOverride);
+  const useTargetOverride = hasUsableOverride(targetStarsOverride);
 
   const runtime = options.detectionRuntime;
-  runtime?.onProgress?.(0.01, "detect-ref");
-  const refStars = await detectStarsAsync(
-    refPixels,
-    width,
-    height,
-    options.detectionOptions ?? { profile: "balanced" },
-    runtime,
-  );
-  runtime?.onProgress?.(0.35, "detect-target");
-  const targetStars = await detectStarsAsync(
-    targetPixels,
-    width,
-    height,
-    options.detectionOptions ?? { profile: "balanced" },
-    runtime,
-  );
-  return { refStars, targetStars, fromOverride: false };
+  const refStars = useRefOverride
+    ? refStarsOverride
+    : await (async () => {
+        runtime?.onProgress?.(0.01, "detect-ref");
+        return detectStarsAsync(
+          refPixels,
+          width,
+          height,
+          options.detectionOptions ?? { profile: "balanced" },
+          runtime,
+        );
+      })();
+  const targetStars = useTargetOverride
+    ? targetStarsOverride
+    : await (async () => {
+        runtime?.onProgress?.(useRefOverride ? 0.01 : 0.35, "detect-target");
+        return detectStarsAsync(
+          targetPixels,
+          width,
+          height,
+          options.detectionOptions ?? { profile: "balanced" },
+          runtime,
+        );
+      })();
+
+  return {
+    refStars,
+    targetStars,
+    overrideUsage: resolveOverrideUsage(useRefOverride, useTargetOverride),
+  };
 }
 
 /**
@@ -577,7 +597,7 @@ export function alignFrame(
     }
   }
 
-  const { refStars, targetStars, fromOverride } = resolveStarsSync(
+  const { refStars, targetStars, overrideUsage } = resolveStarsSync(
     refPixels,
     targetPixels,
     width,
@@ -596,7 +616,7 @@ export function alignFrame(
 
   if (mode === "translation") {
     transform = computeTranslation(refStars, targetStars, searchRadius);
-    transform.fallbackUsed = fromOverride ? "annotated-stars" : "none";
+    transform.fallbackUsed = overrideUsage !== "none" ? "annotated-stars" : "none";
   } else {
     transform = computeFullAlignment(
       refStars,
@@ -614,17 +634,22 @@ export function alignFrame(
       }
     }
 
-    if (transform.fallbackUsed === "none" && fromOverride) {
+    if (transform.fallbackUsed === "none" && overrideUsage !== "none") {
       transform.fallbackUsed = "annotated-stars";
     }
   }
 
   transform.detectionCounts = detectionCounts;
+  transform.overrideUsage = overrideUsage;
 
   if (transform.matchedStars < 3) {
     return {
       aligned: targetPixels,
-      transform: identityTransform(detectionCounts, transform.fallbackUsed ?? "identity"),
+      transform: identityTransform(
+        detectionCounts,
+        transform.fallbackUsed ?? "identity",
+        overrideUsage,
+      ),
     };
   }
 
@@ -679,7 +704,7 @@ export async function alignFrameAsync(
     }
   }
 
-  const { refStars, targetStars, fromOverride } = await resolveStarsAsync(
+  const { refStars, targetStars, overrideUsage } = await resolveStarsAsync(
     refPixels,
     targetPixels,
     width,
@@ -699,7 +724,7 @@ export async function alignFrameAsync(
   let transform: AlignmentTransform;
   if (mode === "translation") {
     transform = computeTranslation(refStars, targetStars, searchRadius);
-    transform.fallbackUsed = fromOverride ? "annotated-stars" : "none";
+    transform.fallbackUsed = overrideUsage !== "none" ? "annotated-stars" : "none";
   } else {
     transform = computeFullAlignment(
       refStars,
@@ -717,18 +742,23 @@ export async function alignFrameAsync(
       }
     }
 
-    if (transform.fallbackUsed === "none" && fromOverride) {
+    if (transform.fallbackUsed === "none" && overrideUsage !== "none") {
       transform.fallbackUsed = "annotated-stars";
     }
   }
 
   transform.detectionCounts = detectionCounts;
+  transform.overrideUsage = overrideUsage;
 
   if (transform.matchedStars < 3) {
     runtime?.onProgress?.(1, "failed");
     return {
       aligned: targetPixels,
-      transform: identityTransform(detectionCounts, transform.fallbackUsed ?? "identity"),
+      transform: identityTransform(
+        detectionCounts,
+        transform.fallbackUsed ?? "identity",
+        overrideUsage,
+      ),
     };
   }
 

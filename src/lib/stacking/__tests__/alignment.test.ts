@@ -183,7 +183,61 @@ describe("stacking alignment", () => {
 
     expect(result.transform.matchedStars).toBeGreaterThanOrEqual(3);
     expect(result.transform.fallbackUsed).toBe("annotated-stars");
+    expect(result.transform.overrideUsage).toBe("both");
     expect(mockDetectStars).not.toHaveBeenCalled();
+  });
+
+  it("alignFrame detects only target side when only ref override is provided", () => {
+    const refPixels = new Float32Array(100).fill(1);
+    const targetPixels = new Float32Array(100).fill(2);
+    const refStars = [star(10, 10), star(20, 10), star(15, 20), star(30, 30)];
+    const targetDetected = [star(13, 8), star(23, 8), star(18, 18), star(33, 28)];
+
+    mockDetectStars.mockReturnValueOnce(targetDetected);
+    const result = alignFrame(refPixels, targetPixels, 100, 100, "full", {
+      refStarsOverride: refStars,
+    });
+
+    expect(result.transform.matchedStars).toBeGreaterThanOrEqual(3);
+    expect(result.transform.overrideUsage).toBe("ref");
+    expect(result.transform.detectionCounts).toEqual({ ref: 4, target: 4 });
+    expect(result.transform.fallbackUsed).toBe("annotated-stars");
+    expect(mockDetectStars).toHaveBeenCalledTimes(1);
+  });
+
+  it("alignFrame detects only ref side when only target override is provided", () => {
+    const refPixels = new Float32Array(100).fill(1);
+    const targetPixels = new Float32Array(100).fill(2);
+    const targetStars = [star(13, 8), star(23, 8), star(18, 18), star(33, 28)];
+    const refDetected = [star(10, 10), star(20, 10), star(15, 20), star(30, 30)];
+
+    mockDetectStars.mockReturnValueOnce(refDetected);
+    const result = alignFrame(refPixels, targetPixels, 100, 100, "full", {
+      targetStarsOverride: targetStars,
+    });
+
+    expect(result.transform.matchedStars).toBeGreaterThanOrEqual(3);
+    expect(result.transform.overrideUsage).toBe("target");
+    expect(result.transform.detectionCounts).toEqual({ ref: 4, target: 4 });
+    expect(result.transform.fallbackUsed).toBe("annotated-stars");
+    expect(mockDetectStars).toHaveBeenCalledTimes(1);
+  });
+
+  it("alignFrameAsync computes overrideUsage per side for partial overrides", async () => {
+    const refPixels = new Float32Array(100).fill(1);
+    const targetPixels = new Float32Array(100).fill(2);
+    const refStars = [star(10, 10), star(20, 10), star(15, 20), star(30, 30)];
+    const targetDetected = [star(13, 8), star(23, 8), star(18, 18), star(33, 28)];
+
+    mockDetectStarsAsync.mockResolvedValueOnce(targetDetected);
+    const result = await alignFrameAsync(refPixels, targetPixels, 100, 100, "full", {
+      refStarsOverride: refStars,
+    });
+
+    expect(result.transform.overrideUsage).toBe("ref");
+    expect(result.transform.fallbackUsed).toBe("annotated-stars");
+    expect(result.transform.detectionCounts).toEqual({ ref: 4, target: 4 });
+    expect(mockDetectStarsAsync).toHaveBeenCalledTimes(1);
   });
 
   it("alignFrame supports one/two/three-star manual control points", () => {

@@ -1,7 +1,6 @@
 /**
  * 图像处理 Hook
- * 支持渐进式加载：先显示低分辨率预览，再异步处理全分辨率
- * 使用分块处理避免阻塞 JS 主线程
+ * 支持双阶段处理（scientific + color）与 legacy/standard profile。
  */
 
 import { useState, useCallback, useRef } from "react";
@@ -12,10 +11,23 @@ import {
   calculateHistogram,
   calculateRegionHistogram,
 } from "../lib/utils/pixelMath";
-import type { StretchType, ColormapType, ViewerCurvePreset } from "../lib/fits/types";
+import type {
+  ColormapType,
+  ProcessingAlgorithmProfile,
+  ProcessingPipelineSnapshot,
+  StretchType,
+  ViewerCurvePreset,
+} from "../lib/fits/types";
+import { executeProcessingPipeline } from "../lib/processing/executor";
+import { normalizeProcessingPipelineSnapshot } from "../lib/processing/recipe";
 
 const PREVIEW_MAX_DIM = 512;
 const LARGE_IMAGE_THRESHOLD = 1_000_000;
+
+interface PipelineProcessingOptions {
+  profile?: ProcessingAlgorithmProfile;
+  recipe?: ProcessingPipelineSnapshot | null;
+}
 
 interface UseImageProcessingReturn {
   rgbaData: Uint8ClampedArray | null;
@@ -41,6 +53,7 @@ interface UseImageProcessingReturn {
     contrast?: number,
     mtfMidtone?: number,
     curvePreset?: ViewerCurvePreset,
+    pipelineOptions?: PipelineProcessingOptions,
   ) => void;
   processImagePreview: (
     pixels: Float32Array,
@@ -57,6 +70,7 @@ interface UseImageProcessingReturn {
     contrast?: number,
     mtfMidtone?: number,
     curvePreset?: ViewerCurvePreset,
+    pipelineOptions?: PipelineProcessingOptions,
   ) => void;
   getHistogram: (pixels: Float32Array, bins?: number) => void;
   getStats: (pixels: Float32Array) => void;
@@ -68,6 +82,10 @@ interface UseImageProcessingReturn {
     bins?: number,
   ) => void;
   clearRegionHistogram: () => void;
+}
+
+function hasRecipeNodes(recipe: ProcessingPipelineSnapshot | null | undefined) {
+  return !!recipe && (recipe.scientificNodes.length > 0 || recipe.colorNodes.length > 0);
 }
 
 export function useImageProcessing(): UseImageProcessingReturn {
@@ -102,13 +120,18 @@ export function useImageProcessing(): UseImageProcessingReturn {
       contrast: number = 1,
       mtfMidtone: number = 0.5,
       curvePreset: ViewerCurvePreset = "linear",
+      pipelineOptions?: PipelineProcessingOptions,
     ) => {
-      // Cancel any in-flight chunked processing
       if (abortRef.current) {
         abortRef.current.abort();
         abortRef.current = null;
       }
 
+      const normalizedRecipe = normalizeProcessingPipelineSnapshot(
+        pipelineOptions?.recipe,
+        pipelineOptions?.profile ?? "standard",
+      );
+      const recipeEnabled = hasRecipeNodes(normalizedRecipe);
       const totalPixels = width * height;
       const opts = {
         stretch,
@@ -122,10 +145,32 @@ export function useImageProcessing(): UseImageProcessingReturn {
         contrast,
         mtfMidtone,
         curvePreset,
+        profile: pipelineOptions?.profile ?? normalizedRecipe.profile,
       };
 
+      if (recipeEnabled) {
+        setIsProcessing(true);
+        setProcessingError(null);
+        try {
+          const result = executeProcessingPipeline({
+            input: { pixels, width, height },
+            snapshot: normalizedRecipe,
+            renderOptions: opts,
+            options: { mode: "full" },
+          });
+          setRgbaData(result.colorOutput.rgbaData);
+          setDisplayWidth(result.colorOutput.width);
+          setDisplayHeight(result.colorOutput.height);
+        } catch (e) {
+          setProcessingError(e instanceof Error ? e.message : "Image processing failed");
+          setRgbaData(null);
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
+
       if (totalPixels <= LARGE_IMAGE_THRESHOLD) {
-        // Small image: process synchronously (fast enough)
         setIsProcessing(true);
         setProcessingError(null);
         try {
@@ -142,7 +187,6 @@ export function useImageProcessing(): UseImageProcessingReturn {
         return;
       }
 
-      // Large image: use chunked async processing
       setIsProcessing(true);
       setProcessingError(null);
       const controller = new AbortController();
@@ -184,13 +228,18 @@ export function useImageProcessing(): UseImageProcessingReturn {
       contrast: number = 1,
       mtfMidtone: number = 0.5,
       curvePreset: ViewerCurvePreset = "linear",
+      pipelineOptions?: PipelineProcessingOptions,
     ) => {
-      // Cancel any in-flight chunked processing
       if (abortRef.current) {
         abortRef.current.abort();
         abortRef.current = null;
       }
 
+      const normalizedRecipe = normalizeProcessingPipelineSnapshot(
+        pipelineOptions?.recipe,
+        pipelineOptions?.profile ?? "standard",
+      );
+      const recipeEnabled = hasRecipeNodes(normalizedRecipe);
       const totalPixels = width * height;
       const opts = {
         stretch,
@@ -204,10 +253,42 @@ export function useImageProcessing(): UseImageProcessingReturn {
         contrast,
         mtfMidtone,
         curvePreset,
+        profile: pipelineOptions?.profile ?? normalizedRecipe.profile,
       };
 
+      if (recipeEnabled) {
+        setIsProcessing(true);
+        setProcessingError(null);
+        try {
+          const previewResult = executeProcessingPipeline({
+            input: { pixels, width, height },
+            snapshot: normalizedRecipe,
+            renderOptions: opts,
+            options: { mode: "preview", previewMaxDimension: PREVIEW_MAX_DIM },
+          });
+          setRgbaData(previewResult.colorOutput.rgbaData);
+          setDisplayWidth(previewResult.colorOutput.width);
+          setDisplayHeight(previewResult.colorOutput.height);
+
+          const fullResult = executeProcessingPipeline({
+            input: { pixels, width, height },
+            snapshot: normalizedRecipe,
+            renderOptions: opts,
+            options: { mode: "full" },
+          });
+          setRgbaData(fullResult.colorOutput.rgbaData);
+          setDisplayWidth(fullResult.colorOutput.width);
+          setDisplayHeight(fullResult.colorOutput.height);
+        } catch (e) {
+          setProcessingError(e instanceof Error ? e.message : "Image processing failed");
+          setRgbaData(null);
+        } finally {
+          setIsProcessing(false);
+        }
+        return;
+      }
+
       if (totalPixels <= LARGE_IMAGE_THRESHOLD) {
-        // Small enough: process directly (same as processImage)
         setIsProcessing(true);
         setProcessingError(null);
         try {
@@ -224,11 +305,9 @@ export function useImageProcessing(): UseImageProcessingReturn {
         return;
       }
 
-      // Large image: show preview first, then process full-res
       setIsProcessing(true);
       setProcessingError(null);
 
-      // Phase 1: Instant low-res preview (synchronous, ~512×512 = fast)
       try {
         const preview = downsamplePixels(pixels, width, height, PREVIEW_MAX_DIM);
         const previewRgba = fitsToRGBA(preview.pixels, preview.width, preview.height, opts);
@@ -236,10 +315,9 @@ export function useImageProcessing(): UseImageProcessingReturn {
         setDisplayWidth(preview.width);
         setDisplayHeight(preview.height);
       } catch {
-        // Preview failed - continue to full-res anyway
+        // continue
       }
 
-      // Phase 2: Full-res chunked processing (async, non-blocking)
       const controller = new AbortController();
       abortRef.current = controller;
 
@@ -254,7 +332,6 @@ export function useImageProcessing(): UseImageProcessingReturn {
         })
         .catch((e) => {
           if (!controller.signal.aborted) {
-            // Preview is already displayed; only set error if it's not an abort
             setProcessingError(e instanceof Error ? e.message : "Image processing failed");
             setIsProcessing(false);
           }
@@ -272,15 +349,12 @@ export function useImageProcessing(): UseImageProcessingReturn {
   }, []);
 
   const getStatsAndHistogram = useCallback((pixels: Float32Array, bins: number = 256) => {
-    // Cancel any pending deferred task
     if (pendingTask.current) {
       pendingTask.current.cancel();
     }
-    // Defer heavy computation until animations/interactions complete
     pendingTask.current = InteractionManager.runAfterInteractions(() => {
       const s = calculateStats(pixels);
       setStats(s);
-      // Reuse min/max from stats to avoid redundant scan
       setHistogram(calculateHistogram(pixels, bins, { min: s.min, max: s.max }));
       pendingTask.current = null;
     });

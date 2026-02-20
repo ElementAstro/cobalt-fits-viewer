@@ -169,4 +169,23 @@ describe("calendarService", () => {
     });
     expect(mockCalendar.openEventInCalendarAsync).toHaveBeenCalledWith({ id: "event-opened" });
   });
+
+  it("supports done and responded actions from edit dialog", async () => {
+    const mod = loadCalendarService();
+
+    mockCalendar.editEventInCalendarAsync.mockResolvedValueOnce({ action: "done" });
+    await expect(mod.editEventInSystemCalendar("event-done")).resolves.toEqual({
+      action: "done",
+      id: undefined,
+    });
+
+    mockCalendar.editEventInCalendarAsync.mockResolvedValueOnce({
+      action: "responded",
+      id: "event-responded",
+    });
+    await expect(mod.editEventInSystemCalendar("event-responded")).resolves.toEqual({
+      action: "responded",
+      id: "event-responded",
+    });
+  });
 });

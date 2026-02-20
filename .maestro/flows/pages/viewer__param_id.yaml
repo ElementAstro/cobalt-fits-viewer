@@ -4,6 +4,15 @@
 - assertVisible:
     id: e2e-screen-viewer__param_id
 - tapOn:
-    id: e2e-action-viewer__param_id-toggle-controls
+    id: e2e-action-viewer__param_id-open-menu
 - tapOn:
-    id: e2e-action-viewer__param_id-open-more
+    id: e2e-action-viewer__param_id-export
+- assertVisible:
+    id: e2e-action-export-dialog-export
+- tapOn:
+    id: e2e-action-export-dialog-format-fits
+- tapOn:
+    id: e2e-action-export-dialog-toggle-watermark
+- tapOn:
+    id: e2e-action-export-dialog-export
+- assertVisible: Scientific FITS cannot embed annotations/watermark. Export switched to rendered mode.

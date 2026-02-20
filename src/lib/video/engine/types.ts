@@ -63,6 +63,7 @@ export interface VideoProcessingRequest {
   inputUri: string;
   operation: VideoProcessingTag;
   profile: VideoProfile;
+  removeAudio?: boolean;
   outputDirUri?: string;
   outputFilename?: string;
   sourceDurationMs?: number;
@@ -97,9 +98,19 @@ export interface VideoProcessingResult {
   logLines?: string[];
 }
 
+export interface VideoProcessingCapabilities {
+  available: boolean;
+  encoderNames: string[];
+  h264Encoders: string[];
+  hevcEncoders: string[];
+  fallbackVideoEncoder?: string;
+  unavailableReason?: string;
+}
+
 export interface VideoProcessingEngine {
   readonly id: string;
   isAvailable(): Promise<boolean>;
+  getCapabilities(): Promise<VideoProcessingCapabilities>;
   run(
     request: VideoProcessingRequest,
     options?: VideoProcessingRunOptions,

@@ -1,5 +1,7 @@
 /**
  * 地图聚类工具 - 基于地理距离的空间聚类
+ * LEGACY: 地图主链路已迁移到 supercluster（见 clusteringSuper.ts）。
+ * 此文件仅保留给兼容场景与历史单测使用。
  */
 
 import type { GeoLocation, FitsMetadata } from "../fits/types";

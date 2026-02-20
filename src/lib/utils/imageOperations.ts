@@ -5,6 +5,12 @@
 
 import { quickSelect, computeMAD } from "./pixelMath";
 import { detectStars } from "../stacking/starDetection";
+import {
+  applySCNRRGBA,
+  applyColorCalibrationRGBA,
+  applySaturationRGBA,
+  applyColorBalanceRGBA,
+} from "../processing/color";
 
 // ===== 几何变换 =====
 
@@ -357,9 +363,120 @@ export function rotateArbitrary(
 // ===== 背景提取 =====
 
 /**
- * 简化版自动背景提取 (ABE)
- * 将图像分为 NxN 网格，对每格取中值作为背景采样点，
- * 使用 sigma clipping 剔除含星点的采样点，双线性插值生成背景模型并减除
+ * 对一组采样值做 sigma clipping（迭代）
+ */
+function sigmaClipSamples(values: number[], sigma: number, maxIters: number): number[] {
+  if (values.length <= 2) return values;
+  let working = values.slice();
+  const s = Math.max(0.5, sigma);
+
+  for (let iter = 0; iter < Math.max(1, maxIters); iter++) {
+    if (working.length <= 2) break;
+    let sum = 0;
+    for (let i = 0; i < working.length; i++) sum += working[i];
+    const mean = sum / working.length;
+    let varAcc = 0;
+    for (let i = 0; i < working.length; i++) {
+      const d = working[i] - mean;
+      varAcc += d * d;
+    }
+    const std = Math.sqrt(varAcc / Math.max(1, working.length));
+    if (!Number.isFinite(std) || std <= 0) break;
+
+    const threshold = s * std;
+    const next = working.filter((v) => Math.abs(v - mean) <= threshold);
+    if (next.length === 0 || next.length === working.length) break;
+    working = next;
+  }
+
+  return working;
+}
+
+function estimateSExtractorBackground(values: number[], sigma: number): number {
+  if (values.length === 0) return 0;
+  const clipped = sigmaClipSamples(values, sigma, 10);
+  if (clipped.length === 0) return 0;
+
+  const sorted = clipped.slice().sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) * 0.5 : sorted[mid];
+
+  let sum = 0;
+  for (let i = 0; i < clipped.length; i++) sum += clipped[i];
+  const mean = sum / clipped.length;
+
+  let varAcc = 0;
+  for (let i = 0; i < clipped.length; i++) {
+    const d = clipped[i] - mean;
+    varAcc += d * d;
+  }
+  const std = Math.sqrt(varAcc / Math.max(1, clipped.length));
+  if (!Number.isFinite(std) || std <= 1e-12) return median;
+
+  // photutils SExtractorBackground:
+  // mode = 2.5 * median - 1.5 * mean, but fallback to median when skew is high.
+  const skewMetric = (mean - median) / std;
+  if (skewMetric > 0.3) return median;
+  return 2.5 * median - 1.5 * mean;
+}
+
+function buildBackgroundModel(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  gridX: number,
+  gridY: number,
+  sigma: number,
+): Float32Array {
+  const gx = Math.max(2, Math.min(64, Math.round(gridX)));
+  const gy = Math.max(2, Math.min(64, Math.round(gridY)));
+  const cellW = Math.max(1, Math.ceil(width / gx));
+  const cellH = Math.max(1, Math.ceil(height / gy));
+
+  const sampleGrid = new Float32Array(gx * gy);
+  for (let y = 0; y < gy; y++) {
+    for (let x = 0; x < gx; x++) {
+      const x0 = x * cellW;
+      const y0 = y * cellH;
+      const x1 = Math.min(width, x0 + cellW);
+      const y1 = Math.min(height, y0 + cellH);
+      const values: number[] = [];
+      for (let py = y0; py < y1; py++) {
+        for (let px = x0; px < x1; px++) {
+          const v = pixels[py * width + px];
+          if (Number.isFinite(v)) values.push(v);
+        }
+      }
+      sampleGrid[y * gx + x] = estimateSExtractorBackground(values, sigma);
+    }
+  }
+
+  const background = new Float32Array(width * height);
+  for (let y = 0; y < height; y++) {
+    const fy = (y / Math.max(1, height - 1)) * (gy - 1);
+    const y0 = Math.max(0, Math.min(gy - 2, Math.floor(fy)));
+    const y1 = Math.min(gy - 1, y0 + 1);
+    const wy = fy - y0;
+    for (let x = 0; x < width; x++) {
+      const fx = (x / Math.max(1, width - 1)) * (gx - 1);
+      const x0 = Math.max(0, Math.min(gx - 2, Math.floor(fx)));
+      const x1 = Math.min(gx - 1, x0 + 1);
+      const wx = fx - x0;
+
+      const v00 = sampleGrid[y0 * gx + x0];
+      const v10 = sampleGrid[y0 * gx + x1];
+      const v01 = sampleGrid[y1 * gx + x0];
+      const v11 = sampleGrid[y1 * gx + x1];
+      background[y * width + x] =
+        v00 * (1 - wx) * (1 - wy) + v10 * wx * (1 - wy) + v01 * (1 - wx) * wy + v11 * wx * wy;
+    }
+  }
+  return background;
+}
+
+/**
+ * 自动背景提取 (ABE)
+ * 采用 sigma-clip + SExtractor 背景估计 + 双线性插值构建背景模型
  */
 export function extractBackground(
   pixels: Float32Array,
@@ -367,75 +484,10 @@ export function extractBackground(
   height: number,
   gridSize: number = 8,
 ): Float32Array {
-  const cellW = Math.floor(width / gridSize);
-  const cellH = Math.floor(height / gridSize);
-  const samples = new Float32Array(gridSize * gridSize);
-
-  // 对每个网格计算中值
-  for (let gy = 0; gy < gridSize; gy++) {
-    for (let gx = 0; gx < gridSize; gx++) {
-      const startX = gx * cellW;
-      const startY = gy * cellH;
-      const w = Math.min(cellW, width - startX);
-      const h = Math.min(cellH, height - startY);
-      const cellPixels = new Float32Array(w * h);
-      let idx = 0;
-      for (let y = startY; y < startY + h; y++) {
-        for (let x = startX; x < startX + w; x++) {
-          cellPixels[idx++] = pixels[y * width + x];
-        }
-      }
-      // 取中值
-      samples[gy * gridSize + gx] = quickSelect(cellPixels, 0, idx - 1, Math.floor(idx / 2));
-    }
-  }
-
-  // Sigma clipping 剔除星点区域采样
-  let sum = 0,
-    count = 0;
-  for (let i = 0; i < samples.length; i++) {
-    sum += samples[i];
-    count++;
-  }
-  const mean = sum / count;
-  let sqSum = 0;
-  for (let i = 0; i < samples.length; i++) sqSum += (samples[i] - mean) ** 2;
-  const stddev = Math.sqrt(sqSum / count);
-  const sigmaThresh = 2.0;
-
-  // 将离群采样点替换为均值
-  for (let i = 0; i < samples.length; i++) {
-    if (Math.abs(samples[i] - mean) > sigmaThresh * stddev) {
-      samples[i] = mean;
-    }
-  }
-
-  // 双线性插值生成全尺寸背景模型
-  const background = new Float32Array(width * height);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      // 映射到网格坐标
-      const gxf = (x / width) * (gridSize - 1);
-      const gyf = (y / height) * (gridSize - 1);
-      const gx0 = Math.min(Math.floor(gxf), gridSize - 2);
-      const gy0 = Math.min(Math.floor(gyf), gridSize - 2);
-      const fx = gxf - gx0;
-      const fy = gyf - gy0;
-
-      const v00 = samples[gy0 * gridSize + gx0];
-      const v10 = samples[gy0 * gridSize + gx0 + 1];
-      const v01 = samples[(gy0 + 1) * gridSize + gx0];
-      const v11 = samples[(gy0 + 1) * gridSize + gx0 + 1];
-      background[y * width + x] =
-        v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) + v01 * (1 - fx) * fy + v11 * fx * fy;
-    }
-  }
-
-  // 减除背景
+  const grid = Math.max(2, Math.min(64, Math.round(gridSize)));
+  const background = buildBackgroundModel(pixels, width, height, grid, grid, 3);
   const result = new Float32Array(width * height);
-  for (let i = 0; i < result.length; i++) {
-    result[i] = pixels[i] - background[i];
-  }
+  for (let i = 0; i < result.length; i++) result[i] = pixels[i] - background[i];
   return result;
 }
 
@@ -800,26 +852,7 @@ export function applySCNR(
   method: "averageNeutral" | "maximumNeutral" = "averageNeutral",
   amount: number = 1.0,
 ): Uint8ClampedArray {
-  const result = new Uint8ClampedArray(rgbaData);
-  const n = rgbaData.length / 4;
-
-  for (let i = 0; i < n; i++) {
-    const off = i * 4;
-    const r = rgbaData[off];
-    const g = rgbaData[off + 1];
-    const b = rgbaData[off + 2];
-
-    let gNew: number;
-    if (method === "averageNeutral") {
-      gNew = Math.min(g, (r + b) / 2);
-    } else {
-      gNew = Math.min(g, Math.max(r, b));
-    }
-
-    result[off + 1] = Math.round(g * (1 - amount) + gNew * amount);
-  }
-
-  return result;
+  return applySCNRRGBA(rgbaData, method, amount);
 }
 
 /**
@@ -834,8 +867,8 @@ export function applySCNRGray(pixels: Float32Array): Float32Array {
 
 /**
  * CLAHE 局部自适应直方图均衡
- * tileSize: 块大小 (4-16)
- * clipLimit: 对比度限制 (1.0-10.0)
+ * tileSize: tileGridSize（每个维度上的网格数，OpenCV 语义）
+ * clipLimit: 对比度限制（OpenCV 语义，按 tileArea / bins 归一化）
  */
 export function clahe(
   pixels: Float32Array,
@@ -844,8 +877,8 @@ export function clahe(
   tileSize: number = 8,
   clipLimit: number = 3.0,
 ): Float32Array {
-  tileSize = Math.max(2, Math.min(64, Math.round(tileSize)));
-  clipLimit = Math.max(1, Math.min(20, clipLimit));
+  const tileGrid = Math.max(2, Math.min(64, Math.round(tileSize)));
+  const clip = Math.max(0.01, Math.min(100, clipLimit));
   const n = width * height;
 
   // 归一化到 [0,1]
@@ -861,10 +894,10 @@ export function clahe(
   const range = max - min;
   if (range === 0) return new Float32Array(pixels);
 
-  const tilesX = Math.max(1, Math.ceil(width / tileSize));
-  const tilesY = Math.max(1, Math.ceil(height / tileSize));
-  const tileW = Math.ceil(width / tilesX);
-  const tileH = Math.ceil(height / tilesY);
+  const tilesX = tileGrid;
+  const tilesY = tileGrid;
+  const tileW = Math.max(1, Math.ceil(width / tilesX));
+  const tileH = Math.max(1, Math.ceil(height / tilesY));
   const BINS = 256;
 
   // 为每个 tile 计算裁剪后的 CDF
@@ -877,6 +910,12 @@ export function clahe(
       const endX = Math.min(startX + tileW, width);
       const endY = Math.min(startY + tileH, height);
       const tilePixelCount = (endX - startX) * (endY - startY);
+      if (tilePixelCount <= 0) {
+        const identity = new Float32Array(BINS);
+        for (let i = 0; i < BINS; i++) identity[i] = i / (BINS - 1);
+        cdfs[ty * tilesX + tx] = identity;
+        continue;
+      }
 
       // 计算直方图
       const hist = new Uint32Array(BINS);
@@ -888,8 +927,8 @@ export function clahe(
         }
       }
 
-      // 裁剪直方图
-      const limit = Math.max(1, Math.floor((clipLimit * tilePixelCount) / BINS));
+      // OpenCV 语义：limit = clipLimit * tileArea / histBins
+      const limit = Math.max(1, Math.floor((clip * tilePixelCount) / BINS));
       let excess = 0;
       for (let i = 0; i < BINS; i++) {
         if (hist[i] > limit) {
@@ -897,7 +936,7 @@ export function clahe(
           hist[i] = limit;
         }
       }
-      // 重分配超出部分
+      // 重分配超出部分（均匀分配到所有 bins）
       const increment = Math.floor(excess / BINS);
       const remainder = excess - increment * BINS;
       for (let i = 0; i < BINS; i++) {
@@ -1398,68 +1437,23 @@ export function applyRangeMask(
  * amount: 饱和度倍数 (-1 到 2)，0=不变，>0 增加，<0 减少
  */
 export function adjustSaturation(rgbaData: Uint8ClampedArray, amount: number): Uint8ClampedArray {
-  const result = new Uint8ClampedArray(rgbaData);
-  const n = rgbaData.length / 4;
-  const factor = 1 + amount;
+  return applySaturationRGBA(rgbaData, amount);
+}
 
-  for (let i = 0; i < n; i++) {
-    const off = i * 4;
-    const r = rgbaData[off] / 255;
-    const g = rgbaData[off + 1] / 255;
-    const b = rgbaData[off + 2] / 255;
+export function applyColorCalibration(
+  rgbaData: Uint8ClampedArray,
+  percentile: number = 0.92,
+): Uint8ClampedArray {
+  return applyColorCalibrationRGBA(rgbaData, percentile);
+}
 
-    // RGB → HSL
-    const cMax = Math.max(r, g, b);
-    const cMin = Math.min(r, g, b);
-    const delta = cMax - cMin;
-    const l = (cMax + cMin) / 2;
-
-    if (delta === 0) continue; // 无色相，跳过
-
-    let h = 0;
-    if (cMax === r) h = ((g - b) / delta) % 6;
-    else if (cMax === g) h = (b - r) / delta + 2;
-    else h = (r - g) / delta + 4;
-    h *= 60;
-    if (h < 0) h += 360;
-
-    let s = delta / (1 - Math.abs(2 * l - 1));
-    s = Math.max(0, Math.min(1, s * factor));
-
-    // HSL → RGB
-    const c = (1 - Math.abs(2 * l - 1)) * s;
-    const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
-    const m = l - c / 2;
-
-    let r1 = 0,
-      g1 = 0,
-      b1 = 0;
-    if (h < 60) {
-      r1 = c;
-      g1 = x;
-    } else if (h < 120) {
-      r1 = x;
-      g1 = c;
-    } else if (h < 180) {
-      g1 = c;
-      b1 = x;
-    } else if (h < 240) {
-      g1 = x;
-      b1 = c;
-    } else if (h < 300) {
-      r1 = x;
-      b1 = c;
-    } else {
-      r1 = c;
-      b1 = x;
-    }
-
-    result[off] = Math.round((r1 + m) * 255);
-    result[off + 1] = Math.round((g1 + m) * 255);
-    result[off + 2] = Math.round((b1 + m) * 255);
-  }
-
-  return result;
+export function adjustColorBalance(
+  rgbaData: Uint8ClampedArray,
+  redGain: number,
+  greenGain: number,
+  blueGain: number,
+): Uint8ClampedArray {
+  return applyColorBalanceRGBA(rgbaData, redGain, greenGain, blueGain);
 }
 
 // ===== PixelMath Expression Evaluator =====
@@ -1694,8 +1688,9 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
 /**
  * Richardson-Lucy 去卷积
  * psfSigma: PSF 高斯宽度
- * iterations: 迭代次数
- * regularization: 正则化强度 [0, 1]
+ * iterations: 迭代次数（num_iter）
+ * regularization: 兼容参数，映射为 filter_epsilon（避免除零）
+ * options.clip: 对输出做 [-1, 1] 裁剪（与 scikit-image 一致）
  */
 export function richardsonLucy(
   pixels: Float32Array,
@@ -1704,66 +1699,54 @@ export function richardsonLucy(
   psfSigma: number = 2.0,
   iterations: number = 20,
   regularization: number = 0.1,
+  options?: { filterEpsilon?: number; clip?: boolean },
 ): Float32Array {
   psfSigma = Math.max(0.3, Math.min(10, psfSigma));
-  iterations = Math.max(0, Math.min(100, Math.round(iterations)));
-  regularization = Math.max(0, Math.min(1, regularization));
+  iterations = Math.max(0, Math.min(200, Math.round(iterations)));
+  const filterEpsilon = Math.max(0, options?.filterEpsilon ?? regularization);
+  const clip = options?.clip ?? false;
   const n = width * height;
 
-  // 确保非负
+  if (iterations === 0) return new Float32Array(pixels);
+
+  // Richardson-Lucy 要求非负输入，先平移到正域
   let minVal = Infinity;
   for (let i = 0; i < n; i++) {
     if (pixels[i] < minVal) minVal = pixels[i];
   }
   const offset = minVal < 0 ? -minVal : 0;
+
   const observed = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    observed[i] = pixels[i] + offset + 1e-10; // 避免零值
+    observed[i] = Math.max(0, pixels[i] + offset);
   }
 
-  // 初始估计 = 观测图像
-  let estimate = new Float32Array(observed);
+  // 初始估计
+  const estimate = new Float32Array(observed);
+  const tiny = 1e-12;
 
   for (let iter = 0; iter < iterations; iter++) {
-    // 正向卷积: conv(estimate, PSF)
+    // 正向卷积: conv(estimate, psf)
     const blurred = gaussianBlur(estimate, width, height, psfSigma);
-
-    // 计算比率: observed / blurred
     const ratio = new Float32Array(n);
     for (let i = 0; i < n; i++) {
-      ratio[i] = observed[i] / (blurred[i] + 1e-10);
+      const denom = blurred[i];
+      ratio[i] = denom > filterEpsilon ? observed[i] / Math.max(denom, tiny) : 0;
     }
 
-    // 反向卷积: conv(ratio, PSF_flip) — 高斯 PSF 对称，所以一样
+    // 反向卷积（高斯核对称）
     const correction = gaussianBlur(ratio, width, height, psfSigma);
-
-    // 更新估计
-    const newEstimate = new Float32Array(n);
     for (let i = 0; i < n; i++) {
-      newEstimate[i] = estimate[i] * correction[i];
+      estimate[i] = Math.max(0, estimate[i] * correction[i]);
     }
-
-    // 可选正则化：轻微平滑抑制噪声放大
-    if (regularization > 0) {
-      const regSigma = psfSigma * regularization * 0.5;
-      if (regSigma > 0.3) {
-        const smoothed = gaussianBlur(newEstimate, width, height, regSigma);
-        for (let i = 0; i < n; i++) {
-          newEstimate[i] =
-            newEstimate[i] * (1 - regularization * 0.3) + smoothed[i] * regularization * 0.3;
-        }
-      }
-    }
-
-    estimate = newEstimate;
   }
 
-  // 移除偏移
   const result = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    result[i] = estimate[i] - offset;
+    let v = estimate[i] - offset;
+    if (clip) v = Math.max(-1, Math.min(1, v));
+    result[i] = v;
   }
-
   return result;
 }
 
@@ -1779,72 +1762,9 @@ export function dynamicBackgroundExtract(
   samplesY: number = 8,
   sigma: number = 2.5,
 ): Float32Array {
-  const sx = Math.max(3, Math.min(64, Math.round(samplesX)));
-  const sy = Math.max(3, Math.min(64, Math.round(samplesY)));
-  const cellW = Math.max(1, Math.floor(width / sx));
-  const cellH = Math.max(1, Math.floor(height / sy));
-  const sampleGrid = new Float32Array(sx * sy);
-
-  for (let gy = 0; gy < sy; gy++) {
-    for (let gx = 0; gx < sx; gx++) {
-      const x0 = gx * cellW;
-      const y0 = gy * cellH;
-      const x1 = Math.min(width, x0 + cellW);
-      const y1 = Math.min(height, y0 + cellH);
-      const values = new Float32Array(Math.max(1, (x1 - x0) * (y1 - y0)));
-      let idx = 0;
-      for (let y = y0; y < y1; y++) {
-        for (let x = x0; x < x1; x++) {
-          values[idx++] = pixels[y * width + x];
-        }
-      }
-      if (idx === 0) {
-        sampleGrid[gy * sx + gx] = 0;
-        continue;
-      }
-      const clipped = values.slice(0, idx);
-      const center = quickSelect(clipped, 0, clipped.length - 1, Math.floor(clipped.length / 2));
-      let sumSq = 0;
-      for (let i = 0; i < clipped.length; i++) {
-        const d = clipped[i] - center;
-        sumSq += d * d;
-      }
-      const std = Math.sqrt(sumSq / Math.max(1, clipped.length));
-      let acc = 0;
-      let count = 0;
-      const threshold = std * Math.max(0.5, sigma);
-      for (let i = 0; i < clipped.length; i++) {
-        const v = clipped[i];
-        if (Math.abs(v - center) <= threshold) {
-          acc += v;
-          count++;
-        }
-      }
-      sampleGrid[gy * sx + gx] = count > 0 ? acc / count : center;
-    }
-  }
-
-  const background = new Float32Array(width * height);
-  for (let y = 0; y < height; y++) {
-    const fy = (y / Math.max(1, height - 1)) * (sy - 1);
-    const gy0 = Math.min(sy - 2, Math.max(0, Math.floor(fy)));
-    const gy1 = Math.min(sy - 1, gy0 + 1);
-    const wy = fy - gy0;
-    for (let x = 0; x < width; x++) {
-      const fx = (x / Math.max(1, width - 1)) * (sx - 1);
-      const gx0 = Math.min(sx - 2, Math.max(0, Math.floor(fx)));
-      const gx1 = Math.min(sx - 1, gx0 + 1);
-      const wx = fx - gx0;
-
-      const v00 = sampleGrid[gy0 * sx + gx0];
-      const v10 = sampleGrid[gy0 * sx + gx1];
-      const v01 = sampleGrid[gy1 * sx + gx0];
-      const v11 = sampleGrid[gy1 * sx + gx1];
-      background[y * width + x] =
-        v00 * (1 - wx) * (1 - wy) + v10 * wx * (1 - wy) + v01 * (1 - wx) * wy + v11 * wx * wy;
-    }
-  }
-
+  const sx = Math.max(2, Math.min(64, Math.round(samplesX)));
+  const sy = Math.max(2, Math.min(64, Math.round(samplesY)));
+  const background = buildBackgroundModel(pixels, width, height, sx, sy, Math.max(0.5, sigma));
   const out = new Float32Array(width * height);
   for (let i = 0; i < out.length; i++) out[i] = pixels[i] - background[i];
   return out;
@@ -1964,7 +1884,7 @@ export function deconvolutionAuto(
 
 // ===== 操作类型定义 =====
 
-export type ImageEditOperation =
+export type ScientificImageOperation =
   | { type: "rotate90cw" }
   | { type: "rotate90ccw" }
   | { type: "rotate180" }
@@ -2006,6 +1926,14 @@ export type ImageEditOperation =
   | { type: "starReduction"; scale: number; strength: number }
   | { type: "deconvolutionAuto"; iterations: number; regularization: number };
 
+export type ColorImageOperation =
+  | { type: "scnr"; method: "averageNeutral" | "maximumNeutral"; amount: number }
+  | { type: "colorCalibration"; percentile: number }
+  | { type: "saturation"; amount: number }
+  | { type: "colorBalance"; redGain: number; greenGain: number; blueGain: number };
+
+export type ImageEditOperation = ScientificImageOperation | ColorImageOperation;
+
 /**
  * 应用编辑操作到像素数据
  */
@@ -2013,7 +1941,7 @@ export function applyOperation(
   pixels: Float32Array,
   width: number,
   height: number,
-  op: ImageEditOperation,
+  op: ScientificImageOperation,
 ): { pixels: Float32Array; width: number; height: number } {
   switch (op.type) {
     case "rotate90cw":

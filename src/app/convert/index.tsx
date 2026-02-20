@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { View, Text, ScrollView, Alert } from "react-native";
 import {
   Accordion,
@@ -19,6 +19,7 @@ import { useExport } from "../../hooks/useExport";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { FormatSelector } from "../../components/converter/FormatSelector";
 import { BatchConvertContent } from "../../components/converter/BatchConvertContent";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
@@ -26,7 +27,18 @@ import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { formatFileSize } from "../../lib/utils/fileManager";
 import { formatBytes } from "../../lib/utils/format";
-import type { ExportFormat, StretchType, ColormapType } from "../../lib/fits/types";
+import {
+  DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
+  type ExportFormat,
+  type StretchType,
+  type ColormapType,
+  type FitsCompression,
+  type FitsExportMode,
+  type FitsTargetOptions,
+  type TiffCompression,
+} from "../../lib/fits/types";
+import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
 
 const STRETCH_OPTIONS: { key: StretchType; label: string }[] = [
   { key: "linear", label: "Linear" },
@@ -49,6 +61,10 @@ const COLORMAP_OPTIONS: { key: ColormapType; label: string }[] = [
 ];
 
 const DPI_OPTIONS = [72, 150, 300, 600];
+const FITS_BITPIX_PRESETS: Array<FitsTargetOptions["bitpix"]> = [8, 16, 32, -32, -64];
+const FITS_MODE_PRESETS: FitsExportMode[] = ["scientific", "rendered"];
+const FITS_COMPRESSION_PRESETS: FitsCompression[] = ["none", "gzip"];
+const TIFF_COMPRESSION_PRESETS: TiffCompression[] = ["lzw", "deflate", "none"];
 
 export default function ConvertScreen() {
   const router = useRouter();
@@ -62,6 +78,14 @@ export default function ConvertScreen() {
   const files = useFitsStore((s) => s.files);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const selectedFile = files.find((f) => f.id === selectedFileId);
+  const astrometryJobs = useAstrometryStore((s) => s.jobs);
+  const latestSolvedJob = useMemo(
+    () =>
+      astrometryJobs.find(
+        (job) => job.fileId === selectedFileId && job.status === "success" && job.result,
+      ),
+    [astrometryJobs, selectedFileId],
+  );
 
   useEffect(() => {
     const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
@@ -118,7 +142,37 @@ export default function ConvertScreen() {
     reset: resetFits,
   } = useFitsFile();
   const { rgbaData, processImage } = useImageProcessing();
-  const { isExporting, exportImage } = useExport();
+  const { isExporting, exportImageDetailed } = useExport();
+
+  const exportSource = useMemo(
+    () => ({
+      sourceType: metadata?.sourceType,
+      sourceFormat: metadata?.sourceFormat,
+      sourceFileId: selectedFile?.id,
+      originalBuffer: sourceBuffer,
+      scientificPixels: pixels,
+      rgbChannels,
+      metadata: metadata ?? undefined,
+      headerKeywords: headers,
+      comments,
+      history,
+      starAnnotations: selectedFile?.starAnnotations?.points ?? [],
+      astrometryAnnotations: latestSolvedJob?.result?.annotations ?? [],
+    }),
+    [
+      selectedFile?.id,
+      selectedFile?.starAnnotations?.points,
+      sourceBuffer,
+      pixels,
+      rgbChannels,
+      metadata,
+      headers,
+      comments,
+      history,
+      latestSolvedJob?.result?.annotations,
+    ],
+  );
+  const fitsScientificAvailable = canUseScientificFitsExport(exportSource);
 
   const showQuality = checkSupportsQuality(currentOptions.format);
   const bitDepths = checkBitDepths(currentOptions.format);
@@ -145,6 +199,12 @@ export default function ConvertScreen() {
         currentOptions.blackPoint,
         currentOptions.whitePoint,
         currentOptions.gamma,
+        currentOptions.outputBlack,
+        currentOptions.outputWhite,
+        currentOptions.brightness,
+        currentOptions.contrast,
+        currentOptions.mtfMidtone,
+        currentOptions.curvePreset,
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,6 +216,12 @@ export default function ConvertScreen() {
     currentOptions.blackPoint,
     currentOptions.whitePoint,
     currentOptions.gamma,
+    currentOptions.outputBlack,
+    currentOptions.outputWhite,
+    currentOptions.brightness,
+    currentOptions.contrast,
+    currentOptions.mtfMidtone,
+    currentOptions.curvePreset,
   ]);
 
   const estimatedSize = dimensions ? getEstimatedSize(dimensions.width, dimensions.height) : null;
@@ -165,7 +231,7 @@ export default function ConvertScreen() {
       Alert.alert(t("common.error"), t("viewer.noImageData"));
       return;
     }
-    const path = await exportImage({
+    const detailed = await exportImageDetailed({
       rgbaData,
       width: dimensions.width,
       height: dimensions.height,
@@ -175,38 +241,23 @@ export default function ConvertScreen() {
       bitDepth: currentOptions.bitDepth,
       fits: currentOptions.fits,
       tiff: currentOptions.tiff,
-      source: {
-        sourceType: metadata?.sourceType,
-        sourceFormat: metadata?.sourceFormat,
-        originalBuffer: sourceBuffer,
-        scientificPixels: pixels,
-        rgbChannels,
-        metadata: metadata ?? undefined,
-        headerKeywords: headers,
-        comments,
-        history,
+      renderOptions: {
+        includeAnnotations: currentOptions.includeAnnotations,
+        includeWatermark: currentOptions.includeWatermark,
+        watermarkText: currentOptions.watermarkText,
       },
+      source: exportSource,
     });
-    if (path) {
-      Alert.alert(t("common.success"), t("viewer.exportSuccess"));
+    if (detailed.path) {
+      const fallbackMessage =
+        detailed.diagnostics.fallbackApplied && detailed.diagnostics.fallbackReasonMessageKey
+          ? `\n${t(detailed.diagnostics.fallbackReasonMessageKey)}`
+          : "";
+      Alert.alert(t("common.success"), `${t("viewer.exportSuccess")}${fallbackMessage}`);
     } else {
       Alert.alert(t("common.error"), t("viewer.exportFailed"));
     }
-  }, [
-    rgbaData,
-    dimensions,
-    selectedFile,
-    exportImage,
-    currentOptions,
-    metadata,
-    sourceBuffer,
-    pixels,
-    rgbChannels,
-    headers,
-    comments,
-    history,
-    t,
-  ]);
+  }, [rgbaData, dimensions, selectedFile, exportImageDetailed, currentOptions, exportSource, t]);
 
   return (
     <View testID="e2e-screen-convert__index" className="flex-1 bg-background">
@@ -441,6 +492,220 @@ export default function ConvertScreen() {
                               <Chip.Label className="text-[9px]">{d}</Chip.Label>
                             </Chip>
                           ))}
+                        </View>
+                      </View>
+
+                      {currentOptions.format === "fits" && (
+                        <View className="gap-3">
+                          <View>
+                            <Text className="mb-2 text-xs font-semibold text-muted">
+                              {t("converter.fitsMode")}
+                            </Text>
+                            <View className="flex-row gap-2">
+                              {FITS_MODE_PRESETS.map((mode) => (
+                                <Chip
+                                  key={mode}
+                                  testID={`e2e-action-convert__index-fits-mode-${mode}`}
+                                  size="sm"
+                                  variant={
+                                    (currentOptions.fits?.mode ??
+                                      DEFAULT_FITS_TARGET_OPTIONS.mode) === mode
+                                      ? "primary"
+                                      : "secondary"
+                                  }
+                                  onPress={() => {
+                                    if (mode === "scientific" && !fitsScientificAvailable) return;
+                                    setOptions({
+                                      fits: {
+                                        ...DEFAULT_FITS_TARGET_OPTIONS,
+                                        ...(currentOptions.fits ?? {}),
+                                        mode,
+                                      },
+                                    });
+                                  }}
+                                >
+                                  <Chip.Label className="text-[9px]">
+                                    {mode === "scientific"
+                                      ? t("converter.fitsModeScientific")
+                                      : t("converter.fitsModeRendered")}
+                                  </Chip.Label>
+                                </Chip>
+                              ))}
+                            </View>
+                            {!fitsScientificAvailable && (
+                              <Text className="mt-1 text-[10px] text-muted">
+                                {t("converter.fitsScientificUnavailable")}
+                              </Text>
+                            )}
+                          </View>
+
+                          <View>
+                            <Text className="mb-2 text-xs font-semibold text-muted">
+                              {t("converter.fitsCompression")}
+                            </Text>
+                            <View className="flex-row gap-2">
+                              {FITS_COMPRESSION_PRESETS.map((compression) => (
+                                <Chip
+                                  key={compression}
+                                  size="sm"
+                                  variant={
+                                    (currentOptions.fits?.compression ??
+                                      DEFAULT_FITS_TARGET_OPTIONS.compression) === compression
+                                      ? "primary"
+                                      : "secondary"
+                                  }
+                                  onPress={() =>
+                                    setOptions({
+                                      fits: {
+                                        ...DEFAULT_FITS_TARGET_OPTIONS,
+                                        ...(currentOptions.fits ?? {}),
+                                        compression,
+                                      },
+                                    })
+                                  }
+                                >
+                                  <Chip.Label className="text-[9px] uppercase">
+                                    {compression}
+                                  </Chip.Label>
+                                </Chip>
+                              ))}
+                            </View>
+                          </View>
+
+                          <View>
+                            <Text className="mb-2 text-xs font-semibold text-muted">
+                              {t("converter.bitpix")}
+                            </Text>
+                            <View className="flex-row flex-wrap gap-1.5">
+                              {FITS_BITPIX_PRESETS.map((bitpix) => (
+                                <Chip
+                                  key={bitpix}
+                                  size="sm"
+                                  variant={
+                                    (currentOptions.fits?.bitpix ??
+                                      DEFAULT_FITS_TARGET_OPTIONS.bitpix) === bitpix
+                                      ? "primary"
+                                      : "secondary"
+                                  }
+                                  onPress={() =>
+                                    setOptions({
+                                      fits: {
+                                        ...DEFAULT_FITS_TARGET_OPTIONS,
+                                        ...(currentOptions.fits ?? {}),
+                                        bitpix,
+                                      },
+                                    })
+                                  }
+                                >
+                                  <Chip.Label className="text-[9px]">{bitpix}</Chip.Label>
+                                </Chip>
+                              ))}
+                            </View>
+                          </View>
+                        </View>
+                      )}
+
+                      {currentOptions.format === "tiff" && (
+                        <View className="gap-3">
+                          <View>
+                            <Text className="mb-2 text-xs font-semibold text-muted">
+                              {t("converter.tiffCompression")}
+                            </Text>
+                            <View className="flex-row gap-2">
+                              {TIFF_COMPRESSION_PRESETS.map((compression) => (
+                                <Chip
+                                  key={compression}
+                                  size="sm"
+                                  variant={
+                                    (currentOptions.tiff?.compression ??
+                                      DEFAULT_TIFF_TARGET_OPTIONS.compression) === compression
+                                      ? "primary"
+                                      : "secondary"
+                                  }
+                                  onPress={() =>
+                                    setOptions({
+                                      tiff: {
+                                        ...DEFAULT_TIFF_TARGET_OPTIONS,
+                                        ...(currentOptions.tiff ?? {}),
+                                        compression,
+                                      },
+                                    })
+                                  }
+                                >
+                                  <Chip.Label className="text-[9px] uppercase">
+                                    {compression}
+                                  </Chip.Label>
+                                </Chip>
+                              ))}
+                            </View>
+                          </View>
+
+                          <View>
+                            <Text className="mb-2 text-xs font-semibold text-muted">
+                              {t("converter.multipage")}
+                            </Text>
+                            <View className="flex-row gap-2">
+                              {(["preserve", "firstFrame"] as const).map((multipage) => (
+                                <Chip
+                                  key={multipage}
+                                  size="sm"
+                                  variant={
+                                    (currentOptions.tiff?.multipage ??
+                                      DEFAULT_TIFF_TARGET_OPTIONS.multipage) === multipage
+                                      ? "primary"
+                                      : "secondary"
+                                  }
+                                  onPress={() =>
+                                    setOptions({
+                                      tiff: {
+                                        ...DEFAULT_TIFF_TARGET_OPTIONS,
+                                        ...(currentOptions.tiff ?? {}),
+                                        multipage,
+                                      },
+                                    })
+                                  }
+                                >
+                                  <Chip.Label className="text-[9px]">
+                                    {multipage === "preserve"
+                                      ? t("converter.multipagePreserve")
+                                      : t("converter.multipageFirstFrame")}
+                                  </Chip.Label>
+                                </Chip>
+                              ))}
+                            </View>
+                          </View>
+                        </View>
+                      )}
+
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("converter.exportDecorations")}
+                        </Text>
+                        <View className="flex-row gap-2">
+                          <Chip
+                            testID="e2e-action-convert__index-toggle-annotations"
+                            size="sm"
+                            variant={currentOptions.includeAnnotations ? "primary" : "secondary"}
+                            onPress={() =>
+                              setOptions({ includeAnnotations: !currentOptions.includeAnnotations })
+                            }
+                          >
+                            <Chip.Label className="text-[9px]">
+                              {t("converter.includeAnnotations")}
+                            </Chip.Label>
+                          </Chip>
+                          <Chip
+                            testID="e2e-action-convert__index-toggle-watermark"
+                            size="sm"
+                            variant={currentOptions.includeWatermark ? "primary" : "secondary"}
+                            onPress={() =>
+                              setOptions({ includeWatermark: !currentOptions.includeWatermark })
+                            }
+                          >
+                            <Chip.Label className="text-[9px]">
+                              {t("converter.includeWatermark")}
+                            </Chip.Label>
+                          </Chip>
                         </View>
                       </View>
                     </View>

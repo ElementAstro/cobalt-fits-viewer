@@ -79,10 +79,11 @@ describe("backup GoogleDriveProvider", () => {
     (provider as unknown as { _accessToken: string; _connected: boolean })._accessToken = "token-g";
     (provider as unknown as { _accessToken: string; _connected: boolean })._connected = true;
     jest.spyOn(provider, "refreshTokenIfNeeded").mockResolvedValue(undefined);
-    // ensureBackupDir: findOrCreate backup + fits by existing folders
+    // ensureBackupDir: findOrCreate backup + fits + thumbnails by existing folders
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: "backup-id" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: "fits-id" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: "thumb-id" }] }) })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({
@@ -104,6 +105,7 @@ describe("backup GoogleDriveProvider", () => {
     mockFetch
       .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: "backup-id" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: "fits-id" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: "thumb-id" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ files: [{ id: "file-id" }] }) });
     await expect(provider.fileExists("fits/a.fits")).resolves.toBe(true);
   });

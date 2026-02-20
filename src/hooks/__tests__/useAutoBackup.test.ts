@@ -48,6 +48,7 @@ describe("useAutoBackup", () => {
       autoBackupEnabled: true,
       autoBackupIntervalHours: 24,
       autoBackupNetwork: "wifi",
+      lastAutoBackupAttempt: 0,
       lastAutoBackupCheck: 0,
       lastError: null,
     });
@@ -114,6 +115,50 @@ describe("useAutoBackup", () => {
       activeProvider: null,
       autoBackupNetwork: "any",
       lastAutoBackupCheck: 0,
+    });
+    mockGetNetworkStateAsync.mockResolvedValue({
+      type: "WIFI",
+      isConnected: true,
+      isInternetReachable: true,
+    });
+
+    renderHook(() => useAutoBackup());
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockBackupFn).not.toHaveBeenCalled();
+  });
+
+  it("records failed attempt but does not update success timestamp", async () => {
+    useBackupStore.setState({
+      autoBackupNetwork: "any",
+      lastAutoBackupCheck: 0,
+      lastAutoBackupAttempt: 0,
+    });
+    mockGetNetworkStateAsync.mockResolvedValue({
+      type: "WIFI",
+      isConnected: true,
+      isInternetReachable: true,
+    });
+    mockBackupFn.mockResolvedValueOnce({ success: false, error: "boom" });
+
+    renderHook(() => useAutoBackup());
+
+    await waitFor(() => {
+      expect(mockBackupFn).toHaveBeenCalledWith("webdav");
+    });
+
+    const state = useBackupStore.getState();
+    expect(state.lastAutoBackupAttempt).toBeGreaterThan(0);
+    expect(state.lastAutoBackupCheck).toBe(0);
+  });
+
+  it("respects failure cooldown and skips immediate retries", async () => {
+    useBackupStore.setState({
+      autoBackupNetwork: "any",
+      lastAutoBackupCheck: 0,
+      lastAutoBackupAttempt: Date.now(),
     });
     mockGetNetworkStateAsync.mockResolvedValue({
       type: "WIFI",

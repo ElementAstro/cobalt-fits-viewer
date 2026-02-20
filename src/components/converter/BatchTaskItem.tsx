@@ -45,9 +45,10 @@ export function BatchTaskItem({ task, onCancel, onRetry }: BatchTaskItemProps) {
             </Chip>
             <Text className="text-xs font-semibold text-foreground capitalize">{task.type}</Text>
           </View>
-          <Text className="text-[10px] text-muted">
+          <Text testID="e2e-text-batch-task-summary" className="text-[10px] text-muted">
             {task.completed}/{task.total}
             {task.failed > 0 && ` (${task.failed} failed)`}
+            {(task.skipped ?? 0) > 0 && ` (${task.skipped} skipped)`}
           </Text>
         </View>
 
@@ -72,6 +73,12 @@ export function BatchTaskItem({ task, onCancel, onRetry }: BatchTaskItemProps) {
               </Button>
             )}
           </View>
+        )}
+
+        {task.error && (
+          <Text className="mt-2 text-[10px] text-muted" numberOfLines={4}>
+            {task.error}
+          </Text>
         )}
       </Card.Body>
     </Card>

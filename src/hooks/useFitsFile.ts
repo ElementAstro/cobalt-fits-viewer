@@ -5,7 +5,7 @@
 import { useState, useCallback } from "react";
 import { FITS } from "fitsjs-ng";
 import {
-  loadFitsFromBufferAuto,
+  loadScientificFitsFromBuffer,
   extractMetadata,
   getHeaderKeywords,
   getImagePixels,
@@ -22,6 +22,7 @@ import { LOG_TAGS, Logger } from "../lib/logger";
 import {
   detectPreferredSupportedImageFormat,
   detectSupportedImageFormat,
+  isDistributedXisfFilename,
   toImageSourceFormat,
 } from "../lib/import/fileFormat";
 import {
@@ -207,11 +208,19 @@ export function useFitsFile(): UseFitsFileReturn {
         const buffer = await readFileAsArrayBuffer(filepath);
         const detectedFormat = detectPreferredSupportedImageFormat({ filename, payload: buffer });
         if (!detectedFormat) {
+          if (isDistributedXisfFilename(filename)) {
+            throw new Error(
+              "Distributed XISF (.xish + .xisb) is not supported. Please import a monolithic .xisf file.",
+            );
+          }
           throw new Error("Unsupported image format");
         }
 
         if (detectedFormat.sourceType === "fits") {
-          const fitsObj = loadFitsFromBufferAuto(buffer);
+          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
+            filename,
+            detectedFormat,
+          });
           const sourceFormat = toImageSourceFormat(detectedFormat);
           const { fitsObj: f } = processFits(
             fitsObj,
@@ -265,11 +274,19 @@ export function useFitsFile(): UseFitsFileReturn {
         await yieldToMain();
         const detectedFormat = detectPreferredSupportedImageFormat({ filename, payload: buffer });
         if (!detectedFormat) {
+          if (isDistributedXisfFilename(filename)) {
+            throw new Error(
+              "Distributed XISF (.xish + .xisb) is not supported. Please import a monolithic .xisf file.",
+            );
+          }
           throw new Error("Unsupported image format");
         }
 
         if (detectedFormat.sourceType === "fits") {
-          const fitsObj = loadFitsFromBufferAuto(buffer);
+          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
+            filename,
+            detectedFormat,
+          });
           const sourceFormat = toImageSourceFormat(detectedFormat);
           const { fitsObj: f } = processFits(
             fitsObj,

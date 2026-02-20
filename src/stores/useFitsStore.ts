@@ -6,6 +6,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandMMKVStorage } from "../lib/storage";
 import type { FitsMetadata } from "../lib/fits/types";
+import { normalizeGeoLocation } from "../lib/map/geo";
 
 export type FitsSortBy = "name" | "date" | "size" | "quality";
 export type FitsSortOrder = "asc" | "desc";
@@ -99,6 +100,27 @@ export function filterAndSortFiles(
   return filtered;
 }
 
+function sanitizeFileLocation(file: FitsMetadata): FitsMetadata {
+  const normalizedLocation = normalizeGeoLocation(file.location);
+  if (normalizedLocation === file.location) return file;
+  return {
+    ...file,
+    location: normalizedLocation ?? undefined,
+  };
+}
+
+function sanitizeFiles(files: FitsMetadata[]): FitsMetadata[] {
+  return files.map(sanitizeFileLocation);
+}
+
+function sanitizeUpdates(updates: Partial<FitsMetadata>): Partial<FitsMetadata> {
+  if (!Object.prototype.hasOwnProperty.call(updates, "location")) return updates;
+  return {
+    ...updates,
+    location: normalizeGeoLocation(updates.location) ?? undefined,
+  };
+}
+
 export const useFitsStore = create<FitsStoreState>()(
   persist(
     (set, get) => ({
@@ -110,9 +132,15 @@ export const useFitsStore = create<FitsStoreState>()(
       searchQuery: "",
       filterTags: [],
 
-      addFile: (file) => set((state) => ({ files: [...state.files, file] })),
+      addFile: (file) =>
+        set((state) => ({
+          files: [...state.files, sanitizeFileLocation(file)],
+        })),
 
-      addFiles: (files) => set((state) => ({ files: [...state.files, ...files] })),
+      addFiles: (files) =>
+        set((state) => ({
+          files: [...state.files, ...sanitizeFiles(files)],
+        })),
 
       removeFile: (id) =>
         set((state) => ({
@@ -128,12 +156,16 @@ export const useFitsStore = create<FitsStoreState>()(
 
       updateFile: (id, updates) =>
         set((state) => ({
-          files: state.files.map((f) => (f.id === id ? { ...f, ...updates } : f)),
+          files: state.files.map((f) =>
+            f.id === id ? sanitizeFileLocation({ ...f, ...sanitizeUpdates(updates) }) : f,
+          ),
         })),
 
       batchSetSessionId: (fileIds, sessionId) =>
         set((state) => ({
-          files: state.files.map((f) => (fileIds.includes(f.id) ? { ...f, sessionId } : f)),
+          files: state.files.map((f) =>
+            fileIds.includes(f.id) ? sanitizeFileLocation({ ...f, sessionId }) : f,
+          ),
         })),
 
       toggleFavorite: (id) =>
@@ -268,6 +300,15 @@ export const useFitsStore = create<FitsStoreState>()(
       partialize: (state) => ({
         files: state.files,
       }),
+      merge: (persistedState, currentState) => {
+        const persistedFiles = (persistedState as Partial<FitsStoreState> | undefined)?.files;
+        if (!persistedFiles) return currentState;
+        return {
+          ...currentState,
+          ...(persistedState as object),
+          files: sanitizeFiles(persistedFiles),
+        };
+      },
     },
   ),
 );

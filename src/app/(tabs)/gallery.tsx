@@ -31,6 +31,7 @@ import { DuplicateImagesSheet } from "../../components/gallery/DuplicateImagesSh
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
+import { routeForMedia } from "../../lib/media/routing";
 import type { GalleryViewMode, FitsMetadata, Album } from "../../lib/fits/types";
 import type { AlbumSortBy } from "../../stores/useAlbumStore";
 
@@ -206,11 +207,7 @@ export default function GalleryScreen() {
       if (isSelectionMode) {
         toggleSelection(file.id);
       } else {
-        const route =
-          file.mediaKind === "video" || file.sourceType === "video"
-            ? `/video/${file.id}`
-            : `/viewer/${file.id}`;
-        router.push(route);
+        router.push(routeForMedia(file));
       }
     },
     [isSelectionMode, toggleSelection, router],
@@ -957,11 +954,7 @@ export default function GalleryScreen() {
         onImagePress={(imageId) => {
           const file = files.find((item) => item.id === imageId);
           if (!file) return;
-          const route =
-            file.mediaKind === "video" || file.sourceType === "video"
-              ? `/video/${imageId}`
-              : `/viewer/${imageId}`;
-          router.push(route);
+          router.push(routeForMedia(file));
         }}
       />
       <PromptDialog

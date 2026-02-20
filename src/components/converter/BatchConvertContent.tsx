@@ -28,6 +28,8 @@ export function BatchConvertContent() {
         id: f.id,
         filepath: f.filepath,
         filename: f.filename,
+        sourceType: f.sourceType,
+        mediaKind: f.mediaKind,
       })),
     );
   };
@@ -40,7 +42,12 @@ export function BatchConvertContent() {
     <View className="gap-4">
       {/* Actions */}
       <View className="flex-row gap-2">
-        <Button variant="primary" className="flex-1" onPress={handleAddSelected}>
+        <Button
+          testID="e2e-action-convert__batch-start"
+          variant="primary"
+          className="flex-1"
+          onPress={handleAddSelected}
+        >
           <Ionicons name="add-circle-outline" size={16} color="#fff" />
           <Button.Label>
             {selectedIds.length > 0

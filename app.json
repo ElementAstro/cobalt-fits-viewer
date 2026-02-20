@@ -67,7 +67,8 @@
           "supportsPictureInPicture": true,
           "supportsBackgroundPlayback": false
         }
-      ]
+      ],
+      "./plugins/withFfmpegKit"
     ],
     "name": "Cobalt FITS Viewer",
     "slug": "cobaltfitsviewer",

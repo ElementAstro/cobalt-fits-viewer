@@ -229,6 +229,21 @@ describe("(tabs)/gallery.tsx routing", () => {
         mediaKind: "video",
         durationMs: 3000,
       },
+      {
+        id: "audio-1",
+        filename: "voice.m4a",
+        filepath: "file:///voice.m4a",
+        fileSize: 1024,
+        importDate: Date.now(),
+        frameType: "unknown",
+        isFavorite: false,
+        tags: [],
+        albumIds: [],
+        sourceType: "audio",
+        mediaKind: "audio",
+        sourceFormat: "m4a",
+        durationMs: 1800,
+      },
     ];
   });
 
@@ -242,5 +257,11 @@ describe("(tabs)/gallery.tsx routing", () => {
     render(<GalleryScreen />);
     fireEvent.press(screen.getByTestId("thumb-video-1"));
     expect(mockPush).toHaveBeenCalledWith("/video/video-1");
+  });
+
+  it("routes audio items to /video/:id", () => {
+    render(<GalleryScreen />);
+    fireEvent.press(screen.getByTestId("thumb-audio-1"));
+    expect(mockPush).toHaveBeenCalledWith("/video/audio-1");
   });
 });

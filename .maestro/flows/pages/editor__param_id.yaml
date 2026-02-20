@@ -4,7 +4,31 @@
 - assertVisible:
     id: e2e-screen-editor__param_id
 - tapOn:
+    id: e2e-action-editor__param_id-advanced-starDetect
+- assertVisible:
+    id: e2e-action-editor__param_id-redetect-stars
+- tapOn:
+    id: e2e-action-editor__param_id-redetect-stars
+- assertVisible:
+    id: e2e-text-editor__param_id-star-counts
+- tapOn:
+    id: e2e-action-editor__param_id-tool-rotate
+- tapOn:
+    id: e2e-action-editor__param_id-rotate90cw
+- tapOn:
+    id: e2e-action-editor__param_id-undo
+- tapOn:
+    id: e2e-action-editor__param_id-redo
+- tapOn:
     id: e2e-action-editor__param_id-open-export
+- assertVisible:
+    id: e2e-text-export-dialog-fits-unavailable
+- tapOn:
+    id: e2e-action-export-dialog-format-fits
+- tapOn:
+    id: e2e-action-export-dialog-toggle-annotations
+- tapOn:
+    id: e2e-action-export-dialog-export
 - tapOn:
     id: e2e-action-editor__param_id-back
 - assertVisible:

@@ -176,6 +176,40 @@ export function calculateRegionHistogram(
  * ZScale 算法 (IRAF/DS9)
  * 通过线性回归采样像素来确定最佳显示范围
  */
+function collectFinitePixels(pixels: Float32Array): number[] {
+  const values: number[] = [];
+  for (let i = 0; i < pixels.length; i++) {
+    const v = pixels[i];
+    if (Number.isFinite(v)) values.push(v);
+  }
+  return values;
+}
+
+function percentileFromSorted(sorted: number[], percentile: number): number {
+  if (sorted.length === 0) return 0;
+  if (sorted.length === 1) return sorted[0];
+
+  const p = Math.max(0, Math.min(100, percentile));
+  const pos = (p / 100) * (sorted.length - 1);
+  const i0 = Math.floor(pos);
+  const i1 = Math.min(sorted.length - 1, i0 + 1);
+  const t = pos - i0;
+  return sorted[i0] * (1 - t) + sorted[i1] * t;
+}
+
+function dilateMask(mask: boolean[], kernelSize: number): boolean[] {
+  if (kernelSize <= 1) return mask.slice();
+  const radius = Math.floor(kernelSize / 2);
+  const out = new Array<boolean>(mask.length).fill(false);
+  for (let i = 0; i < mask.length; i++) {
+    if (!mask[i]) continue;
+    const start = Math.max(0, i - radius);
+    const end = Math.min(mask.length - 1, i + radius);
+    for (let j = start; j <= end; j++) out[j] = true;
+  }
+  return out;
+}
+
 export function computeZScale(
   pixels: Float32Array,
   nSamples: number = 1000,
@@ -185,110 +219,105 @@ export function computeZScale(
   kRej: number = 2.5,
   maxIterations: number = 5,
 ): { z1: number; z2: number } {
-  const n = pixels.length;
-  if (n === 0) return { z1: 0, z2: 1 };
+  const finite = collectFinitePixels(pixels);
+  if (finite.length === 0) return { z1: 0, z2: 1 };
 
-  // Sample pixels evenly
-  const stride = Math.max(1, Math.floor(n / nSamples));
-  const samples: number[] = [];
-  for (let i = 0; i < n; i += stride) {
-    const v = pixels[i];
-    if (!isNaN(v) && isFinite(v)) samples.push(v);
-  }
-
-  if (samples.length < minNPixels) {
-    let min = Infinity,
-      max = -Infinity;
-    for (let i = 0; i < n; i++) {
-      const v = pixels[i];
-      if (!isNaN(v) && isFinite(v)) {
-        if (v < min) min = v;
-        if (v > max) max = v;
-      }
-    }
-    return { z1: min, z2: max };
-  }
+  const safeSamples = Math.max(1, Math.floor(nSamples));
+  const stride = Math.max(1, Math.floor(finite.length / safeSamples));
+  const samples = finite.filter((_, idx) => idx % stride === 0).slice(0, safeSamples);
+  if (samples.length === 0) return { z1: 0, z2: 1 };
 
   samples.sort((a, b) => a - b);
-  const nPix = samples.length;
-  const midpoint = Math.floor(nPix / 2);
-  const medianVal = samples[midpoint];
 
-  // If contrast is 0, use full range
-  if (contrast === 0) {
-    return { z1: samples[0], z2: samples[nPix - 1] };
-  }
+  const npix = samples.length;
+  let vmin = samples[0];
+  let vmax = samples[npix - 1];
 
-  // Fit a linear function I(i) = intercept + slope * (i - midpoint)
-  // with iterative sigma-clipping rejection
-  let indices: number[] = Array.from({ length: nPix }, (_, i) => i);
+  if (npix < 2) return { z1: vmin, z2: vmax };
 
-  let slope = 0;
-  let intercept = medianVal;
+  const minpix = Math.max(Math.max(1, Math.floor(minNPixels)), Math.floor(npix * maxReject));
+  let ngoodpix = npix;
+  let lastNgoodpix = npix + 1;
+  let badpix = new Array<boolean>(npix).fill(false);
+  const ngrow = Math.max(1, Math.floor(npix * 0.01));
 
-  for (let iter = 0; iter < maxIterations; iter++) {
-    if (indices.length < minNPixels) break;
+  let fitSlope = 0;
+  let fitIntercept = 0;
 
-    // Fit line: y = a + b*x where x = index - midpoint
-    const nn = indices.length;
-    let sumX = 0,
-      sumY = 0,
-      sumXX = 0,
-      sumXY = 0;
-    for (const idx of indices) {
-      const x = idx - midpoint;
-      const y = samples[idx];
+  for (let iter = 0; iter < Math.max(1, Math.floor(maxIterations)); iter++) {
+    if (ngoodpix >= lastNgoodpix || ngoodpix < minpix) break;
+
+    let sumW = 0;
+    let sumX = 0;
+    let sumY = 0;
+    let sumXX = 0;
+    let sumXY = 0;
+    for (let i = 0; i < npix; i++) {
+      if (badpix[i]) continue;
+      const x = i;
+      const y = samples[i];
+      sumW += 1;
       sumX += x;
       sumY += y;
       sumXX += x * x;
       sumXY += x * y;
     }
-    const denom = nn * sumXX - sumX * sumX;
-    if (denom === 0) break;
+    if (sumW < 2) break;
 
-    slope = (nn * sumXY - sumX * sumY) / denom;
-    intercept = (sumY - slope * sumX) / nn;
+    const denom = sumW * sumXX - sumX * sumX;
+    if (!Number.isFinite(denom) || Math.abs(denom) < 1e-12) break;
 
-    // Compute residuals and reject outliers
-    let sumRes = 0,
-      sumRes2 = 0;
+    fitSlope = (sumW * sumXY - sumX * sumY) / denom;
+    fitIntercept = (sumY - fitSlope * sumX) / sumW;
+
     const residuals: number[] = [];
-    for (const idx of indices) {
-      const x = idx - midpoint;
-      const expected = intercept + slope * x;
-      const res = samples[idx] - expected;
-      residuals.push(res);
-      sumRes += res;
-      sumRes2 += res * res;
+    for (let i = 0; i < npix; i++) {
+      if (badpix[i]) continue;
+      const fitted = fitIntercept + fitSlope * i;
+      residuals.push(samples[i] - fitted);
     }
-    const meanRes = sumRes / nn;
-    const sigma = Math.sqrt(sumRes2 / nn - meanRes * meanRes);
+    if (residuals.length < 2) break;
 
-    if (sigma === 0) break;
+    let mean = 0;
+    for (let i = 0; i < residuals.length; i++) mean += residuals[i];
+    mean /= residuals.length;
+    let varAcc = 0;
+    for (let i = 0; i < residuals.length; i++) {
+      const d = residuals[i] - mean;
+      varAcc += d * d;
+    }
+    const sigma = Math.sqrt(varAcc / residuals.length);
+    if (!Number.isFinite(sigma) || sigma <= 0) break;
 
-    const newIndices: number[] = [];
-    for (let j = 0; j < indices.length; j++) {
-      if (Math.abs(residuals[j] - meanRes) <= kRej * sigma) {
-        newIndices.push(indices[j]);
+    const threshold = kRej * sigma;
+    for (let i = 0; i < npix; i++) {
+      if (badpix[i]) continue;
+      const fitted = fitIntercept + fitSlope * i;
+      const flat = samples[i] - fitted;
+      if (flat < -threshold || flat > threshold) {
+        badpix[i] = true;
       }
     }
 
-    // Check if too many points rejected
-    if (nPix - newIndices.length > maxReject * nPix) break;
-    if (newIndices.length === indices.length) break;
-    indices = newIndices;
+    badpix = dilateMask(badpix, ngrow);
+    lastNgoodpix = ngoodpix;
+    ngoodpix = 0;
+    for (let i = 0; i < npix; i++) if (!badpix[i]) ngoodpix++;
   }
 
-  // If too many rejected, use full range
-  if (indices.length < minNPixels) {
-    return { z1: samples[0], z2: samples[nPix - 1] };
+  if (ngoodpix >= minpix) {
+    let slope = fitSlope;
+    if (contrast > 0) slope /= contrast;
+    const centerPixel = Math.floor((npix - 1) / 2);
+    const median = percentileFromSorted(samples, 50);
+    vmin = Math.max(vmin, median - (centerPixel - 1) * slope);
+    vmax = Math.min(vmax, median + (npix - centerPixel) * slope);
   }
 
-  // Compute z1, z2 from the fitted line
-  const z1 = Math.max(samples[0], intercept + (slope / contrast) * (0 - midpoint));
-  const z2 = Math.min(samples[nPix - 1], intercept + (slope / contrast) * (nPix - 1 - midpoint));
-
-  return { z1: Math.min(z1, z2), z2: Math.max(z1, z2) };
+  if (!Number.isFinite(vmin) || !Number.isFinite(vmax) || vmin === vmax) {
+    return { z1: samples[0], z2: samples[npix - 1] };
+  }
+  return { z1: Math.min(vmin, vmax), z2: Math.max(vmin, vmax) };
 }
 
 /**
@@ -300,25 +329,26 @@ export function computePercentile(
   lowPercentile: number = 1,
   highPercentile: number = 99,
 ): { z1: number; z2: number } {
-  const n = pixels.length;
-  if (n === 0) return { z1: 0, z2: 1 };
+  const finite = collectFinitePixels(pixels);
+  if (finite.length === 0) return { z1: 0, z2: 1 };
 
-  // Sample for performance
-  const maxSamples = 50000;
-  const stride = Math.max(1, Math.floor(n / maxSamples));
-  const samples: number[] = [];
-  for (let i = 0; i < n; i += stride) {
-    const v = pixels[i];
-    if (!isNaN(v) && isFinite(v)) samples.push(v);
+  const lo = Math.max(0, Math.min(100, lowPercentile));
+  const hi = Math.max(0, Math.min(100, highPercentile));
+  const p1 = Math.min(lo, hi);
+  const p2 = Math.max(lo, hi);
+
+  const maxSamples = 50_000;
+  let values = finite;
+  if (values.length > maxSamples) {
+    const stride = Math.max(1, Math.floor(values.length / maxSamples));
+    values = values.filter((_, idx) => idx % stride === 0).slice(0, maxSamples);
   }
 
-  if (samples.length === 0) return { z1: 0, z2: 1 };
-
-  samples.sort((a, b) => a - b);
-  const lowIdx = Math.floor((lowPercentile / 100) * (samples.length - 1));
-  const highIdx = Math.ceil((highPercentile / 100) * (samples.length - 1));
-
-  return { z1: samples[lowIdx], z2: samples[highIdx] };
+  values.sort((a, b) => a - b);
+  return {
+    z1: percentileFromSorted(values, p1),
+    z2: percentileFromSorted(values, p2),
+  };
 }
 
 /**

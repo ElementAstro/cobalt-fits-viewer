@@ -1,11 +1,15 @@
 const mockFromArrayBuffer = jest.fn((buffer: ArrayBuffer) => ({ kind: "buffer", buffer }));
 const mockFromBlob = jest.fn(async (blob: Blob) => ({ kind: "blob", blob }));
 const mockFromURL = jest.fn(async (url: string) => ({ kind: "url", url }));
+const mockConvertXisfToFits = jest.fn(async (input: ArrayBuffer) => input);
+const mockConvertSerToFits = jest.fn(async (input: ArrayBuffer) => input);
 const mockClassifyWithDetail = jest.fn(() => ({ type: "light", source: "header" }));
 const mockIsGzipFitsBytes = jest.fn(() => false);
 const mockGunzipFitsBytes = jest.fn((value: ArrayBuffer | Uint8Array) =>
   value instanceof Uint8Array ? value : new Uint8Array(value),
 );
+const mockDetectPreferredSupportedImageFormat = jest.fn(() => null);
+const mockIsDistributedXisfFilename = jest.fn(() => false);
 
 jest.mock("../../gallery/frameClassifier", () => ({
   classifyWithDetail: (...args: any[]) => (mockClassifyWithDetail as any)(...args),
@@ -14,6 +18,12 @@ jest.mock("../../gallery/frameClassifier", () => ({
 jest.mock("../compression", () => ({
   isGzipFitsBytes: (...args: any[]) => (mockIsGzipFitsBytes as any)(...args),
   gunzipFitsBytes: (...args: any[]) => (mockGunzipFitsBytes as any)(...args),
+}));
+
+jest.mock("../../import/fileFormat", () => ({
+  detectPreferredSupportedImageFormat: (...args: any[]) =>
+    (mockDetectPreferredSupportedImageFormat as any)(...args),
+  isDistributedXisfFilename: (...args: any[]) => (mockIsDistributedXisfFilename as any)(...args),
 }));
 
 jest.mock("fitsjs-ng", () => {
@@ -81,7 +91,15 @@ jest.mock("fitsjs-ng", () => {
     }
   }
 
-  return { FITS, Image, BinaryTable, Table, CompressedImage };
+  return {
+    FITS,
+    Image,
+    BinaryTable,
+    Table,
+    CompressedImage,
+    convertXisfToFits: (...args: any[]) => (mockConvertXisfToFits as any)(...args),
+    convertSerToFits: (...args: any[]) => (mockConvertSerToFits as any)(...args),
+  };
 });
 
 import { BinaryTable, CompressedImage, FITS, Image, Table } from "fitsjs-ng";
@@ -103,6 +121,7 @@ import {
   loadFitsFromBufferAuto,
   loadFitsFromBuffer,
   loadFitsFromURL,
+  loadScientificFitsFromBuffer,
   isRgbCube,
 } from "../parser";
 
@@ -119,6 +138,8 @@ function createHeader(data: Record<string, unknown>) {
 describe("fits parser", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDetectPreferredSupportedImageFormat.mockReturnValue(null);
+    mockIsDistributedXisfFilename.mockReturnValue(false);
   });
 
   it("loads FITS from buffer/blob/url", async () => {
@@ -147,6 +168,56 @@ describe("fits parser", () => {
     loadFitsFromBufferAuto(gz);
     expect(mockGunzipFitsBytes).toHaveBeenCalled();
     expect(mockFromArrayBuffer).toHaveBeenCalledWith(inflated.buffer);
+  });
+
+  it("loads scientific buffers (xisf/ser) by converting to fits", async () => {
+    const xisfBuffer = new TextEncoder().encode("XISF0100payload").buffer;
+    const serBuffer = new TextEncoder().encode("LUCAM-RECORDERpayload").buffer;
+    const convertedXisf = new Uint8Array([1, 2, 3, 4]).buffer;
+    const convertedSer = new Uint8Array([9, 8, 7, 6]).buffer;
+
+    mockConvertXisfToFits.mockResolvedValueOnce(convertedXisf);
+    await expect(
+      loadScientificFitsFromBuffer(xisfBuffer, {
+        filename: "frame.xisf",
+        detectedFormat: { id: "xisf", sourceType: "fits", label: "XISF", extensions: [".xisf"] },
+      }),
+    ).resolves.toEqual({ kind: "buffer", buffer: convertedXisf });
+    expect(mockConvertXisfToFits).toHaveBeenCalledWith(
+      xisfBuffer,
+      expect.objectContaining({ strictValidation: true }),
+    );
+
+    mockConvertSerToFits.mockResolvedValueOnce(convertedSer);
+    await expect(
+      loadScientificFitsFromBuffer(serBuffer, {
+        filename: "capture.ser",
+        detectedFormat: { id: "ser", sourceType: "fits", label: "SER", extensions: [".ser"] },
+      }),
+    ).resolves.toEqual({ kind: "buffer", buffer: convertedSer });
+    expect(mockConvertSerToFits).toHaveBeenCalledWith(
+      serBuffer,
+      expect.objectContaining({ layout: "cube", includeTimestampExtension: true }),
+    );
+  });
+
+  it("rejects distributed xish/xisb and normalizes conversion errors", async () => {
+    const xishBuffer = new ArrayBuffer(8);
+    mockDetectPreferredSupportedImageFormat.mockReturnValueOnce(null);
+    mockIsDistributedXisfFilename.mockReturnValueOnce(true);
+    await expect(
+      loadScientificFitsFromBuffer(xishBuffer, {
+        filename: "distributed.xish",
+      }),
+    ).rejects.toThrow("Distributed XISF");
+
+    mockConvertXisfToFits.mockRejectedValueOnce(new Error("signature mismatch"));
+    await expect(
+      loadScientificFitsFromBuffer(new ArrayBuffer(8), {
+        filename: "invalid.xisf",
+        detectedFormat: { id: "xisf", sourceType: "fits", label: "XISF", extensions: [".xisf"] },
+      }),
+    ).rejects.toThrow("signature validation failed");
   });
 
   it("reads header values and HDU information", () => {

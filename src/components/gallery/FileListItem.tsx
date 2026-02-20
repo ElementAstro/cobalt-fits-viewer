@@ -86,8 +86,9 @@ export const FileListItem = memo(function FileListItem({
 
   const hasSwipeActions = (onDelete || onToggleFavorite) && layout !== "grid";
   const isVideo = file.mediaKind === "video" || file.sourceType === "video";
+  const isAudio = file.mediaKind === "audio" || file.sourceType === "audio";
   const videoResolution = formatVideoResolution(file.videoWidth, file.videoHeight);
-  const videoDuration = formatVideoDuration(file.durationMs);
+  const mediaDuration = formatVideoDuration(file.durationMs);
 
   const metaSummary = [
     file.sourceFormat?.toUpperCase(),
@@ -112,15 +113,29 @@ export const FileListItem = memo(function FileListItem({
                   transition={150}
                 />
               ) : (
-                <Ionicons name="image-outline" size={24} color={successColor} />
+                <Ionicons
+                  name={isAudio ? "musical-notes-outline" : "image-outline"}
+                  size={24}
+                  color={successColor}
+                />
               )}
               {isVideo && (
                 <>
                   <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
-                    <Text className="text-[8px] font-semibold text-white">{videoDuration}</Text>
+                    <Text className="text-[8px] font-semibold text-white">{mediaDuration}</Text>
                   </View>
                   <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
                     <Ionicons name="play" size={10} color="#fff" />
+                  </View>
+                </>
+              )}
+              {isAudio && (
+                <>
+                  <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
+                    <Text className="text-[8px] font-semibold text-white">{mediaDuration}</Text>
+                  </View>
+                  <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
+                    <Ionicons name="musical-note" size={10} color="#fff" />
                   </View>
                 </>
               )}
@@ -145,15 +160,17 @@ export const FileListItem = memo(function FileListItem({
                 {metaSummary.join(" · ")}
               </Text>
             )}
-            {isVideo && (
+            {(isVideo || isAudio) && (
               <View className="mt-1 flex-row items-center gap-1.5">
                 <Chip size="sm" variant="secondary">
-                  <Chip.Label className="text-[9px] font-semibold">VIDEO</Chip.Label>
+                  <Chip.Label className="text-[9px] font-semibold">
+                    {isVideo ? "VIDEO" : "AUDIO"}
+                  </Chip.Label>
                 </Chip>
-                {!!videoResolution && (
+                {isVideo && !!videoResolution && (
                   <Text className="text-[9px] text-muted">{videoResolution}</Text>
                 )}
-                <Text className="text-[9px] text-muted">{videoDuration}</Text>
+                <Text className="text-[9px] text-muted">{mediaDuration}</Text>
               </View>
             )}
           </Card.Body>
@@ -180,7 +197,7 @@ export const FileListItem = memo(function FileListItem({
                 />
               ) : (
                 <Ionicons
-                  name="image-outline"
+                  name={isAudio ? "musical-notes-outline" : "image-outline"}
                   size={layout === "compact" ? 20 : 28}
                   color={successColor}
                 />
@@ -188,6 +205,11 @@ export const FileListItem = memo(function FileListItem({
               {isVideo && (
                 <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
                   <Ionicons name="play" size={10} color="#fff" />
+                </View>
+              )}
+              {isAudio && (
+                <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
+                  <Ionicons name="musical-note" size={10} color="#fff" />
                 </View>
               )}
             </View>
@@ -223,21 +245,23 @@ export const FileListItem = memo(function FileListItem({
                     </Chip.Label>
                   </Chip>
                 )}
-                {isVideo && (
+                {(isVideo || isAudio) && (
                   <Chip size="sm" variant="secondary">
-                    <Chip.Label className="text-[10px] font-semibold">VIDEO</Chip.Label>
+                    <Chip.Label className="text-[10px] font-semibold">
+                      {isVideo ? "VIDEO" : "AUDIO"}
+                    </Chip.Label>
                   </Chip>
                 )}
                 {showExposure && file.exptime != null && (
                   <Text className="text-[10px] text-muted">{file.exptime}s</Text>
                 )}
               </View>
-              {isVideo && (
+              {(isVideo || isAudio) && (
                 <View className="mt-1 flex-row items-center gap-2">
-                  {!!videoResolution && (
+                  {isVideo && !!videoResolution && (
                     <Text className="text-[9px] text-muted">{videoResolution}</Text>
                   )}
-                  <Text className="text-[9px] text-muted">{videoDuration}</Text>
+                  <Text className="text-[9px] text-muted">{mediaDuration}</Text>
                 </View>
               )}
               {layout !== "compact" && (

@@ -40,8 +40,9 @@ import {
   adjustSaturation,
   evaluatePixelExpression,
   richardsonLucy,
+  dynamicBackgroundExtract,
   applyOperation,
-  type ImageEditOperation,
+  type ScientificImageOperation,
 } from "../imageOperations";
 
 // ===== Test Helpers =====
@@ -788,7 +789,7 @@ describe("applyOperation dispatcher", () => {
     h = 4;
 
   // Test that every operation type is dispatched without throwing
-  const operations: ImageEditOperation[] = [
+  const operations: ScientificImageOperation[] = [
     { type: "rotate90cw" },
     { type: "rotate90ccw" },
     { type: "rotate180" },
@@ -826,7 +827,7 @@ describe("applyOperation dispatcher", () => {
   ];
 
   it.each(operations.map((op) => [op.type, op]))("dispatches %s without error", (_name, op) => {
-    const result = applyOperation(pixels, w, h, op as ImageEditOperation);
+    const result = applyOperation(pixels, w, h, op);
     expect(result).toBeDefined();
     expect(result.pixels).toBeInstanceOf(Float32Array);
     expect(result.width).toBeGreaterThan(0);
@@ -1374,5 +1375,47 @@ describe("StarMask correctness", () => {
     const starOnly = applyStarMask(pixels, 32, 32, 1.5, false);
     // Background should be reduced
     expect(starOnly[0]).toBeLessThanOrEqual(pixels[0] + 0.01);
+  });
+});
+
+describe("advanced processing semantics", () => {
+  it("CLAHE keeps output finite under OpenCV-style tile grid settings", () => {
+    const pixels = makePixels(31, 17, "gradient");
+    const out = clahe(pixels, 31, 17, 8, 2.0);
+    expect(out.length).toBe(pixels.length);
+    for (let i = 0; i < out.length; i++) {
+      expect(Number.isFinite(out[i])).toBe(true);
+    }
+  });
+
+  it("Richardson-Lucy supports clip option and filter epsilon", () => {
+    const pixels = new Float32Array([2, 2, 2, 2, 2, 2, 2, 2, 2]);
+    const out = richardsonLucy(pixels, 3, 3, 1.2, 3, 1e-6, {
+      filterEpsilon: 1e-6,
+      clip: true,
+    });
+    expect(out.length).toBe(9);
+    for (let i = 0; i < out.length; i++) {
+      expect(out[i]).toBeLessThanOrEqual(1);
+      expect(out[i]).toBeGreaterThanOrEqual(-1);
+    }
+  });
+
+  it("dynamicBackgroundExtract removes large-scale background trend", () => {
+    const w = 32;
+    const h = 24;
+    const pixels = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        let v = 0.1 + x * 0.005 + y * 0.002;
+        if ((x - 16) * (x - 16) + (y - 12) * (y - 12) < 9) v += 1.5;
+        pixels[y * w + x] = v;
+      }
+    }
+
+    const corrected = dynamicBackgroundExtract(pixels, w, h, 8, 6, 2.5);
+    const sorted = Array.from(corrected).sort((a, b) => a - b);
+    const median = sorted[Math.floor(sorted.length / 2)];
+    expect(Math.abs(median)).toBeLessThan(0.15);
   });
 });

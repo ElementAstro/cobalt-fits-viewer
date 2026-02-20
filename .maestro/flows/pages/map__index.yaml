@@ -6,4 +6,28 @@
 - tapOn:
     id: e2e-action-map__index-toggle-filters
 - tapOn:
-    id: e2e-action-map__index-toggle-presets
+    id: e2e-action-map__index-filter-date-all
+- tapOn:
+    id: e2e-action-map__index-filter-object-ngc7000
+- tapOn:
+    id: e2e-action-map__index-filter-band-r
+- tapOn:
+    id: e2e-action-map__index-filter-target-target-002
+- tapOn:
+    id: e2e-action-map__index-filter-session-session-002
+- tapOn:
+    point: 50%,60%
+- tapOn:
+    text: M42_R_005.fits
+- assertVisible:
+    id: e2e-screen-viewer__param_id
+- back
+- tapOn:
+    id: e2e-action-map__index-open-session
+- assertVisible:
+    id: e2e-screen-session__param_id
+- back
+- tapOn:
+    id: e2e-action-map__index-open-target
+- assertVisible:
+    id: e2e-screen-target__param_id

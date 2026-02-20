@@ -8,7 +8,7 @@ const mockClearThumbnailCache = jest.fn();
 const mockGetThumbnailCacheSize = jest.fn();
 const mockGenerateAndSaveThumbnail = jest.fn();
 const mockCopyThumbnailToCache = jest.fn();
-const mockLoadFitsFromBufferAuto = jest.fn();
+const mockLoadScientificFitsFromBuffer = jest.fn();
 const mockGetImageDimensions = jest.fn();
 const mockGetImagePixels = jest.fn();
 const mockFitsToRGBA = jest.fn();
@@ -36,7 +36,7 @@ jest.mock("../../stores/useSettingsStore", () => ({
 }));
 
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBufferAuto: (...args: unknown[]) => mockLoadFitsFromBufferAuto(...args),
+  loadScientificFitsFromBuffer: (...args: unknown[]) => mockLoadScientificFitsFromBuffer(...args),
   getImageDimensions: (...args: unknown[]) => mockGetImageDimensions(...args),
   getImagePixels: (...args: unknown[]) => mockGetImagePixels(...args),
 }));
@@ -142,8 +142,8 @@ describe("useThumbnail", () => {
     mockFileMap["/tmp/ras-ok.png"] = { exists: true, buffer: new ArrayBuffer(8) };
     mockFileMap["/tmp/missing.fits"] = { exists: false };
 
-    mockLoadFitsFromBufferAuto.mockImplementationOnce(() => ({ fits: true }));
-    mockLoadFitsFromBufferAuto.mockImplementationOnce(() => {
+    mockLoadScientificFitsFromBuffer.mockImplementationOnce(() => ({ fits: true }));
+    mockLoadScientificFitsFromBuffer.mockImplementationOnce(() => {
       throw new Error("fits parse fail");
     });
 

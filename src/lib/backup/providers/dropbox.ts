@@ -9,7 +9,7 @@ import { BaseCloudProvider } from "../cloudProvider";
 import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
 import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR } from "../types";
+import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.DropboxProvider;
 const SECURE_STORE_KEY = "backup_dropbox_tokens";
@@ -26,6 +26,11 @@ export class DropboxProvider extends BaseCloudProvider {
   readonly name = "dropbox" as const;
   readonly displayName = "Dropbox";
   readonly icon = "water-outline";
+  readonly capabilities = {
+    supportsConditionalWrite: true,
+    supportsResumableUpload: true,
+    supportsContentHash: true,
+  } as const;
 
   private _appKey: string | null = null;
 
@@ -137,6 +142,7 @@ export class DropboxProvider extends BaseCloudProvider {
 
     await this.createFolderIfNotExists(`/${BACKUP_DIR}`);
     await this.createFolderIfNotExists(`/${BACKUP_DIR}/${FITS_SUBDIR}`);
+    await this.createFolderIfNotExists(`/${BACKUP_DIR}/${THUMBNAIL_SUBDIR}`);
   }
 
   async uploadFile(

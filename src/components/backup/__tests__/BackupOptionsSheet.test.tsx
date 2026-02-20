@@ -109,11 +109,13 @@ describe("BackupOptionsSheet", () => {
 
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm.mock.calls[0][0]).toMatchObject({
-      includeFiles: false,
+      includeFiles: true,
       includeAlbums: true,
       includeTargets: true,
       includeSessions: true,
       includeSettings: true,
+      localPayloadMode: "full",
+      localEncryption: { enabled: false },
     });
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -173,6 +175,24 @@ describe("BackupOptionsSheet", () => {
 
     fireEvent.press(screen.getByTestId("backup-options-confirm"));
     expect(onConfirm).toHaveBeenCalledTimes(1);
-    expect(onConfirm.mock.calls[0][0].includeFiles).toBe(false);
+    expect(onConfirm.mock.calls[0][0].includeFiles).toBe(true);
+  });
+
+  it("requires password when local export encryption is enabled", () => {
+    render(
+      <BackupOptionsSheet visible mode="local-export" onConfirm={onConfirm} onClose={onClose} />,
+    );
+
+    fireEvent.press(screen.getByTestId("backup-option-local-encryption"));
+    fireEvent.press(screen.getByTestId("backup-options-confirm"));
+    expect(onConfirm).not.toHaveBeenCalled();
+
+    fireEvent.changeText(screen.getByTestId("backup-option-password"), "pass-123");
+    fireEvent.press(screen.getByTestId("backup-options-confirm"));
+    expect(onConfirm).toHaveBeenCalledTimes(1);
+    expect(onConfirm.mock.calls[0][0].localEncryption).toEqual({
+      enabled: true,
+      password: "pass-123",
+    });
   });
 });

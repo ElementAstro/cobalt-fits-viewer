@@ -1,5 +1,5 @@
 import type { FitsMetadata } from "../../fits/types";
-import type { LocationCluster } from "../clustering";
+import type { MapClusterNode } from "../types";
 
 function makeFile(id: string, importDate: number, dateObs?: string): FitsMetadata {
   return {
@@ -17,10 +17,12 @@ function makeFile(id: string, importDate: number, dateObs?: string): FitsMetadat
   };
 }
 
-function makeCluster(id: string, longitude: number, files: FitsMetadata[]): LocationCluster {
+function makeCluster(id: string, longitude: number, files: FitsMetadata[]): MapClusterNode {
   return {
     id,
     label: id,
+    isCluster: files.length > 1,
+    count: files.length,
     location: {
       latitude: 0,
       longitude,

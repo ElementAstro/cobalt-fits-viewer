@@ -41,6 +41,8 @@ import { ZoomControls } from "../../components/fits/ZoomControls";
 import { AstrometryBadge } from "../../components/fits/AstrometryBadge";
 import { shareWCS } from "../../lib/astrometry/wcsExport";
 import { toViewerPreset } from "../../lib/viewer/model";
+import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
+import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
 
 export default function ViewerDetailScreen() {
   useKeepAwake();
@@ -145,7 +147,17 @@ export default function ViewerDetailScreen() {
   const settingsWheelZoomSensitivity = useSettingsStore((s) => s.canvasWheelZoomSensitivity);
   const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
   const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
+  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
+  const viewerApplyEditorRecipe = useSettingsStore((s) => s.viewerApplyEditorRecipe);
   const haptics = useHapticFeedback();
+  const activeViewerRecipe = useMemo(() => {
+    if (!viewerApplyEditorRecipe || !file?.editorRecipe) return null;
+    return normalizeProcessingPipelineSnapshot(
+      file.editorRecipe,
+      file.editorRecipe.profile ?? "legacy",
+    );
+  }, [file?.editorRecipe, viewerApplyEditorRecipe]);
+  const viewerPipelineProfile = activeViewerRecipe ? undefined : imageProcessingProfile;
 
   // Cursor & frame — grouped
   const { cursorX, cursorY, currentFrame, totalFrames, currentHDU } = useViewerStore(
@@ -219,6 +231,51 @@ export default function ViewerDetailScreen() {
     ],
   );
 
+  // Astrometry integration
+  const { submitFile: astrometrySubmit, config: astrometryConfig } = useAstrometry();
+  const allAstrometryJobs = useAstrometryStore((s) => s.jobs);
+  const astrometryJobs = useMemo(
+    () => allAstrometryJobs.filter((j) => j.fileId === (id ?? "")),
+    [allAstrometryJobs, id],
+  );
+  const latestSolvedJob = astrometryJobs.find((j) => j.status === "success" && j.result);
+  const activeAstrometryJob = astrometryJobs.find(
+    (j) => j.status === "uploading" || j.status === "submitted" || j.status === "solving",
+  );
+
+  const exportSource = useMemo(
+    () => ({
+      sourceType: metadata?.sourceType,
+      sourceFormat: metadata?.sourceFormat,
+      sourceFileId: file?.id,
+      originalBuffer: sourceBuffer,
+      scientificPixels: pixels,
+      rgbChannels,
+      metadata: metadata ?? undefined,
+      headerKeywords: headers,
+      comments,
+      history,
+      starAnnotations: file?.starAnnotations?.points ?? [],
+      astrometryAnnotations: latestSolvedJob?.result?.annotations ?? [],
+    }),
+    [
+      file?.id,
+      file?.starAnnotations?.points,
+      sourceBuffer,
+      pixels,
+      rgbChannels,
+      metadata,
+      headers,
+      comments,
+      history,
+      latestSolvedJob?.result?.annotations,
+    ],
+  );
+  const fitsScientificAvailable = useMemo(
+    () => canUseScientificFitsExport(exportSource),
+    [exportSource],
+  );
+
   const closeExportDialog = useCallback(() => setShowExport(false), []);
   const {
     isExporting,
@@ -233,17 +290,7 @@ export default function ViewerDetailScreen() {
     height: dimensions?.height,
     filename: file?.filename ?? "fits",
     format: exportFormat,
-    source: {
-      sourceType: metadata?.sourceType,
-      sourceFormat: metadata?.sourceFormat,
-      originalBuffer: sourceBuffer,
-      scientificPixels: pixels,
-      rgbChannels,
-      metadata: metadata ?? undefined,
-      headerKeywords: headers,
-      comments,
-      history,
-    },
+    source: exportSource,
     onDone: closeExportDialog,
   });
   const prevPixelsRef = useRef<Float32Array | null>(null);
@@ -268,18 +315,6 @@ export default function ViewerDetailScreen() {
   }, []);
 
   const toggleFavorite = useFitsStore((s) => s.toggleFavorite);
-
-  // Astrometry integration
-  const { submitFile: astrometrySubmit, config: astrometryConfig } = useAstrometry();
-  const allAstrometryJobs = useAstrometryStore((s) => s.jobs);
-  const astrometryJobs = useMemo(
-    () => allAstrometryJobs.filter((j) => j.fileId === (id ?? "")),
-    [allAstrometryJobs, id],
-  );
-  const latestSolvedJob = astrometryJobs.find((j) => j.status === "success" && j.result);
-  const activeAstrometryJob = astrometryJobs.find(
-    (j) => j.status === "uploading" || j.status === "submitted" || j.status === "solving",
-  );
 
   const handleSolveThis = useCallback(() => {
     if (!astrometryConfig.apiKey) {
@@ -684,6 +719,10 @@ export default function ViewerDetailScreen() {
           contrast,
           mtfMidtone,
           curvePreset,
+          {
+            profile: viewerPipelineProfile,
+            recipe: activeViewerRecipe,
+          },
         );
       } else {
         // New pixel data (initial load or frame change): show preview immediately
@@ -702,6 +741,10 @@ export default function ViewerDetailScreen() {
           contrast,
           mtfMidtone,
           curvePreset,
+          {
+            profile: viewerPipelineProfile,
+            recipe: activeViewerRecipe,
+          },
         );
       }
       return;
@@ -724,6 +767,10 @@ export default function ViewerDetailScreen() {
         contrast,
         mtfMidtone,
         curvePreset,
+        {
+          profile: viewerPipelineProfile,
+          recipe: activeViewerRecipe,
+        },
       );
     }, settingsDebounce);
 
@@ -744,6 +791,8 @@ export default function ViewerDetailScreen() {
     mtfMidtone,
     curvePreset,
     useHighQualityPreview,
+    viewerPipelineProfile,
+    activeViewerRecipe,
   ]);
 
   // Histogram and stats only on pixel/dimension change (deferred after interactions)
@@ -1191,7 +1240,7 @@ export default function ViewerDetailScreen() {
         onExport={handleExport}
         onShare={handleShare}
         onSaveToDevice={handleSaveToDevice}
-        fitsScientificAvailable={metadata?.sourceType === "fits" && !!sourceBuffer}
+        fitsScientificAvailable={fitsScientificAvailable}
         onPrint={handlePrint}
         onPrintToPdf={handlePrintToPdf}
         onClose={() => setShowExport(false)}

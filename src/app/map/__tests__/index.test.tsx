@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react-nativ
 import MapScreen from "../index";
 import { useFitsStore } from "../../../stores/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
+import type { MapClusterAction } from "../../../lib/map/types";
 
 const mockSettingsState = {
   mapPreset: "standard" as const,
@@ -13,6 +14,8 @@ const mockSettingsState = {
 };
 
 const mockEnsurePermission = jest.fn().mockResolvedValue(true);
+const mockRouterPush = jest.fn();
+const mockRouterBack = jest.fn();
 
 jest.mock("../../../stores/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof mockSettingsState) => unknown) =>
@@ -25,6 +28,25 @@ jest.mock("../../../hooks/useLocation", () => ({
   },
 }));
 
+jest.mock("expo-constants", () => ({
+  expoConfig: {
+    android: {
+      config: {
+        googleMaps: {
+          apiKey: "test-key",
+        },
+      },
+    },
+  },
+}));
+
+jest.mock("expo-router", () => ({
+  useRouter: () => ({
+    push: mockRouterPush,
+    back: mockRouterBack,
+  }),
+}));
+
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
     t: (key: string) =>
@@ -33,6 +55,7 @@ jest.mock("../../../i18n/useI18n", () => ({
           "common.goHome": "Go Home",
           "location.mapView": "Map View",
           "location.sites": "sites",
+          "location.filesLabel": "files",
           "location.noLocationData": "No location data available",
           "location.emptyStateHint": "Import files with location data or enable auto-tagging",
           "location.enableAutoTag": "Enable Auto Tag",
@@ -48,6 +71,9 @@ jest.mock("../../../i18n/useI18n", () => ({
           "location.last1Year": "Last 1 Year",
           "location.allObjects": "All Objects",
           "location.allFilters": "All Filters",
+          "location.allTargets": "All Targets",
+          "location.allSessions": "All Sessions",
+          "location.clearAllFilters": "Clear All",
           "sessions.imageCount": "images",
         }) as Record<string, string>
       )[key] ?? key,
@@ -56,16 +82,83 @@ jest.mock("../../../i18n/useI18n", () => ({
 
 jest.mock("../../../components/gallery/LocationMapView", () => {
   const React = require("react");
-  const { Text } = require("react-native");
+  const { Text, Pressable, View } = require("react-native");
   return {
-    LocationMapView: ({ files }: { files: Array<{ id: string }> }) =>
-      React.createElement(Text, { testID: "location-map-view" }, `map-files:${files.length}`),
+    LocationMapView: ({
+      files,
+      onClusterAction,
+    }: {
+      files: Array<{ id: string }>;
+      onClusterAction?: (action: MapClusterAction) => void;
+    }) =>
+      React.createElement(
+        View,
+        null,
+        React.createElement(Text, { testID: "location-map-view" }, `map-files:${files.length}`),
+        React.createElement(
+          Pressable,
+          {
+            testID: "mock-open-cluster",
+            onPress: () => {
+              if (files.length === 0 || !onClusterAction) return;
+              onClusterAction({
+                type: "open-cluster",
+                zoom: 10,
+                node: {
+                  id: "cluster-1",
+                  isCluster: true,
+                  count: 1,
+                  label: "cluster",
+                  location: { latitude: 10, longitude: 20 },
+                  files: files as FitsMetadata[],
+                },
+              });
+            },
+          },
+          React.createElement(Text, null, "open-cluster"),
+        ),
+      ),
   };
 });
 
-jest.mock("../../../components/gallery/LocationMarkerSheet", () => ({
-  LocationMarkerSheet: () => null,
-}));
+jest.mock("../../../components/gallery/LocationMarkerSheet", () => {
+  const React = require("react");
+  const { Pressable, Text, View } = require("react-native");
+  return {
+    LocationMarkerSheet: ({
+      cluster,
+      onFilePress,
+      onSessionPress,
+      onTargetPress,
+    }: {
+      cluster: { files: FitsMetadata[] } | null;
+      onFilePress: (file: FitsMetadata) => void;
+      onSessionPress: (sessionId: string) => void;
+      onTargetPress: (targetId: string) => void;
+    }) =>
+      cluster
+        ? React.createElement(
+            View,
+            null,
+            React.createElement(
+              Pressable,
+              { testID: "mock-open-viewer", onPress: () => onFilePress(cluster.files[0]) },
+              React.createElement(Text, null, "viewer"),
+            ),
+            React.createElement(
+              Pressable,
+              { testID: "mock-open-session", onPress: () => onSessionPress("session-a") },
+              React.createElement(Text, null, "session"),
+            ),
+            React.createElement(
+              Pressable,
+              { testID: "mock-open-target", onPress: () => onTargetPress("target-a") },
+              React.createElement(Text, null, "target"),
+            ),
+          )
+        : null,
+  };
+});
 
 jest.mock("../../../hooks/useScreenOrientation", () => ({
   useScreenOrientation: () => ({
@@ -92,11 +185,6 @@ function makeFile(id: string, overrides: Partial<FitsMetadata> = {}): FitsMetada
     albumIds: [],
     ...overrides,
   };
-}
-
-function pressByText(text: string) {
-  const node = screen.getByText(text);
-  fireEvent.press(node.parent);
 }
 
 describe("MapScreen", () => {
@@ -146,7 +234,7 @@ describe("MapScreen", () => {
     expect(mockEnsurePermission).toHaveBeenCalled();
   });
 
-  it("updates map file count when date filter changes", async () => {
+  it("applies full filter chain (date -> object -> filter -> target -> session)", async () => {
     const dayMs = 24 * 60 * 60 * 1000;
     const now = Date.now();
 
@@ -155,25 +243,72 @@ describe("MapScreen", () => {
         makeFile("old", {
           importDate: now - 40 * dayMs,
           dateObs: new Date(now - 40 * dayMs).toISOString(),
+          object: "M31",
+          filter: "Ha",
+          targetId: "target-a",
+          sessionId: "session-a",
           location: { latitude: 10, longitude: 20 },
         }),
-        makeFile("recent", {
+        makeFile("recent1", {
           importDate: now - 2 * dayMs,
           dateObs: new Date(now - 2 * dayMs).toISOString(),
+          object: "M31",
+          filter: "Ha",
+          targetId: "target-a",
+          sessionId: "session-a",
           location: { latitude: 11, longitude: 21 },
+        }),
+        makeFile("recent2", {
+          importDate: now - 2 * dayMs,
+          dateObs: new Date(now - 2 * dayMs).toISOString(),
+          object: "M42",
+          filter: "OIII",
+          targetId: "target-b",
+          sessionId: "session-b",
+          location: { latitude: 12, longitude: 22 },
+        }),
+      ],
+    });
+
+    render(<MapScreen />);
+    expect(screen.getByText("map-files:3")).toBeTruthy();
+
+    fireEvent.press(screen.getByTestId("e2e-action-map__index-toggle-filters"));
+    fireEvent.press(screen.getByText("Last 7 Days").parent);
+    fireEvent.press(screen.getByText("M31").parent);
+    fireEvent.press(screen.getByText("Ha").parent);
+    fireEvent.press(screen.getByText("target-a").parent);
+    fireEvent.press(screen.getByText("session-a").parent);
+
+    await waitFor(() => {
+      expect(screen.getByText("map-files:1")).toBeTruthy();
+    });
+  });
+
+  it("routes to viewer/session/target from marker detail actions", () => {
+    useFitsStore.setState({
+      files: [
+        makeFile("f1", {
+          targetId: "target-a",
+          sessionId: "session-a",
+          location: { latitude: 10, longitude: 20 },
         }),
       ],
     });
 
     render(<MapScreen />);
 
-    expect(screen.getByText("map-files:2")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("mock-open-cluster"));
+    fireEvent.press(screen.getByTestId("mock-open-session"));
 
-    pressByText("filter");
-    pressByText("Last 7 Days");
+    fireEvent.press(screen.getByTestId("mock-open-cluster"));
+    fireEvent.press(screen.getByTestId("mock-open-target"));
 
-    await waitFor(() => {
-      expect(screen.getByText("map-files:1")).toBeTruthy();
-    });
+    fireEvent.press(screen.getByTestId("mock-open-cluster"));
+    fireEvent.press(screen.getByTestId("mock-open-viewer"));
+
+    expect(mockRouterPush).toHaveBeenNthCalledWith(1, "/session/session-a");
+    expect(mockRouterPush).toHaveBeenNthCalledWith(2, "/target/target-a");
+    expect(mockRouterPush).toHaveBeenNthCalledWith(3, "/viewer/f1");
   });
 });

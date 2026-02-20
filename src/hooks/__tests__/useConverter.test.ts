@@ -166,6 +166,8 @@ describe("useConverter", () => {
       progress: 0,
       completed: 0,
       failed: 0,
+      skipped: 0,
+      warnings: [],
       error: undefined,
     });
 
@@ -175,5 +177,24 @@ describe("useConverter", () => {
     expect(result.current.supportsQuality("png")).toBe(true);
     expect(result.current.getSupportedBitDepths("png")).toEqual([8, 16]);
     expect(clearCompletedTasks).toBe(result.current.clearCompletedTasks);
+  });
+
+  it("prefilters non-image files as skipped before batch execution", () => {
+    const { result } = renderHook(() => useConverter());
+
+    const taskId = result.current.startBatchConvert([
+      { id: "v1", filepath: "/tmp/a.mp4", filename: "a.mp4", sourceType: "video" },
+    ]);
+
+    expect(taskId).toBe("task-1");
+    expect(batchLib.executeBatchConvert).not.toHaveBeenCalled();
+    expect(updateBatchTask).toHaveBeenCalledWith(
+      taskId,
+      expect.objectContaining({
+        skipped: 1,
+        status: "completed",
+        progress: 100,
+      }),
+    );
   });
 });

@@ -59,6 +59,14 @@ const CONVERTER_FORMAT_OPTIONS = [
 ];
 const BATCH_NAMING_VALUES = ["original", "prefix", "suffix", "sequence"] as const;
 const COMPOSE_PRESET_VALUES = ["rgb", "sho", "hoo", "lrgb", "custom"] as const;
+const ADV_COMPOSE_REGISTRATION_VALUES = ["none", "translation", "full"] as const;
+const ADV_COMPOSE_FRAMING_VALUES = ["first", "min", "cog"] as const;
+const VIDEO_PROFILE_VALUES = ["compatibility", "balanced", "quality"] as const;
+const VIDEO_TARGET_PRESET_VALUES = ["1080p", "720p", "custom"] as const;
+const IMAGE_PROCESSING_PROFILE_OPTIONS = [
+  { label: "Standard", value: "standard" as const },
+  { label: "Legacy", value: "legacy" as const },
+];
 const EXPORT_FORMAT_OPTIONS: Array<{ label: string; value: ExportFormat }> = [
   { label: "PNG", value: "png" },
   { label: "JPEG", value: "jpeg" },
@@ -100,12 +108,25 @@ export default function ProcessingSettingsScreen() {
   const stackingDetectMinArea = useSettingsStore((s) => s.stackingDetectMinArea);
   const stackingDetectMaxArea = useSettingsStore((s) => s.stackingDetectMaxArea);
   const stackingDetectBorderMargin = useSettingsStore((s) => s.stackingDetectBorderMargin);
+  const stackingDetectSigmaClipIters = useSettingsStore((s) => s.stackingDetectSigmaClipIters);
+  const stackingDetectApplyMatchedFilter = useSettingsStore(
+    (s) => s.stackingDetectApplyMatchedFilter,
+  );
+  const stackingDetectConnectivity = useSettingsStore((s) => s.stackingDetectConnectivity);
   const stackingBackgroundMeshSize = useSettingsStore((s) => s.stackingBackgroundMeshSize);
   const stackingDeblendNLevels = useSettingsStore((s) => s.stackingDeblendNLevels);
   const stackingDeblendMinContrast = useSettingsStore((s) => s.stackingDeblendMinContrast);
   const stackingFilterFwhm = useSettingsStore((s) => s.stackingFilterFwhm);
+  const stackingDetectMinFwhm = useSettingsStore((s) => s.stackingDetectMinFwhm);
   const stackingMaxFwhm = useSettingsStore((s) => s.stackingMaxFwhm);
   const stackingMaxEllipticity = useSettingsStore((s) => s.stackingMaxEllipticity);
+  const stackingDetectMinSharpness = useSettingsStore((s) => s.stackingDetectMinSharpness);
+  const stackingDetectMaxSharpness = useSettingsStore((s) => s.stackingDetectMaxSharpness);
+  const stackingDetectPeakMax = useSettingsStore((s) => s.stackingDetectPeakMax);
+  const stackingDetectSnrMin = useSettingsStore((s) => s.stackingDetectSnrMin);
+  const stackingUseAnnotatedForAlignment = useSettingsStore(
+    (s) => s.stackingUseAnnotatedForAlignment,
+  );
   const stackingRansacMaxIterations = useSettingsStore((s) => s.stackingRansacMaxIterations);
   const stackingAlignmentInlierThreshold = useSettingsStore(
     (s) => s.stackingAlignmentInlierThreshold,
@@ -122,12 +143,27 @@ export default function ProcessingSettingsScreen() {
   const setStackingDetectMinArea = useSettingsStore((s) => s.setStackingDetectMinArea);
   const setStackingDetectMaxArea = useSettingsStore((s) => s.setStackingDetectMaxArea);
   const setStackingDetectBorderMargin = useSettingsStore((s) => s.setStackingDetectBorderMargin);
+  const setStackingDetectSigmaClipIters = useSettingsStore(
+    (s) => s.setStackingDetectSigmaClipIters,
+  );
+  const setStackingDetectApplyMatchedFilter = useSettingsStore(
+    (s) => s.setStackingDetectApplyMatchedFilter,
+  );
+  const setStackingDetectConnectivity = useSettingsStore((s) => s.setStackingDetectConnectivity);
   const setStackingBackgroundMeshSize = useSettingsStore((s) => s.setStackingBackgroundMeshSize);
   const setStackingDeblendNLevels = useSettingsStore((s) => s.setStackingDeblendNLevels);
   const setStackingDeblendMinContrast = useSettingsStore((s) => s.setStackingDeblendMinContrast);
   const setStackingFilterFwhm = useSettingsStore((s) => s.setStackingFilterFwhm);
+  const setStackingDetectMinFwhm = useSettingsStore((s) => s.setStackingDetectMinFwhm);
   const setStackingMaxFwhm = useSettingsStore((s) => s.setStackingMaxFwhm);
   const setStackingMaxEllipticity = useSettingsStore((s) => s.setStackingMaxEllipticity);
+  const setStackingDetectMinSharpness = useSettingsStore((s) => s.setStackingDetectMinSharpness);
+  const setStackingDetectMaxSharpness = useSettingsStore((s) => s.setStackingDetectMaxSharpness);
+  const setStackingDetectPeakMax = useSettingsStore((s) => s.setStackingDetectPeakMax);
+  const setStackingDetectSnrMin = useSettingsStore((s) => s.setStackingDetectSnrMin);
+  const setStackingUseAnnotatedForAlignment = useSettingsStore(
+    (s) => s.setStackingUseAnnotatedForAlignment,
+  );
   const setStackingRansacMaxIterations = useSettingsStore((s) => s.setStackingRansacMaxIterations);
   const setStackingAlignmentInlierThreshold = useSettingsStore(
     (s) => s.setStackingAlignmentInlierThreshold,
@@ -150,14 +186,64 @@ export default function ProcessingSettingsScreen() {
   const composeRedWeight = useSettingsStore((s) => s.composeRedWeight);
   const composeGreenWeight = useSettingsStore((s) => s.composeGreenWeight);
   const composeBlueWeight = useSettingsStore((s) => s.composeBlueWeight);
+  const advancedComposeRegistrationMode = useSettingsStore(
+    (s) => s.advancedComposeRegistrationMode,
+  );
+  const advancedComposeFramingMode = useSettingsStore((s) => s.advancedComposeFramingMode);
+  const advancedComposeAutoLinearMatch = useSettingsStore((s) => s.advancedComposeAutoLinearMatch);
+  const advancedComposeAutoBrightnessBalance = useSettingsStore(
+    (s) => s.advancedComposeAutoBrightnessBalance,
+  );
+  const advancedComposePreviewScale = useSettingsStore((s) => s.advancedComposePreviewScale);
+  const advancedComposePixelMathR = useSettingsStore((s) => s.advancedComposePixelMathR);
+  const advancedComposePixelMathG = useSettingsStore((s) => s.advancedComposePixelMathG);
+  const advancedComposePixelMathB = useSettingsStore((s) => s.advancedComposePixelMathB);
   const setDefaultComposePreset = useSettingsStore((s) => s.setDefaultComposePreset);
   const setComposeRedWeight = useSettingsStore((s) => s.setComposeRedWeight);
   const setComposeGreenWeight = useSettingsStore((s) => s.setComposeGreenWeight);
   const setComposeBlueWeight = useSettingsStore((s) => s.setComposeBlueWeight);
+  const setAdvancedComposeRegistrationMode = useSettingsStore(
+    (s) => s.setAdvancedComposeRegistrationMode,
+  );
+  const setAdvancedComposeFramingMode = useSettingsStore((s) => s.setAdvancedComposeFramingMode);
+  const setAdvancedComposeAutoLinearMatch = useSettingsStore(
+    (s) => s.setAdvancedComposeAutoLinearMatch,
+  );
+  const setAdvancedComposeAutoBrightnessBalance = useSettingsStore(
+    (s) => s.setAdvancedComposeAutoBrightnessBalance,
+  );
+  const setAdvancedComposePreviewScale = useSettingsStore((s) => s.setAdvancedComposePreviewScale);
+  const setAdvancedComposePixelMathR = useSettingsStore((s) => s.setAdvancedComposePixelMathR);
+  const setAdvancedComposePixelMathG = useSettingsStore((s) => s.setAdvancedComposePixelMathG);
+  const setAdvancedComposePixelMathB = useSettingsStore((s) => s.setAdvancedComposePixelMathB);
+
+  // Video & media defaults
+  const videoCoreEnabled = useSettingsStore((s) => s.videoCoreEnabled);
+  const videoProcessingEnabled = useSettingsStore((s) => s.videoProcessingEnabled);
+  const videoAutoplay = useSettingsStore((s) => s.videoAutoplay);
+  const videoLoopByDefault = useSettingsStore((s) => s.videoLoopByDefault);
+  const videoMutedByDefault = useSettingsStore((s) => s.videoMutedByDefault);
+  const videoThumbnailTimeMs = useSettingsStore((s) => s.videoThumbnailTimeMs);
+  const videoProcessingConcurrency = useSettingsStore((s) => s.videoProcessingConcurrency);
+  const defaultVideoProfile = useSettingsStore((s) => s.defaultVideoProfile);
+  const defaultVideoTargetPreset = useSettingsStore((s) => s.defaultVideoTargetPreset);
+  const setVideoCoreEnabled = useSettingsStore((s) => s.setVideoCoreEnabled);
+  const setVideoProcessingEnabled = useSettingsStore((s) => s.setVideoProcessingEnabled);
+  const setVideoAutoplay = useSettingsStore((s) => s.setVideoAutoplay);
+  const setVideoLoopByDefault = useSettingsStore((s) => s.setVideoLoopByDefault);
+  const setVideoMutedByDefault = useSettingsStore((s) => s.setVideoMutedByDefault);
+  const setVideoThumbnailTimeMs = useSettingsStore((s) => s.setVideoThumbnailTimeMs);
+  const setVideoProcessingConcurrency = useSettingsStore((s) => s.setVideoProcessingConcurrency);
+  const setDefaultVideoProfile = useSettingsStore((s) => s.setDefaultVideoProfile);
+  const setDefaultVideoTargetPreset = useSettingsStore((s) => s.setDefaultVideoTargetPreset);
 
   // Performance
+  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
+  const viewerApplyEditorRecipe = useSettingsStore((s) => s.viewerApplyEditorRecipe);
   const imageProcessingDebounce = useSettingsStore((s) => s.imageProcessingDebounce);
   const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
+  const setImageProcessingProfile = useSettingsStore((s) => s.setImageProcessingProfile);
+  const setViewerApplyEditorRecipe = useSettingsStore((s) => s.setViewerApplyEditorRecipe);
   const setImageProcessingDebounce = useSettingsStore((s) => s.setImageProcessingDebounce);
   const setUseHighQualityPreview = useSettingsStore((s) => s.setUseHighQualityPreview);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
@@ -469,6 +555,36 @@ export default function ProcessingSettingsScreen() {
 
   const composePresetLabel = (value: (typeof COMPOSE_PRESET_VALUES)[number]) =>
     value === "custom" ? t("settings.composePresetCustom") : value.toUpperCase();
+  const imageProcessingProfileLabel = (
+    value: (typeof IMAGE_PROCESSING_PROFILE_OPTIONS)[number]["value"],
+  ) =>
+    value === "legacy"
+      ? t("settings.imageProcessingProfileLegacy")
+      : t("settings.imageProcessingProfileStandard");
+  const advancedComposeRegistrationLabel = (
+    value: (typeof ADV_COMPOSE_REGISTRATION_VALUES)[number],
+  ) =>
+    value === "none"
+      ? t("editor.alignNone")
+      : value === "translation"
+        ? t("editor.alignTranslation")
+        : t("editor.alignFull");
+  const advancedComposeFramingLabel = (value: (typeof ADV_COMPOSE_FRAMING_VALUES)[number]) =>
+    value === "first"
+      ? t("settings.composeAdvancedFramingFirst")
+      : value === "min"
+        ? t("settings.composeAdvancedFramingMin")
+        : t("settings.composeAdvancedFramingCog");
+
+  const videoProfileLabel = (value: (typeof VIDEO_PROFILE_VALUES)[number]) =>
+    value === "compatibility"
+      ? t("settings.videoProfileCompatibility")
+      : value === "quality"
+        ? t("settings.videoProfileQuality")
+        : t("settings.videoProfileBalanced");
+
+  const videoTargetPresetLabel = (value: (typeof VIDEO_TARGET_PRESET_VALUES)[number]) =>
+    value === "custom" ? t("settings.videoPresetCustom") : value;
 
   const stackMethodOptions = STACK_METHOD_VALUES.map((value) => ({
     label: stackMethodLabel(value),
@@ -499,6 +615,31 @@ export default function ProcessingSettingsScreen() {
 
   const composePresetOptions = COMPOSE_PRESET_VALUES.map((value) => ({
     label: composePresetLabel(value),
+    value,
+  }));
+  const imageProcessingProfileOptions = IMAGE_PROCESSING_PROFILE_OPTIONS.map((option) => ({
+    label:
+      option.value === "legacy"
+        ? t("settings.imageProcessingProfileLegacy")
+        : t("settings.imageProcessingProfileStandard"),
+    value: option.value,
+  }));
+  const advancedComposeRegistrationOptions = ADV_COMPOSE_REGISTRATION_VALUES.map((value) => ({
+    label: advancedComposeRegistrationLabel(value),
+    value,
+  }));
+  const advancedComposeFramingOptions = ADV_COMPOSE_FRAMING_VALUES.map((value) => ({
+    label: advancedComposeFramingLabel(value),
+    value,
+  }));
+
+  const videoProfileOptions = VIDEO_PROFILE_VALUES.map((value) => ({
+    label: videoProfileLabel(value),
+    value,
+  }));
+
+  const videoTargetPresetOptions = VIDEO_TARGET_PRESET_VALUES.map((value) => ({
+    label: videoTargetPresetLabel(value),
     value,
   }));
 
@@ -626,6 +767,21 @@ export default function ProcessingSettingsScreen() {
           />
           <Separator />
           <SettingsRow
+            testID="e2e-action-settings__processing-toggle-use-annotated"
+            icon="star-outline"
+            label={t("settings.stackingUseAnnotatedForAlignment")}
+            rightElement={
+              <Switch
+                isSelected={stackingUseAnnotatedForAlignment}
+                onSelectedChange={(v: boolean) => {
+                  haptics.selection();
+                  setStackingUseAnnotatedForAlignment(v);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
             icon="sparkles-outline"
             label={t("settings.stackingDetectionProfile")}
             value={stackingDetectionProfileLabel(stackingDetectionProfile)}
@@ -713,6 +869,60 @@ export default function ProcessingSettingsScreen() {
           </View>
           <Separator />
           <SettingsRow
+            icon="git-network-outline"
+            label={t("settings.stackingDetectSigmaClipIters")}
+            value={`${stackingDetectSigmaClipIters}`}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={stackingDetectSigmaClipIters}
+              min={0}
+              max={10}
+              step={1}
+              onValueChange={(v) => setStackingDetectSigmaClipIters(Math.round(v))}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="funnel-outline"
+            label={t("settings.stackingDetectApplyMatchedFilter")}
+            rightElement={
+              <Switch
+                isSelected={stackingDetectApplyMatchedFilter}
+                onSelectedChange={(v: boolean) => {
+                  haptics.selection();
+                  setStackingDetectApplyMatchedFilter(v);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="git-compare-outline"
+            label={t("settings.stackingDetectConnectivity")}
+            value={`${stackingDetectConnectivity}`}
+          />
+          <View className="px-2 pb-2">
+            <View className="flex-row gap-2">
+              <Chip
+                size="sm"
+                variant={stackingDetectConnectivity === 4 ? "primary" : "secondary"}
+                onPress={() => setStackingDetectConnectivity(4)}
+              >
+                <Chip.Label className="text-[9px]">4</Chip.Label>
+              </Chip>
+              <Chip
+                size="sm"
+                variant={stackingDetectConnectivity === 8 ? "primary" : "secondary"}
+                onPress={() => setStackingDetectConnectivity(8)}
+              >
+                <Chip.Label className="text-[9px]">8</Chip.Label>
+              </Chip>
+            </View>
+          </View>
+          <Separator />
+          <SettingsRow
             icon="grid-outline"
             label={t("settings.stackingBackgroundMeshSize")}
             value={`${stackingBackgroundMeshSize}`}
@@ -778,6 +988,25 @@ export default function ProcessingSettingsScreen() {
           <Separator />
           <SettingsRow
             icon="ellipse-outline"
+            label={t("settings.stackingDetectMinFwhm")}
+            value={stackingDetectMinFwhm.toFixed(1)}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={stackingDetectMinFwhm}
+              min={0.1}
+              max={15}
+              step={0.1}
+              onValueChange={(v) => {
+                setStackingDetectMinFwhm(v);
+                if (v > stackingMaxFwhm) setStackingMaxFwhm(v);
+              }}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="ellipse-outline"
             label={t("settings.stackingMaxFwhm")}
             value={stackingMaxFwhm.toFixed(1)}
           />
@@ -805,6 +1034,76 @@ export default function ProcessingSettingsScreen() {
               max={1}
               step={0.01}
               onValueChange={setStackingMaxEllipticity}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="sparkles-outline"
+            label={t("settings.stackingDetectMinSharpness")}
+            value={stackingDetectMinSharpness.toFixed(2)}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={stackingDetectMinSharpness}
+              min={0}
+              max={100}
+              step={0.05}
+              onValueChange={(v) => {
+                setStackingDetectMinSharpness(v);
+                if (v > stackingDetectMaxSharpness) setStackingDetectMaxSharpness(v);
+              }}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="sparkles-outline"
+            label={t("settings.stackingDetectMaxSharpness")}
+            value={stackingDetectMaxSharpness.toFixed(2)}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={stackingDetectMaxSharpness}
+              min={0}
+              max={100}
+              step={0.05}
+              onValueChange={(v) => {
+                setStackingDetectMaxSharpness(v);
+                if (v < stackingDetectMinSharpness) setStackingDetectMinSharpness(v);
+              }}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="analytics-outline"
+            label={t("settings.stackingDetectPeakMax")}
+            value={`${Math.round(stackingDetectPeakMax)}`}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={stackingDetectPeakMax}
+              min={0}
+              max={10000}
+              step={10}
+              onValueChange={setStackingDetectPeakMax}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="speedometer-outline"
+            label={t("settings.stackingDetectSnrMin")}
+            value={stackingDetectSnrMin.toFixed(1)}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={stackingDetectSnrMin}
+              min={0}
+              max={50}
+              step={0.1}
+              onValueChange={setStackingDetectSnrMin}
             />
           </View>
           <Separator />
@@ -951,8 +1250,235 @@ export default function ProcessingSettingsScreen() {
           </View>
         </SettingsSection>
 
+        <SettingsSection title={t("settings.composeAdvancedDefaults")}>
+          <SettingsRow
+            icon="sync-outline"
+            label={t("settings.composeAdvancedRegistration")}
+            value={advancedComposeRegistrationLabel(advancedComposeRegistrationMode)}
+            onPress={() => openPicker("advancedComposeRegistration")}
+          />
+          <Separator />
+          <SettingsRow
+            icon="crop-outline"
+            label={t("settings.composeAdvancedFraming")}
+            value={advancedComposeFramingLabel(advancedComposeFramingMode)}
+            onPress={() => openPicker("advancedComposeFraming")}
+          />
+          <Separator />
+          <SettingsRow
+            icon="analytics-outline"
+            label={t("settings.composeAdvancedAutoLinearMatch")}
+            rightElement={
+              <Switch
+                isSelected={advancedComposeAutoLinearMatch}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setAdvancedComposeAutoLinearMatch(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="sunny-outline"
+            label={t("settings.composeAdvancedAutoBrightnessBalance")}
+            rightElement={
+              <Switch
+                isSelected={advancedComposeAutoBrightnessBalance}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setAdvancedComposeAutoBrightnessBalance(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="resize-outline"
+            label={t("settings.composeAdvancedPreviewScale")}
+            value={advancedComposePreviewScale.toFixed(2)}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={advancedComposePreviewScale}
+              min={0.1}
+              max={1}
+              step={0.05}
+              onValueChange={setAdvancedComposePreviewScale}
+            />
+          </View>
+          <Separator />
+          <View className="px-2 py-2">
+            <Text className="mb-2 text-xs text-muted">
+              {t("settings.composeAdvancedPixelMath")}
+            </Text>
+            <TextField className="mb-2">
+              <Input
+                value={advancedComposePixelMathR}
+                onChangeText={setAdvancedComposePixelMathR}
+                placeholder="R"
+              />
+            </TextField>
+            <TextField className="mb-2">
+              <Input
+                value={advancedComposePixelMathG}
+                onChangeText={setAdvancedComposePixelMathG}
+                placeholder="G"
+              />
+            </TextField>
+            <TextField>
+              <Input
+                value={advancedComposePixelMathB}
+                onChangeText={setAdvancedComposePixelMathB}
+                placeholder="B"
+              />
+            </TextField>
+          </View>
+        </SettingsSection>
+
+        {/* Video & Media */}
+        <SettingsSection title={t("settings.videoMediaTitle")}>
+          <SettingsRow
+            icon="videocam-outline"
+            label={t("settings.videoCoreEnabled")}
+            rightElement={
+              <Switch
+                isSelected={videoCoreEnabled}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setVideoCoreEnabled(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="build-outline"
+            label={t("settings.videoProcessingEnabled")}
+            rightElement={
+              <Switch
+                isSelected={videoProcessingEnabled}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setVideoProcessingEnabled(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="play-circle-outline"
+            label={t("settings.videoAutoplay")}
+            rightElement={
+              <Switch
+                isSelected={videoAutoplay}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setVideoAutoplay(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="repeat-outline"
+            label={t("settings.videoLoopByDefault")}
+            rightElement={
+              <Switch
+                isSelected={videoLoopByDefault}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setVideoLoopByDefault(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="volume-mute-outline"
+            label={t("settings.videoMutedByDefault")}
+            rightElement={
+              <Switch
+                isSelected={videoMutedByDefault}
+                onSelectedChange={(value: boolean) => {
+                  haptics.selection();
+                  setVideoMutedByDefault(value);
+                }}
+              />
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="layers-outline"
+            label={t("settings.defaultVideoProfile")}
+            value={videoProfileLabel(defaultVideoProfile)}
+            onPress={() => openPicker("videoProfile")}
+          />
+          <Separator />
+          <SettingsRow
+            icon="resize-outline"
+            label={t("settings.defaultVideoTargetPreset")}
+            value={videoTargetPresetLabel(defaultVideoTargetPreset)}
+            onPress={() => openPicker("videoTargetPreset")}
+          />
+          <Separator />
+          <SettingsRow
+            icon="image-outline"
+            label={t("settings.videoThumbnailTimeMs")}
+            value={`${videoThumbnailTimeMs}ms`}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={videoThumbnailTimeMs}
+              min={0}
+              max={5000}
+              step={100}
+              onValueChange={setVideoThumbnailTimeMs}
+            />
+          </View>
+          <Separator />
+          <SettingsRow
+            icon="git-branch-outline"
+            label={t("settings.videoProcessingConcurrency")}
+            value={`${videoProcessingConcurrency}`}
+          />
+          <View className="px-2 pb-2">
+            <SimpleSlider
+              label=""
+              value={videoProcessingConcurrency}
+              min={1}
+              max={6}
+              step={1}
+              onValueChange={setVideoProcessingConcurrency}
+            />
+          </View>
+        </SettingsSection>
+
         {/* Performance */}
         <SettingsSection title={t("settings.performance")}>
+          <SettingsRow
+            icon="options-outline"
+            label={t("settings.imageProcessingProfile")}
+            value={imageProcessingProfileLabel(imageProcessingProfile)}
+            onPress={() => openPicker("imageProcessingProfile")}
+          />
+          <Separator />
+          <SettingsRow
+            icon="eye-outline"
+            label={t("settings.viewerApplyEditorRecipe")}
+            rightElement={
+              <Switch
+                isSelected={viewerApplyEditorRecipe}
+                onSelectedChange={(v: boolean) => {
+                  haptics.selection();
+                  setViewerApplyEditorRecipe(v);
+                }}
+              />
+            }
+          />
+          <Separator />
           <SettingsRow
             icon="speedometer-outline"
             label={t("settings.imageProcessingDebounce")}
@@ -1435,6 +1961,46 @@ export default function ProcessingSettingsScreen() {
           options={composePresetOptions}
           selectedValue={defaultComposePreset}
           onSelect={setDefaultComposePreset}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "advancedComposeRegistration"}
+          title={t("settings.composeAdvancedRegistration")}
+          options={advancedComposeRegistrationOptions}
+          selectedValue={advancedComposeRegistrationMode}
+          onSelect={setAdvancedComposeRegistrationMode}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "advancedComposeFraming"}
+          title={t("settings.composeAdvancedFraming")}
+          options={advancedComposeFramingOptions}
+          selectedValue={advancedComposeFramingMode}
+          onSelect={setAdvancedComposeFramingMode}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "videoProfile"}
+          title={t("settings.defaultVideoProfile")}
+          options={videoProfileOptions}
+          selectedValue={defaultVideoProfile}
+          onSelect={setDefaultVideoProfile}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "videoTargetPreset"}
+          title={t("settings.defaultVideoTargetPreset")}
+          options={videoTargetPresetOptions}
+          selectedValue={defaultVideoTargetPreset}
+          onSelect={setDefaultVideoTargetPreset}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "imageProcessingProfile"}
+          title={t("settings.imageProcessingProfile")}
+          options={imageProcessingProfileOptions}
+          selectedValue={imageProcessingProfile}
+          onSelect={setImageProcessingProfile}
           onClose={closePicker}
         />
         <OptionPickerModal

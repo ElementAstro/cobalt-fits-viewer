@@ -24,6 +24,8 @@ interface BatchFileInfo {
   id: string;
   filepath: string;
   filename: string;
+  sourceType?: "fits" | "raster" | "video" | "audio";
+  mediaKind?: "image" | "video" | "audio";
 }
 
 export function useConverter() {
@@ -104,11 +106,68 @@ export function useConverter() {
         taskId: task.id,
       });
 
+      const preSkipped = files.filter(
+        (file) =>
+          (file.mediaKind && file.mediaKind !== "image") ||
+          file.sourceType === "video" ||
+          file.sourceType === "audio",
+      );
+      const executableFiles = files.filter((file) => !preSkipped.includes(file));
+      const preSkippedWarnings = preSkipped.map(
+        (file) => `${file.filename}: prefiltered non-image source`,
+      );
+
+      if (preSkipped.length > 0) {
+        updateBatchTask(task.id, {
+          skipped: preSkipped.length,
+          warnings: preSkippedWarnings,
+          progress: Math.round((preSkipped.length / Math.max(files.length, 1)) * 100),
+        });
+      }
+
+      if (executableFiles.length === 0) {
+        updateBatchTask(task.id, {
+          status: "completed",
+          progress: 100,
+          completed: 0,
+          failed: 0,
+          skipped: preSkipped.length,
+          warnings: preSkippedWarnings,
+          finishedAt: Date.now(),
+          error:
+            preSkippedWarnings.length > 0
+              ? `Skipped (${preSkippedWarnings.length}):\n${preSkippedWarnings.join("\n")}`
+              : undefined,
+        });
+        abortControllers.current.delete(task.id);
+        return task.id;
+      }
+
       executeBatchConvert(
         task.id,
-        files.map((f) => ({ filepath: f.filepath, filename: f.filename })),
+        executableFiles.map((f) => ({
+          id: f.id,
+          filepath: f.filepath,
+          filename: f.filename,
+          sourceType: f.sourceType,
+          mediaKind: f.mediaKind,
+        })),
         currentOptions,
-        (taskId, updates) => updateBatchTask(taskId, updates),
+        (taskId, updates) => {
+          const mergedSkipped = preSkipped.length + (updates.skipped ?? 0);
+          const mergedWarnings = [...preSkippedWarnings, ...(updates.warnings ?? [])];
+          const completed = updates.completed ?? 0;
+          const failed = updates.failed ?? 0;
+          const progress = Math.round(
+            ((completed + failed + mergedSkipped) / Math.max(files.length, 1)) * 100,
+          );
+          updateBatchTask(taskId, {
+            ...updates,
+            skipped: mergedSkipped,
+            warnings: mergedWarnings,
+            progress,
+          });
+        },
         controller.signal,
         {
           rule: batchNamingRule,
@@ -148,6 +207,8 @@ export function useConverter() {
         progress: 0,
         completed: 0,
         failed: 0,
+        skipped: 0,
+        warnings: [],
         error: undefined,
       });
     },

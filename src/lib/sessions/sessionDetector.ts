@@ -9,22 +9,13 @@ import type {
   SessionEquipment,
 } from "../fits/types";
 import { dedupeTargetRefs, toTargetRef } from "../targets/targetRefs";
-import { LOG_TAGS, Logger } from "../logger";
 import { toLocalDateKey } from "./planUtils";
 
-function parseDateObsToTimestamp(dateObs: string | undefined, fileId?: string): number | undefined {
+function parseDateObsToTimestamp(dateObs: string | undefined): number | undefined {
   if (!dateObs) return undefined;
 
   const timestamp = Date.parse(dateObs);
-  if (!Number.isFinite(timestamp)) {
-    Logger.warn(LOG_TAGS.Sessions, `Invalid DATE-OBS skipped${fileId ? `: ${fileId}` : ""}`, {
-      dateObs,
-      fileId,
-    });
-    return undefined;
-  }
-
-  return timestamp;
+  return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
 /**
@@ -37,7 +28,7 @@ export function detectSessions(
 ): ObservationSession[] {
   const filesWithDate = files
     .map((file) => {
-      const timestamp = parseDateObsToTimestamp(file.dateObs, file.id);
+      const timestamp = parseDateObsToTimestamp(file.dateObs);
       if (!Number.isFinite(timestamp)) return undefined;
       return {
         ...file,
@@ -116,7 +107,7 @@ export function generateLogEntries(
   return files
     .map((file) => ({
       file,
-      timestamp: parseDateObsToTimestamp(file.dateObs, file.id),
+      timestamp: parseDateObsToTimestamp(file.dateObs),
     }))
     .filter((entry): entry is { file: FitsMetadata; timestamp: number } =>
       Number.isFinite(entry.timestamp),
@@ -164,7 +155,7 @@ export function getDatesWithObservations(
   const dates = new Set<number>();
 
   for (const file of files) {
-    const timestamp = parseDateObsToTimestamp(file.dateObs, file.id);
+    const timestamp = parseDateObsToTimestamp(file.dateObs);
     if (timestamp === undefined) continue;
     const d = new Date(timestamp);
     if (d.getFullYear() === year && d.getMonth() === month) {

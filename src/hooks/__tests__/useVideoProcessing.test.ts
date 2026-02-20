@@ -6,6 +6,13 @@ import type { VideoProcessingRequest } from "../../lib/video/engine";
 
 const mockEngine = {
   isAvailable: jest.fn(async () => true),
+  getCapabilities: jest.fn(async () => ({
+    available: true,
+    encoderNames: ["h264_mediacodec", "mpeg4"],
+    h264Encoders: ["h264_mediacodec", "mpeg4"],
+    hevcEncoders: [],
+    fallbackVideoEncoder: "h264_mediacodec",
+  })),
   run: jest.fn(),
 };
 
@@ -125,6 +132,13 @@ describe("useVideoProcessing", () => {
     jest.clearAllMocks();
     mockIdSeq = 1;
     mockSettings.videoProcessingEnabled = true;
+    mockEngine.getCapabilities.mockResolvedValue({
+      available: true,
+      encoderNames: ["h264_mediacodec", "mpeg4"],
+      h264Encoders: ["h264_mediacodec", "mpeg4"],
+      hevcEncoders: [],
+      fallbackVideoEncoder: "h264_mediacodec",
+    });
     useVideoTaskStore.setState({ tasks: [] });
     useFitsStore.setState({
       files: [
@@ -165,7 +179,7 @@ describe("useVideoProcessing", () => {
     const { result } = await renderReadyHook();
     let taskId: string | null = null;
     await act(async () => {
-      taskId = result.current.enqueueProcessingTask(baseRequest);
+      taskId = result.current.enqueueProcessingTask(baseRequest).taskId;
     });
 
     await waitFor(() => {
@@ -204,7 +218,7 @@ describe("useVideoProcessing", () => {
     let taskId: string | null = null;
 
     await act(async () => {
-      taskId = result.current.enqueueProcessingTask(baseRequest);
+      taskId = result.current.enqueueProcessingTask(baseRequest).taskId;
     });
     await waitFor(() => {
       const task = useVideoTaskStore.getState().tasks.find((item) => item.id === taskId);
@@ -234,6 +248,7 @@ describe("useVideoProcessing", () => {
           durationMs: 10_000,
           createdAt: Date.now(),
           outputUris: [],
+          outputFileIds: [],
           error: "boom",
           retries: 0,
           logLines: [],
@@ -248,5 +263,55 @@ describe("useVideoProcessing", () => {
     const task = useVideoTaskStore.getState().tasks.find((item) => item.id === "task-failed");
     expect(task?.status).toBe("pending");
     expect(task?.retries).toBe(1);
+  });
+
+  it("imports extract-audio outputs as audio media and stores output file ids", async () => {
+    mockEngine.run.mockResolvedValueOnce({
+      outputUri: "file:///cache/processed.m4a",
+      operation: "extract-audio",
+      sourceId: "source-video",
+      processingTag: "extract-audio",
+    });
+
+    const { result } = await renderReadyHook();
+    let taskId: string | null = null;
+    await act(async () => {
+      taskId = result.current.enqueueProcessingTask({
+        ...baseRequest,
+        operation: "extract-audio",
+        extractAudio: { audioCodec: "aac", bitrateKbps: 160 },
+      }).taskId;
+    });
+
+    await waitFor(() => {
+      const task = useVideoTaskStore.getState().tasks.find((item) => item.id === taskId);
+      expect(task?.status).toBe("completed");
+      expect(task?.outputFileIds?.length).toBeGreaterThan(0);
+    });
+
+    const derived = useFitsStore
+      .getState()
+      .files.find((file) => file.derivedFromId === "source-video");
+    expect(derived?.mediaKind).toBe("audio");
+    expect(derived?.sourceType).toBe("audio");
+  });
+
+  it("returns explicit error when engine is unavailable", async () => {
+    mockEngine.getCapabilities.mockResolvedValueOnce({
+      available: false,
+      encoderNames: [],
+      h264Encoders: [],
+      hevcEncoders: [],
+      fallbackVideoEncoder: "h264_mediacodec",
+    });
+    const { result } = renderHook(() => useVideoProcessing());
+
+    await waitFor(() => {
+      expect(result.current.isEngineAvailable).toBe(false);
+    });
+
+    const enqueueResult = result.current.enqueueProcessingTask(baseRequest);
+    expect(enqueueResult.taskId).toBeNull();
+    expect(enqueueResult.errorCode).toBe("ffmpeg_executor_unavailable");
   });
 });

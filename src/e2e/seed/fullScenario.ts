@@ -47,6 +47,27 @@ export const E2E_FILES: FitsMetadata[] = [
     exptime: 300,
     targetId: E2E_IDS.target,
     sessionId: E2E_IDS.session,
+    editorRecipe: {
+      version: 2,
+      savedAt: NOW - 80_000_000,
+      profile: "standard",
+      scientificNodes: [
+        {
+          id: "recipe-node-1",
+          operationId: "dbe",
+          enabled: true,
+          params: { samplesX: 12, samplesY: 8, sigma: 2.5 },
+        },
+      ],
+      colorNodes: [
+        {
+          id: "recipe-node-2",
+          operationId: "scnr",
+          enabled: true,
+          params: { method: "averageNeutral", amount: 0.8 },
+        },
+      ],
+    },
     location: {
       latitude: 34.0522,
       longitude: -118.2437,
@@ -72,6 +93,21 @@ export const E2E_FILES: FitsMetadata[] = [
     exptime: 240,
     targetId: E2E_IDS.target,
     sessionId: E2E_IDS.session,
+    editorRecipe: {
+      version: 1,
+      savedAt: NOW - 40_000_000,
+      profile: "legacy",
+      scientificNodes: [],
+      colorNodes: [],
+      nodes: [
+        {
+          id: "legacy-node-1",
+          operationId: "backgroundExtract",
+          enabled: true,
+          params: { gridSize: 8 },
+        },
+      ],
+    },
     location: {
       latitude: 35.6762,
       longitude: 139.6503,

@@ -9,7 +9,7 @@ import { BaseCloudProvider } from "../cloudProvider";
 import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
 import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR } from "../types";
+import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.WebDAVProvider;
 const SECURE_STORE_KEY = "backup_webdav_config";
@@ -18,6 +18,11 @@ export class WebDAVProvider extends BaseCloudProvider {
   readonly name = "webdav" as const;
   readonly displayName = "WebDAV";
   readonly icon = "server-outline";
+  readonly capabilities = {
+    supportsConditionalWrite: true,
+    supportsResumableUpload: false,
+    supportsContentHash: false,
+  } as const;
 
   private _serverUrl: string | null = null;
   private _username: string | null = null;
@@ -75,6 +80,7 @@ export class WebDAVProvider extends BaseCloudProvider {
   async ensureBackupDir(): Promise<void> {
     await this.createDirIfNotExists(`/${BACKUP_DIR}`);
     await this.createDirIfNotExists(`/${BACKUP_DIR}/${FITS_SUBDIR}`);
+    await this.createDirIfNotExists(`/${BACKUP_DIR}/${THUMBNAIL_SUBDIR}`);
   }
 
   async uploadFile(

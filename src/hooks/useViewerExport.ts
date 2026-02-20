@@ -6,10 +6,12 @@ import { useExport } from "./useExport";
 import { useHapticFeedback } from "./useHapticFeedback";
 import type { ExportFormat, FitsTargetOptions, TiffTargetOptions } from "../lib/fits/types";
 import type { ExportSourceContext } from "./useExport";
+import type { ExportRenderOptions } from "../lib/converter/exportDecorations";
 
 type ViewerExportOptions = {
   fits?: Partial<FitsTargetOptions>;
   tiff?: Partial<TiffTargetOptions>;
+  render?: ExportRenderOptions;
 };
 
 interface UseViewerExportParams {
@@ -33,7 +35,8 @@ export function useViewerExport({
 }: UseViewerExportParams) {
   const { t } = useI18n();
   const haptics = useHapticFeedback();
-  const { isExporting, exportImage, shareImage, saveImage, printImage, printToPdf } = useExport();
+  const { isExporting, exportImageDetailed, shareImage, saveImage, printImage, printToPdf } =
+    useExport();
 
   const handleExport = useCallback(
     async (quality: number, options?: ViewerExportOptions) => {
@@ -41,7 +44,7 @@ export function useViewerExport({
         Alert.alert(t("common.error"), t("viewer.noImageData"));
         return;
       }
-      const path = await exportImage({
+      const detailed = await exportImageDetailed({
         rgbaData,
         width,
         height,
@@ -50,18 +53,23 @@ export function useViewerExport({
         quality,
         fits: options?.fits,
         tiff: options?.tiff,
+        renderOptions: options?.render,
         source,
       });
-      if (path) {
+      if (detailed.path) {
         haptics.notify(Haptics.NotificationFeedbackType.Success);
-        Alert.alert(t("common.success"), t("viewer.exportSuccess"));
+        const fallbackMessage =
+          detailed.diagnostics.fallbackApplied && detailed.diagnostics.fallbackReasonMessageKey
+            ? `\n${t(detailed.diagnostics.fallbackReasonMessageKey)}`
+            : "";
+        Alert.alert(t("common.success"), `${t("viewer.exportSuccess")}${fallbackMessage}`);
       } else {
         haptics.notify(Haptics.NotificationFeedbackType.Error);
         Alert.alert(t("common.error"), t("viewer.exportFailed"));
       }
       onDone();
     },
-    [rgbaData, width, height, exportImage, filename, format, source, haptics, t, onDone],
+    [rgbaData, width, height, exportImageDetailed, filename, format, source, haptics, t, onDone],
   );
 
   const handleShare = useCallback(
@@ -80,6 +88,7 @@ export function useViewerExport({
           quality,
           fits: options?.fits,
           tiff: options?.tiff,
+          renderOptions: options?.render,
           source,
         });
       } catch {
@@ -105,6 +114,7 @@ export function useViewerExport({
         quality,
         fits: options?.fits,
         tiff: options?.tiff,
+        renderOptions: options?.render,
         source,
       });
       if (uri) {

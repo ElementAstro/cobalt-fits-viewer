@@ -53,11 +53,17 @@ function parseSplitSegments(input: string): Array<{ startMs: number; endMs: numb
     .filter(Boolean)
     .map((token) => {
       const [startRaw, endRaw] = token.split("-");
-      const startMs = Math.max(0, Math.round(Number(startRaw)));
-      const endMs = Math.max(startMs + 1, Math.round(Number(endRaw)));
+      const startMs = Math.round(Number(startRaw));
+      const endMs = Math.round(Number(endRaw));
       return { startMs, endMs };
     })
-    .filter((segment) => Number.isFinite(segment.startMs) && Number.isFinite(segment.endMs));
+    .filter(
+      (segment) =>
+        Number.isFinite(segment.startMs) &&
+        Number.isFinite(segment.endMs) &&
+        segment.startMs >= 0 &&
+        segment.endMs > segment.startMs,
+    );
 }
 
 export function VideoProcessingSheet({
@@ -83,6 +89,7 @@ export function VideoProcessingSheet({
   const [coverTimeMs, setCoverTimeMs] = useState("1000");
   const [removeAudio, setRemoveAudio] = useState(false);
   const [mergeInputUris, setMergeInputUris] = useState("");
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!file) return;
@@ -92,12 +99,28 @@ export function VideoProcessingSheet({
     setCoverTimeMs(String(Math.min(1000, duration)));
   }, [file]);
 
+  useEffect(() => {
+    if (
+      operationOption?.value &&
+      !["trim", "split", "compress", "transcode"].includes(operationOption.value)
+    ) {
+      setRemoveAudio(false);
+    }
+    setSubmitError(null);
+  }, [operationOption?.value]);
+
   const canSubmit = useMemo(() => Boolean(file), [file]);
   const operation: VideoProcessingTag = operationOption?.value ?? "trim";
   const targetPreset: "1080p" | "720p" | "custom" = targetPresetOption?.value ?? "1080p";
+  const canApplyRemoveAudio =
+    operation === "trim" ||
+    operation === "split" ||
+    operation === "compress" ||
+    operation === "transcode";
 
   const handleSubmit = () => {
     if (!file) return;
+    setSubmitError(null);
     const request: VideoProcessingRequest = {
       sourceId: file.id,
       sourceFilename: file.filename,
@@ -108,14 +131,25 @@ export function VideoProcessingSheet({
     };
 
     if (operation === "trim") {
+      const start = Math.round(Number(trimStartMs));
+      const end = Math.round(Number(trimEndMs));
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
+        setSubmitError("Trim range is invalid.");
+        return;
+      }
       request.trim = {
-        startMs: Math.max(0, Math.round(Number(trimStartMs) || 0)),
-        endMs: Math.max(1, Math.round(Number(trimEndMs) || 1)),
+        startMs: start,
+        endMs: end,
         reencode: true,
       };
     } else if (operation === "split") {
+      const segments = parseSplitSegments(splitSegments);
+      if (segments.length === 0) {
+        setSubmitError("Split segments are invalid.");
+        return;
+      }
       request.split = {
-        segments: parseSplitSegments(splitSegments),
+        segments,
       };
     } else if (operation === "compress") {
       request.compress = {
@@ -135,10 +169,14 @@ export function VideoProcessingSheet({
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean);
+      if (merged.length < 2) {
+        setSubmitError("Merge requires at least two input URIs.");
+        return;
+      }
       request.merge = {
-        inputUris: merged.length > 0 ? merged : [file.filepath],
+        inputUris: merged,
       };
-    } else if (operation === "mute" || removeAudio) {
+    } else if (operation === "mute") {
       request.operation = "mute";
     } else if (operation === "extract-audio") {
       request.extractAudio = {
@@ -146,9 +184,17 @@ export function VideoProcessingSheet({
         bitrateKbps: 192,
       };
     } else if (operation === "cover") {
+      const coverAtMs = Math.round(Number(coverTimeMs));
+      if (!Number.isFinite(coverAtMs) || coverAtMs < 0) {
+        setSubmitError("Cover frame time is invalid.");
+        return;
+      }
       request.cover = {
-        timeMs: Math.max(0, Math.round(Number(coverTimeMs) || 0)),
+        timeMs: coverAtMs,
       };
+    }
+    if (removeAudio && canApplyRemoveAudio) {
+      request.removeAudio = true;
     }
 
     onSubmit(request);
@@ -211,9 +257,14 @@ export function VideoProcessingSheet({
               ))}
             </RadioGroup>
 
-            <Switch isSelected={removeAudio} onSelectedChange={setRemoveAudio}>
+            <Switch
+              testID="remove-audio-switch"
+              isSelected={removeAudio}
+              onSelectedChange={setRemoveAudio}
+              isDisabled={!canApplyRemoveAudio}
+            >
               <Switch.Thumb />
-              <Text className="text-sm text-foreground">Remove audio track</Text>
+              <Text className="text-sm text-foreground">Remove audio in output</Text>
             </Switch>
 
             <Accordion selectionMode="multiple" variant="surface" defaultValue={["params"]}>
@@ -337,6 +388,7 @@ export function VideoProcessingSheet({
           </View>
 
           <View className="mt-4 flex-row justify-end gap-2">
+            {!!submitError && <Text className="mr-auto text-xs text-danger">{submitError}</Text>}
             <Button variant="outline" onPress={onClose}>
               <Button.Label>Cancel</Button.Label>
             </Button>

@@ -2,7 +2,13 @@
  * 云存储 Provider 统一抽象接口
  */
 
-import type { CloudProvider, CloudProviderConfig, BackupManifest, RemoteFile } from "./types";
+import type {
+  CloudProvider,
+  CloudProviderCapabilities,
+  CloudProviderConfig,
+  BackupManifest,
+  RemoteFile,
+} from "./types";
 
 /**
  * 所有云存储 Provider 需实现此接口
@@ -11,6 +17,7 @@ export interface ICloudProvider {
   readonly name: CloudProvider;
   readonly displayName: string;
   readonly icon: string;
+  readonly capabilities?: CloudProviderCapabilities;
 
   /**
    * 连接到云服务（认证）
@@ -103,6 +110,7 @@ export abstract class BaseCloudProvider implements ICloudProvider {
   abstract readonly name: CloudProvider;
   abstract readonly displayName: string;
   abstract readonly icon: string;
+  readonly capabilities?: CloudProviderCapabilities;
 
   protected _connected = false;
   protected _accessToken: string | null = null;

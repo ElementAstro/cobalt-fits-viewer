@@ -4,6 +4,12 @@
  */
 
 import { applyStretch } from "../converter/formatConverter";
+import {
+  applyColorBalanceRGBA,
+  applyColorCalibrationRGBA,
+  applySaturationRGBA,
+  applySCNRRGBA,
+} from "../processing/color";
 
 export interface ChannelData {
   pixels: Float32Array;
@@ -90,19 +96,7 @@ export function composeRGB(options: ComposeOptions): Uint8ClampedArray {
  * factor > 1 增加饱和度, < 1 减少饱和度
  */
 export function adjustSaturation(rgba: Uint8ClampedArray, factor: number): Uint8ClampedArray {
-  const result = new Uint8ClampedArray(rgba.length);
-  for (let i = 0; i < rgba.length; i += 4) {
-    const r = rgba[i] / 255;
-    const g = rgba[i + 1] / 255;
-    const b = rgba[i + 2] / 255;
-
-    const gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    result[i] = Math.round(Math.max(0, Math.min(1, gray + (r - gray) * factor)) * 255);
-    result[i + 1] = Math.round(Math.max(0, Math.min(1, gray + (g - gray) * factor)) * 255);
-    result[i + 2] = Math.round(Math.max(0, Math.min(1, gray + (b - gray) * factor)) * 255);
-    result[i + 3] = rgba[i + 3];
-  }
-  return result;
+  return applySaturationRGBA(rgba, factor - 1);
 }
 
 /**
@@ -114,14 +108,22 @@ export function adjustColorBalance(
   gGain: number,
   bGain: number,
 ): Uint8ClampedArray {
-  const result = new Uint8ClampedArray(rgba.length);
-  for (let i = 0; i < rgba.length; i += 4) {
-    result[i] = Math.min(255, Math.round(rgba[i] * rGain));
-    result[i + 1] = Math.min(255, Math.round(rgba[i + 1] * gGain));
-    result[i + 2] = Math.min(255, Math.round(rgba[i + 2] * bGain));
-    result[i + 3] = rgba[i + 3];
-  }
-  return result;
+  return applyColorBalanceRGBA(rgba, rGain, gGain, bGain);
+}
+
+export function applyColorCalibration(
+  rgba: Uint8ClampedArray,
+  percentile: number = 0.92,
+): Uint8ClampedArray {
+  return applyColorCalibrationRGBA(rgba, percentile);
+}
+
+export function applySCNR(
+  rgba: Uint8ClampedArray,
+  method: "averageNeutral" | "maximumNeutral" = "averageNeutral",
+  amount: number = 1,
+): Uint8ClampedArray {
+  return applySCNRRGBA(rgba, method, amount);
 }
 
 /**

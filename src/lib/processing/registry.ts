@@ -3,7 +3,9 @@ import type {
   ProcessingImageState,
   ProcessingOperationSchema,
   ProcessingParamSchema,
+  ProcessingRGBAState,
 } from "./types";
+import { applyColorOperation } from "./color";
 import {
   rotate90CW,
   rotate90CCW,
@@ -38,7 +40,7 @@ import {
   localContrastEnhancement,
   starReduction,
   deconvolutionAuto,
-  type ImageEditOperation,
+  type ScientificImageOperation,
 } from "../utils/imageOperations";
 
 function asNumber(params: Record<string, ProcessingParamValue>, key: string, fallback: number) {
@@ -112,7 +114,7 @@ function levelParams(): ProcessingParamSchema[] {
 
 function applyLegacyOperation(
   input: ProcessingImageState,
-  op: ImageEditOperation,
+  op: ScientificImageOperation,
 ): ProcessingImageState {
   const withPixels = (pixels: Float32Array): ProcessingImageState => ({ ...input, pixels });
 
@@ -248,7 +250,7 @@ const legacyOps: Array<{
   build: (
     params: Record<string, ProcessingParamValue>,
     input: ProcessingImageState,
-  ) => ImageEditOperation;
+  ) => ScientificImageOperation;
 }> = [
   {
     id: "rotate90cw",
@@ -918,21 +920,189 @@ const registry = new Map<ProcessingOperationId, ProcessingOperationSchema>();
 for (const entry of legacyOps) {
   registry.set(entry.id, {
     id: entry.id,
+    stage: "scientific",
     label: entry.label,
     category: entry.category,
     complexity: entry.complexity,
     supportsPreview: entry.supportsPreview,
     params: entry.params,
-    execute: (input, params) => applyLegacyOperation(input, entry.build(params, input)),
+    execute: (input, params) =>
+      applyLegacyOperation(
+        input as ProcessingImageState,
+        entry.build(params, input as ProcessingImageState),
+      ),
   });
 }
+
+type ColorRegistryOperationId = Extract<
+  ProcessingOperationId,
+  "scnr" | "colorCalibration" | "saturation" | "colorBalance"
+>;
+
+const colorOps: Array<{
+  id: ColorRegistryOperationId;
+  label: string;
+  category: ProcessingOperationSchema["category"];
+  complexity: ProcessingOperationSchema["complexity"];
+  supportsPreview: boolean;
+  params: ProcessingParamSchema[];
+}> = [
+  {
+    id: "scnr",
+    label: "SCNR",
+    category: "color",
+    complexity: "light",
+    supportsPreview: true,
+    params: [
+      {
+        key: "method",
+        label: "Method",
+        control: {
+          kind: "select",
+          options: [
+            { label: "Average Neutral", value: "averageNeutral" },
+            { label: "Maximum Neutral", value: "maximumNeutral" },
+          ],
+        },
+        defaultValue: "averageNeutral",
+      },
+      {
+        key: "amount",
+        label: "Amount",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 1,
+      },
+    ],
+  },
+  {
+    id: "colorCalibration",
+    label: "Color Calibration",
+    category: "color",
+    complexity: "light",
+    supportsPreview: true,
+    params: [
+      {
+        key: "percentile",
+        label: "White Reference Percentile",
+        control: { kind: "slider", min: 0.5, max: 0.99, step: 0.01 },
+        defaultValue: 0.92,
+      },
+    ],
+  },
+  {
+    id: "saturation",
+    label: "Saturation",
+    category: "color",
+    complexity: "light",
+    supportsPreview: true,
+    params: [
+      {
+        key: "amount",
+        label: "Amount",
+        control: { kind: "slider", min: -1, max: 2, step: 0.05 },
+        defaultValue: 0,
+      },
+    ],
+  },
+  {
+    id: "colorBalance",
+    label: "Color Balance",
+    category: "color",
+    complexity: "light",
+    supportsPreview: true,
+    params: [
+      {
+        key: "redGain",
+        label: "Red Gain",
+        control: { kind: "slider", min: 0, max: 4, step: 0.05 },
+        defaultValue: 1,
+      },
+      {
+        key: "greenGain",
+        label: "Green Gain",
+        control: { kind: "slider", min: 0, max: 4, step: 0.05 },
+        defaultValue: 1,
+      },
+      {
+        key: "blueGain",
+        label: "Blue Gain",
+        control: { kind: "slider", min: 0, max: 4, step: 0.05 },
+        defaultValue: 1,
+      },
+    ],
+  },
+];
+
+for (const entry of colorOps) {
+  registry.set(entry.id, {
+    id: entry.id,
+    stage: "color",
+    label: entry.label,
+    category: entry.category,
+    complexity: entry.complexity,
+    supportsPreview: entry.supportsPreview,
+    params: entry.params,
+    execute: (input, params) => applyColorOperation(input as ProcessingRGBAState, entry.id, params),
+  });
+}
+
+export const REQUIRED_PROCESSING_OPERATION_IDS: ProcessingOperationId[] = [
+  "rotate90cw",
+  "rotate90ccw",
+  "rotate180",
+  "flipH",
+  "flipV",
+  "invert",
+  "blur",
+  "sharpen",
+  "denoise",
+  "histogramEq",
+  "crop",
+  "brightness",
+  "contrast",
+  "gamma",
+  "levels",
+  "rotateArbitrary",
+  "backgroundExtract",
+  "mtf",
+  "starMask",
+  "binarize",
+  "rescale",
+  "clahe",
+  "curves",
+  "morphology",
+  "hdr",
+  "rangeMask",
+  "pixelMath",
+  "deconvolution",
+  "dbe",
+  "multiscaleDenoise",
+  "localContrast",
+  "starReduction",
+  "deconvolutionAuto",
+  "scnr",
+  "colorCalibration",
+  "saturation",
+  "colorBalance",
+];
+
+export function assertProcessingRegistryCoverage() {
+  const missing = REQUIRED_PROCESSING_OPERATION_IDS.filter((id) => !registry.has(id));
+  if (missing.length > 0) {
+    throw new Error(`Processing registry missing operations: ${missing.join(", ")}`);
+  }
+}
+
+assertProcessingRegistryCoverage();
 
 export function getProcessingOperation(operationId: ProcessingOperationId) {
   return registry.get(operationId);
 }
 
-export function listProcessingOperations() {
-  return Array.from(registry.values());
+export function listProcessingOperations(stage?: ProcessingOperationSchema["stage"]) {
+  const values = Array.from(registry.values());
+  if (!stage) return values;
+  return values.filter((item) => item.stage === stage);
 }
 
 export function createDefaultParams(operationId: ProcessingOperationId) {

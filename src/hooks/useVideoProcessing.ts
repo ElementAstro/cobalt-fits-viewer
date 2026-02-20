@@ -5,7 +5,11 @@ import { File } from "expo-file-system";
 import { useVideoTaskStore } from "../stores/useVideoTaskStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useFitsStore } from "../stores/useFitsStore";
-import { getVideoProcessingEngine, type VideoProcessingRequest } from "../lib/video/engine";
+import {
+  getVideoProcessingEngine,
+  type VideoProcessingCapabilities,
+  type VideoProcessingRequest,
+} from "../lib/video/engine";
 import { extractVideoMetadata } from "../lib/video/metadata";
 import { detectSupportedMediaFormat, toImageSourceFormat } from "../lib/import/fileFormat";
 import { generateFileId, importFile } from "../lib/utils/fileManager";
@@ -16,6 +20,27 @@ import type { FitsMetadata } from "../lib/fits/types";
 
 function deriveOutputEntries(taskOutput: string, extraOutputs?: string[]): string[] {
   return [taskOutput, ...(extraOutputs ?? [])];
+}
+
+interface EnqueueProcessingResult {
+  taskId: string | null;
+  errorCode?: string;
+  errorMessage?: string;
+}
+
+function parseEngineError(error: unknown): { message: string; code?: string } {
+  if (error instanceof Error) {
+    const code = /^(?:ffmpeg_|encoder_|video_processing_)[a-z0-9_.-]+$/i.test(error.message)
+      ? error.message
+      : undefined;
+    return {
+      message: error.message,
+      code,
+    };
+  }
+  return {
+    message: "video_processing_failed",
+  };
 }
 
 export function useVideoProcessing() {
@@ -39,14 +64,30 @@ export function useVideoProcessing() {
   const engine = useMemo(() => getVideoProcessingEngine(), []);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const [isEngineAvailable, setIsEngineAvailable] = useState(false);
+  const [engineCapabilities, setEngineCapabilities] = useState<VideoProcessingCapabilities | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
-    void engine.isAvailable().then((available) => {
-      if (!cancelled) {
-        setIsEngineAvailable(available);
-      }
-    });
+    void engine
+      .getCapabilities()
+      .then((capabilities) => {
+        if (cancelled) return;
+        setEngineCapabilities(capabilities);
+        setIsEngineAvailable(capabilities.available);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setEngineCapabilities({
+          available: false,
+          encoderNames: [],
+          h264Encoders: [],
+          hevcEncoders: [],
+          unavailableReason: "ffmpeg_capabilities_unavailable",
+        });
+        setIsEngineAvailable(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -60,7 +101,8 @@ export function useVideoProcessing() {
       const imported = importFile(outputUri, filename);
       const importedFile = new File(imported.uri);
       const format = detectSupportedMediaFormat(importedFile.name);
-      const sourceType = format?.sourceType ?? "video";
+      const sourceType =
+        request.operation === "extract-audio" ? "audio" : (format?.sourceType ?? "video");
       const fileId = generateFileId();
       const fileSize = importedFile.size ?? 0;
       const now = Date.now();
@@ -142,6 +184,53 @@ export function useVideoProcessing() {
         return fileId;
       }
 
+      if (sourceType === "audio") {
+        const frameClassified = classifyWithDetail(
+          undefined,
+          undefined,
+          importedFile.name,
+          frameClassificationConfig,
+        );
+        let audioMeta = {};
+        try {
+          audioMeta = await extractVideoMetadata(importedFile.uri);
+        } catch {
+          // best effort
+        }
+
+        const meta = audioMeta as {
+          durationMs?: number;
+          audioCodec?: string;
+          bitrateKbps?: number;
+          hasAudioTrack?: boolean;
+        };
+        const next: FitsMetadata = {
+          id: fileId,
+          filename: importedFile.name,
+          filepath: importedFile.uri,
+          fileSize,
+          importDate: now,
+          frameType: frameClassified.type,
+          frameTypeSource: frameClassified.source,
+          isFavorite: false,
+          tags: [],
+          albumIds: [],
+          sessionId: source?.sessionId,
+          location: source?.location,
+          sourceType: "audio",
+          sourceFormat: toImageSourceFormat(format),
+          mediaKind: "audio",
+          durationMs: meta.durationMs,
+          audioCodec: meta.audioCodec,
+          bitrateKbps: meta.bitrateKbps,
+          hasAudioTrack: meta.hasAudioTrack ?? true,
+          derivedFromId: source?.id,
+          processingTag: request.operation,
+        };
+        addFile(next);
+        return fileId;
+      }
+
       const buffer = await importedFile.arrayBuffer();
       const parsed = parseRasterFromBuffer(buffer);
       const rgba = new Uint8ClampedArray(
@@ -207,16 +296,17 @@ export function useVideoProcessing() {
           },
         });
         const outputEntries = deriveOutputEntries(result.outputUri, result.extraOutputUris);
+        const outputFileIds: string[] = [];
         for (const outputUri of outputEntries) {
-          await importOutputUri(task.request, outputUri);
+          outputFileIds.push(await importOutputUri(task.request, outputUri));
         }
-        markCompleted(taskId, outputEntries, result.logLines);
+        markCompleted(taskId, outputEntries, outputFileIds, result.logLines);
       } catch (error) {
         if (controller.signal.aborted) {
           markCancelled(taskId);
         } else {
-          const message = error instanceof Error ? error.message : "video_processing_failed";
-          markFailed(taskId, message);
+          const parsed = parseEngineError(error);
+          markFailed(taskId, parsed.message, [], parsed.code);
         }
       } finally {
         abortControllersRef.current.delete(taskId);
@@ -240,12 +330,35 @@ export function useVideoProcessing() {
     }
   }, [concurrency, isEngineAvailable, runTask, tasks, videoProcessingEnabled]);
 
+  useEffect(() => {
+    if (!videoProcessingEnabled || isEngineAvailable) return;
+    const errorCode = engineCapabilities?.unavailableReason ?? "ffmpeg_executor_unavailable";
+    for (const task of tasks) {
+      if (task.status !== "pending") continue;
+      markFailed(task.id, errorCode, [], errorCode);
+    }
+  }, [engineCapabilities, isEngineAvailable, markFailed, tasks, videoProcessingEnabled]);
+
   const enqueueProcessingTask = useCallback(
-    (request: VideoProcessingRequest): string | null => {
-      if (!videoProcessingEnabled) return null;
-      return enqueueTask(request);
+    (request: VideoProcessingRequest): EnqueueProcessingResult => {
+      if (!videoProcessingEnabled) {
+        return {
+          taskId: null,
+          errorCode: "video_processing_disabled",
+          errorMessage: "Video processing is disabled by settings.",
+        };
+      }
+      if (!isEngineAvailable) {
+        const errorCode = engineCapabilities?.unavailableReason ?? "ffmpeg_executor_unavailable";
+        return {
+          taskId: null,
+          errorCode,
+          errorMessage: "Local FFmpeg engine is unavailable in this build.",
+        };
+      }
+      return { taskId: enqueueTask(request) };
     },
-    [enqueueTask, videoProcessingEnabled],
+    [engineCapabilities, enqueueTask, isEngineAvailable, videoProcessingEnabled],
   );
 
   const cancelTask = useCallback(
@@ -264,6 +377,7 @@ export function useVideoProcessing() {
   return {
     tasks,
     isEngineAvailable,
+    engineCapabilities,
     enqueueProcessingTask,
     retryTask,
     removeTask,

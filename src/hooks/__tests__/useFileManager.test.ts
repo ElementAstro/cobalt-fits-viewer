@@ -32,6 +32,10 @@ jest.mock("expo-video", () => ({
   })),
 }));
 
+jest.mock("fitsjs-ng", () => ({
+  convertHiPSToFITS: jest.fn(),
+}));
+
 jest.mock("expo-clipboard", () => ({
   hasImageAsync: jest.fn().mockResolvedValue(false),
   getImageAsync: jest.fn().mockResolvedValue(null),
@@ -171,7 +175,7 @@ jest.mock("../../lib/gallery/thumbnailCache", () => ({
 }));
 
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBufferAuto: jest.fn(),
+  loadScientificFitsFromBuffer: jest.fn(),
   extractMetadata: jest.fn(),
   getImagePixels: jest.fn(),
   getImageDimensions: jest.fn(),
@@ -259,8 +263,11 @@ describe("useFileManager", () => {
     zip: jest.Mock;
   };
   const parserMock = require("../../lib/fits/parser") as {
-    loadFitsFromBufferAuto: jest.Mock;
+    loadScientificFitsFromBuffer: jest.Mock;
     extractMetadata: jest.Mock;
+  };
+  const fitsJsMock = require("fitsjs-ng") as {
+    convertHiPSToFITS: jest.Mock;
   };
   const fileManagerMock = require("../../lib/utils/fileManager") as {
     importFile: jest.Mock;
@@ -319,7 +326,8 @@ describe("useFileManager", () => {
       filepath: "",
       filename: "",
     });
-    parserMock.loadFitsFromBufferAuto.mockReturnValue({ fits: true });
+    parserMock.loadScientificFitsFromBuffer.mockResolvedValue({ fits: true });
+    fitsJsMock.convertHiPSToFITS.mockResolvedValue(new Uint8Array([1, 2, 3, 4]).buffer);
     parserMock.extractMetadata.mockReturnValue({
       frameType: "darkflat",
       frameTypeSource: "header",
@@ -837,6 +845,46 @@ describe("useFileManager", () => {
       expect.objectContaining({
         decodeStatus: "failed",
         decodeError: "Unsupported TIFF photometric: 6",
+      }),
+    );
+  });
+
+  it("returns validation error for HiPS URL missing ra/dec/fov", async () => {
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.importFromUrl("https://example.com/hips?hips=1&dec=22.01&fov=1.2");
+    });
+
+    expect(result.current.importError).toContain("requires ra");
+    expect(useFitsStore.getState().files).toHaveLength(0);
+  });
+
+  it("imports HiPS cutout URL and tags source format as hips", async () => {
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.importFromUrl(
+        "https://example.com/hips?hips=1&source=https%3A%2F%2Fhips.example.org%2Fsurvey&ra=83.63&dec=22.01&fov=1.2&width=320&height=240",
+      );
+    });
+
+    expect(fitsJsMock.convertHiPSToFITS).toHaveBeenCalledWith(
+      "https://hips.example.org/survey",
+      expect.objectContaining({
+        cutout: expect.objectContaining({
+          ra: 83.63,
+          dec: 22.01,
+          fov: 1.2,
+          width: 320,
+          height: 240,
+        }),
+      }),
+    );
+    const [file] = useFitsStore.getState().files;
+    expect(file).toEqual(
+      expect.objectContaining({
+        sourceType: "fits",
+        sourceFormat: "hips",
+        mediaKind: "image",
       }),
     );
   });

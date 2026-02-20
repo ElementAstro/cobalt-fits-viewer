@@ -5,7 +5,7 @@
 
 import type { ImageSourceFormat } from "../fits/types";
 
-export type ImageSourceType = "fits" | "raster" | "video";
+export type ImageSourceType = "fits" | "raster" | "video" | "audio";
 
 export type SupportedMediaFormatId =
   | "fits"
@@ -14,6 +14,8 @@ export type SupportedMediaFormatId =
   | "fz"
   | "fits_gz"
   | "fit_gz"
+  | "xisf"
+  | "ser"
   | "png"
   | "jpeg"
   | "webp"
@@ -28,11 +30,15 @@ export type SupportedMediaFormatId =
   | "webm"
   | "mkv"
   | "avi"
-  | "3gp";
+  | "3gp"
+  | "mp3"
+  | "aac"
+  | "m4a"
+  | "wav";
 
 export type SupportedImageFormatId = Exclude<
   SupportedMediaFormatId,
-  "mp4" | "mov" | "m4v" | "webm" | "mkv" | "avi" | "3gp"
+  "mp4" | "mov" | "m4v" | "webm" | "mkv" | "avi" | "3gp" | "mp3" | "aac" | "m4a" | "wav"
 >;
 
 export interface SupportedMediaFormat {
@@ -52,6 +58,8 @@ const SUPPORTED_FORMATS: SupportedMediaFormat[] = [
   { id: "fz", sourceType: "fits", label: "FZ", extensions: [".fz"] },
   { id: "fits_gz", sourceType: "fits", label: "FITS.GZ", extensions: [".fits.gz"] },
   { id: "fit_gz", sourceType: "fits", label: "FIT.GZ", extensions: [".fit.gz"] },
+  { id: "xisf", sourceType: "fits", label: "XISF", extensions: [".xisf"] },
+  { id: "ser", sourceType: "fits", label: "SER", extensions: [".ser"] },
   { id: "png", sourceType: "raster", label: "PNG", extensions: [".png"] },
   {
     id: "jpeg",
@@ -72,6 +80,10 @@ const SUPPORTED_FORMATS: SupportedMediaFormat[] = [
   { id: "mkv", sourceType: "video", label: "MKV", extensions: [".mkv"] },
   { id: "avi", sourceType: "video", label: "AVI", extensions: [".avi"] },
   { id: "3gp", sourceType: "video", label: "3GP", extensions: [".3gp"] },
+  { id: "mp3", sourceType: "audio", label: "MP3", extensions: [".mp3"] },
+  { id: "aac", sourceType: "audio", label: "AAC", extensions: [".aac"] },
+  { id: "m4a", sourceType: "audio", label: "M4A", extensions: [".m4a"] },
+  { id: "wav", sourceType: "audio", label: "WAV", extensions: [".wav"] },
 ];
 
 const FORMAT_LOOKUP = new Map<string, SupportedMediaFormat>();
@@ -103,6 +115,12 @@ const MIME_LOOKUP = new Map<string, SupportedMediaFormatId>([
   ["application/fits", "fits"],
   ["image/fits", "fits"],
   ["application/x-fits", "fits"],
+  ["application/xisf", "xisf"],
+  ["application/x-xisf", "xisf"],
+  ["image/xisf", "xisf"],
+  ["application/ser", "ser"],
+  ["application/x-ser", "ser"],
+  ["video/x-ser", "ser"],
   ["video/mp4", "mp4"],
   ["video/quicktime", "mov"],
   ["video/x-m4v", "m4v"],
@@ -110,6 +128,16 @@ const MIME_LOOKUP = new Map<string, SupportedMediaFormatId>([
   ["video/x-matroska", "mkv"],
   ["video/x-msvideo", "avi"],
   ["video/3gpp", "3gp"],
+  ["audio/mpeg", "mp3"],
+  ["audio/mp3", "mp3"],
+  ["audio/aac", "aac"],
+  ["audio/x-aac", "aac"],
+  ["audio/mp4", "m4a"],
+  ["audio/x-m4a", "m4a"],
+  ["audio/wav", "wav"],
+  ["audio/x-wav", "wav"],
+  ["audio/wave", "wav"],
+  ["audio/vnd.wave", "wav"],
 ]);
 
 export interface SupportedMediaFormatDetectionInput {
@@ -268,6 +296,9 @@ function detectIsoBmff(bytes: Uint8Array): SupportedMediaFormat | null {
   if (brands.includes("m4v")) {
     return FORMAT_ID_LOOKUP.get("m4v") ?? null;
   }
+  if (brands.includes("m4a")) {
+    return FORMAT_ID_LOOKUP.get("m4a") ?? null;
+  }
   if (brands.includes("3gp") || brands.includes("3g2")) {
     return FORMAT_ID_LOOKUP.get("3gp") ?? null;
   }
@@ -317,6 +348,10 @@ export function detectSupportedMediaFormatByContent(
   if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "AVI ") {
     return FORMAT_ID_LOOKUP.get("avi") ?? null;
   }
+  // WAV (RIFF....WAVE)
+  if (ascii(bytes, 0, 4) === "RIFF" && ascii(bytes, 8, 4) === "WAVE") {
+    return FORMAT_ID_LOOKUP.get("wav") ?? null;
+  }
 
   // TIFF
   if (
@@ -336,6 +371,29 @@ export function detectSupportedMediaFormatByContent(
   // FITS (starts with "SIMPLE  =")
   if (ascii(bytes, 0, 9) === "SIMPLE  =") {
     return FORMAT_ID_LOOKUP.get("fits") ?? null;
+  }
+  // XISF (signature "XISF0100")
+  if (ascii(bytes, 0, 8) === "XISF0100") {
+    return FORMAT_ID_LOOKUP.get("xisf") ?? null;
+  }
+  // SER (signature "LUCAM-RECORDER")
+  if (ascii(bytes, 0, 14) === "LUCAM-RECORDER") {
+    return FORMAT_ID_LOOKUP.get("ser") ?? null;
+  }
+  // MP3 (ID3 header)
+  if (ascii(bytes, 0, 3) === "ID3") {
+    return FORMAT_ID_LOOKUP.get("mp3") ?? null;
+  }
+  // AAC (ADTS syncword)
+  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xf0) === 0xf0) {
+    const layerBits = bytes[1] & 0x06;
+    if (layerBits === 0) {
+      return FORMAT_ID_LOOKUP.get("aac") ?? null;
+    }
+  }
+  // MP3 frame sync fallback
+  if (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) {
+    return FORMAT_ID_LOOKUP.get("mp3") ?? null;
   }
 
   // GZIP (heuristic: commonly used for fits.gz)
@@ -386,9 +444,19 @@ export function isFitsFamilyFilename(filename: string): boolean {
   return format?.sourceType === "fits";
 }
 
+export function isDistributedXisfFilename(filename: string): boolean {
+  const normalized = normalizeFilename(filename);
+  return normalized.endsWith(".xish") || normalized.endsWith(".xisb");
+}
+
 export function isVideoFilename(filename: string): boolean {
   const format = detectSupportedMediaFormat(filename);
   return format?.sourceType === "video";
+}
+
+export function isAudioFilename(filename: string): boolean {
+  const format = detectSupportedMediaFormat(filename);
+  return format?.sourceType === "audio";
 }
 
 const FORMAT_TO_SOURCE_FORMAT: Record<
@@ -401,6 +469,8 @@ const FORMAT_TO_SOURCE_FORMAT: Record<
   fz: "fz",
   fits_gz: "fits.gz",
   fit_gz: "fit.gz",
+  xisf: "xisf",
+  ser: "ser",
   png: "png",
   jpeg: "jpeg",
   webp: "webp",
@@ -416,6 +486,10 @@ const FORMAT_TO_SOURCE_FORMAT: Record<
   mkv: "mkv",
   avi: "avi",
   "3gp": "3gp",
+  mp3: "mp3",
+  aac: "aac",
+  m4a: "m4a",
+  wav: "wav",
 };
 
 export function toImageSourceFormat(

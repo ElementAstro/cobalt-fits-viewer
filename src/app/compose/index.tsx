@@ -169,6 +169,16 @@ export default function ComposeScreen() {
     composer.compose();
   }, [composer, t]);
 
+  const updateColorProcessing = useCallback(
+    (patch: Partial<typeof composer.colorProcessing>) => {
+      composer.setColorProcessing({
+        ...composer.colorProcessing,
+        ...patch,
+      });
+    },
+    [composer],
+  );
+
   return (
     <ScrollView
       testID="e2e-screen-compose__index"
@@ -182,6 +192,9 @@ export default function ComposeScreen() {
       <View className="flex-row items-center gap-3 mb-4">
         <Button size="sm" variant="outline" onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={16} color={mutedColor} />
+        </Button>
+        <Button size="sm" variant="outline" onPress={() => router.push("/compose/advanced")}>
+          <Ionicons name="construct-outline" size={16} color={mutedColor} />
         </Button>
         <View className="flex-1">
           <Text className="text-lg font-bold text-foreground">{t("editor.compose")}</Text>
@@ -486,6 +499,92 @@ export default function ComposeScreen() {
       )}
 
       {/* Compose Button */}
+      <Separator className="mb-3" />
+      <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+        {t("editor.color") ?? "Color"}
+      </Text>
+      <View className="mb-3 gap-2">
+        <SimpleSlider
+          label="SCNR Amount"
+          value={composer.colorProcessing.scnrAmount}
+          min={0}
+          max={1}
+          step={0.05}
+          onValueChange={(v) => updateColorProcessing({ scnrAmount: v })}
+        />
+        <View className="flex-row gap-2">
+          <Button
+            size="sm"
+            variant={
+              composer.colorProcessing.scnrMethod === "averageNeutral" ? "primary" : "outline"
+            }
+            onPress={() => updateColorProcessing({ scnrMethod: "averageNeutral" })}
+          >
+            <Button.Label className="text-[9px]">Average</Button.Label>
+          </Button>
+          <Button
+            size="sm"
+            variant={
+              composer.colorProcessing.scnrMethod === "maximumNeutral" ? "primary" : "outline"
+            }
+            onPress={() => updateColorProcessing({ scnrMethod: "maximumNeutral" })}
+          >
+            <Button.Label className="text-[9px]">Maximum</Button.Label>
+          </Button>
+        </View>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-xs text-muted">Color Calibration</Text>
+          <Switch
+            isSelected={composer.colorProcessing.enableColorCalibration}
+            onSelectedChange={(v) => updateColorProcessing({ enableColorCalibration: v })}
+          >
+            <Switch.Thumb />
+          </Switch>
+        </View>
+        {composer.colorProcessing.enableColorCalibration && (
+          <SimpleSlider
+            label="Calibration Percentile"
+            value={composer.colorProcessing.colorCalibrationPercentile}
+            min={0.5}
+            max={0.99}
+            step={0.01}
+            onValueChange={(v) => updateColorProcessing({ colorCalibrationPercentile: v })}
+          />
+        )}
+        <SimpleSlider
+          label="Saturation"
+          value={composer.colorProcessing.saturationAmount}
+          min={-1}
+          max={2}
+          step={0.05}
+          onValueChange={(v) => updateColorProcessing({ saturationAmount: v })}
+        />
+        <SimpleSlider
+          label="Red Gain"
+          value={composer.colorProcessing.redGain}
+          min={0}
+          max={4}
+          step={0.05}
+          onValueChange={(v) => updateColorProcessing({ redGain: v })}
+        />
+        <SimpleSlider
+          label="Green Gain"
+          value={composer.colorProcessing.greenGain}
+          min={0}
+          max={4}
+          step={0.05}
+          onValueChange={(v) => updateColorProcessing({ greenGain: v })}
+        />
+        <SimpleSlider
+          label="Blue Gain"
+          value={composer.colorProcessing.blueGain}
+          min={0}
+          max={4}
+          step={0.05}
+          onValueChange={(v) => updateColorProcessing({ blueGain: v })}
+        />
+      </View>
+
       <Button
         testID="e2e-action-compose__index-compose"
         variant="primary"

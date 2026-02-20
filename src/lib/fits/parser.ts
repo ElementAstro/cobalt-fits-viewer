@@ -3,10 +3,23 @@
  * 提供统一的 FITS 文件加载、解析和元数据提取接口
  */
 
-import { FITS, Image, BinaryTable, Table, CompressedImage } from "fitsjs-ng";
+import {
+  FITS,
+  Image,
+  BinaryTable,
+  Table,
+  CompressedImage,
+  convertXisfToFits,
+  convertSerToFits,
+} from "fitsjs-ng";
 import type { FitsMetadata, FrameClassificationConfig, HeaderKeyword, HDUDataType } from "./types";
 import { classifyWithDetail } from "../gallery/frameClassifier";
 import { gunzipFitsBytes, isGzipFitsBytes } from "./compression";
+import {
+  detectPreferredSupportedImageFormat,
+  isDistributedXisfFilename,
+  type SupportedMediaFormat,
+} from "../import/fileFormat";
 
 // ===== FITS 文件加载 =====
 
@@ -28,6 +41,100 @@ export function loadFitsFromBufferAuto(buffer: ArrayBuffer): FITS {
   const inflated = gunzipFitsBytes(bytes);
   const normalized = new Uint8Array(inflated).slice().buffer;
   return loadFitsFromBuffer(normalized);
+}
+
+export interface LoadScientificFitsOptions {
+  filename?: string;
+  mimeType?: string | null;
+  detectedFormat?: SupportedMediaFormat | null;
+}
+
+function normalizeXisfReadError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error ?? "unknown error");
+  const lowered = message.toLowerCase();
+  if (lowered.includes("signature")) {
+    return new Error(
+      `XISF signature validation failed. Please verify the file integrity or export ` +
+        `an unsigned/verified monolithic .xisf. Raw error: ${message}`,
+    );
+  }
+  if (lowered.includes(".xish") || lowered.includes(".xisb")) {
+    return new Error(
+      `Distributed XISF (.xish + .xisb) is not supported in this viewer. ` +
+        `Please import a monolithic .xisf file. Raw error: ${message}`,
+    );
+  }
+  return new Error(`Failed to decode XISF file: ${message}`);
+}
+
+function normalizeSerReadError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error ?? "unknown error");
+  const lowered = message.toLowerCase();
+  if (
+    lowered.includes("invalid ser") ||
+    lowered.includes("unsupported ser") ||
+    lowered.includes("pixel depth") ||
+    lowered.includes("color id")
+  ) {
+    return new Error(`Unsupported or invalid SER file. Raw error: ${message}`);
+  }
+  return new Error(`Failed to decode SER file: ${message}`);
+}
+
+/**
+ * 从科学图像格式自动加载为 FITS（支持 FITS/FITS.GZ、XISF、SER）
+ */
+export async function loadScientificFitsFromBuffer(
+  buffer: ArrayBuffer,
+  options: LoadScientificFitsOptions = {},
+): Promise<FITS> {
+  const detectedFormat =
+    options.detectedFormat ??
+    detectPreferredSupportedImageFormat({
+      filename: options.filename,
+      mimeType: options.mimeType,
+      payload: buffer,
+    });
+
+  if (!detectedFormat) {
+    if (options.filename && isDistributedXisfFilename(options.filename)) {
+      throw new Error(
+        "Distributed XISF (.xish + .xisb) is not supported. Please import a monolithic .xisf file.",
+      );
+    }
+    throw new Error("Unsupported scientific image format");
+  }
+
+  if (detectedFormat.id === "xisf") {
+    try {
+      const fitsBuffer = await convertXisfToFits(buffer, {
+        strictValidation: true,
+        includeXisfMetaExtension: true,
+      });
+      return loadFitsFromBuffer(fitsBuffer);
+    } catch (error) {
+      throw normalizeXisfReadError(error);
+    }
+  }
+
+  if (detectedFormat.id === "ser") {
+    try {
+      const fitsBuffer = await convertSerToFits(buffer, {
+        layout: "cube",
+        includeTimestampExtension: true,
+        strictValidation: true,
+      });
+      return loadFitsFromBuffer(fitsBuffer);
+    } catch (error) {
+      throw normalizeSerReadError(error);
+    }
+  }
+
+  if (detectedFormat.sourceType === "fits") {
+    return loadFitsFromBufferAuto(buffer);
+  }
+
+  throw new Error(`Unsupported scientific image format: ${detectedFormat.id}`);
 }
 
 /**

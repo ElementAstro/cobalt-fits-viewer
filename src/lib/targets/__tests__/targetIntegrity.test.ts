@@ -127,10 +127,71 @@ describe("targetIntegrity", () => {
     expect(patch.valid).toBe(true);
   });
 
+  it("uses file.sessionId as source of truth and rewrites session imageIds", () => {
+    const patch = reconcileAll({
+      targets: [makeTarget({ id: "t1", imageIds: ["f1"] })],
+      files: [makeFile({ id: "f1", targetId: "t1", sessionId: "s2" })],
+      sessions: [
+        makeSession({ id: "s1", imageIds: ["f1"], startTime: 10, endTime: 20 }),
+        makeSession({ id: "s2", imageIds: [], startTime: 30, endTime: 40 }),
+      ],
+    });
+
+    expect(patch.files[0].sessionId).toBe("s2");
+    expect(patch.sessions.find((session) => session.id === "s1")?.imageIds).toEqual([]);
+    expect(patch.sessions.find((session) => session.id === "s2")?.imageIds).toEqual(["f1"]);
+    expect(patch.report.fixedSessionLinks).toBeGreaterThan(0);
+  });
+
+  it("backfills file.sessionId from session imageIds and resolves conflicts by latest startTime", () => {
+    const patch = reconcileAll({
+      targets: [makeTarget({ id: "t1", imageIds: ["f1", "f2"] })],
+      files: [
+        makeFile({ id: "f1", targetId: "t1", sessionId: undefined }),
+        makeFile({ id: "f2", targetId: "t1", sessionId: undefined }),
+      ],
+      sessions: [
+        makeSession({ id: "s-old", imageIds: ["f1", "f2"], startTime: 100, endTime: 200 }),
+        makeSession({ id: "s-new", imageIds: ["f2"], startTime: 300, endTime: 400 }),
+      ],
+    });
+
+    expect(patch.files.find((file) => file.id === "f1")?.sessionId).toBe("s-old");
+    expect(patch.files.find((file) => file.id === "f2")?.sessionId).toBe("s-new");
+    expect(patch.sessions.find((session) => session.id === "s-old")?.imageIds).toEqual(["f1"]);
+    expect(patch.sessions.find((session) => session.id === "s-new")?.imageIds).toEqual(["f2"]);
+  });
+
+  it("relinks log entries to file sessionId when available", () => {
+    const patch = reconcileAll({
+      targets: [makeTarget({ id: "t1", imageIds: ["f1"] })],
+      files: [makeFile({ id: "f1", targetId: "t1", sessionId: "s2" })],
+      sessions: [
+        makeSession({ id: "s1", imageIds: [], startTime: 100, endTime: 200 }),
+        makeSession({ id: "s2", imageIds: ["f1"], startTime: 300, endTime: 400 }),
+      ],
+      logEntries: [
+        {
+          id: "log-1",
+          sessionId: "s1",
+          imageId: "f1",
+          dateTime: "2026-01-01T01:00:00.000Z",
+          object: "M31",
+          filter: "L",
+          exptime: 300,
+        },
+      ],
+    });
+
+    expect(patch.logEntries).toHaveLength(1);
+    expect(patch.logEntries[0].sessionId).toBe("s2");
+  });
+
   it("validateTargetIntegrity reports graph mismatches", () => {
     const invalid = validateTargetIntegrity({
       targets: [makeTarget({ id: "t1", imageIds: ["f1"] })],
-      files: [makeFile({ id: "f1", targetId: "other" })],
+      files: [makeFile({ id: "f1", targetId: "other", sessionId: "s2" })],
+      sessions: [makeSession({ id: "s1", imageIds: ["f1"] })],
     });
     expect(invalid.valid).toBe(false);
     expect(invalid.errors.length).toBeGreaterThan(0);

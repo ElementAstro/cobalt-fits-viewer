@@ -11,6 +11,7 @@ import { useI18n } from "../../i18n/useI18n";
 import { formatBytes } from "../../lib/utils/format";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
+import { isMediaWorkspaceFile } from "../../lib/media/routing";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 interface QuickLookModalProps {
@@ -34,6 +35,8 @@ export function QuickLookModal({
     [file],
   );
   const isVideo = file?.mediaKind === "video" || file?.sourceType === "video";
+  const isAudio = file?.mediaKind === "audio" || file?.sourceType === "audio";
+  const isMedia = file ? isMediaWorkspaceFile(file) : false;
   const player = useVideoPlayer(isVideo && file ? { uri: file.filepath } : null, (instance) => {
     instance.muted = true;
     instance.loop = true;
@@ -71,6 +74,13 @@ export function QuickLookModal({
                 allowsPictureInPicture={false}
               />
             </View>
+          ) : isAudio ? (
+            <View className="mt-3 h-48 rounded-lg bg-black/70 items-center justify-center">
+              <Ionicons name="musical-notes-outline" size={48} color="#d0d0d0" />
+              <Text className="mt-2 text-xs text-muted">
+                {formatVideoDuration(file.durationMs)}
+              </Text>
+            </View>
           ) : thumbnailUri ? (
             <View className="mt-3 h-48 rounded-lg overflow-hidden bg-black items-center justify-center">
               <Image
@@ -101,12 +111,21 @@ export function QuickLookModal({
                 />
               </>
             )}
+            {isAudio && (
+              <>
+                <InfoRow
+                  label={t("common.duration")}
+                  value={formatVideoDuration(file.durationMs)}
+                />
+                {!!file.audioCodec && <InfoRow label="Audio codec" value={file.audioCodec} />}
+              </>
+            )}
             {file.object && <InfoRow label={t("targets.object")} value={file.object} />}
             {file.filter && <InfoRow label={t("targets.filter")} value={file.filter} />}
-            {!isVideo && file.exptime != null && (
+            {!isMedia && file.exptime != null && (
               <InfoRow label={t("targets.exposure")} value={`${file.exptime}s`} />
             )}
-            {!isVideo && file.naxis1 != null && file.naxis2 != null && (
+            {!isMedia && file.naxis1 != null && file.naxis2 != null && (
               <InfoRow label={t("viewer.dimensions")} value={`${file.naxis1} × ${file.naxis2}`} />
             )}
           </View>
@@ -118,7 +137,7 @@ export function QuickLookModal({
             <Button variant="outline" size="sm" onPress={onClose}>
               <Button.Label>{t("common.cancel")}</Button.Label>
             </Button>
-            {!isVideo && (
+            {!isMedia && (
               <Button
                 variant="outline"
                 size="sm"

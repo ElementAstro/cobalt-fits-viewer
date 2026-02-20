@@ -3,8 +3,18 @@
  * FITS → PNG/JPEG/WebP/TIFF/BMP 及反向转换
  */
 
-import type { ConvertOptions, StretchType, ColormapType, ViewerCurvePreset } from "../fits/types";
+import type {
+  ColormapType,
+  ConvertOptions,
+  ProcessingAlgorithmProfile,
+  StretchType,
+  ViewerCurvePreset,
+} from "../fits/types";
 import { computeZScale, computePercentile } from "../utils/pixelMath";
+import {
+  MATPLOTLIB_LISTED_COLORMAPS,
+  type ListedMatplotlibColormapName,
+} from "./mplListedColormaps";
 
 // ===== 像素拉伸算法 =====
 
@@ -142,25 +152,36 @@ function applyViewerTone(
 // ===== 色彩映射 =====
 
 const LUT_SIZE = 4096;
-const lutCache = new Map<ColormapType, Uint8Array>();
+const lutCache = new Map<string, Uint8Array>();
+const MATPLOTLIB_LISTED_COLORMAP_SET = new Set<ListedMatplotlibColormapName>([
+  "viridis",
+  "plasma",
+  "magma",
+  "inferno",
+  "cividis",
+]);
 
 /**
  * 构建或获取预计算 LUT（4096 档位，每档 3 字节 RGB）
  * 比原来的 256 档位精度提升 16 倍，消除色带效应
  */
-function getColormapLUT(colormap: ColormapType): Uint8Array {
-  let lut = lutCache.get(colormap);
+function getColormapLUT(
+  colormap: ColormapType,
+  profile: ProcessingAlgorithmProfile = "standard",
+): Uint8Array {
+  const cacheKey = `${profile}:${colormap}`;
+  let lut = lutCache.get(cacheKey);
   if (lut) return lut;
 
   lut = new Uint8Array(LUT_SIZE * 3);
   for (let i = 0; i < LUT_SIZE; i++) {
     const v = i / (LUT_SIZE - 1);
-    const [r, g, b] = colormapLookup(v, colormap);
+    const [r, g, b] = colormapLookup(v, colormap, profile);
     lut[i * 3] = r;
     lut[i * 3 + 1] = g;
     lut[i * 3 + 2] = b;
   }
-  lutCache.set(colormap, lut);
+  lutCache.set(cacheKey, lut);
   return lut;
 }
 
@@ -174,9 +195,10 @@ export function applyColormap(
   colormap: ColormapType,
   width: number,
   height: number,
+  profile: ProcessingAlgorithmProfile = "standard",
 ): Uint8ClampedArray {
   const rgba = new Uint8ClampedArray(width * height * 4);
-  const lut = getColormapLUT(colormap);
+  const lut = getColormapLUT(colormap, profile);
   const lutMax = LUT_SIZE - 1;
 
   for (let i = 0; i < normalized.length; i++) {
@@ -195,7 +217,18 @@ export function applyColormap(
 /**
  * 色彩映射查找表
  */
-function colormapLookup(v: number, colormap: ColormapType): [number, number, number] {
+function colormapLookup(
+  v: number,
+  colormap: ColormapType,
+  profile: ProcessingAlgorithmProfile,
+): [number, number, number] {
+  if (
+    profile === "standard" &&
+    MATPLOTLIB_LISTED_COLORMAP_SET.has(colormap as ListedMatplotlibColormapName)
+  ) {
+    return sampleListedColormap(colormap as ListedMatplotlibColormapName, v);
+  }
+
   const byte = Math.round(v * 255);
 
   switch (colormap) {
@@ -234,6 +267,26 @@ function colormapLookup(v: number, colormap: ColormapType): [number, number, num
     default:
       return [byte, byte, byte];
   }
+}
+
+function sampleListedColormap(
+  colormap: ListedMatplotlibColormapName,
+  v: number,
+): [number, number, number] {
+  const table = MATPLOTLIB_LISTED_COLORMAPS[colormap];
+  const points = table.length / 3;
+  const clamped = Math.max(0, Math.min(1, v));
+  const index = clamped * (points - 1);
+  const i0 = Math.floor(index);
+  const i1 = Math.min(points - 1, i0 + 1);
+  const t = index - i0;
+  const o0 = i0 * 3;
+  const o1 = i1 * 3;
+
+  const r = Math.round(table[o0] * (1 - t) + table[o1] * t);
+  const g = Math.round(table[o0 + 1] * (1 - t) + table[o1 + 1] * t);
+  const b = Math.round(table[o0 + 2] * (1 - t) + table[o1 + 2] * t);
+  return [r, g, b];
 }
 
 function heatmap(v: number): [number, number, number] {
@@ -397,18 +450,24 @@ function hslToRgb(h: number, s: number, l: number): [number, number, number] {
 /**
  * 将 FITS 像素数据转换为 RGBA 图像数据
  */
+type RenderConvertOptions = Pick<
+  ConvertOptions,
+  "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma"
+> & {
+  outputBlack?: number;
+  outputWhite?: number;
+  brightness?: number;
+  contrast?: number;
+  mtfMidtone?: number;
+  curvePreset?: ViewerCurvePreset;
+  profile?: ProcessingAlgorithmProfile;
+};
+
 export function fitsToRGBA(
   pixels: Float32Array,
   width: number,
   height: number,
-  options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma"> & {
-    outputBlack?: number;
-    outputWhite?: number;
-    brightness?: number;
-    contrast?: number;
-    mtfMidtone?: number;
-    curvePreset?: ViewerCurvePreset;
-  },
+  options: RenderConvertOptions,
 ): Uint8ClampedArray {
   const stretched = applyStretch(
     pixels,
@@ -423,7 +482,7 @@ export function fitsToRGBA(
     options.mtfMidtone ?? 0.5,
     options.curvePreset ?? "linear",
   );
-  return applyColormap(stretched, options.colormap, width, height);
+  return applyColormap(stretched, options.colormap, width, height, options.profile ?? "standard");
 }
 
 /**
@@ -470,14 +529,7 @@ export async function fitsToRGBAChunked(
   pixels: Float32Array,
   width: number,
   height: number,
-  options: Pick<ConvertOptions, "stretch" | "colormap" | "blackPoint" | "whitePoint" | "gamma"> & {
-    outputBlack?: number;
-    outputWhite?: number;
-    brightness?: number;
-    contrast?: number;
-    mtfMidtone?: number;
-    curvePreset?: ViewerCurvePreset;
-  },
+  options: RenderConvertOptions,
   signal?: AbortSignal,
 ): Promise<Uint8ClampedArray> {
   const n = pixels.length;
@@ -501,7 +553,7 @@ export async function fitsToRGBAChunked(
   const range = rawMax - rawMin;
   if (range === 0) {
     const rgba = new Uint8ClampedArray(n * 4);
-    const lut = getColormapLUT(options.colormap);
+    const lut = getColormapLUT(options.colormap, options.profile ?? "standard");
     const mid = Math.floor((LUT_SIZE - 1) / 2) * 3;
     for (let i = 0; i < n; i++) {
       const off = i * 4;
@@ -542,7 +594,7 @@ export async function fitsToRGBAChunked(
 
   // --- Phase 3: Stretch + Colormap combined (chunked) ---
   const rgba = new Uint8ClampedArray(width * height * 4);
-  const lut = getColormapLUT(options.colormap);
+  const lut = getColormapLUT(options.colormap, options.profile ?? "standard");
   const lutMax = LUT_SIZE - 1;
 
   for (let start = 0; start < n; start += CHUNK_SIZE) {

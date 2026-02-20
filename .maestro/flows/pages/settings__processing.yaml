@@ -3,6 +3,10 @@
 - openLink: cobalt://settings/processing
 - assertVisible:
     id: e2e-screen-settings__processing
+- assertVisible:
+    id: e2e-action-settings__processing-toggle-use-annotated
+- tapOn:
+    id: e2e-action-settings__processing-toggle-use-annotated
 - tapOn:
     id: e2e-action-settings__processing-open-stack-method
 - tapOn:

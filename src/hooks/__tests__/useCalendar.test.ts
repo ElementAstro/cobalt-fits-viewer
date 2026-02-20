@@ -419,23 +419,28 @@ describe("useCalendar", () => {
     expect(useSessionStore.getState().plans[0].title).toBe("Local Plan");
   });
 
-  it("create*ViaSystemCalendar performs permission precheck", async () => {
+  it("create*ViaSystemCalendar bypasses permission precheck and keeps Android no-id unlinked", async () => {
     const session = makeSession({ id: "s-system" });
     const plan = makePlan({ id: "p-system" });
     useSessionStore.setState({ sessions: [session], plans: [plan] });
 
     calendarApi.checkCalendarPermission.mockResolvedValue(false);
     calendarApi.requestCalendarPermission.mockResolvedValue(false);
+    calendarApi.createEventViaSystemUI
+      .mockResolvedValueOnce({ action: "done", id: null })
+      .mockResolvedValueOnce({ action: "saved", id: "event-plan-created" });
 
     const { result } = renderHook(() => useCalendar());
     await act(async () => {
       const sessionOk = await result.current.createSessionViaSystemCalendar(session);
       const planOk = await result.current.createPlanViaSystemCalendar(plan);
-      expect(sessionOk).toBe(false);
-      expect(planOk).toBe(false);
+      expect(sessionOk).toBe(true);
+      expect(planOk).toBe(true);
     });
 
-    expect(calendarApi.createEventViaSystemUI).not.toHaveBeenCalled();
+    expect(calendarApi.createEventViaSystemUI).toHaveBeenCalledTimes(2);
+    expect(useSessionStore.getState().sessions[0].calendarEventId).toBeUndefined();
+    expect(useSessionStore.getState().plans[0].calendarEventId).toBe("event-plan-created");
   });
 
   it("unsyncObservationPlan removes calendar link locally", async () => {
@@ -453,17 +458,47 @@ describe("useCalendar", () => {
     expect(useSessionStore.getState().plans[0].calendarEventId).toBeUndefined();
   });
 
-  it("editPlanInCalendar refreshes local plan when action is opened", async () => {
+  it("editSessionInCalendar refreshes local session when action is done", async () => {
+    const session = makeSession({
+      id: "session-done-refresh",
+      date: "2025-04-01",
+      startTime: new Date("2025-04-01T01:00:00.000Z").getTime(),
+      endTime: new Date("2025-04-01T02:00:00.000Z").getTime(),
+      duration: 3600,
+      calendarEventId: "event-session-done",
+    });
+    useSessionStore.setState({ sessions: [session] });
+
+    calendarApi.editEventInSystemCalendar.mockResolvedValueOnce({ action: "done" });
+    calendarApi.getCalendarEvent.mockResolvedValueOnce({
+      id: "event-session-done",
+      startDate: new Date("2025-04-01T03:00:00.000Z"),
+      endDate: new Date("2025-04-01T05:00:00.000Z"),
+    });
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const ok = await result.current.editSessionInCalendar(session);
+      expect(ok).toBe(true);
+    });
+
+    expect(calendarApi.getCalendarEvent).toHaveBeenCalledWith("event-session-done");
+    const updated = useSessionStore.getState().sessions[0];
+    expect(updated.duration).toBe(7200);
+    expect(updated.date).toBe("2025-04-01");
+  });
+
+  it("editPlanInCalendar refreshes local plan when action is done", async () => {
     const plan = makePlan({
-      id: "plan-opened-refresh",
+      id: "plan-done-refresh",
       title: "Old Plan",
-      calendarEventId: "event-plan-opened",
+      calendarEventId: "event-plan-done",
     });
     useSessionStore.setState({ plans: [plan] });
 
-    calendarApi.editEventInSystemCalendar.mockResolvedValueOnce({ action: "opened" });
+    calendarApi.editEventInSystemCalendar.mockResolvedValueOnce({ action: "done" });
     calendarApi.getCalendarEvent.mockResolvedValueOnce({
-      id: "event-plan-opened",
+      id: "event-plan-done",
       title: "🔭 Refreshed Plan",
       notes: "from system calendar",
       startDate: new Date("2025-05-01T02:00:00.000Z"),
@@ -477,7 +512,7 @@ describe("useCalendar", () => {
       expect(ok).toBe(true);
     });
 
-    expect(calendarApi.getCalendarEvent).toHaveBeenCalledWith("event-plan-opened");
+    expect(calendarApi.getCalendarEvent).toHaveBeenCalledWith("event-plan-done");
     const updated = useSessionStore.getState().plans[0];
     expect(updated.title).toBe("Refreshed Plan");
     expect(updated.reminderMinutes).toBe(20);

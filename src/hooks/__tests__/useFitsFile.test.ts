@@ -3,7 +3,7 @@ import { useFitsFile } from "../useFitsFile";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 
 jest.mock("../../lib/fits/parser", () => ({
-  loadFitsFromBufferAuto: jest.fn(),
+  loadScientificFitsFromBuffer: jest.fn(),
   extractMetadata: jest.fn(),
   getHeaderKeywords: jest.fn(),
   getCommentsAndHistory: jest.fn(),
@@ -20,6 +20,7 @@ jest.mock("../../lib/utils/fileManager", () => ({
 jest.mock("../../lib/import/fileFormat", () => ({
   detectPreferredSupportedImageFormat: jest.fn(),
   detectSupportedImageFormat: jest.fn(),
+  isDistributedXisfFilename: jest.fn(() => false),
   toImageSourceFormat: jest.fn(() => "fits"),
 }));
 jest.mock("../../lib/image/rasterParser", () => ({
@@ -41,7 +42,7 @@ jest.mock("../../lib/logger", () => {
 });
 
 const parserLib = jest.requireMock("../../lib/fits/parser") as {
-  loadFitsFromBufferAuto: jest.Mock;
+  loadScientificFitsFromBuffer: jest.Mock;
   extractMetadata: jest.Mock;
   getHeaderKeywords: jest.Mock;
   getCommentsAndHistory: jest.Mock;
@@ -56,6 +57,7 @@ const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
 };
 const formatLib = jest.requireMock("../../lib/import/fileFormat") as {
   detectPreferredSupportedImageFormat: jest.Mock;
+  isDistributedXisfFilename: jest.Mock;
   toImageSourceFormat: jest.Mock;
 };
 const rasterLib = jest.requireMock("../../lib/image/rasterParser") as {
@@ -91,7 +93,7 @@ describe("useFitsFile", () => {
     jest.clearAllMocks();
     useSettingsStore.setState({ frameClassificationConfig: classificationConfig as any });
     fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    parserLib.loadFitsFromBufferAuto.mockReturnValue({ fits: true });
+    parserLib.loadScientificFitsFromBuffer.mockResolvedValue({ fits: true });
     parserLib.extractMetadata.mockReturnValue({
       filename: "a.fits",
       filepath: "/tmp/a.fits",
@@ -181,6 +183,47 @@ describe("useFitsFile", () => {
     expect(result.current.metadata).toBeNull();
     expect(result.current.pixels).toBeNull();
     expect(result.current.sourceBuffer).toBeNull();
+  });
+
+  it("loads scientific wrappers (.xisf/.ser) through scientific parser", async () => {
+    const { result } = renderHook(() => useFitsFile());
+    const xisfFormat = { id: "xisf", sourceType: "fits" };
+    formatLib.detectPreferredSupportedImageFormat.mockReturnValueOnce(xisfFormat);
+    formatLib.toImageSourceFormat.mockReturnValueOnce("xisf");
+
+    const xisfBuffer = new ArrayBuffer(12);
+    await act(async () => {
+      await result.current.loadFromBuffer(xisfBuffer, "stack.xisf", 12);
+    });
+    expect(parserLib.loadScientificFitsFromBuffer).toHaveBeenCalledWith(xisfBuffer, {
+      filename: "stack.xisf",
+      detectedFormat: xisfFormat,
+    });
+    expect(result.current.metadata).toEqual(
+      expect.objectContaining({
+        sourceType: "fits",
+        sourceFormat: "xisf",
+      }),
+    );
+
+    const serFormat = { id: "ser", sourceType: "fits" };
+    formatLib.detectPreferredSupportedImageFormat.mockReturnValueOnce(serFormat);
+    formatLib.toImageSourceFormat.mockReturnValueOnce("ser");
+
+    const serBuffer = new ArrayBuffer(16);
+    await act(async () => {
+      await result.current.loadFromBuffer(serBuffer, "capture.ser", 16);
+    });
+    expect(parserLib.loadScientificFitsFromBuffer).toHaveBeenCalledWith(serBuffer, {
+      filename: "capture.ser",
+      detectedFormat: serFormat,
+    });
+    expect(result.current.metadata).toEqual(
+      expect.objectContaining({
+        sourceType: "fits",
+        sourceFormat: "ser",
+      }),
+    );
   });
 
   it("loads raster from path and buffer branches", async () => {

@@ -34,7 +34,7 @@ const { useHapticFeedback } = jest.requireMock("../useHapticFeedback") as {
 const notifyMock = jest.fn();
 
 describe("useViewerExport", () => {
-  const exportImage = jest.fn();
+  const exportImageDetailed = jest.fn();
   const shareImage = jest.fn();
   const saveImage = jest.fn();
   const printImage = jest.fn();
@@ -52,13 +52,21 @@ describe("useViewerExport", () => {
     });
     useExport.mockReturnValue({
       isExporting: false,
-      exportImage,
+      exportImageDetailed,
       shareImage,
       saveImage,
       printImage,
       printToPdf,
     });
-    exportImage.mockResolvedValue("/tmp/a.png");
+    exportImageDetailed.mockResolvedValue({
+      path: "/tmp/a.png",
+      diagnostics: {
+        fallbackApplied: false,
+        warnings: [],
+        annotationsDrawn: 0,
+        watermarkApplied: false,
+      },
+    });
     saveImage.mockResolvedValue("asset://a.png");
     shareImage.mockResolvedValue(undefined);
     printImage.mockResolvedValue(undefined);
@@ -101,18 +109,60 @@ describe("useViewerExport", () => {
     await act(async () => {
       await result.current.handleExport(90);
     });
-    expect(exportImage).toHaveBeenCalled();
+    expect(exportImageDetailed).toHaveBeenCalled();
     expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Success);
     expect(Alert.alert).toHaveBeenCalledWith("common.success", "viewer.exportSuccess");
     expect(onDone).toHaveBeenCalledTimes(1);
 
-    exportImage.mockResolvedValueOnce(null);
+    exportImageDetailed.mockResolvedValueOnce({
+      path: null,
+      diagnostics: {
+        fallbackApplied: false,
+        warnings: [],
+        annotationsDrawn: 0,
+        watermarkApplied: false,
+      },
+    });
     await act(async () => {
       await result.current.handleExport(90);
     });
     expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);
     expect(Alert.alert).toHaveBeenCalledWith("common.error", "viewer.exportFailed");
     expect(onDone).toHaveBeenCalledTimes(2);
+  });
+
+  it("shows fallback reason message when diagnostics includes fallback", async () => {
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+    exportImageDetailed.mockResolvedValueOnce({
+      path: "/tmp/a.png",
+      diagnostics: {
+        fallbackApplied: true,
+        fallbackReasonMessageKey: "converter.fitsFallbackScientificUnavailable",
+        warnings: [],
+        annotationsDrawn: 0,
+        watermarkApplied: false,
+      },
+    });
+
+    const { result } = renderHook(() =>
+      useViewerExport({
+        rgbaData: rgba,
+        width: 1,
+        height: 1,
+        filename: "x",
+        format: "fits",
+        onDone,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleExport(90);
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "common.success",
+      "viewer.exportSuccess\nconverter.fitsFallbackScientificUnavailable",
+    );
   });
 
   it("handles share/save/print actions and error alerts", async () => {

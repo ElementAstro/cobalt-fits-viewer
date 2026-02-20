@@ -3,8 +3,9 @@
  */
 
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, Platform } from "react-native";
 import { useRouter } from "expo-router";
+import Constants from "expo-constants";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Chip, useThemeColor } from "heroui-native";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -14,11 +15,12 @@ import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { LocationMapView } from "../../components/gallery/LocationMapView";
 import { LocationMarkerSheet } from "../../components/gallery/LocationMarkerSheet";
 import { MapFilterBar } from "../../components/map/MapFilterBar";
-import type { MapDateFilterPreset } from "../../components/map/MapFilterBar";
-import type { LocationCluster, MapPreset } from "../../components/gallery/LocationMapView";
+import type { MapDateFilterPreset, MapClusterAction, MapClusterNode } from "../../lib/map/types";
+import type { MapPreset } from "../../lib/map/styles";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { MAP_PRESETS, MAP_PRESET_ORDER } from "../../lib/map/styles";
 import { LocationService } from "../../hooks/useLocation";
+import { normalizeGeoLocation } from "../../lib/map/geo";
 
 const DATE_FILTER_DAYS: Record<Exclude<MapDateFilterPreset, "all">, number> = {
   "7d": 7,
@@ -30,9 +32,7 @@ const DATE_FILTER_DAYS: Record<Exclude<MapDateFilterPreset, "all">, number> = {
 function getFileTimestamp(file: FitsMetadata): number {
   if (file.dateObs) {
     const parsed = new Date(file.dateObs).getTime();
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
+    if (Number.isFinite(parsed)) return parsed;
   }
   return file.importDate;
 }
@@ -46,48 +46,162 @@ function getDateFilterStartTimestamp(preset: MapDateFilterPreset): number | null
   return start.getTime();
 }
 
+function hasGeoLocation(file: FitsMetadata): boolean {
+  return Boolean(normalizeGeoLocation(file.location));
+}
+
+function uniqueSorted(values: Array<string | undefined>): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort();
+}
+
+function locationSiteKey(file: FitsMetadata): string {
+  const location = normalizeGeoLocation(file.location);
+  if (!location) return "invalid";
+  return `${location.latitude.toFixed(4)}_${location.longitude.toFixed(4)}`;
+}
+
+function getAndroidGoogleMapsApiKey(): string | undefined {
+  const expoConfig = Constants.expoConfig as
+    | {
+        android?: {
+          config?: {
+            googleMaps?: {
+              apiKey?: string;
+            };
+          };
+        };
+      }
+    | undefined;
+  return expoConfig?.android?.config?.googleMaps?.apiKey;
+}
+
 export default function MapScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const [mutedColor, bgColor, successColor] = useThemeColor(["muted", "background", "success"]);
+  const [mutedColor, bgColor, successColor, warningColor] = useThemeColor([
+    "muted",
+    "background",
+    "success",
+    "warning",
+  ]);
   const { contentPaddingTop, horizontalPadding, isLandscapeTablet, sidePanelWidth } =
     useResponsiveLayout();
 
-  const files = useFitsStore((s) => s.files);
-  const setAutoTagLocation = useSettingsStore((s) => s.setAutoTagLocation);
-  const mapPreset = useSettingsStore((s) => s.mapPreset);
-  const setMapPreset = useSettingsStore((s) => s.setMapPreset);
-  const mapShowOverlays = useSettingsStore((s) => s.mapShowOverlays);
-  const setMapShowOverlays = useSettingsStore((s) => s.setMapShowOverlays);
+  const files = useFitsStore((state) => state.files);
+  const setAutoTagLocation = useSettingsStore((state) => state.setAutoTagLocation);
+  const mapPreset = useSettingsStore((state) => state.mapPreset);
+  const setMapPreset = useSettingsStore((state) => state.setMapPreset);
+  const mapShowOverlays = useSettingsStore((state) => state.mapShowOverlays);
+  const setMapShowOverlays = useSettingsStore((state) => state.setMapShowOverlays);
 
-  const [selectedCluster, setSelectedCluster] = useState<LocationCluster | null>(null);
+  const [selectedCluster, setSelectedCluster] = useState<MapClusterNode | null>(null);
   const [filterObject, setFilterObject] = useState("");
   const [filterFilter, setFilterFilter] = useState("");
+  const [filterTargetId, setFilterTargetId] = useState("");
+  const [filterSessionId, setFilterSessionId] = useState("");
   const [dateFilterPreset, setDateFilterPreset] = useState<MapDateFilterPreset>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
 
-  // 进入地图页面时确保定位权限（用于 isMyLocationEnabled）
   useEffect(() => {
-    LocationService.ensurePermission();
+    if (Platform.OS !== "web") {
+      LocationService.ensurePermission();
+    }
   }, []);
 
-  // Apply filters
-  const filteredFiles = useMemo(() => {
-    let result = files;
-    if (filterObject) result = result.filter((f) => f.object === filterObject);
-    if (filterFilter) result = result.filter((f) => f.filter === filterFilter);
-    const startTimestamp = getDateFilterStartTimestamp(dateFilterPreset);
-    if (startTimestamp !== null) {
-      result = result.filter((f) => getFileTimestamp(f) >= startTimestamp);
+  const filesWithLocation = useMemo(() => files.filter(hasGeoLocation), [files]);
+  const startTimestamp = useMemo(
+    () => getDateFilterStartTimestamp(dateFilterPreset),
+    [dateFilterPreset],
+  );
+
+  const dateScopedFiles = useMemo(() => {
+    if (startTimestamp === null) return filesWithLocation;
+    return filesWithLocation.filter((file) => getFileTimestamp(file) >= startTimestamp);
+  }, [filesWithLocation, startTimestamp]);
+
+  const objectOptions = useMemo(
+    () => uniqueSorted(dateScopedFiles.map((file) => file.object)),
+    [dateScopedFiles],
+  );
+  const objectScopedFiles = useMemo(
+    () =>
+      filterObject
+        ? dateScopedFiles.filter((file) => file.object === filterObject)
+        : dateScopedFiles,
+    [dateScopedFiles, filterObject],
+  );
+
+  const filterOptions = useMemo(
+    () => uniqueSorted(objectScopedFiles.map((file) => file.filter)),
+    [objectScopedFiles],
+  );
+  const filterScopedFiles = useMemo(
+    () =>
+      filterFilter
+        ? objectScopedFiles.filter((file) => file.filter === filterFilter)
+        : objectScopedFiles,
+    [filterFilter, objectScopedFiles],
+  );
+
+  const targetOptions = useMemo(
+    () => uniqueSorted(filterScopedFiles.map((file) => file.targetId)),
+    [filterScopedFiles],
+  );
+  const targetScopedFiles = useMemo(
+    () =>
+      filterTargetId
+        ? filterScopedFiles.filter((file) => file.targetId === filterTargetId)
+        : filterScopedFiles,
+    [filterScopedFiles, filterTargetId],
+  );
+
+  const sessionOptions = useMemo(
+    () => uniqueSorted(targetScopedFiles.map((file) => file.sessionId)),
+    [targetScopedFiles],
+  );
+  const filteredFiles = useMemo(
+    () =>
+      filterSessionId
+        ? targetScopedFiles.filter((file) => file.sessionId === filterSessionId)
+        : targetScopedFiles,
+    [filterSessionId, targetScopedFiles],
+  );
+
+  useEffect(() => {
+    if (filterObject && !objectOptions.includes(filterObject)) setFilterObject("");
+  }, [filterObject, objectOptions]);
+  useEffect(() => {
+    if (filterFilter && !filterOptions.includes(filterFilter)) setFilterFilter("");
+  }, [filterFilter, filterOptions]);
+  useEffect(() => {
+    if (filterTargetId && !targetOptions.includes(filterTargetId)) setFilterTargetId("");
+  }, [filterTargetId, targetOptions]);
+  useEffect(() => {
+    if (filterSessionId && !sessionOptions.includes(filterSessionId)) setFilterSessionId("");
+  }, [filterSessionId, sessionOptions]);
+
+  const siteCount = useMemo(() => {
+    const set = new Set(filteredFiles.map((file) => locationSiteKey(file)));
+    return set.has("invalid") ? set.size - 1 : set.size;
+  }, [filteredFiles]);
+
+  const totalWithLocation = filesWithLocation.length;
+  const currentPresetConfig = MAP_PRESETS[mapPreset];
+  const androidMapsKeyMissing = Platform.OS === "android" && !getAndroidGoogleMapsApiKey();
+
+  const clearAllFilters = useCallback(() => {
+    setDateFilterPreset("all");
+    setFilterObject("");
+    setFilterFilter("");
+    setFilterTargetId("");
+    setFilterSessionId("");
+  }, []);
+
+  const handleMapClusterAction = useCallback((action: MapClusterAction) => {
+    if (action.type === "open-cluster") {
+      setSelectedCluster(action.node);
     }
-    return result;
-  }, [files, filterObject, filterFilter, dateFilterPreset]);
-
-  const filesWithLocation = useMemo(() => filteredFiles.filter((f) => f.location), [filteredFiles]);
-
-  const handleClusterPress = useCallback((cluster: LocationCluster) => {
-    setSelectedCluster(cluster);
   }, []);
 
   const handleFilePress = useCallback(
@@ -98,26 +212,36 @@ export default function MapScreen() {
     [router],
   );
 
+  const handleOpenSession = useCallback(
+    (sessionId: string) => {
+      setSelectedCluster(null);
+      router.push(`/session/${sessionId}`);
+    },
+    [router],
+  );
+
+  const handleOpenTarget = useCallback(
+    (targetId: string) => {
+      setSelectedCluster(null);
+      router.push(`/target/${targetId}`);
+    },
+    [router],
+  );
+
   const handleEnableAutoTag = useCallback(() => {
     setAutoTagLocation(true);
   }, [setAutoTagLocation]);
 
   const handlePresetChange = useCallback(
-    (p: MapPreset) => {
-      setMapPreset(p);
+    (preset: MapPreset) => {
+      setMapPreset(preset);
       setShowPresets(false);
     },
     [setMapPreset],
   );
 
-  // Empty state when no files have location data at all
-  const totalWithLocation = useMemo(() => files.filter((f) => f.location).length, [files]);
-
-  const currentPresetConfig = MAP_PRESETS[mapPreset];
-
   return (
     <View testID="e2e-screen-map__index" className="flex-1 bg-background">
-      {/* Header */}
       <View
         className="absolute top-0 z-10 pb-2"
         style={{
@@ -139,13 +263,12 @@ export default function MapScreen() {
             <Text className="text-base font-bold text-foreground">{t("location.mapView")}</Text>
           </View>
           <View className="flex-row items-center gap-1">
-            {/* Preset toggle */}
             <Button
               testID="e2e-action-map__index-toggle-presets"
               size="sm"
               isIconOnly
               variant="ghost"
-              onPress={() => setShowPresets((v) => !v)}
+              onPress={() => setShowPresets((value) => !value)}
             >
               <Ionicons
                 name={currentPresetConfig.icon as keyof typeof Ionicons.glyphMap}
@@ -153,7 +276,6 @@ export default function MapScreen() {
                 color={mapPreset !== "standard" ? successColor : mutedColor}
               />
             </Button>
-            {/* Overlay toggle */}
             <Button
               size="sm"
               isIconOnly
@@ -166,47 +288,57 @@ export default function MapScreen() {
                 color={mapShowOverlays ? successColor : mutedColor}
               />
             </Button>
-            {/* Filter toggle */}
             <Button
               testID="e2e-action-map__index-toggle-filters"
               size="sm"
               isIconOnly
               variant="ghost"
-              onPress={() => setShowFilters((v) => !v)}
+              onPress={() => setShowFilters((value) => !value)}
             >
               <Ionicons
                 name="filter"
                 size={16}
                 color={
-                  filterObject || filterFilter || dateFilterPreset !== "all"
+                  dateFilterPreset !== "all" ||
+                  Boolean(filterObject) ||
+                  Boolean(filterFilter) ||
+                  Boolean(filterTargetId) ||
+                  Boolean(filterSessionId)
                     ? successColor
                     : mutedColor
                 }
               />
             </Button>
             <Text className="text-xs text-muted">
-              {filesWithLocation.length} {t("location.sites")}
+              {siteCount} {t("location.sites")} · {filteredFiles.length} {t("location.filesLabel")}
             </Text>
           </View>
         </View>
 
-        {/* Preset selector */}
-        {showPresets && (
+        {androidMapsKeyMissing ? (
+          <View className="mt-1 px-1">
+            <Text className="text-[11px]" style={{ color: warningColor }}>
+              {t("location.androidMapsKeyMissing")}
+            </Text>
+          </View>
+        ) : null}
+
+        {showPresets ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mt-1">
             <View className="flex-row gap-1 px-1">
-              {MAP_PRESET_ORDER.map((p) => {
-                const cfg = MAP_PRESETS[p];
+              {MAP_PRESET_ORDER.map((preset) => {
+                const cfg = MAP_PRESETS[preset];
                 return (
                   <Chip
-                    key={p}
+                    key={preset}
                     size="sm"
-                    variant={mapPreset === p ? "primary" : "secondary"}
-                    onPress={() => handlePresetChange(p)}
+                    variant={mapPreset === preset ? "primary" : "secondary"}
+                    onPress={() => handlePresetChange(preset)}
                   >
                     <Ionicons
                       name={cfg.icon as keyof typeof Ionicons.glyphMap}
                       size={10}
-                      color={mapPreset === p ? successColor : mutedColor}
+                      color={mapPreset === preset ? successColor : mutedColor}
                     />
                     <Chip.Label className="text-[9px]">{t(cfg.label)}</Chip.Label>
                   </Chip>
@@ -214,23 +346,30 @@ export default function MapScreen() {
               })}
             </View>
           </ScrollView>
-        )}
+        ) : null}
 
-        {/* Filter bar */}
-        {showFilters && (
+        {showFilters ? (
           <MapFilterBar
-            files={files.filter((f) => f.location)}
+            files={filteredFiles}
+            objectOptions={objectOptions}
+            filterOptions={filterOptions}
+            targetOptions={targetOptions}
+            sessionOptions={sessionOptions}
             filterObject={filterObject}
             filterFilter={filterFilter}
+            filterTargetId={filterTargetId}
+            filterSessionId={filterSessionId}
             dateFilterPreset={dateFilterPreset}
             onFilterObjectChange={setFilterObject}
             onFilterFilterChange={setFilterFilter}
+            onFilterTargetChange={setFilterTargetId}
+            onFilterSessionChange={setFilterSessionId}
             onDateFilterChange={setDateFilterPreset}
+            onClearAll={clearAllFilters}
           />
-        )}
+        ) : null}
       </View>
 
-      {/* Map or Empty State */}
       {totalWithLocation === 0 ? (
         <View className="flex-1 items-center justify-center px-8 gap-4">
           <Ionicons name="map-outline" size={64} color={mutedColor} />
@@ -252,18 +391,20 @@ export default function MapScreen() {
       ) : (
         <LocationMapView
           files={filteredFiles}
-          onClusterPress={handleClusterPress}
+          onClusterAction={handleMapClusterAction}
           style={{ flex: 1 }}
           preset={mapPreset}
           showOverlays={mapShowOverlays}
+          contentPaddingTop={contentPaddingTop + 64}
         />
       )}
 
-      {/* Marker Detail Sheet */}
       <LocationMarkerSheet
         cluster={selectedCluster}
         onClose={() => setSelectedCluster(null)}
         onFilePress={handleFilePress}
+        onSessionPress={handleOpenSession}
+        onTargetPress={handleOpenTarget}
       />
     </View>
   );

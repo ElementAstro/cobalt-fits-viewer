@@ -10,6 +10,7 @@ interface TaskQueueSheetProps {
   onRetryTask: (taskId: string) => void;
   onRemoveTask: (taskId: string) => void;
   onClearFinished: () => void;
+  onOpenOutputFile?: (fileId: string) => void;
 }
 
 function statusColor(
@@ -37,6 +38,7 @@ export function TaskQueueSheet({
   onRetryTask,
   onRemoveTask,
   onClearFinished,
+  onOpenOutputFile,
 }: TaskQueueSheetProps) {
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
@@ -72,6 +74,18 @@ export function TaskQueueSheet({
                     </View>
                     {!!task.error && <Text className="text-xs text-danger">{task.error}</Text>}
                     <View className="flex-row flex-wrap items-center gap-2">
+                      {task.status === "completed" &&
+                        (task.outputFileIds?.length ?? 0) > 0 &&
+                        task.outputFileIds?.map((fileId, index) => (
+                          <Button
+                            key={`${task.id}_${fileId}`}
+                            size="sm"
+                            variant="outline"
+                            onPress={() => onOpenOutputFile?.(fileId)}
+                          >
+                            <Button.Label>{`Open #${index + 1}`}</Button.Label>
+                          </Button>
+                        ))}
                       {task.status === "running" && (
                         <Button size="sm" variant="outline" onPress={() => onCancelTask(task.id)}>
                           <Button.Label>Cancel</Button.Label>

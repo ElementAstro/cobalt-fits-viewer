@@ -9,7 +9,7 @@ import { BaseCloudProvider } from "../cloudProvider";
 import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
 import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR } from "../types";
+import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.OneDriveProvider;
 const SECURE_STORE_KEY = "backup_onedrive_tokens";
@@ -26,6 +26,11 @@ export class OneDriveProvider extends BaseCloudProvider {
   readonly name = "onedrive" as const;
   readonly displayName = "OneDrive";
   readonly icon = "cloud-outline";
+  readonly capabilities = {
+    supportsConditionalWrite: true,
+    supportsResumableUpload: true,
+    supportsContentHash: false,
+  } as const;
 
   private _clientId: string | null = null;
 
@@ -130,6 +135,7 @@ export class OneDriveProvider extends BaseCloudProvider {
     // Create backup dir in app folder
     await this.createFolderIfNotExists(BACKUP_DIR);
     await this.createFolderIfNotExists(`${BACKUP_DIR}/${FITS_SUBDIR}`);
+    await this.createFolderIfNotExists(`${BACKUP_DIR}/${THUMBNAIL_SUBDIR}`);
   }
 
   async uploadFile(

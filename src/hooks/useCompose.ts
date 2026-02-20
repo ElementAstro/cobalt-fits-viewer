@@ -5,8 +5,19 @@
 
 import { useState, useCallback } from "react";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import { loadFitsFromBufferAuto, getImagePixels, getImageDimensions } from "../lib/fits/parser";
+import {
+  loadScientificFitsFromBuffer,
+  getImagePixels,
+  getImageDimensions,
+} from "../lib/fits/parser";
 import { composeRGB, type ChannelData } from "../lib/utils/rgbCompose";
+import {
+  applyColorBalanceRGBA,
+  applyColorCalibrationRGBA,
+  applySaturationRGBA,
+  applySCNRRGBA,
+  type SCNRMethod,
+} from "../lib/processing/color";
 import { LOG_TAGS, Logger } from "../lib/logger";
 
 interface ChannelState {
@@ -21,6 +32,17 @@ interface ComposeResult {
   rgbaData: Uint8ClampedArray;
   width: number;
   height: number;
+}
+
+interface ComposeColorProcessingOptions {
+  scnrMethod: SCNRMethod;
+  scnrAmount: number;
+  colorCalibrationPercentile: number;
+  enableColorCalibration: boolean;
+  saturationAmount: number;
+  redGain: number;
+  greenGain: number;
+  blueGain: number;
 }
 
 interface UseComposeOptions {
@@ -81,6 +103,16 @@ export function useCompose(options: UseComposeOptions = {}) {
   const [refDimensions, setRefDimensions] = useState<{ width: number; height: number } | null>(
     null,
   );
+  const [colorProcessing, setColorProcessing] = useState<ComposeColorProcessingOptions>({
+    scnrMethod: "averageNeutral",
+    scnrAmount: 0,
+    colorCalibrationPercentile: 0.92,
+    enableColorCalibration: false,
+    saturationAmount: 0,
+    redGain: 1,
+    greenGain: 1,
+    blueGain: 1,
+  });
 
   const loadChannel = useCallback(
     async (
@@ -94,7 +126,7 @@ export function useCompose(options: UseComposeOptions = {}) {
 
       try {
         const buffer = await readFileAsArrayBuffer(filepath);
-        const fits = loadFitsFromBufferAuto(buffer);
+        const fits = await loadScientificFitsFromBuffer(buffer, { filename });
         const dims = getImageDimensions(fits);
         const pixels = await getImagePixels(fits);
 
@@ -241,8 +273,38 @@ export function useCompose(options: UseComposeOptions = {}) {
         linkedStretch,
       });
 
+      let processed = rgbaData;
+      if (colorProcessing.scnrAmount > 0) {
+        processed = applySCNRRGBA(
+          processed,
+          colorProcessing.scnrMethod,
+          Math.max(0, Math.min(1, colorProcessing.scnrAmount)),
+        );
+      }
+      if (colorProcessing.enableColorCalibration) {
+        processed = applyColorCalibrationRGBA(
+          processed,
+          Math.max(0.5, Math.min(0.99, colorProcessing.colorCalibrationPercentile)),
+        );
+      }
+      if (Math.abs(colorProcessing.saturationAmount) > 1e-6) {
+        processed = applySaturationRGBA(processed, colorProcessing.saturationAmount);
+      }
+      if (
+        Math.abs(colorProcessing.redGain - 1) > 1e-6 ||
+        Math.abs(colorProcessing.greenGain - 1) > 1e-6 ||
+        Math.abs(colorProcessing.blueGain - 1) > 1e-6
+      ) {
+        processed = applyColorBalanceRGBA(
+          processed,
+          colorProcessing.redGain,
+          colorProcessing.greenGain,
+          colorProcessing.blueGain,
+        );
+      }
+
       setResult({
-        rgbaData,
+        rgbaData: processed,
         width: refDimensions.width,
         height: refDimensions.height,
       });
@@ -257,7 +319,7 @@ export function useCompose(options: UseComposeOptions = {}) {
     } finally {
       setIsComposing(false);
     }
-  }, [red, green, blue, luminance, linkedStretch, refDimensions]);
+  }, [red, green, blue, luminance, linkedStretch, refDimensions, colorProcessing]);
 
   const reset = useCallback(() => {
     const empty = (weight: number): ChannelState => ({
@@ -285,6 +347,8 @@ export function useCompose(options: UseComposeOptions = {}) {
     error,
     linkedStretch,
     setLinkedStretch,
+    colorProcessing,
+    setColorProcessing,
     assignedCount: [red, green, blue].filter((c) => c.pixels !== null).length,
     hasLuminance: luminance.pixels !== null,
     loadChannel,

@@ -13,7 +13,7 @@ const APP_CALENDAR_TITLE = "Cobalt Observations";
 const APP_CALENDAR_COLOR = "#6366f1";
 
 export interface CalendarEditResult {
-  action: "saved" | "deleted" | "canceled" | "opened";
+  action: "done" | "saved" | "deleted" | "canceled" | "responded" | "opened";
   id?: string;
 }
 
@@ -155,10 +155,19 @@ export async function editEventInSystemCalendar(eventId: string): Promise<Calend
   if (typeof editableCalendar.editEventInCalendarAsync === "function") {
     const result = await editableCalendar.editEventInCalendarAsync({ id: eventId });
     const normalizedId = typeof result.id === "string" ? result.id : undefined;
-    if (result.action === "saved" || result.action === "deleted" || result.action === "canceled") {
-      return { action: result.action, id: normalizedId };
+    if (
+      result.action === "done" ||
+      result.action === "saved" ||
+      result.action === "deleted" ||
+      result.action === "canceled" ||
+      result.action === "responded"
+    ) {
+      return {
+        action: result.action,
+        id: normalizedId,
+      };
     }
-    return { action: "saved", id: normalizedId };
+    return { action: "done", id: normalizedId };
   }
 
   await Calendar.openEventInCalendarAsync({ id: eventId });

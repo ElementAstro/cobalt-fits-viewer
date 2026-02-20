@@ -94,11 +94,31 @@ jest.mock("../../../hooks/useConverter", () => ({
       quality: 90,
       bitDepth: 8,
       dpi: 300,
+      fits: {
+        mode: "scientific",
+        compression: "none",
+        bitpix: -32,
+        colorLayout: "rgbCube3d",
+        preserveOriginalHeader: true,
+        preserveWcs: true,
+      },
+      tiff: {
+        compression: "lzw",
+        multipage: "preserve",
+      },
       stretch: "linear",
       colormap: "grayscale",
       blackPoint: 0,
       whitePoint: 1,
       gamma: 1,
+      outputBlack: 0,
+      outputWhite: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
+      includeAnnotations: false,
+      includeWatermark: false,
     },
     setFormat: jest.fn(),
     setQuality: jest.fn(),
@@ -133,8 +153,15 @@ jest.mock("../../../hooks/useImageProcessing", () => ({
 jest.mock("../../../hooks/useExport", () => ({
   useExport: () => ({
     isExporting: false,
-    exportImage: jest.fn(),
+    exportImageDetailed: jest.fn(),
   }),
+}));
+
+jest.mock("../../../stores/useAstrometryStore", () => ({
+  useAstrometryStore: (selector: (state: unknown) => unknown) =>
+    selector({
+      jobs: [],
+    }),
 }));
 
 jest.mock("../../../components/converter/FormatSelector", () => ({

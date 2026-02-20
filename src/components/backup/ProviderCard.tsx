@@ -12,6 +12,7 @@ import { formatFileSize } from "../../lib/utils/fileManager";
 
 interface ProviderCardProps {
   connection: ProviderConnectionState;
+  isActive?: boolean;
   onBackup: () => void;
   onRestore: () => void;
   onDisconnect: () => void;
@@ -20,6 +21,7 @@ interface ProviderCardProps {
 
 export function ProviderCard({
   connection,
+  isActive = false,
   onBackup,
   onRestore,
   onDisconnect,
@@ -82,6 +84,13 @@ export function ProviderCard({
             </View>
           )}
         </View>
+        {isActive && (
+          <View className="mt-2">
+            <Chip size="sm" variant="primary">
+              <Chip.Label>{t("backup.activeProvider")}</Chip.Label>
+            </Chip>
+          </View>
+        )}
       </Card.Body>
 
       <Card.Footer className="flex-row gap-2">

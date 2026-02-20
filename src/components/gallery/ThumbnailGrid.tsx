@@ -58,6 +58,7 @@ const ThumbnailItem = memo(function ThumbnailItem({
     [file.id, file.thumbnailUri],
   );
   const isVideo = file.mediaKind === "video" || file.sourceType === "video";
+  const isAudio = file.mediaKind === "audio" || file.sourceType === "audio";
   const duration = formatVideoDuration(file.durationMs);
   const resolution = formatVideoResolution(file.videoWidth, file.videoHeight);
 
@@ -90,7 +91,11 @@ const ThumbnailItem = memo(function ThumbnailItem({
         ) : (
           <Skeleton className="h-full w-full rounded-lg">
             <View className="h-full w-full items-center justify-center">
-              <Ionicons name="image-outline" size={28} color={mutedColor} />
+              <Ionicons
+                name={isAudio ? "musical-notes-outline" : "image-outline"}
+                size={28}
+                color={mutedColor}
+              />
             </View>
           </Skeleton>
         )}
@@ -99,6 +104,16 @@ const ThumbnailItem = memo(function ThumbnailItem({
           <>
             <View className="absolute right-1 top-1 rounded-full bg-black/60 p-1">
               <Ionicons name="play" size={10} color="#fff" />
+            </View>
+            <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
+              <Text className="text-[8px] font-semibold text-white">{duration}</Text>
+            </View>
+          </>
+        )}
+        {isAudio && (
+          <>
+            <View className="absolute right-1 top-1 rounded-full bg-black/60 p-1">
+              <Ionicons name="musical-note" size={10} color="#fff" />
             </View>
             <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
               <Text className="text-[8px] font-semibold text-white">{duration}</Text>
@@ -121,7 +136,9 @@ const ThumbnailItem = memo(function ThumbnailItem({
                   showFilter && file.filter,
                   showExposure && file.exptime != null && `${file.exptime}s`,
                   isVideo && "VIDEO",
+                  isAudio && "AUDIO",
                   isVideo && resolution,
+                  (isVideo || isAudio) && duration,
                 ]
                   .filter(Boolean)
                   .join(" · ")}

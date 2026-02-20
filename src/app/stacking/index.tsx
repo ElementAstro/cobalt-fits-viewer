@@ -98,12 +98,25 @@ export default function StackingScreen() {
   const settingsDetectMinArea = useSettingsStore((s) => s.stackingDetectMinArea);
   const settingsDetectMaxArea = useSettingsStore((s) => s.stackingDetectMaxArea);
   const settingsDetectBorderMargin = useSettingsStore((s) => s.stackingDetectBorderMargin);
+  const settingsDetectSigmaClipIters = useSettingsStore((s) => s.stackingDetectSigmaClipIters);
+  const settingsDetectApplyMatchedFilter = useSettingsStore(
+    (s) => s.stackingDetectApplyMatchedFilter,
+  );
+  const settingsDetectConnectivity = useSettingsStore((s) => s.stackingDetectConnectivity);
   const settingsBackgroundMeshSize = useSettingsStore((s) => s.stackingBackgroundMeshSize);
   const settingsDeblendNLevels = useSettingsStore((s) => s.stackingDeblendNLevels);
   const settingsDeblendMinContrast = useSettingsStore((s) => s.stackingDeblendMinContrast);
   const settingsFilterFwhm = useSettingsStore((s) => s.stackingFilterFwhm);
+  const settingsDetectMinFwhm = useSettingsStore((s) => s.stackingDetectMinFwhm);
   const settingsMaxFwhm = useSettingsStore((s) => s.stackingMaxFwhm);
   const settingsMaxEllipticity = useSettingsStore((s) => s.stackingMaxEllipticity);
+  const settingsDetectMinSharpness = useSettingsStore((s) => s.stackingDetectMinSharpness);
+  const settingsDetectMaxSharpness = useSettingsStore((s) => s.stackingDetectMaxSharpness);
+  const settingsDetectPeakMax = useSettingsStore((s) => s.stackingDetectPeakMax);
+  const settingsDetectSnrMin = useSettingsStore((s) => s.stackingDetectSnrMin);
+  const settingsUseAnnotatedForAlignment = useSettingsStore(
+    (s) => s.stackingUseAnnotatedForAlignment,
+  );
   const settingsRansacMaxIterations = useSettingsStore((s) => s.stackingRansacMaxIterations);
   const settingsAlignmentInlierThreshold = useSettingsStore(
     (s) => s.stackingAlignmentInlierThreshold,
@@ -121,12 +134,25 @@ export default function StackingScreen() {
   const [detectMinArea, setDetectMinArea] = useState(settingsDetectMinArea);
   const [detectMaxArea, setDetectMaxArea] = useState(settingsDetectMaxArea);
   const [detectBorderMargin, setDetectBorderMargin] = useState(settingsDetectBorderMargin);
+  const [detectSigmaClipIters, setDetectSigmaClipIters] = useState(settingsDetectSigmaClipIters);
+  const [detectApplyMatchedFilter, setDetectApplyMatchedFilter] = useState(
+    settingsDetectApplyMatchedFilter,
+  );
+  const [detectConnectivity, setDetectConnectivity] = useState<4 | 8>(settingsDetectConnectivity);
   const [backgroundMeshSize, setBackgroundMeshSize] = useState(settingsBackgroundMeshSize);
   const [deblendNLevels, setDeblendNLevels] = useState(settingsDeblendNLevels);
   const [deblendMinContrast, setDeblendMinContrast] = useState(settingsDeblendMinContrast);
   const [filterFwhm, setFilterFwhm] = useState(settingsFilterFwhm);
+  const [detectMinFwhm, setDetectMinFwhm] = useState(settingsDetectMinFwhm);
   const [maxFwhm, setMaxFwhm] = useState(settingsMaxFwhm);
   const [maxEllipticity, setMaxEllipticity] = useState(settingsMaxEllipticity);
+  const [detectMinSharpness, setDetectMinSharpness] = useState(settingsDetectMinSharpness);
+  const [detectMaxSharpness, setDetectMaxSharpness] = useState(settingsDetectMaxSharpness);
+  const [detectPeakMax, setDetectPeakMax] = useState(settingsDetectPeakMax);
+  const [detectSnrMin, setDetectSnrMin] = useState(settingsDetectSnrMin);
+  const [useAnnotatedForAlignment, setUseAnnotatedForAlignment] = useState(
+    settingsUseAnnotatedForAlignment,
+  );
   const [ransacMaxIterations, setRansacMaxIterations] = useState(settingsRansacMaxIterations);
   const [alignmentInlierThreshold, setAlignmentInlierThreshold] = useState(
     settingsAlignmentInlierThreshold,
@@ -190,17 +216,29 @@ export default function StackingScreen() {
           minArea: detectMinArea,
           maxArea: detectMaxArea,
           borderMargin: detectBorderMargin,
+          sigmaClipIters: detectSigmaClipIters,
+          applyMatchedFilter: detectApplyMatchedFilter,
+          connectivity: detectConnectivity,
           meshSize: backgroundMeshSize,
           deblendNLevels,
           deblendMinContrast,
           filterFwhm,
+          minFwhm: detectMinFwhm,
           maxFwhm,
           maxEllipticity,
+          minSharpness: detectMinSharpness,
+          maxSharpness: detectMaxSharpness,
+          peakMax: detectPeakMax > 0 ? detectPeakMax : undefined,
+          snrMin: detectSnrMin,
         },
         alignment: {
           maxRansacIterations: ransacMaxIterations,
           inlierThreshold: alignmentInlierThreshold,
           fallbackToTranslation: true,
+        },
+        annotation: {
+          useAnnotatedForAlignment,
+          stalePolicy: "auto-fallback-detect",
         },
         quality: {
           detectionOptions: {
@@ -210,12 +248,20 @@ export default function StackingScreen() {
             minArea: detectMinArea,
             maxArea: detectMaxArea,
             borderMargin: detectBorderMargin,
+            sigmaClipIters: detectSigmaClipIters,
+            applyMatchedFilter: detectApplyMatchedFilter,
+            connectivity: detectConnectivity,
             meshSize: backgroundMeshSize,
             deblendNLevels,
             deblendMinContrast,
             filterFwhm,
+            minFwhm: detectMinFwhm,
             maxFwhm,
             maxEllipticity,
+            minSharpness: detectMinSharpness,
+            maxSharpness: detectMaxSharpness,
+            peakMax: detectPeakMax > 0 ? detectPeakMax : undefined,
+            snrMin: detectSnrMin,
           },
         },
       },
@@ -235,12 +281,21 @@ export default function StackingScreen() {
     detectMinArea,
     detectMaxArea,
     detectBorderMargin,
+    detectSigmaClipIters,
+    detectApplyMatchedFilter,
+    detectConnectivity,
     backgroundMeshSize,
     deblendNLevels,
     deblendMinContrast,
     filterFwhm,
+    detectMinFwhm,
     maxFwhm,
     maxEllipticity,
+    detectMinSharpness,
+    detectMaxSharpness,
+    detectPeakMax,
+    detectSnrMin,
+    useAnnotatedForAlignment,
     ransacMaxIterations,
     alignmentInlierThreshold,
   ]);
@@ -486,6 +541,14 @@ export default function StackingScreen() {
                   <Checkbox.Indicator />
                   <Label className="text-xs">{t("editor.enableQualityEval")}</Label>
                 </Checkbox>
+                <Checkbox
+                  testID="e2e-action-stacking__index-toggle-use-annotated"
+                  isSelected={useAnnotatedForAlignment}
+                  onSelectedChange={setUseAnnotatedForAlignment}
+                >
+                  <Checkbox.Indicator />
+                  <Label className="text-xs">{t("editor.useAnnotatedForStacking")}</Label>
+                </Checkbox>
 
                 {/* Export Format */}
                 <View className="flex-row items-center gap-2">
@@ -554,6 +617,42 @@ export default function StackingScreen() {
                   onValueChange={setDetectBorderMargin}
                 />
                 <SimpleSlider
+                  label={t("settings.stackingDetectSigmaClipIters")}
+                  value={detectSigmaClipIters}
+                  min={0}
+                  max={10}
+                  step={1}
+                  onValueChange={(value) => setDetectSigmaClipIters(Math.round(value))}
+                />
+                <Checkbox
+                  isSelected={detectApplyMatchedFilter}
+                  onSelectedChange={setDetectApplyMatchedFilter}
+                >
+                  <Checkbox.Indicator />
+                  <Label className="text-xs">
+                    {t("settings.stackingDetectApplyMatchedFilter")}
+                  </Label>
+                </Checkbox>
+                <View className="flex-row items-center gap-2">
+                  <Text className="text-[10px] text-muted">
+                    {t("settings.stackingDetectConnectivity")}:
+                  </Text>
+                  <Chip
+                    size="sm"
+                    variant={detectConnectivity === 4 ? "primary" : "secondary"}
+                    onPress={() => setDetectConnectivity(4)}
+                  >
+                    <Chip.Label className="text-[9px]">4</Chip.Label>
+                  </Chip>
+                  <Chip
+                    size="sm"
+                    variant={detectConnectivity === 8 ? "primary" : "secondary"}
+                    onPress={() => setDetectConnectivity(8)}
+                  >
+                    <Chip.Label className="text-[9px]">8</Chip.Label>
+                  </Chip>
+                </View>
+                <SimpleSlider
                   label={t("settings.stackingBackgroundMeshSize")}
                   value={backgroundMeshSize}
                   min={16}
@@ -586,6 +685,17 @@ export default function StackingScreen() {
                   onValueChange={setFilterFwhm}
                 />
                 <SimpleSlider
+                  label={t("settings.stackingDetectMinFwhm")}
+                  value={detectMinFwhm}
+                  min={0.1}
+                  max={15}
+                  step={0.1}
+                  onValueChange={(value) => {
+                    setDetectMinFwhm(value);
+                    if (value > maxFwhm) setMaxFwhm(value);
+                  }}
+                />
+                <SimpleSlider
                   label={t("settings.stackingMaxFwhm")}
                   value={maxFwhm}
                   min={1}
@@ -600,6 +710,44 @@ export default function StackingScreen() {
                   max={1}
                   step={0.01}
                   onValueChange={setMaxEllipticity}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectMinSharpness")}
+                  value={detectMinSharpness}
+                  min={0}
+                  max={100}
+                  step={0.05}
+                  onValueChange={(value) => {
+                    setDetectMinSharpness(value);
+                    if (value > detectMaxSharpness) setDetectMaxSharpness(value);
+                  }}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectMaxSharpness")}
+                  value={detectMaxSharpness}
+                  min={0}
+                  max={100}
+                  step={0.05}
+                  onValueChange={(value) => {
+                    setDetectMaxSharpness(value);
+                    if (value < detectMinSharpness) setDetectMinSharpness(value);
+                  }}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectPeakMax")}
+                  value={detectPeakMax}
+                  min={0}
+                  max={10000}
+                  step={10}
+                  onValueChange={setDetectPeakMax}
+                />
+                <SimpleSlider
+                  label={t("settings.stackingDetectSnrMin")}
+                  value={detectSnrMin}
+                  min={0}
+                  max={50}
+                  step={0.1}
+                  onValueChange={setDetectSnrMin}
                 />
                 <SimpleSlider
                   label={t("settings.stackingRansacMaxIterations")}
@@ -782,6 +930,32 @@ export default function StackingScreen() {
                 </Card.Body>
               </Card>
             )}
+
+            {stacking.result.annotationDiagnostics &&
+              stacking.result.annotationDiagnostics.length > 0 && (
+                <Card variant="secondary" className="mb-2">
+                  <Card.Body className="gap-1 p-3">
+                    <Text className="text-[10px] font-semibold text-muted mb-1">
+                      {t("editor.annotationDiagnostics")}
+                    </Text>
+                    {stacking.result.annotationDiagnostics.map((diag, idx) => (
+                      <View key={idx} className="flex-row items-center gap-2">
+                        <View
+                          className={`h-2 w-2 rounded-full ${diag.usedForAlignment ? "bg-success" : "bg-warning"}`}
+                        />
+                        <Text className="text-[9px] text-foreground flex-1" numberOfLines={1}>
+                          {diag.filename}
+                        </Text>
+                        <Text className="text-[9px] text-muted">
+                          {diag.usedForAlignment
+                            ? t("editor.annotationUsed")
+                            : `${t("editor.annotationFallback")} (${diag.reason ?? "unknown"})`}
+                        </Text>
+                      </View>
+                    ))}
+                  </Card.Body>
+                </Card>
+              )}
 
             {/* Quality Metrics */}
             {stacking.result.qualityMetrics && stacking.result.qualityMetrics.length > 0 && (

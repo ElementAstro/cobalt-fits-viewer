@@ -9,7 +9,7 @@ import { BaseCloudProvider } from "../cloudProvider";
 import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
 import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR } from "../types";
+import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.GoogleDriveProvider;
 const SECURE_STORE_KEY = "backup_google_tokens";
@@ -21,11 +21,40 @@ export class GoogleDriveProvider extends BaseCloudProvider {
   readonly name = "google-drive" as const;
   readonly displayName = "Google Drive";
   readonly icon = "logo-google";
+  readonly capabilities = {
+    supportsConditionalWrite: false,
+    supportsResumableUpload: true,
+    supportsContentHash: false,
+  } as const;
 
   private _backupFolderId: string | null = null;
   private _fitsFolderId: string | null = null;
+  private _thumbnailFolderId: string | null = null;
 
-  async connect(_config?: CloudProviderConfig): Promise<void> {
+  async connect(config?: CloudProviderConfig): Promise<void> {
+    if (config?.accessToken) {
+      this._accessToken = config.accessToken;
+      this._connected = true;
+      await SecureStore.setItemAsync(
+        SECURE_STORE_KEY,
+        JSON.stringify({ accessToken: config.accessToken }),
+      );
+      Logger.info(TAG, "Connected to Google Drive");
+      return;
+    }
+
+    const savedTokens = await this.loadTokens();
+    if (savedTokens?.accessToken) {
+      this._accessToken = savedTokens.accessToken;
+      this._connected = true;
+      Logger.info(TAG, "Restored Google Drive connection");
+      return;
+    }
+
+    if (!config) {
+      throw new Error("Google Drive session not found");
+    }
+
     try {
       const { GoogleSignin } = await import("@react-native-google-signin/google-signin");
 
@@ -64,6 +93,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     this._connected = false;
     this._backupFolderId = null;
     this._fitsFolderId = null;
+    this._thumbnailFolderId = null;
     await SecureStore.deleteItemAsync(SECURE_STORE_KEY);
     Logger.info(TAG, "Disconnected from Google Drive");
   }
@@ -98,6 +128,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     // Find or create backup folder in appDataFolder
     this._backupFolderId = await this.findOrCreateFolder(BACKUP_DIR, "appDataFolder");
     this._fitsFolderId = await this.findOrCreateFolder(FITS_SUBDIR, this._backupFolderId);
+    this._thumbnailFolderId = await this.findOrCreateFolder(THUMBNAIL_SUBDIR, this._backupFolderId);
   }
 
   async uploadFile(
@@ -112,8 +143,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     if (!file.exists) throw new Error(`Local file not found: ${localPath}`);
 
     const fileName = remotePath.split("/").pop() ?? remotePath;
-    const isInFitsDir = remotePath.includes(FITS_SUBDIR);
-    const parentId = isInFitsDir ? this._fitsFolderId! : this._backupFolderId!;
+    const parentId = this.resolveParentFolderId(remotePath);
 
     // Check if file already exists, delete it first
     const existingId = await this.findFileId(fileName, parentId);
@@ -177,8 +207,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     await this.ensureBackupDir();
 
     const fileName = remotePath.split("/").pop() ?? remotePath;
-    const isInFitsDir = remotePath.includes(FITS_SUBDIR);
-    const parentId = isInFitsDir ? this._fitsFolderId! : this._backupFolderId!;
+    const parentId = this.resolveParentFolderId(remotePath);
 
     const fileId = await this.findFileId(fileName, parentId);
     if (!fileId) throw new Error(`Remote file not found: ${remotePath}`);
@@ -202,8 +231,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     await this.ensureBackupDir();
 
     const fileName = remotePath.split("/").pop() ?? remotePath;
-    const isInFitsDir = remotePath.includes(FITS_SUBDIR);
-    const parentId = isInFitsDir ? this._fitsFolderId! : this._backupFolderId!;
+    const parentId = this.resolveParentFolderId(remotePath);
 
     const fileId = await this.findFileId(fileName, parentId);
     if (!fileId) return;
@@ -218,8 +246,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     await this.refreshTokenIfNeeded();
     await this.ensureBackupDir();
 
-    const isInFitsDir = remotePath.includes(FITS_SUBDIR) || remotePath === FITS_SUBDIR;
-    const parentId = isInFitsDir ? this._fitsFolderId! : this._backupFolderId!;
+    const parentId = this.resolveParentFolderId(remotePath);
 
     const query = `'${parentId}' in parents and trashed = false`;
     const res = await fetch(
@@ -254,8 +281,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     await this.ensureBackupDir();
 
     const fileName = remotePath.split("/").pop() ?? remotePath;
-    const isInFitsDir = remotePath.includes(FITS_SUBDIR);
-    const parentId = isInFitsDir ? this._fitsFolderId! : this._backupFolderId!;
+    const parentId = this.resolveParentFolderId(remotePath);
 
     const fileId = await this.findFileId(fileName, parentId);
     return fileId !== null;
@@ -384,5 +410,38 @@ export class GoogleDriveProvider extends BaseCloudProvider {
 
     const data = (await res.json()) as { files: Array<{ id: string }> };
     return data.files?.[0]?.id ?? null;
+  }
+
+  private isPathInSubdir(remotePath: string, subdir: string): boolean {
+    const normalized = remotePath.replace(/^\/+/, "").replace(/\/+$/, "");
+    return (
+      normalized === subdir ||
+      normalized.endsWith(`/${subdir}`) ||
+      normalized.includes(`/${subdir}/`) ||
+      normalized.startsWith(`${subdir}/`)
+    );
+  }
+
+  private resolveParentFolderId(remotePath: string): string {
+    if (this.isPathInSubdir(remotePath, FITS_SUBDIR)) {
+      return this._fitsFolderId ?? this._backupFolderId!;
+    }
+    if (this.isPathInSubdir(remotePath, THUMBNAIL_SUBDIR)) {
+      return this._thumbnailFolderId ?? this._backupFolderId!;
+    }
+    return this._backupFolderId!;
+  }
+
+  private async loadTokens(): Promise<{ accessToken: string | null } | null> {
+    try {
+      const raw = await SecureStore.getItemAsync(SECURE_STORE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as { accessToken?: string };
+      return {
+        accessToken: parsed.accessToken ?? null,
+      };
+    } catch {
+      return null;
+    }
   }
 }

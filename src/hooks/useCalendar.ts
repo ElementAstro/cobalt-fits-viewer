@@ -774,7 +774,12 @@ export function useCalendar() {
         const result = await editEventInSystemCalendar(eventId);
         if (result.action === "deleted") {
           updateSession(session.id, { calendarEventId: undefined });
-        } else if (result.action === "saved" || result.action === "opened") {
+        } else if (
+          result.action === "saved" ||
+          result.action === "done" ||
+          result.action === "responded" ||
+          result.action === "opened"
+        ) {
           try {
             setSyncing(true);
             await refreshSessionFromCalendarCore(session);
@@ -809,7 +814,12 @@ export function useCalendar() {
         const result = await editEventInSystemCalendar(eventId);
         if (result.action === "deleted") {
           updatePlan(plan.id, { calendarEventId: undefined });
-        } else if (result.action === "saved" || result.action === "opened") {
+        } else if (
+          result.action === "saved" ||
+          result.action === "done" ||
+          result.action === "responded" ||
+          result.action === "opened"
+        ) {
           try {
             setSyncing(true);
             await refreshPlanFromCalendarCore(plan);
@@ -833,9 +843,6 @@ export function useCalendar() {
         return false;
       }
 
-      const permitted = await ensurePermission(true);
-      if (!permitted) return false;
-
       try {
         const result = await createEventViaSystemUI(
           buildSessionEventDetails(session, defaultReminderMinutes, targets),
@@ -852,7 +859,6 @@ export function useCalendar() {
     },
     [
       calendarSyncEnabled,
-      ensurePermission,
       defaultReminderMinutes,
       updateSession,
       showCalendarSyncDisabledAlert,
@@ -867,9 +873,6 @@ export function useCalendar() {
         return false;
       }
 
-      const permitted = await ensurePermission(true);
-      if (!permitted) return false;
-
       try {
         const result = await createEventViaSystemUI(buildPlanEventDetails(plan, targets), {
           startNewActivityTask: false,
@@ -883,7 +886,7 @@ export function useCalendar() {
         return false;
       }
     },
-    [calendarSyncEnabled, ensurePermission, updatePlan, showCalendarSyncDisabledAlert, targets],
+    [calendarSyncEnabled, updatePlan, showCalendarSyncDisabledAlert, targets],
   );
 
   const deleteObservationPlan = useCallback(

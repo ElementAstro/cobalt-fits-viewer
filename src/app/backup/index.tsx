@@ -3,7 +3,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { Alert, Button, Card, Chip, Dialog, Separator, Switch, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,9 +27,11 @@ export default function BackupScreen() {
   const router = useRouter();
   const mutedColor = useThemeColor("muted");
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
+  const isWeb = Platform.OS === "web";
 
   const {
     connections,
+    activeProvider,
     backupInProgress,
     restoreInProgress,
     progress,
@@ -182,10 +184,12 @@ export default function BackupScreen() {
     const preview = previewResult.preview!;
     const summaryDesc =
       `${t("backup.optionFiles")}: ${preview.summary.fileCount}\n` +
+      `${t("backup.optionThumbnails")}: ${preview.summary.thumbnailCount}\n` +
       `${t("backup.optionAlbums")}: ${preview.summary.albumCount}\n` +
       `${t("backup.optionTargets")}: ${preview.summary.targetCount}\n` +
       `${t("backup.optionSessions")}: ${preview.summary.sessionCount}\n` +
       `${t("backup.optionSettings")}: ${preview.summary.hasSettings ? t("backup.valueYes") : t("backup.valueNo")}\n` +
+      `${t("backup.localEncryption")}: ${preview.encrypted ? t("backup.valueYes") : t("backup.valueNo")}\n` +
       `${preview.summary.deviceName} (${preview.summary.appVersion})\n` +
       `${new Date(preview.summary.createdAt).toLocaleString()}\n\n` +
       t("backup.confirmImport");
@@ -316,6 +320,7 @@ export default function BackupScreen() {
               <ProviderCard
                 key={conn.provider}
                 connection={conn}
+                isActive={activeProvider === conn.provider}
                 onBackup={() => handleBackup(conn.provider)}
                 onRestore={() => handleRestore(conn.provider)}
                 onDisconnect={() => handleDisconnect(conn.provider)}
@@ -369,11 +374,12 @@ export default function BackupScreen() {
         <Button
           variant="secondary"
           onPress={() => setShowAddProvider(true)}
-          isDisabled={isOperating}
+          isDisabled={isOperating || isWeb}
         >
           <Ionicons name="add-circle-outline" size={18} color={mutedColor} />
           <Button.Label>{t("backup.addProvider")}</Button.Label>
         </Button>
+        {isWeb && <Text className="mt-2 text-xs text-muted">{t("backup.webProviderLimited")}</Text>}
 
         {/* Auto backup setting */}
         <View className="mt-6">
@@ -488,6 +494,7 @@ export default function BackupScreen() {
       <BackupOptionsSheet
         visible={optionsSheet.visible}
         mode={optionsSheet.mode}
+        localPreview={optionsSheet.localPreview}
         onConfirm={handleRunWithOptions}
         onClose={() =>
           setOptionsSheet((prev) => ({

@@ -41,4 +41,29 @@ describe("StarAnnotationOverlay", () => {
     const hidden = render(<StarAnnotationOverlay {...baseProps} visible={false} points={[]} />);
     expect(hidden.toJSON()).toBeNull();
   });
+
+  it("does not render points transformed outside of viewport bounds", () => {
+    const view = render(
+      <StarAnnotationOverlay
+        {...baseProps}
+        visible
+        points={[
+          {
+            id: "far-away",
+            x: 20,
+            y: 30,
+            source: "manual",
+            enabled: true,
+            anchorIndex: 2,
+          },
+        ]}
+        transform={{
+          ...baseProps.transform,
+          translateX: 1000,
+          translateY: 1000,
+        }}
+      />,
+    );
+    expect(view.queryByText("2")).toBeNull();
+  });
 });

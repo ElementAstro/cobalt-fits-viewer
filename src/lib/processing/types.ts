@@ -6,11 +6,18 @@ import type {
 } from "../fits/types";
 
 export type ProcessingComplexity = "light" | "medium" | "heavy";
+export type ProcessingStage = "scientific" | "color";
 
 export type ProcessingCategory = "geometry" | "adjust" | "process" | "mask" | "color" | "advanced";
 
 export interface ProcessingImageState {
   pixels: Float32Array;
+  width: number;
+  height: number;
+}
+
+export interface ProcessingRGBAState {
+  rgbaData: Uint8ClampedArray;
   width: number;
   height: number;
 }
@@ -37,15 +44,16 @@ export interface ProcessingParamSchema {
 
 export interface ProcessingOperationSchema {
   id: ProcessingOperationId;
+  stage: ProcessingStage;
   label: string;
   category: ProcessingCategory;
   complexity: ProcessingComplexity;
   supportsPreview: boolean;
   params: ProcessingParamSchema[];
   execute: (
-    input: ProcessingImageState,
+    input: ProcessingImageState | ProcessingRGBAState,
     params: Record<string, ProcessingParamValue>,
-  ) => ProcessingImageState;
+  ) => ProcessingImageState | ProcessingRGBAState;
 }
 
 export interface ProcessingExecutionOptions {
