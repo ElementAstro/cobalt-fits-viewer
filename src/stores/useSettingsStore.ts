@@ -49,9 +49,12 @@ export interface SettingsStoreState {
   defaultGridColumns: 2 | 3 | 4;
   thumbnailQuality: number;
   thumbnailSize: number;
+  thumbnailCacheMaxSizeMB: number;
 
   // 导出/转换默认
   defaultExportFormat: ExportFormat;
+  defaultExportQuality: number;
+  includeAnnotationsByDefault: boolean;
 
   // 目标管理
   autoGroupByObject: boolean;
@@ -109,6 +112,9 @@ export interface SettingsStoreState {
   defaultBlackPoint: number;
   defaultWhitePoint: number;
   defaultGamma: number;
+  compareDefaultMode: "blink" | "side-by-side" | "split";
+  compareBlinkSpeed: number;
+  compareSplitPosition: number;
 
   // 直方图配置
   defaultHistogramMode: "linear" | "log" | "cdf";
@@ -240,7 +246,10 @@ export interface SettingsStoreState {
   setDefaultGridColumns: (cols: 2 | 3 | 4) => void;
   setThumbnailQuality: (quality: number) => void;
   setThumbnailSize: (size: number) => void;
+  setThumbnailCacheMaxSizeMB: (size: number) => void;
   setDefaultExportFormat: (format: ExportFormat) => void;
+  setDefaultExportQuality: (quality: number) => void;
+  setIncludeAnnotationsByDefault: (value: boolean) => void;
   setAutoGroupByObject: (value: boolean) => void;
   setAutoDetectDuplicates: (value: boolean) => void;
   setAutoTagLocation: (value: boolean) => void;
@@ -411,7 +420,10 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   defaultGridColumns: 3,
   thumbnailQuality: 80,
   thumbnailSize: 256,
+  thumbnailCacheMaxSizeMB: 200,
   defaultExportFormat: "png",
+  defaultExportQuality: 85,
+  includeAnnotationsByDefault: false,
   autoGroupByObject: true,
   autoDetectDuplicates: true,
   autoTagLocation: false,
@@ -443,6 +455,9 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   defaultBlackPoint: 0,
   defaultWhitePoint: 1,
   defaultGamma: 1,
+  compareDefaultMode: "blink",
+  compareBlinkSpeed: 1.5,
+  compareSplitPosition: 0.5,
   defaultHistogramMode: "linear",
   histogramHeight: 100,
   pixelInfoDecimalPlaces: 1,
@@ -653,11 +668,14 @@ function sanitizeSettingsPatch(
   }> = [
     { key: "thumbnailQuality", min: 10, max: 100, integer: true },
     { key: "thumbnailSize", min: 64, max: 2048, integer: true },
+    { key: "thumbnailCacheMaxSizeMB", min: 50, max: 2000, integer: true },
     { key: "sessionGapMinutes", min: 15, max: 1440, integer: true },
     { key: "defaultReminderMinutes", min: 0, max: 1440, integer: true },
     { key: "defaultBlackPoint", min: 0, max: 1 },
     { key: "defaultWhitePoint", min: 0, max: 1 },
     { key: "defaultGamma", min: 0.1, max: 5 },
+    { key: "compareBlinkSpeed", min: 0.3, max: 5 },
+    { key: "compareSplitPosition", min: 0.1, max: 0.9 },
     { key: "histogramHeight", min: 60, max: 300, integer: true },
     { key: "pixelInfoDecimalPlaces", min: 0, max: 8, integer: true },
     { key: "defaultSigmaValue", min: 0.1, max: 10 },
@@ -723,6 +741,7 @@ function sanitizeSettingsPatch(
     theme: ["light", "dark", "system"],
     orientationLock: ["default", "portrait", "landscape"],
     themeColorMode: THEME_COLOR_MODES,
+    compareDefaultMode: ["blink", "side-by-side", "split"],
     defaultHistogramMode: ["linear", "log", "cdf"],
     defaultGallerySortBy: ["name", "date", "size", "object", "filter"],
     defaultGallerySortOrder: ["asc", "desc"],
@@ -993,7 +1012,11 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setDefaultGridColumns: (cols) => set({ defaultGridColumns: cols }),
       setThumbnailQuality: (quality) => get().applySettingsPatch({ thumbnailQuality: quality }),
       setThumbnailSize: (size) => get().applySettingsPatch({ thumbnailSize: size }),
+      setThumbnailCacheMaxSizeMB: (size) =>
+        get().applySettingsPatch({ thumbnailCacheMaxSizeMB: size }),
       setDefaultExportFormat: (format) => set({ defaultExportFormat: format }),
+      setDefaultExportQuality: (quality) => set({ defaultExportQuality: quality }),
+      setIncludeAnnotationsByDefault: (value) => set({ includeAnnotationsByDefault: value }),
       setAutoGroupByObject: (value) => set({ autoGroupByObject: value }),
       setAutoDetectDuplicates: (value) => set({ autoDetectDuplicates: value }),
       setAutoTagLocation: (value) => set({ autoTagLocation: value }),

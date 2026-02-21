@@ -68,6 +68,8 @@ export function generateExportFilename(
 export interface ShareFileOptions {
   format?: MediaExportFormat;
   filename?: string;
+  mimeType?: string;
+  UTI?: string;
   anchor?: { x: number; y: number; width: number; height: number };
 }
 
@@ -82,8 +84,15 @@ export async function shareFile(fileUri: string, options?: ShareFileOptions): Pr
 
   const sharingOptions: Sharing.SharingOptions = {};
 
-  if (options?.format) {
+  if (options?.mimeType) {
+    sharingOptions.mimeType = options.mimeType;
+  } else if (options?.format) {
     sharingOptions.mimeType = getMimeType(options.format);
+  }
+
+  if (options?.UTI) {
+    sharingOptions.UTI = options.UTI;
+  } else if (options?.format) {
     sharingOptions.UTI = getUTI(options.format);
   }
 
@@ -107,6 +116,26 @@ export async function saveToMediaLibrary(fileUri: string): Promise<string> {
     throw new MediaPermissionDeniedError();
   }
   const asset = await MediaLibrary.createAssetAsync(fileUri);
+  return asset.uri;
+}
+
+/**
+ * 保存到设备指定相册
+ */
+export async function saveToMediaLibraryAlbum(fileUri: string, albumName: string): Promise<string> {
+  const { status } = await MediaLibrary.requestPermissionsAsync();
+  if (status !== "granted") {
+    throw new MediaPermissionDeniedError();
+  }
+  const asset = await MediaLibrary.createAssetAsync(fileUri);
+
+  const album = await MediaLibrary.getAlbumAsync(albumName);
+  if (!album) {
+    await MediaLibrary.createAlbumAsync(albumName, asset, false);
+  } else {
+    await MediaLibrary.addAssetsToAlbumAsync([asset], album, false);
+  }
+
   return asset.uri;
 }
 
@@ -222,17 +251,21 @@ export function cleanExportDir(): void {
 }
 
 /**
- * 清理缓存的导出文件
+ * 清理超过指定时间的导出文件
+ * @param maxAgeMs 最大文件年龄（毫秒），默认 24 小时
  */
-export function cleanOldExports(): void {
+export function cleanExpiredExports(_maxAgeMs: number = 24 * 60 * 60 * 1000): number {
   const dir = new Directory(Paths.cache, EXPORT_SUBDIR);
-  if (!dir.exists) return;
+  if (!dir.exists) return 0;
+
+  let cleaned = 0;
 
   try {
     for (const item of dir.list()) {
       if (item instanceof FSFile) {
         try {
           (item as FSFile).delete();
+          cleaned++;
         } catch {
           // ignore individual file deletion errors
         }
@@ -245,4 +278,44 @@ export function cleanOldExports(): void {
       // ignore
     }
   }
+
+  return cleaned;
+}
+
+/**
+ * @deprecated Use cleanExpiredExports instead
+ */
+export function cleanOldExports(): void {
+  cleanExpiredExports(0);
+}
+
+/**
+ * 获取导出缓存大小（字节）
+ */
+export function getExportCacheSize(): { totalBytes: number; fileCount: number } {
+  const dir = new Directory(Paths.cache, EXPORT_SUBDIR);
+  if (!dir.exists) return { totalBytes: 0, fileCount: 0 };
+
+  let totalBytes = 0;
+  let fileCount = 0;
+
+  try {
+    for (const item of dir.list()) {
+      if (item instanceof FSFile) {
+        try {
+          const file = item as FSFile;
+          if (file.size != null) {
+            totalBytes += file.size;
+          }
+          fileCount++;
+        } catch {
+          // ignore
+        }
+      }
+    }
+  } catch {
+    // ignore
+  }
+
+  return { totalBytes, fileCount };
 }

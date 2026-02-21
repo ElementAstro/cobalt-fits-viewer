@@ -157,12 +157,16 @@ async function buildExportRequest(
       contrast: options.contrast,
       mtfMidtone: options.mtfMidtone,
       curvePreset: options.curvePreset,
+      profile: options.profile,
     });
   } else {
     const decoded = await parseRasterFromBufferAsync(buffer, {
       frameIndex: 0,
       cacheSize: 3,
       preferTiffDecoder: true,
+      sourceUri: file.filepath,
+      filename: file.filename,
+      formatHint: detected.id,
     });
     width = decoded.width;
     height = decoded.height;
@@ -213,6 +217,7 @@ async function buildExportRequest(
     renderOptions: {
       includeAnnotations: options.includeAnnotations,
       includeWatermark: options.includeWatermark,
+      watermarkText: options.watermarkText,
     },
   };
 }

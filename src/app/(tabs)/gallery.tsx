@@ -3,16 +3,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import {
-  Button,
-  Chip,
-  Input,
-  ScrollShadow,
-  Separator,
-  Tabs,
-  TextField,
-  useThemeColor,
-} from "heroui-native";
+import { Button, Chip, ScrollShadow, Separator, Tabs, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -32,7 +23,7 @@ import { BatchTagSheet } from "../../components/gallery/BatchTagSheet";
 import { BatchRenameSheet } from "../../components/gallery/BatchRenameSheet";
 import { IntegrationReportSheet } from "../../components/gallery/IntegrationReportSheet";
 import { SmartAlbumModal } from "../../components/gallery/SmartAlbumModal";
-import { AlbumSearchBar } from "../../components/gallery/AlbumSearchBar";
+import { SearchBar } from "../../components/common/SearchBar";
 import { AlbumSortControl } from "../../components/gallery/AlbumSortControl";
 import { AlbumStatisticsSheet } from "../../components/gallery/AlbumStatisticsSheet";
 import { AlbumMergeSheet } from "../../components/gallery/AlbumMergeSheet";
@@ -363,7 +354,7 @@ export default function GalleryScreen() {
 
         <View className="flex-row items-center gap-2">
           <View className="flex-1">
-            <AlbumSearchBar
+            <SearchBar
               value={albumSearchQuery}
               onChangeText={setAlbumSearchQuery}
               compact={isLandscape}
@@ -477,34 +468,12 @@ export default function GalleryScreen() {
         {/* Search + Filters: side-by-side in landscape */}
         {isLandscape ? (
           <View className="flex-row items-center gap-2">
-            <TextField>
-              <View className="flex-row items-center" style={{ width: 200 }}>
-                <Input
-                  className="flex-1 pl-9 pr-9"
-                  placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCorrect={false}
-                />
-                <Ionicons
-                  name="search-outline"
-                  size={14}
-                  color={mutedColor}
-                  style={{ position: "absolute", left: 12 }}
-                />
-                {searchQuery.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => setSearchQuery("")}
-                    style={{ position: "absolute", right: 4 }}
-                  >
-                    <Ionicons name="close-circle" size={14} color={mutedColor} />
-                  </Button>
-                )}
-              </View>
-            </TextField>
+            <SearchBar
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
+              compact
+            />
             <ScrollShadow LinearGradientComponent={LinearGradient} className="flex-1">
               <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
                 <View className="flex-row gap-1">
@@ -571,34 +540,11 @@ export default function GalleryScreen() {
         ) : (
           <>
             {/* Search Bar */}
-            <TextField>
-              <View className="w-full flex-row items-center">
-                <Input
-                  className="flex-1 pl-9 pr-9"
-                  placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  autoCorrect={false}
-                />
-                <Ionicons
-                  name="search-outline"
-                  size={16}
-                  color={mutedColor}
-                  style={{ position: "absolute", left: 12 }}
-                />
-                {searchQuery.length > 0 && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => setSearchQuery("")}
-                    style={{ position: "absolute", right: 12 }}
-                  >
-                    <Ionicons name="close-circle" size={16} color={mutedColor} />
-                  </Button>
-                )}
-              </View>
-            </TextField>
+            <SearchBar
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
+            />
 
             <Separator />
 
@@ -881,11 +827,11 @@ export default function GalleryScreen() {
         >
           <Tabs.List>
             <Tabs.Indicator />
-            <Tabs.Trigger value="images" testID="gallery-tab-images">
+            <Tabs.Trigger value="images" testID="e2e-action-tabs__gallery-tab-images">
               <Ionicons name="images-outline" size={14} color={mutedColor} />
               <Tabs.Label>{t("gallery.imagesTab")}</Tabs.Label>
             </Tabs.Trigger>
-            <Tabs.Trigger value="albums" testID="gallery-tab-albums">
+            <Tabs.Trigger value="albums" testID="e2e-action-tabs__gallery-tab-albums">
               <Ionicons name="albums-outline" size={14} color={mutedColor} />
               <Tabs.Label>{t("gallery.albumsTab")}</Tabs.Label>
             </Tabs.Trigger>

@@ -86,6 +86,8 @@ describe("stacking alignment", () => {
       rmsError: 0.5,
     });
     expect(translated).toHaveLength(pixels.length);
+    expect(Number.isNaN(translated[0])).toBe(true);
+    expect(translated[4]).toBeCloseTo(4, 5);
   });
 
   it("aligns frame by mode and handles failed matching", () => {

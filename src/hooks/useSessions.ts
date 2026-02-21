@@ -9,8 +9,8 @@ import { useSettingsStore } from "../stores/useSettingsStore";
 import { useTargetStore } from "../stores/useTargetStore";
 import {
   detectSessions,
+  findMatchingSession,
   getDatesWithObservations,
-  isSessionDuplicate,
 } from "../lib/sessions/sessionDetector";
 import { generateLogFromFiles } from "../lib/sessions/observationLog";
 import {
@@ -26,12 +26,28 @@ import {
   deriveSessionMetadataFromFiles,
 } from "../lib/sessions/sessionLinking";
 import { mergeSessionLike } from "../lib/sessions/sessionNormalization";
+import {
+  reconcileSessionsFromLinkedFilesGraph,
+  type SessionReconcileSummary,
+} from "../lib/sessions/sessionReconciliation";
 import type { ObservationSession } from "../lib/fits/types";
 
 interface EndLiveSessionWithIntegrationResult {
   session: ObservationSession | null;
   linkedFileCount: number;
   linkedLogCount: number;
+}
+
+interface AutoDetectSessionsResult {
+  newCount: number;
+  totalDetected: number;
+  updatedCount: number;
+  mergedCount: number;
+  skippedCount: number;
+}
+
+function stableEquals(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 export function useSessions() {
@@ -50,7 +66,7 @@ export function useSessions() {
   const sessionGapMinutes = useSettingsStore((s) => s.sessionGapMinutes);
   const targetCatalog = useTargetStore((s) => s.targets);
 
-  const autoDetectSessions = useCallback((): { newCount: number; totalDetected: number } => {
+  const autoDetectSessions = useCallback((): AutoDetectSessionsResult => {
     const detected = detectSessions(files, sessionGapMinutes);
     Logger.info(
       LOG_TAGS.Sessions,
@@ -58,39 +74,148 @@ export function useSessions() {
     );
 
     let newCount = 0;
-    for (const session of detected) {
-      if (isSessionDuplicate(session, sessions)) continue;
+    let updatedCount = 0;
+    let mergedCount = 0;
+    let skippedCount = 0;
 
-      const sessionFiles = files.filter((f) => session.imageIds.includes(f.id));
+    for (const detectedSession of detected) {
+      const sessionFiles = files.filter((f) => detectedSession.imageIds.includes(f.id));
+      if (sessionFiles.length === 0) {
+        skippedCount++;
+        continue;
+      }
+
       const derived = deriveSessionMetadataFromFiles(sessionFiles, targetCatalog);
-      const integratedSession = mergeSessionLike(session, {
+      const integratedSession = mergeSessionLike(detectedSession, {
         targetRefs: derived.targetRefs,
         imageIds: derived.imageIds,
         equipment: {
-          ...(session.equipment ?? {}),
+          ...(detectedSession.equipment ?? {}),
           ...(derived.equipment ?? {}),
         },
-        location: derived.location ?? session.location,
+        location: derived.location ?? detectedSession.location,
       }) as ObservationSession;
 
-      addSession(integratedSession);
-      batchSetSessionId(integratedSession.imageIds, integratedSession.id);
+      const existingSessions = useSessionStore.getState().sessions;
+      const matchedSession = findMatchingSession(integratedSession, existingSessions);
+      if (!matchedSession) {
+        addSession(integratedSession);
+        batchSetSessionId(integratedSession.imageIds, integratedSession.id);
+        const entries = generateLogFromFiles(sessionFiles, integratedSession.id);
+        if (entries.length > 0) {
+          addLogEntries(entries);
+        }
+        newCount++;
+        continue;
+      }
 
-      const entries = generateLogFromFiles(sessionFiles, integratedSession.id);
-      addLogEntries(entries);
-      newCount++;
+      const mergedStart = Math.min(matchedSession.startTime, integratedSession.startTime);
+      const mergedEnd = Math.max(matchedSession.endTime, integratedSession.endTime);
+      const mergedDuration = Math.max(0, Math.round((mergedEnd - mergedStart) / 1000));
+      const mergedSession = mergeSessionLike(matchedSession, {
+        targetRefs: integratedSession.targetRefs,
+        imageIds: integratedSession.imageIds,
+        equipment: integratedSession.equipment,
+        location: integratedSession.location,
+        startTime: mergedStart,
+        endTime: mergedEnd,
+        duration: mergedDuration,
+      }) as ObservationSession;
+
+      const nextSessionData = {
+        targetRefs: mergedSession.targetRefs,
+        imageIds: mergedSession.imageIds,
+        equipment: mergedSession.equipment ?? matchedSession.equipment ?? {},
+        location: mergedSession.location ?? matchedSession.location,
+        startTime: mergedStart,
+        endTime: mergedEnd,
+        duration: mergedDuration,
+        date: matchedSession.date,
+      };
+
+      const hasSessionChanges = !stableEquals(
+        {
+          targetRefs: matchedSession.targetRefs,
+          imageIds: matchedSession.imageIds,
+          equipment: matchedSession.equipment,
+          location: matchedSession.location,
+          startTime: matchedSession.startTime,
+          endTime: matchedSession.endTime,
+          duration: matchedSession.duration,
+          date: matchedSession.date,
+        },
+        nextSessionData,
+      );
+
+      const existingLogEntries = useSessionStore.getState().logEntries;
+      const missingLogs = buildMissingLogEntries(
+        sessionFiles,
+        matchedSession.id,
+        existingLogEntries,
+      );
+      if (!hasSessionChanges && missingLogs.length === 0) {
+        skippedCount++;
+        continue;
+      }
+
+      updateSession(matchedSession.id, nextSessionData);
+      batchSetSessionId(nextSessionData.imageIds, matchedSession.id);
+      if (missingLogs.length > 0) {
+        addLogEntries(missingLogs);
+      }
+
+      updatedCount++;
+      if (
+        nextSessionData.imageIds.length > matchedSession.imageIds.length ||
+        missingLogs.length > 0
+      ) {
+        mergedCount++;
+      }
     }
 
-    return { newCount, totalDetected: detected.length };
+    return {
+      newCount,
+      totalDetected: detected.length,
+      updatedCount,
+      mergedCount,
+      skippedCount,
+    };
   }, [
     files,
     sessionGapMinutes,
-    sessions,
     addSession,
     addLogEntries,
     batchSetSessionId,
     targetCatalog,
+    updateSession,
   ]);
+
+  const reconcileSessionsFromLinkedFiles = useCallback(
+    (sessionIds?: string[]): SessionReconcileSummary => {
+      const state = useSessionStore.getState();
+      const {
+        sessions: nextSessions,
+        logEntries: nextLogEntries,
+        summary,
+      } = reconcileSessionsFromLinkedFilesGraph({
+        sessionIds,
+        sessions: state.sessions,
+        files: useFitsStore.getState().files,
+        logEntries: state.logEntries,
+        targetCatalog: useTargetStore.getState().targets,
+      });
+
+      if (summary.changed) {
+        useSessionStore.setState({
+          sessions: nextSessions,
+          logEntries: nextLogEntries,
+        });
+      }
+
+      return summary;
+    },
+    [],
+  );
 
   const endLiveSessionWithIntegration = useCallback((): EndLiveSessionWithIntegrationResult => {
     const endedSession = endLiveSession();
@@ -179,6 +304,7 @@ export function useSessions() {
       mergeSessions,
       endLiveSessionWithIntegration,
       autoDetectSessions,
+      reconcileSessionsFromLinkedFiles,
       getSessionStats,
       getMonthlyData,
       getObservationDates,
@@ -195,6 +321,7 @@ export function useSessions() {
       mergeSessions,
       endLiveSessionWithIntegration,
       autoDetectSessions,
+      reconcileSessionsFromLinkedFiles,
       getSessionStats,
       getMonthlyData,
       getObservationDates,

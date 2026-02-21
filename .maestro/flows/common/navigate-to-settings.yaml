@@ -1,0 +1,7 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+- openLink: cobalt://settings
+- extendedWaitUntil:
+    visible:
+      id: e2e-screen-settings__index
+    timeout: 10000

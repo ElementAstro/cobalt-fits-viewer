@@ -3,7 +3,15 @@
 - openLink: cobalt://compare?ids=fits-001,fits-002
 - assertVisible:
     id: e2e-screen-compare__index
+- assertVisible:
+    id: e2e-action-compare__index-open-picker-a
+- assertVisible:
+    id: e2e-action-compare__index-open-picker-b
+- assertVisible:
+    id: e2e-action-compare__index-toggle-linked
 - tapOn:
     id: e2e-action-compare__index-toggle-linked
 - tapOn:
     id: e2e-action-compare__index-auto-stretch
+- tapOn:
+    id: e2e-action-compare__index-toggle-linked

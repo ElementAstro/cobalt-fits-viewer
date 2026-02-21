@@ -3,14 +3,24 @@
 - openLink: cobalt://editor/fits-001
 - assertVisible:
     id: e2e-screen-editor__param_id
+- assertVisible: M42_Light_001.fits
+- assertVisible:
+    id: e2e-action-editor__param_id-undo
+- assertVisible:
+    id: e2e-action-editor__param_id-redo
+- assertVisible:
+    id: e2e-action-editor__param_id-toggle-original
+- takeScreenshot: screenshots/editor__param_id
 - tapOn:
     id: e2e-action-editor__param_id-advanced-starDetect
 - assertVisible:
     id: e2e-action-editor__param_id-redetect-stars
 - tapOn:
     id: e2e-action-editor__param_id-redetect-stars
-- assertVisible:
-    id: e2e-text-editor__param_id-star-counts
+- extendedWaitUntil:
+    visible:
+      id: e2e-text-editor__param_id-star-counts
+    timeout: 10000
 - tapOn:
     id: e2e-action-editor__param_id-tool-rotate
 - tapOn:

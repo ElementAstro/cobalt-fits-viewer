@@ -1,5 +1,11 @@
 import type { Target } from "../../fits/types";
-import { detectDuplicates, findDuplicatesOf, suggestMergeStrategy } from "../duplicateDetector";
+import {
+  detectDuplicates,
+  findDuplicatesOf,
+  selectPrimaryDuplicateTarget,
+  sortDuplicateTargetsByMergePriority,
+  suggestMergeStrategy,
+} from "../duplicateDetector";
 
 const makeTarget = (overrides: Partial<Target> = {}): Target => {
   const now = Date.now();
@@ -106,5 +112,40 @@ describe("target duplicateDetector", () => {
       targets: [makeTarget({ id: "single" })],
     };
     expect(suggestMergeStrategy(group)).toBeNull();
+  });
+
+  it("selects primary target deterministically using tie-break rules", () => {
+    const targets = [
+      makeTarget({
+        id: "c",
+        imageIds: ["i1", "i2"],
+        updatedAt: 100,
+        createdAt: 50,
+      }),
+      makeTarget({
+        id: "a",
+        imageIds: ["i1", "i2"],
+        updatedAt: 100,
+        createdAt: 50,
+      }),
+      makeTarget({
+        id: "b",
+        imageIds: ["i1", "i2", "i3"],
+        updatedAt: 10,
+        createdAt: 10,
+      }),
+    ];
+
+    const sorted = sortDuplicateTargetsByMergePriority(targets);
+    expect(sorted.map((target) => target.id)).toEqual(["b", "a", "c"]);
+    expect(selectPrimaryDuplicateTarget(targets)?.id).toBe("b");
+  });
+
+  it("prefers recently updated target when frame counts tie", () => {
+    const targets = [
+      makeTarget({ id: "older", imageIds: ["i1"], updatedAt: 10, createdAt: 100 }),
+      makeTarget({ id: "newer", imageIds: ["i1"], updatedAt: 20, createdAt: 50 }),
+    ];
+    expect(selectPrimaryDuplicateTarget(targets)?.id).toBe("newer");
   });
 });

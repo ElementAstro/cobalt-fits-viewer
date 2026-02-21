@@ -1,9 +1,11 @@
 import {
   applyFlat,
   calibrateFrame,
+  computeMedianExposure,
   createMasterDark,
   createMasterFlat,
   normalizeFlat,
+  scaleFrameByExposure,
   subtractBias,
   subtractDark,
 } from "../calibration";
@@ -67,5 +69,25 @@ describe("stacking calibration", () => {
     const singleFlat = createMasterFlat([new Float32Array([2, 2])]);
     expect(singleFlat[0]).toBeCloseTo(1, 5);
     expect(singleFlat[1]).toBeCloseTo(1, 5);
+  });
+
+  it("computes median exposure from valid positive values only", () => {
+    expect(computeMedianExposure([null, undefined, -1, 0])).toBeNull();
+    expect(computeMedianExposure([10, 30, 20])).toBe(20);
+    expect(computeMedianExposure([10, 40, 20, 30])).toBe(25);
+  });
+
+  it("scales frames by exposure and falls back to scale=1 when EXPTIME is missing", () => {
+    const frame = new Float32Array([1, 2, 3]);
+
+    const scaled = scaleFrameByExposure(frame, 10, 20);
+    expect(Array.from(scaled.pixels)).toEqual([2, 4, 6]);
+    expect(scaled.scale).toBe(2);
+    expect(scaled.usedFallbackScale).toBe(false);
+
+    const fallback = scaleFrameByExposure(frame, null, 20);
+    expect(Array.from(fallback.pixels)).toEqual([1, 2, 3]);
+    expect(fallback.scale).toBe(1);
+    expect(fallback.usedFallbackScale).toBe(true);
   });
 });

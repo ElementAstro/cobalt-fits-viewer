@@ -3,7 +3,13 @@
 - openLink: cobalt://session/session-001
 - assertVisible:
     id: e2e-screen-session__param_id
+- assertVisible: E2E seeded session
+- assertVisible:
+    id: e2e-action-session__param_id-share
 - tapOn:
     id: e2e-action-session__param_id-open-edit
+- back
 - tapOn:
     id: e2e-action-session__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__sessions

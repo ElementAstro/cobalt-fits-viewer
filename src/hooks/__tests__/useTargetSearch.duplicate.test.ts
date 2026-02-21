@@ -12,6 +12,8 @@ jest.mock("../useTargets", () => ({
 jest.mock("../../lib/targets/duplicateDetector", () => ({
   detectDuplicates: jest.fn(),
   findDuplicatesOf: jest.fn(),
+  sortDuplicateTargetsByMergePriority: jest.fn(),
+  selectPrimaryDuplicateTarget: jest.fn(),
 }));
 
 const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
@@ -23,6 +25,8 @@ const { useTargets } = jest.requireMock("../useTargets") as {
 const duplicateLib = jest.requireMock("../../lib/targets/duplicateDetector") as {
   detectDuplicates: jest.Mock;
   findDuplicatesOf: jest.Mock;
+  sortDuplicateTargetsByMergePriority: jest.Mock;
+  selectPrimaryDuplicateTarget: jest.Mock;
 };
 
 describe("useDuplicateDetection", () => {
@@ -41,6 +45,13 @@ describe("useDuplicateDetection", () => {
     useTargets.mockReturnValue({ mergeTargetsCascade });
     duplicateLib.detectDuplicates.mockReturnValue({ groups: [] });
     duplicateLib.findDuplicatesOf.mockReturnValue([{ id: "t2" }]);
+    duplicateLib.sortDuplicateTargetsByMergePriority.mockImplementation(
+      (targets: Array<{ imageIds: unknown[] }>) =>
+        [...targets].sort((a, b) => b.imageIds.length - a.imageIds.length),
+    );
+    duplicateLib.selectPrimaryDuplicateTarget.mockImplementation(
+      (targets: Array<unknown>) => targets[0],
+    );
   });
 
   afterEach(() => {
@@ -79,8 +90,9 @@ describe("useDuplicateDetection", () => {
     const single = { targets: [{ id: "t1", imageIds: ["f1"] }] };
     const pair = {
       targets: [
-        { id: "t1", imageIds: ["f1", "f2"] },
-        { id: "t2", imageIds: ["f3"] },
+        { id: "t1", imageIds: ["f1"] },
+        { id: "t2", imageIds: ["f2", "f3"] },
+        { id: "t3", imageIds: ["f4"] },
       ],
     };
 
@@ -92,7 +104,10 @@ describe("useDuplicateDetection", () => {
     act(() => {
       result.current.mergeDuplicates(pair as never);
     });
-    expect(mergeTargetsCascade).toHaveBeenCalledWith("t1", "t2");
+    expect(duplicateLib.sortDuplicateTargetsByMergePriority).toHaveBeenCalledWith(pair.targets);
+    expect(duplicateLib.selectPrimaryDuplicateTarget).toHaveBeenCalled();
+    expect(mergeTargetsCascade).toHaveBeenCalledWith("t2", "t1");
+    expect(mergeTargetsCascade).toHaveBeenCalledWith("t2", "t3");
     act(() => {
       jest.runAllTimers();
     });

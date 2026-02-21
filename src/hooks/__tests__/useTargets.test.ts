@@ -194,4 +194,62 @@ describe("useTargets cascade actions", () => {
     expect(useTargetStore.getState().targets).toHaveLength(1);
     expect(useFitsStore.getState().files.find((file) => file.id === "f1")?.targetId).toBe("t1");
   });
+
+  it("scanAndAutoDetect returns full summary fields", () => {
+    useFitsStore.setState({
+      files: [
+        makeFile({ id: "f1", object: "M31" }),
+        makeFile({ id: "f2", targetId: "existing-target", object: "M42" }),
+        makeFile({ id: "f3" }),
+      ],
+    });
+
+    const { result } = renderHook(() => useTargets());
+    let summary:
+      | { newCount: number; updatedCount: number; scannedCount: number; skippedCount: number }
+      | undefined;
+    act(() => {
+      summary = result.current.scanAndAutoDetect();
+    });
+
+    expect(summary).toEqual({
+      newCount: 1,
+      updatedCount: 0,
+      scannedCount: 2,
+      skippedCount: 1,
+    });
+  });
+
+  it("sets and toggles target group membership idempotently", () => {
+    useTargetStore.setState({
+      targets: [makeTarget({ id: "t1", name: "M31" })],
+    });
+    useTargetGroupStore.setState({
+      groups: [makeGroup({ id: "g1", targetIds: ["t1"] }), makeGroup({ id: "g2", targetIds: [] })],
+    });
+
+    const { result } = renderHook(() => useTargets());
+
+    act(() => {
+      result.current.setTargetGroupMembership("t1", ["g2"]);
+    });
+    expect(result.current.getTargetGroupIds("t1").sort()).toEqual(["g2"]);
+    expect(
+      useTargetGroupStore.getState().groups.find((group) => group.id === "g1")?.targetIds,
+    ).toEqual([]);
+    expect(
+      useTargetGroupStore.getState().groups.find((group) => group.id === "g2")?.targetIds,
+    ).toEqual(["t1"]);
+
+    act(() => {
+      result.current.toggleTargetGroupMembership("t1", "g2");
+    });
+    expect(result.current.getTargetGroupIds("t1")).toEqual([]);
+
+    act(() => {
+      result.current.toggleTargetGroupMembership("t1", "g1");
+      result.current.toggleTargetGroupMembership("t1", "g1");
+    });
+    expect(result.current.getTargetGroupIds("t1")).toEqual([]);
+  });
 });

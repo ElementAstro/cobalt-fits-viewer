@@ -11,6 +11,9 @@ const mockFromBytes = jest.fn((bytes: Uint8Array) => ({ bytes }));
 const mockClassifyWithDetail = jest.fn(() => ({ type: "light", source: "filename" }));
 const mockIsTiffLikeBuffer = jest.fn(() => false);
 const mockCreateTiffFrameProvider = jest.fn();
+const mockImageManipulator = {
+  manipulate: jest.fn(),
+};
 
 jest.mock("../../gallery/frameClassifier", () => ({
   classifyWithDetail: (...args: any[]) => (mockClassifyWithDetail as any)(...args),
@@ -33,6 +36,32 @@ jest.mock("@shopify/react-native-skia", () => ({
   AlphaType: { Unpremul: "Unpremul" },
   ColorType: { RGBA_8888: "RGBA_8888" },
 }));
+
+jest.mock("expo-image-manipulator", () => ({
+  SaveFormat: { PNG: "png" },
+  manipulate: (...args: any[]) => (mockImageManipulator.manipulate as any)(...args),
+}));
+
+jest.mock("expo-file-system", () => {
+  class MockFile {
+    uri: string;
+    constructor(pathOrDir: string | { uri: string }, name?: string) {
+      const base = typeof pathOrDir === "string" ? pathOrDir : pathOrDir.uri;
+      this.uri = name ? `${base}/${name}` : base;
+    }
+    write() {}
+    delete() {}
+    async arrayBuffer() {
+      return new ArrayBuffer(8);
+    }
+  }
+  return {
+    File: MockFile,
+    Paths: {
+      cache: "file:///cache",
+    },
+  };
+});
 
 import {
   extractRasterMetadata,
@@ -163,6 +192,33 @@ describe("image rasterParser", () => {
     expect(result.compression).toBe(5);
     expect(result.headers).toEqual([{ key: "COMPRESSION", value: 5 }]);
     expect(mockCreateTiffFrameProvider).toHaveBeenCalled();
+  });
+
+  it("falls back to ImageManipulator when Skia cannot decode", async () => {
+    // First decode attempt fails (Skia returns null), second attempt (after transcode) succeeds.
+    setMockRasterImage({
+      width: 1,
+      height: 1,
+      pixels: new Uint8Array([255, 0, 0, 255]),
+    });
+    mockMakeFromEncoded.mockImplementationOnce(() => null);
+
+    const saveAsync = jest.fn(async () => ({ uri: "file:///cache/out.png" }));
+    const renderAsync = jest.fn(async () => ({ saveAsync }));
+    mockImageManipulator.manipulate.mockReturnValue({ renderAsync });
+
+    const result = await parseRasterFromBufferAsync(new ArrayBuffer(8), {
+      sourceUri: "file:///input.heic",
+      filename: "input.heic",
+      formatHint: "heic",
+    });
+
+    expect(mockImageManipulator.manipulate).toHaveBeenCalledWith("file:///input.heic");
+    expect(renderAsync).toHaveBeenCalled();
+    expect(saveAsync).toHaveBeenCalled();
+    expect(result.width).toBe(1);
+    expect(result.height).toBe(1);
+    expect(result.decodeStatus).toBe("ready");
   });
 
   it("extracts raster metadata", () => {

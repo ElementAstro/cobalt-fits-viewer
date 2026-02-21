@@ -3,7 +3,13 @@
 - openLink: cobalt://compose
 - assertVisible:
     id: e2e-screen-compose__index
-- tapOn:
+- assertVisible:
     id: e2e-action-compose__index-compose
+- assertVisible:
+    id: e2e-action-compose__index-reset
 - tapOn:
     id: e2e-action-compose__index-reset
+- tapOn:
+    id: e2e-action-compose__index-compose
+- assertVisible:
+    id: e2e-screen-compose__index

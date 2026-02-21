@@ -221,6 +221,39 @@ function buildDefaultAudioArgs(): string[] {
   return ["-c:a", "aac", "-b:a", "128k"];
 }
 
+function buildAtempoChain(factor: number): string[] {
+  if (factor <= 0) return [];
+  const filters: string[] = [];
+  let remaining = factor;
+  while (remaining > 2.0) {
+    filters.push("atempo=2.0");
+    remaining /= 2.0;
+  }
+  while (remaining < 0.5) {
+    filters.push("atempo=0.5");
+    remaining /= 0.5;
+  }
+  filters.push(`atempo=${remaining.toFixed(4)}`);
+  return filters;
+}
+
+function resolveWatermarkPosition(position: string): string {
+  switch (position) {
+    case "top-left":
+      return "x=10:y=10";
+    case "top-right":
+      return "x=w-tw-10:y=10";
+    case "bottom-left":
+      return "x=10:y=h-th-10";
+    case "bottom-right":
+      return "x=w-tw-10:y=h-th-10";
+    case "center":
+      return "x=(w-tw)/2:y=(h-th)/2";
+    default:
+      return "x=10:y=h-th-10";
+  }
+}
+
 function buildOutputFilename(
   request: VideoProcessingRequest,
   extOverride?: string,
@@ -417,6 +450,88 @@ export function buildFfmpegCommandForRequest(
     throw new Error("split_requires_segment_builder");
   }
 
+  if (request.operation === "rotate") {
+    const rotation = request.rotateNormalize?.rotationDeg ?? 0;
+    const rotationFilter =
+      rotation === 90
+        ? "transpose=1"
+        : rotation === 180
+          ? "transpose=1,transpose=1"
+          : rotation === 270
+            ? "transpose=2"
+            : null;
+    return buildCoreCommand(request, resolveContext(), request.inputUri, outputUri, {
+      scaleFilter: rotationFilter,
+      muteAudio: request.removeAudio,
+    });
+  }
+
+  if (request.operation === "speed") {
+    const factor = clamp(request.speed?.factor ?? 1, 0.25, 4);
+    const videoFilter = `setpts=PTS/${factor}`;
+    const audioFilters = buildAtempoChain(factor);
+    const ctx = resolveContext();
+    const args = ["-y", "-hide_banner", "-loglevel", "info", "-i", request.inputUri];
+    if (request.removeAudio || audioFilters.length === 0) {
+      args.push("-vf", videoFilter, "-an");
+    } else {
+      args.push("-filter:v", videoFilter, "-filter:a", audioFilters.join(","));
+    }
+    args.push(
+      ...buildVideoCodecArgs(request.profile, ctx.encoderSelection),
+      ...(request.removeAudio ? [] : ["-c:a", "aac", "-b:a", "128k"]),
+      "-movflags",
+      "+faststart",
+      outputUri,
+    );
+    return commandToString(args);
+  }
+
+  if (request.operation === "watermark") {
+    if (!request.watermark?.text) {
+      throw new Error("watermark_text_required");
+    }
+    const wm = request.watermark;
+    const fontSize = clamp(wm.fontSize ?? 24, 8, 120);
+    const fontColor = wm.fontColor ?? "white";
+    const opacity = clamp(wm.opacity ?? 1, 0, 1);
+    const positionExpr = resolveWatermarkPosition(wm.position);
+    const escapedText = wm.text.replace(/'/g, "'\\''").replace(/:/g, "\\:");
+    const drawtext = `drawtext=text='${escapedText}':fontsize=${fontSize}:fontcolor=${fontColor}@${opacity}:${positionExpr}`;
+    return buildCoreCommand(request, resolveContext(), request.inputUri, outputUri, {
+      scaleFilter: drawtext,
+      muteAudio: request.removeAudio,
+    });
+  }
+
+  if (request.operation === "gif") {
+    if (!request.gif) {
+      throw new Error("gif_options_required");
+    }
+    const g = request.gif;
+    const startSec = msToSecondsString(Math.max(0, g.startMs));
+    const durationSec = msToSecondsString(Math.max(100, g.durationMs));
+    const fps = clamp(g.fps ?? 10, 1, 30);
+    const width = g.width ?? 480;
+    const paletteFilter = `fps=${fps},scale=${width}:-1:flags=lanczos,split[s0][s1];[s0]palettegen[p];[s1][p]paletteuse`;
+    return commandToString([
+      "-y",
+      "-hide_banner",
+      "-loglevel",
+      "info",
+      "-ss",
+      startSec,
+      "-t",
+      durationSec,
+      "-i",
+      request.inputUri,
+      "-lavfi",
+      paletteFilter,
+      outputUri,
+    ]);
+  }
+
+  // Fallback: re-encode with optional rotation from rotateNormalize
   const rotation = request.rotateNormalize?.rotationDeg ?? 0;
   const rotationFilter =
     rotation === 90
@@ -615,7 +730,8 @@ export class FfmpegVideoProcessingEngine implements VideoProcessingEngine {
     const requiresVideoEncoder =
       request.operation !== "extract-audio" &&
       request.operation !== "cover" &&
-      request.operation !== "merge";
+      request.operation !== "merge" &&
+      request.operation !== "gif";
     const commandContext = requiresVideoEncoder
       ? buildCommandContext(request, capabilities.encoderNames)
       : undefined;
@@ -680,6 +796,8 @@ export class FfmpegVideoProcessingEngine implements VideoProcessingEngine {
       outputExtension = request.extractAudio?.audioCodec === "mp3" ? ".mp3" : ".m4a";
     } else if (request.operation === "cover") {
       outputExtension = ".jpg";
+    } else if (request.operation === "gif") {
+      outputExtension = ".gif";
     }
     const outputFilename = buildOutputFilename(request, outputExtension);
     const outputFile = new File(outputDir, outputFilename);

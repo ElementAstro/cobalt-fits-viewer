@@ -3,7 +3,15 @@
 - openLink: cobalt://settings/appearance
 - assertVisible:
     id: e2e-screen-settings__appearance
+- assertVisible:
+    id: e2e-action-settings__appearance-open-language
+- assertVisible:
+    id: e2e-action-settings__appearance-open-theme
 - tapOn:
     id: e2e-action-settings__appearance-open-language
+- back
 - tapOn:
     id: e2e-action-settings__appearance-open-theme
+- back
+- assertVisible:
+    id: e2e-screen-settings__appearance

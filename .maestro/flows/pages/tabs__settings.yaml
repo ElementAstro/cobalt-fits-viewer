@@ -3,9 +3,21 @@
 - openLink: cobalt://settings
 - assertVisible:
     id: e2e-screen-settings__index
+- assertVisible:
+    id: e2e-action-settings__index-open-viewer
+- assertVisible:
+    id: e2e-action-settings__index-open-gallery
+- assertVisible:
+    id: e2e-action-settings__index-open-processing
+- assertVisible:
+    id: e2e-action-settings__index-open-about
 - tapOn:
     id: e2e-action-settings__index-open-viewer
 - assertVisible:
     id: e2e-screen-settings__viewer
 - tapOn:
     id: e2e-action-settings__viewer-open-colormap
+- back
+- back
+- assertVisible:
+    id: e2e-screen-settings__index

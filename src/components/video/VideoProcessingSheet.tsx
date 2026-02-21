@@ -15,20 +15,19 @@ import type {
   VideoProcessingRequest,
   VideoProcessingTag,
   VideoProfile,
+  WatermarkPosition,
 } from "../../lib/video/engine";
+import { useI18n } from "../../i18n/useI18n";
 
 type OperationOption = { value: VideoProcessingTag; label: string };
 type PresetOption = { value: "1080p" | "720p" | "custom"; label: string };
 
-const OPERATION_OPTIONS: OperationOption[] = [
-  { value: "trim", label: "Trim" },
-  { value: "split", label: "Split" },
-  { value: "compress", label: "Compress" },
-  { value: "transcode", label: "Transcode" },
-  { value: "merge", label: "Merge" },
-  { value: "mute", label: "Mute Audio" },
-  { value: "extract-audio", label: "Extract Audio" },
-  { value: "cover", label: "Cover Frame" },
+const WATERMARK_POSITION_KEYS: Array<{ value: WatermarkPosition; fallback: string }> = [
+  { value: "top-left", fallback: "Top Left" },
+  { value: "top-right", fallback: "Top Right" },
+  { value: "bottom-left", fallback: "Bottom Left" },
+  { value: "bottom-right", fallback: "Bottom Right" },
+  { value: "center", fallback: "Center" },
 ];
 
 const TARGET_PRESET_OPTIONS: PresetOption[] = [
@@ -74,6 +73,44 @@ export function VideoProcessingSheet({
   onClose,
   onSubmit,
 }: VideoProcessingSheetProps) {
+  const { t } = useI18n();
+
+  const OPERATION_OPTIONS: OperationOption[] = useMemo(
+    () => [
+      { value: "trim", label: t("settings.videoOpTrim") },
+      { value: "split", label: t("settings.videoOpSplit") },
+      { value: "compress", label: t("settings.videoOpCompress") },
+      { value: "transcode", label: t("settings.videoOpTranscode") },
+      { value: "merge", label: t("settings.videoOpMerge") },
+      { value: "mute", label: t("settings.videoOpMuteAudio") },
+      { value: "extract-audio", label: t("settings.videoOpExtractAudio") },
+      { value: "cover", label: t("settings.videoOpCoverFrame") },
+      { value: "rotate", label: t("settings.videoOpRotate") },
+      { value: "speed", label: t("settings.videoOpSpeed") },
+      { value: "watermark", label: t("settings.videoOpWatermark") },
+      { value: "gif", label: t("settings.videoOpGif") },
+    ],
+    [t],
+  );
+
+  const ROTATION_OPTIONS = useMemo(
+    () => [
+      { value: "90", label: t("settings.videoRotation90") },
+      { value: "180", label: t("settings.videoRotation180") },
+      { value: "270", label: t("settings.videoRotation270") },
+    ],
+    [t],
+  );
+
+  const WATERMARK_POSITION_OPTIONS = useMemo(
+    () =>
+      WATERMARK_POSITION_KEYS.map((item) => ({
+        value: item.value,
+        label: item.fallback,
+      })),
+    [],
+  );
+
   const [operationOption, setOperationOption] = useState<OperationOption | undefined>(
     OPERATION_OPTIONS[0],
   );
@@ -89,6 +126,19 @@ export function VideoProcessingSheet({
   const [coverTimeMs, setCoverTimeMs] = useState("1000");
   const [removeAudio, setRemoveAudio] = useState(false);
   const [mergeInputUris, setMergeInputUris] = useState("");
+  const [rotationDeg, setRotationDeg] = useState("90");
+  const [speedFactor, setSpeedFactor] = useState("2");
+  const [watermarkText, setWatermarkText] = useState("");
+  const [watermarkPosition, setWatermarkPosition] = useState<WatermarkPosition>("bottom-right");
+  const [watermarkFontSize, setWatermarkFontSize] = useState("24");
+  const [watermarkFontColor, setWatermarkFontColor] = useState("white");
+  const [watermarkOpacity, setWatermarkOpacity] = useState("1");
+  const [gifStartMs, setGifStartMs] = useState("0");
+  const [gifDurationMs, setGifDurationMs] = useState("3000");
+  const [gifWidth, setGifWidth] = useState("480");
+  const [gifFps, setGifFps] = useState("10");
+  const [extractAudioCodec, setExtractAudioCodec] = useState<"aac" | "mp3">("aac");
+  const [extractAudioBitrate, setExtractAudioBitrate] = useState("192");
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -116,7 +166,10 @@ export function VideoProcessingSheet({
     operation === "trim" ||
     operation === "split" ||
     operation === "compress" ||
-    operation === "transcode";
+    operation === "transcode" ||
+    operation === "rotate" ||
+    operation === "speed" ||
+    operation === "watermark";
 
   const handleSubmit = () => {
     if (!file) return;
@@ -134,7 +187,7 @@ export function VideoProcessingSheet({
       const start = Math.round(Number(trimStartMs));
       const end = Math.round(Number(trimEndMs));
       if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
-        setSubmitError("Trim range is invalid.");
+        setSubmitError(t("settings.videoErrorTrimRange"));
         return;
       }
       request.trim = {
@@ -145,7 +198,7 @@ export function VideoProcessingSheet({
     } else if (operation === "split") {
       const segments = parseSplitSegments(splitSegments);
       if (segments.length === 0) {
-        setSubmitError("Split segments are invalid.");
+        setSubmitError(t("settings.videoErrorSplitSegments"));
         return;
       }
       request.split = {
@@ -170,7 +223,7 @@ export function VideoProcessingSheet({
         .map((line) => line.trim())
         .filter(Boolean);
       if (merged.length < 2) {
-        setSubmitError("Merge requires at least two input URIs.");
+        setSubmitError(t("settings.videoErrorMergeInputs"));
         return;
       }
       request.merge = {
@@ -180,13 +233,56 @@ export function VideoProcessingSheet({
       request.operation = "mute";
     } else if (operation === "extract-audio") {
       request.extractAudio = {
-        audioCodec: "aac",
-        bitrateKbps: 192,
+        audioCodec: extractAudioCodec,
+        bitrateKbps: Math.max(32, Math.round(Number(extractAudioBitrate) || 192)),
+      };
+    } else if (operation === "rotate") {
+      const deg = Number(rotationDeg);
+      if (deg !== 90 && deg !== 180 && deg !== 270) {
+        setSubmitError(t("settings.videoErrorRotation"));
+        return;
+      }
+      request.rotateNormalize = { rotationDeg: deg as 90 | 180 | 270 };
+    } else if (operation === "speed") {
+      const factor = Number(speedFactor);
+      if (!Number.isFinite(factor) || factor < 0.25 || factor > 4) {
+        setSubmitError(t("settings.videoErrorSpeedFactor"));
+        return;
+      }
+      request.speed = { factor };
+    } else if (operation === "watermark") {
+      if (!watermarkText.trim()) {
+        setSubmitError(t("settings.videoErrorWatermarkText"));
+        return;
+      }
+      request.watermark = {
+        text: watermarkText.trim(),
+        position: watermarkPosition,
+        fontSize: Math.max(8, Math.min(120, Math.round(Number(watermarkFontSize) || 24))),
+        fontColor: watermarkFontColor || "white",
+        opacity: Math.max(0, Math.min(1, Number(watermarkOpacity) || 1)),
+      };
+    } else if (operation === "gif") {
+      const startMs = Math.round(Number(gifStartMs));
+      const durationMs = Math.round(Number(gifDurationMs));
+      if (!Number.isFinite(startMs) || startMs < 0) {
+        setSubmitError(t("settings.videoErrorGifStart"));
+        return;
+      }
+      if (!Number.isFinite(durationMs) || durationMs < 100) {
+        setSubmitError(t("settings.videoErrorGifDuration"));
+        return;
+      }
+      request.gif = {
+        startMs,
+        durationMs,
+        width: Math.max(60, Math.round(Number(gifWidth) || 480)),
+        fps: Math.max(1, Math.min(30, Math.round(Number(gifFps) || 10))),
       };
     } else if (operation === "cover") {
       const coverAtMs = Math.round(Number(coverTimeMs));
       if (!Number.isFinite(coverAtMs) || coverAtMs < 0) {
-        setSubmitError("Cover frame time is invalid.");
+        setSubmitError(t("settings.videoErrorCoverTime"));
         return;
       }
       request.cover = {
@@ -206,8 +302,8 @@ export function VideoProcessingSheet({
       <Dialog.Portal>
         <Dialog.Overlay />
         <Dialog.Content className="max-w-[420px]">
-          <Dialog.Title>Video Processing</Dialog.Title>
-          <Dialog.Description>Create a non-destructive derived media file.</Dialog.Description>
+          <Dialog.Title>{t("settings.videoProcessingTitle")}</Dialog.Title>
+          <Dialog.Description>{t("settings.videoProcessingDescription")}</Dialog.Description>
 
           <View className="mt-3 gap-3">
             <Select
@@ -220,7 +316,7 @@ export function VideoProcessingSheet({
               }
             >
               <Select.Trigger>
-                <Select.Value placeholder="Choose operation" />
+                <Select.Value placeholder={t("settings.videoChooseOperation")} />
                 <Select.TriggerIndicator />
               </Select.Trigger>
               <Select.Portal>
@@ -264,13 +360,17 @@ export function VideoProcessingSheet({
               isDisabled={!canApplyRemoveAudio}
             >
               <Switch.Thumb />
-              <Text className="text-sm text-foreground">Remove audio in output</Text>
+              <Text className="text-sm text-foreground">
+                {t("settings.videoRemoveAudioInOutput")}
+              </Text>
             </Switch>
 
             <Accordion selectionMode="multiple" variant="surface" defaultValue={["params"]}>
               <Accordion.Item value="params">
                 <Accordion.Trigger>
-                  <Text className="flex-1 text-sm font-semibold text-foreground">Parameters</Text>
+                  <Text className="flex-1 text-sm font-semibold text-foreground">
+                    {t("settings.videoParameters")}
+                  </Text>
                   <Accordion.Indicator />
                 </Accordion.Trigger>
                 <Accordion.Content>
@@ -281,7 +381,7 @@ export function VideoProcessingSheet({
                           <View className="flex-row gap-2">
                             <TextField className="flex-1">
                               <Input
-                                placeholder="Start ms"
+                                placeholder={t("settings.videoTrimStartMs")}
                                 keyboardType="numeric"
                                 value={trimStartMs}
                                 onChangeText={setTrimStartMs}
@@ -289,7 +389,7 @@ export function VideoProcessingSheet({
                             </TextField>
                             <TextField className="flex-1">
                               <Input
-                                placeholder="End ms"
+                                placeholder={t("settings.videoTrimEndMs")}
                                 keyboardType="numeric"
                                 value={trimEndMs}
                                 onChangeText={setTrimEndMs}
@@ -320,7 +420,7 @@ export function VideoProcessingSheet({
                           }
                         >
                           <Select.Trigger>
-                            <Select.Value placeholder="Target preset" />
+                            <Select.Value placeholder={t("settings.videoTargetPreset")} />
                             <Select.TriggerIndicator />
                           </Select.Trigger>
                           <Select.Portal>
@@ -340,7 +440,7 @@ export function VideoProcessingSheet({
                         </Select>
                         <TextField>
                           <Input
-                            placeholder="Target bitrate kbps"
+                            placeholder={t("settings.videoTargetBitrateKbps")}
                             keyboardType="numeric"
                             value={targetBitrateKbps}
                             onChangeText={setTargetBitrateKbps}
@@ -349,7 +449,7 @@ export function VideoProcessingSheet({
                         {operation === "compress" && (
                           <TextField>
                             <Input
-                              placeholder="CRF (0-51)"
+                              placeholder={t("settings.videoCrf")}
                               keyboardType="numeric"
                               value={crf}
                               onChangeText={setCrf}
@@ -362,7 +462,7 @@ export function VideoProcessingSheet({
                     {operation === "cover" && (
                       <TextField>
                         <Input
-                          placeholder="Thumbnail time ms"
+                          placeholder={t("settings.videoCoverTimeMs")}
                           keyboardType="numeric"
                           value={coverTimeMs}
                           onChangeText={setCoverTimeMs}
@@ -373,13 +473,181 @@ export function VideoProcessingSheet({
                     {operation === "merge" && (
                       <TextField>
                         <Input
-                          placeholder={"Input URIs (one per line)\nfile:///path/a.mp4"}
+                          placeholder={t("settings.videoMergeInputUris")}
                           value={mergeInputUris}
                           onChangeText={setMergeInputUris}
                           multiline
                           numberOfLines={4}
                         />
                       </TextField>
+                    )}
+
+                    {operation === "extract-audio" && (
+                      <>
+                        <RadioGroup
+                          value={extractAudioCodec}
+                          onValueChange={(v) => setExtractAudioCodec(v as "aac" | "mp3")}
+                        >
+                          {[
+                            { value: "aac", label: "AAC" },
+                            { value: "mp3", label: "MP3" },
+                          ].map((item) => (
+                            <RadioGroup.Item key={item.value} value={item.value}>
+                              {({ isSelected }) => (
+                                <View className="flex-row items-center justify-between rounded-lg border border-separator px-3 py-1.5">
+                                  <Text className="text-sm text-foreground">{item.label}</Text>
+                                  <Text
+                                    className={`text-xs ${isSelected ? "text-success" : "text-muted"}`}
+                                  >
+                                    {isSelected ? "Selected" : ""}
+                                  </Text>
+                                </View>
+                              )}
+                            </RadioGroup.Item>
+                          ))}
+                        </RadioGroup>
+                        <TextField>
+                          <Input
+                            placeholder={t("settings.videoExtractAudioBitrate")}
+                            keyboardType="numeric"
+                            value={extractAudioBitrate}
+                            onChangeText={setExtractAudioBitrate}
+                          />
+                        </TextField>
+                      </>
+                    )}
+
+                    {operation === "rotate" && (
+                      <RadioGroup value={rotationDeg} onValueChange={setRotationDeg}>
+                        {ROTATION_OPTIONS.map((item) => (
+                          <RadioGroup.Item key={item.value} value={item.value}>
+                            {({ isSelected }) => (
+                              <View className="flex-row items-center justify-between rounded-lg border border-separator px-3 py-1.5">
+                                <Text className="text-sm text-foreground">{item.label}</Text>
+                                <Text
+                                  className={`text-xs ${isSelected ? "text-success" : "text-muted"}`}
+                                >
+                                  {isSelected ? "Selected" : ""}
+                                </Text>
+                              </View>
+                            )}
+                          </RadioGroup.Item>
+                        ))}
+                      </RadioGroup>
+                    )}
+
+                    {operation === "speed" && (
+                      <TextField>
+                        <Input
+                          placeholder={t("settings.videoSpeedFactor")}
+                          keyboardType="decimal-pad"
+                          value={speedFactor}
+                          onChangeText={setSpeedFactor}
+                        />
+                      </TextField>
+                    )}
+
+                    {operation === "watermark" && (
+                      <>
+                        <TextField>
+                          <Input
+                            placeholder={t("settings.videoWatermarkText")}
+                            value={watermarkText}
+                            onChangeText={setWatermarkText}
+                          />
+                        </TextField>
+                        <Select
+                          value={WATERMARK_POSITION_OPTIONS.find(
+                            (o) => o.value === watermarkPosition,
+                          )}
+                          onValueChange={(option) =>
+                            setWatermarkPosition(
+                              (option?.value as WatermarkPosition) ?? "bottom-right",
+                            )
+                          }
+                        >
+                          <Select.Trigger>
+                            <Select.Value placeholder={t("settings.videoWatermarkPosition")} />
+                            <Select.TriggerIndicator />
+                          </Select.Trigger>
+                          <Select.Portal>
+                            <Select.Overlay />
+                            <Select.Content presentation="popover">
+                              {WATERMARK_POSITION_OPTIONS.map((item) => (
+                                <Select.Item key={item.value} value={item.value} label={item.label}>
+                                  <Select.ItemLabel />
+                                </Select.Item>
+                              ))}
+                            </Select.Content>
+                          </Select.Portal>
+                        </Select>
+                        <View className="flex-row gap-2">
+                          <TextField className="flex-1">
+                            <Input
+                              placeholder={t("settings.videoWatermarkFontSize")}
+                              keyboardType="numeric"
+                              value={watermarkFontSize}
+                              onChangeText={setWatermarkFontSize}
+                            />
+                          </TextField>
+                          <TextField className="flex-1">
+                            <Input
+                              placeholder={t("settings.videoWatermarkFontColor")}
+                              value={watermarkFontColor}
+                              onChangeText={setWatermarkFontColor}
+                            />
+                          </TextField>
+                        </View>
+                        <TextField>
+                          <Input
+                            placeholder={t("settings.videoWatermarkOpacity")}
+                            keyboardType="decimal-pad"
+                            value={watermarkOpacity}
+                            onChangeText={setWatermarkOpacity}
+                          />
+                        </TextField>
+                      </>
+                    )}
+
+                    {operation === "gif" && (
+                      <>
+                        <View className="flex-row gap-2">
+                          <TextField className="flex-1">
+                            <Input
+                              placeholder={t("settings.videoGifStart")}
+                              keyboardType="numeric"
+                              value={gifStartMs}
+                              onChangeText={setGifStartMs}
+                            />
+                          </TextField>
+                          <TextField className="flex-1">
+                            <Input
+                              placeholder={t("settings.videoGifDuration")}
+                              keyboardType="numeric"
+                              value={gifDurationMs}
+                              onChangeText={setGifDurationMs}
+                            />
+                          </TextField>
+                        </View>
+                        <View className="flex-row gap-2">
+                          <TextField className="flex-1">
+                            <Input
+                              placeholder={t("settings.videoGifWidth")}
+                              keyboardType="numeric"
+                              value={gifWidth}
+                              onChangeText={setGifWidth}
+                            />
+                          </TextField>
+                          <TextField className="flex-1">
+                            <Input
+                              placeholder={t("settings.videoGifFps")}
+                              keyboardType="numeric"
+                              value={gifFps}
+                              onChangeText={setGifFps}
+                            />
+                          </TextField>
+                        </View>
+                      </>
                     )}
                   </View>
                 </Accordion.Content>
@@ -390,10 +658,10 @@ export function VideoProcessingSheet({
           <View className="mt-4 flex-row justify-end gap-2">
             {!!submitError && <Text className="mr-auto text-xs text-danger">{submitError}</Text>}
             <Button variant="outline" onPress={onClose}>
-              <Button.Label>Cancel</Button.Label>
+              <Button.Label>{t("settings.videoCancel")}</Button.Label>
             </Button>
             <Button variant="primary" isDisabled={!canSubmit} onPress={handleSubmit}>
-              <Button.Label>Queue Task</Button.Label>
+              <Button.Label>{t("settings.videoQueueTask")}</Button.Label>
             </Button>
           </View>
         </Dialog.Content>

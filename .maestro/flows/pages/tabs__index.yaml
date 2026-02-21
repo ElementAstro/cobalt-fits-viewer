@@ -3,7 +3,13 @@
 - openLink: cobalt://
 - assertVisible:
     id: e2e-screen-tabs__index
+- assertVisible: M42_Light_001.fits
+- assertVisible: M31_Light_002.fits
 - tapOn:
-    id: files-enter-selection-mode-button
+    id: e2e-action-tabs__index-enter-selection
+- assertVisible:
+    id: e2e-action-tabs__index-select-all
+- assertVisible:
+    id: e2e-action-tabs__index-open-trash
 - tapOn:
-    id: files-open-trash-button
+    id: e2e-action-tabs__index-open-trash

@@ -8,6 +8,7 @@ import { Platform } from "react-native";
 import { Skia, AlphaType, ColorType, ImageFormat } from "@shopify/react-native-skia";
 import { File as FSFile } from "expo-file-system";
 import * as Print from "expo-print";
+import * as Clipboard from "expo-clipboard";
 import { LOG_TAGS, Logger } from "../lib/logger";
 import type { ExportFormat } from "../lib/fits/types";
 import type {
@@ -48,11 +49,13 @@ function buildPrintHtml(base64: string, filename: string, width: number, height:
 }
 
 function encodeToBase64(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const CHUNK = 8192;
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    const slice = bytes.subarray(i, Math.min(i + CHUNK, bytes.length));
+    parts.push(String.fromCharCode.apply(null, slice as unknown as number[]));
   }
-  return btoa(binary);
+  return btoa(parts.join(""));
 }
 
 function encodeSkiaPng(
@@ -144,12 +147,36 @@ interface SaveImageFn {
   ): Promise<string | null>;
 }
 
+export type PdfPageSize = "letter" | "a4" | "a3" | "legal";
+
+const PDF_PAGE_DIMENSIONS: Record<PdfPageSize, { width: number; height: number }> = {
+  letter: { width: 612, height: 792 },
+  a4: { width: 595, height: 842 },
+  a3: { width: 842, height: 1191 },
+  legal: { width: 612, height: 1008 },
+};
+
+export type ExportPhase =
+  | "idle"
+  | "encoding"
+  | "writing"
+  | "sharing"
+  | "saving"
+  | "copying"
+  | "printing";
+
 interface UseExportReturn {
   isExporting: boolean;
+  exportPhase: ExportPhase;
   exportImage: ExportImageFn;
   exportImageDetailed: (request: ExportRequest) => Promise<ExportImageDetailedResult>;
   shareImage: ShareImageFn;
   saveImage: SaveImageFn;
+  copyImageToClipboard: (
+    rgbaData: Uint8ClampedArray,
+    width: number,
+    height: number,
+  ) => Promise<boolean>;
   printImage: (
     rgbaData: Uint8ClampedArray,
     width: number,
@@ -161,11 +188,13 @@ interface UseExportReturn {
     width: number,
     height: number,
     filename: string,
+    pageSize?: PdfPageSize,
   ) => Promise<void>;
 }
 
 export function useExport(): UseExportReturn {
   const [isExporting, setIsExporting] = useState(false);
+  const [exportPhase, setExportPhase] = useState<ExportPhase>("idle");
 
   const createExportFileDetailed = useCallback(
     async (request: ExportRequest): Promise<ExportImageDetailedResult> => {
@@ -176,11 +205,13 @@ export function useExport(): UseExportReturn {
         watermarkApplied: false,
       };
       try {
+        setExportPhase("encoding");
         const encoded = await encodeExportRequest(request);
         if (!encoded.bytes || encoded.bytes.length === 0 || !encoded.extension) {
           return { path: null, diagnostics: encoded.diagnostics };
         }
 
+        setExportPhase("writing");
         const { baseName } = splitFilenameExtension(request.filename);
         const exportDir = getExportDir();
         const outFile = new FSFile(
@@ -212,6 +243,7 @@ export function useExport(): UseExportReturn {
         const request = normalizeRequest(args.length === 1 ? args[0] : args);
         return await createExportFile(request);
       } finally {
+        setExportPhase("idle");
         setIsExporting(false);
       }
     },
@@ -224,6 +256,7 @@ export function useExport(): UseExportReturn {
       try {
         return await createExportFileDetailed(request);
       } finally {
+        setExportPhase("idle");
         setIsExporting(false);
       }
     },
@@ -237,12 +270,14 @@ export function useExport(): UseExportReturn {
         const request = normalizeRequest(args.length === 1 ? args[0] : args);
         const path = await createExportFile(request);
         if (!path) throw new Error("Failed to create image");
+        setExportPhase("sharing");
         const shareOptions: ShareFileOptions = {
           format: request.format,
           filename: request.filename,
         };
         await shareFile(path, shareOptions);
       } finally {
+        setExportPhase("idle");
         setIsExporting(false);
       }
     },
@@ -256,13 +291,36 @@ export function useExport(): UseExportReturn {
         const request = normalizeRequest(args.length === 1 ? args[0] : args);
         const path = await createExportFile(request);
         if (!path) return null;
+        setExportPhase("saving");
         return await saveToMediaLibrary(path);
       } finally {
+        setExportPhase("idle");
         setIsExporting(false);
       }
     },
     [createExportFile],
   ) as SaveImageFn;
+
+  const copyImageToClipboard = useCallback(
+    async (rgbaData: Uint8ClampedArray, width: number, height: number): Promise<boolean> => {
+      setIsExporting(true);
+      setExportPhase("copying");
+      try {
+        const bytes = encodeSkiaPng(rgbaData, width, height);
+        if (!bytes || bytes.length === 0) return false;
+        const base64 = encodeToBase64(bytes);
+        await Clipboard.setImageAsync(base64);
+        return true;
+      } catch (error) {
+        Logger.warn(LOG_TAGS.Export, "Copy to clipboard failed", error);
+        return false;
+      } finally {
+        setExportPhase("idle");
+        setIsExporting(false);
+      }
+    },
+    [],
+  );
 
   const createBase64Png = useCallback(
     (rgbaData: Uint8ClampedArray, width: number, height: number): string | null => {
@@ -281,6 +339,7 @@ export function useExport(): UseExportReturn {
       filename: string,
     ): Promise<void> => {
       setIsExporting(true);
+      setExportPhase("printing");
       try {
         const base64 = createBase64Png(rgbaData, width, height);
         if (!base64) throw new Error("Failed to encode image");
@@ -292,6 +351,7 @@ export function useExport(): UseExportReturn {
           ...(Platform.OS === "ios" ? { orientation } : {}),
         });
       } finally {
+        setExportPhase("idle");
         setIsExporting(false);
       }
     },
@@ -304,19 +364,22 @@ export function useExport(): UseExportReturn {
       width: number,
       height: number,
       filename: string,
+      pageSize: PdfPageSize = "letter",
     ): Promise<void> => {
       setIsExporting(true);
       try {
         const base64 = createBase64Png(rgbaData, width, height);
         if (!base64) throw new Error("Failed to encode image");
         const html = buildPrintHtml(base64, filename, width, height);
+        const dims = PDF_PAGE_DIMENSIONS[pageSize];
         const { uri } = await Print.printToFileAsync({
           html,
-          width: 612,
-          height: 792,
+          width: dims.width,
+          height: dims.height,
         });
         await shareFile(uri);
       } finally {
+        setExportPhase("idle");
         setIsExporting(false);
       }
     },
@@ -325,10 +388,12 @@ export function useExport(): UseExportReturn {
 
   return {
     isExporting,
+    exportPhase,
     exportImage,
     exportImageDetailed,
     shareImage,
     saveImage,
+    copyImageToClipboard,
     printImage,
     printToPdf,
   };

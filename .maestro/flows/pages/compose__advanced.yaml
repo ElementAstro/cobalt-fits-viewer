@@ -3,7 +3,13 @@
 - openLink: cobalt://compose/advanced
 - assertVisible:
     id: e2e-screen-compose__advanced
+- assertVisible:
+    id: e2e-action-compose__advanced-render
+- assertVisible:
+    id: e2e-action-compose__advanced-save
 - tapOn:
     id: e2e-action-compose__advanced-add-layer
 - tapOn:
     id: e2e-action-compose__advanced-render
+- assertVisible:
+    id: e2e-screen-compose__advanced

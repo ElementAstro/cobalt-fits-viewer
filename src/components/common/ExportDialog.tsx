@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { View, Text } from "react-native";
-import { Button, Chip, Dialog, Separator, useThemeColor } from "heroui-native";
+import { Button, Chip, Dialog, Input, Separator, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import {
   DEFAULT_FITS_TARGET_OPTIONS,
   DEFAULT_TIFF_TARGET_OPTIONS,
   type ExportFormat,
+  type FitsColorLayout,
   type FitsCompression,
   type FitsExportMode,
   type FitsTargetOptions,
@@ -18,11 +19,15 @@ import { supportsQuality } from "../../lib/converter/convertPresets";
 import { estimateFileSize } from "../../lib/converter/formatConverter";
 import { formatBytes } from "../../lib/utils/format";
 import type { ExportRenderOptions } from "../../lib/converter/exportDecorations";
+import { useSettingsStore } from "../../stores/useSettingsStore";
+import { FitsExportOptions } from "./FitsExportOptions";
+import { TiffExportOptions } from "./TiffExportOptions";
 
 export interface ExportDialogActionOptions {
   fits?: Partial<FitsTargetOptions>;
   tiff?: Partial<TiffTargetOptions>;
   render?: ExportRenderOptions;
+  customFilename?: string;
 }
 
 interface ExportDialogProps {
@@ -35,6 +40,7 @@ interface ExportDialogProps {
   onExport: (quality: number, options?: ExportDialogActionOptions) => void;
   onShare: (quality: number, options?: ExportDialogActionOptions) => void;
   onSaveToDevice: (quality: number, options?: ExportDialogActionOptions) => void;
+  onCopyToClipboard?: () => void;
   onPrint?: () => void;
   onPrintToPdf?: () => void;
   fitsScientificAvailable?: boolean;
@@ -43,13 +49,6 @@ interface ExportDialogProps {
 
 const FORMATS: ExportFormat[] = ["png", "jpeg", "webp", "tiff", "bmp", "fits"];
 const QUALITY_PRESETS = [60, 75, 85, 95, 100];
-const FITS_BITPIX_PRESETS: Array<FitsTargetOptions["bitpix"]> = [8, 16, 32, -32, -64];
-const TIFF_COMPRESSION_PRESETS: TiffCompression[] = ["lzw", "deflate", "none"];
-const TIFF_COMPRESSION_LABEL_KEYS: Record<TiffCompression, string> = {
-  lzw: "converter.tiffCompressionLzw",
-  deflate: "converter.tiffCompressionDeflate",
-  none: "converter.tiffCompressionNone",
-};
 
 export function ExportDialog({
   visible,
@@ -61,6 +60,7 @@ export function ExportDialog({
   onExport,
   onShare,
   onSaveToDevice,
+  onCopyToClipboard,
   onPrint,
   onPrintToPdf,
   fitsScientificAvailable = true,
@@ -68,7 +68,9 @@ export function ExportDialog({
 }: ExportDialogProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
-  const [quality, setQuality] = useState(85);
+  const savedQuality = useSettingsStore((s) => s.defaultExportQuality);
+  const savedAnnotations = useSettingsStore((s) => s.includeAnnotationsByDefault);
+  const [quality, setQuality] = useState(savedQuality);
   const [fitsMode, setFitsMode] = useState<FitsExportMode>(DEFAULT_FITS_TARGET_OPTIONS.mode);
   const [fitsCompression, setFitsCompression] = useState<FitsCompression>(
     DEFAULT_FITS_TARGET_OPTIONS.compression,
@@ -76,14 +78,27 @@ export function ExportDialog({
   const [fitsBitpix, setFitsBitpix] = useState<FitsTargetOptions["bitpix"]>(
     DEFAULT_FITS_TARGET_OPTIONS.bitpix,
   );
+  const [fitsColorLayout, setFitsColorLayout] = useState<FitsColorLayout>(
+    DEFAULT_FITS_TARGET_OPTIONS.colorLayout,
+  );
+  const [fitsPreserveOriginalHeader, setFitsPreserveOriginalHeader] = useState(
+    DEFAULT_FITS_TARGET_OPTIONS.preserveOriginalHeader,
+  );
+  const [fitsPreserveWcs, setFitsPreserveWcs] = useState(DEFAULT_FITS_TARGET_OPTIONS.preserveWcs);
   const [tiffCompression, setTiffCompression] = useState<TiffCompression>(
     DEFAULT_TIFF_TARGET_OPTIONS.compression,
   );
   const [tiffMultipage, setTiffMultipage] = useState<TiffMultipageMode>(
     DEFAULT_TIFF_TARGET_OPTIONS.multipage,
   );
-  const [includeAnnotations, setIncludeAnnotations] = useState(false);
+  const [includeAnnotations, setIncludeAnnotations] = useState(savedAnnotations);
   const [includeWatermark, setIncludeWatermark] = useState(false);
+  const [watermarkText, setWatermarkText] = useState("");
+  const [customFilename, setCustomFilename] = useState(() => filename.replace(/\.[^.]+$/, ""));
+
+  useEffect(() => {
+    setCustomFilename(filename.replace(/\.[^.]+$/, ""));
+  }, [filename]);
 
   const showQuality = supportsQuality(format);
   const showFitsOptions = format === "fits";
@@ -106,7 +121,9 @@ export function ExportDialog({
         mode: fitsMode,
         compression: fitsCompression,
         bitpix: fitsBitpix,
-        colorLayout: DEFAULT_FITS_TARGET_OPTIONS.colorLayout,
+        colorLayout: fitsColorLayout,
+        preserveOriginalHeader: fitsPreserveOriginalHeader,
+        preserveWcs: fitsPreserveWcs,
       }
     : undefined;
   const tiffOptions: Partial<TiffTargetOptions> | undefined = showTiffOptions
@@ -120,6 +137,7 @@ export function ExportDialog({
       ? {
           includeAnnotations,
           includeWatermark,
+          watermarkText: includeWatermark ? watermarkText : undefined,
         }
       : undefined;
 
@@ -160,9 +178,14 @@ export function ExportDialog({
             <Dialog.Close />
           </View>
 
-          <Text className="text-xs text-muted mb-3" numberOfLines={1}>
-            {filename}
-          </Text>
+          <TextField className="mb-3">
+            <Input
+              testID="e2e-input-export-dialog-filename"
+              value={customFilename}
+              onChangeText={setCustomFilename}
+              className="text-xs"
+            />
+          </TextField>
 
           <Separator className="mb-3" />
 
@@ -204,123 +227,30 @@ export function ExportDialog({
           )}
 
           {showFitsOptions && (
-            <View className="mb-4 gap-3">
-              <View>
-                <Text className="text-xs font-semibold text-muted mb-2">
-                  {t("converter.fitsMode")}
-                </Text>
-                <View className="flex-row gap-2">
-                  <Chip
-                    size="sm"
-                    variant={fitsMode === "scientific" ? "primary" : "secondary"}
-                    onPress={() => fitsScientificAvailable && setFitsMode("scientific")}
-                  >
-                    <Chip.Label className="text-[9px]">
-                      {t("converter.fitsModeScientific")}
-                    </Chip.Label>
-                  </Chip>
-                  <Chip
-                    size="sm"
-                    variant={fitsMode === "rendered" ? "primary" : "secondary"}
-                    onPress={() => setFitsMode("rendered")}
-                  >
-                    <Chip.Label className="text-[9px]">
-                      {t("converter.fitsModeRendered")}
-                    </Chip.Label>
-                  </Chip>
-                </View>
-                {!fitsScientificAvailable && (
-                  <Text
-                    testID="e2e-text-export-dialog-fits-unavailable"
-                    className="text-[10px] text-muted mt-1"
-                  >
-                    {t("converter.fitsScientificUnavailable")}
-                  </Text>
-                )}
-              </View>
-
-              <View>
-                <Text className="text-xs font-semibold text-muted mb-2">
-                  {t("converter.fitsCompression")}
-                </Text>
-                <View className="flex-row gap-2">
-                  {(["none", "gzip"] as const).map((comp) => (
-                    <Chip
-                      key={comp}
-                      size="sm"
-                      variant={fitsCompression === comp ? "primary" : "secondary"}
-                      onPress={() => setFitsCompression(comp)}
-                    >
-                      <Chip.Label className="text-[9px] uppercase">{comp}</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-
-              <View>
-                <Text className="text-xs font-semibold text-muted mb-2">
-                  {t("converter.bitpix")}
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {FITS_BITPIX_PRESETS.map((bp) => (
-                    <Chip
-                      key={bp}
-                      size="sm"
-                      variant={fitsBitpix === bp ? "primary" : "secondary"}
-                      onPress={() => setFitsBitpix(bp)}
-                    >
-                      <Chip.Label className="text-[9px]">{bp}</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-            </View>
+            <FitsExportOptions
+              fitsMode={fitsMode}
+              fitsCompression={fitsCompression}
+              fitsBitpix={fitsBitpix}
+              fitsColorLayout={fitsColorLayout}
+              fitsPreserveOriginalHeader={fitsPreserveOriginalHeader}
+              fitsPreserveWcs={fitsPreserveWcs}
+              fitsScientificAvailable={fitsScientificAvailable}
+              onFitsModeChange={setFitsMode}
+              onFitsCompressionChange={setFitsCompression}
+              onFitsBitpixChange={setFitsBitpix}
+              onFitsColorLayoutChange={setFitsColorLayout}
+              onFitsPreserveOriginalHeaderChange={setFitsPreserveOriginalHeader}
+              onFitsPreserveWcsChange={setFitsPreserveWcs}
+            />
           )}
 
           {showTiffOptions && (
-            <View className="mb-4 gap-3">
-              <View>
-                <Text className="text-xs font-semibold text-muted mb-2">
-                  {t("converter.tiffCompression")}
-                </Text>
-                <View className="flex-row gap-2">
-                  {TIFF_COMPRESSION_PRESETS.map((comp) => (
-                    <Chip
-                      key={comp}
-                      size="sm"
-                      variant={tiffCompression === comp ? "primary" : "secondary"}
-                      onPress={() => setTiffCompression(comp)}
-                    >
-                      <Chip.Label className="text-[9px] uppercase">
-                        {t(TIFF_COMPRESSION_LABEL_KEYS[comp])}
-                      </Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-
-              <View>
-                <Text className="text-xs font-semibold text-muted mb-2">
-                  {t("converter.multipage")}
-                </Text>
-                <View className="flex-row gap-2">
-                  {(["preserve", "firstFrame"] as const).map((mode) => (
-                    <Chip
-                      key={mode}
-                      size="sm"
-                      variant={tiffMultipage === mode ? "primary" : "secondary"}
-                      onPress={() => setTiffMultipage(mode)}
-                    >
-                      <Chip.Label className="text-[9px]">
-                        {mode === "preserve"
-                          ? t("converter.multipagePreserve")
-                          : t("converter.multipageFirstFrame")}
-                      </Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-            </View>
+            <TiffExportOptions
+              tiffCompression={tiffCompression}
+              tiffMultipage={tiffMultipage}
+              onTiffCompressionChange={setTiffCompression}
+              onTiffMultipageChange={setTiffMultipage}
+            />
           )}
 
           <View className="mb-4 gap-3">
@@ -348,6 +278,23 @@ export function ExportDialog({
                   <Chip.Label className="text-[9px]">{t("converter.includeWatermark")}</Chip.Label>
                 </Chip>
               </View>
+
+              {includeWatermark && (
+                <View className="mt-3">
+                  <Text className="text-xs font-semibold text-muted mb-2">
+                    {t("converter.watermarkText")}
+                  </Text>
+                  <TextField>
+                    <Input
+                      testID="e2e-input-export-dialog-watermark-text"
+                      value={watermarkText}
+                      onChangeText={setWatermarkText}
+                      placeholder={t("converter.watermarkTextPlaceholder")}
+                      className="text-xs"
+                    />
+                  </TextField>
+                </View>
+              )}
             </View>
           </View>
 
@@ -360,7 +307,12 @@ export function ExportDialog({
               testID="e2e-action-export-dialog-export"
               variant="primary"
               onPress={() =>
-                onExport(quality, { fits: fitsOptions, tiff: tiffOptions, render: renderOptions })
+                onExport(quality, {
+                  fits: fitsOptions,
+                  tiff: tiffOptions,
+                  render: renderOptions,
+                  customFilename: customFilename.trim() || undefined,
+                })
               }
             >
               <Ionicons name="download-outline" size={16} color="#fff" />
@@ -373,6 +325,7 @@ export function ExportDialog({
                   fits: fitsOptions,
                   tiff: tiffOptions,
                   render: renderOptions,
+                  customFilename: customFilename.trim() || undefined,
                 })
               }
             >
@@ -382,12 +335,23 @@ export function ExportDialog({
             <Button
               variant="outline"
               onPress={() =>
-                onShare(quality, { fits: fitsOptions, tiff: tiffOptions, render: renderOptions })
+                onShare(quality, {
+                  fits: fitsOptions,
+                  tiff: tiffOptions,
+                  render: renderOptions,
+                  customFilename: customFilename.trim() || undefined,
+                })
               }
             >
               <Ionicons name="share-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.share")}</Button.Label>
             </Button>
+            {onCopyToClipboard && (
+              <Button variant="outline" onPress={onCopyToClipboard}>
+                <Ionicons name="copy-outline" size={16} color={mutedColor} />
+                <Button.Label>{t("common.copy")}</Button.Label>
+              </Button>
+            )}
             {onPrint && (
               <Button variant="outline" onPress={onPrint}>
                 <Ionicons name="print-outline" size={16} color={mutedColor} />

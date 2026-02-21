@@ -5,29 +5,20 @@
     id: e2e-screen-map__index
 - tapOn:
     id: e2e-action-map__index-toggle-filters
+- assertVisible:
+    id: e2e-action-map__index-filter-date-all
+- takeScreenshot: screenshots/map__index
 - tapOn:
     id: e2e-action-map__index-filter-date-all
 - tapOn:
-    id: e2e-action-map__index-filter-object-ngc7000
+    id: e2e-action-map__index-filter-object-m42
 - tapOn:
-    id: e2e-action-map__index-filter-band-r
+    id: e2e-action-map__index-filter-band-ha
 - tapOn:
-    id: e2e-action-map__index-filter-target-target-002
+    id: e2e-action-map__index-filter-target-target-001
 - tapOn:
-    id: e2e-action-map__index-filter-session-session-002
+    id: e2e-action-map__index-filter-session-session-001
 - tapOn:
-    point: 50%,60%
-- tapOn:
-    text: M42_R_005.fits
+    id: e2e-action-map__index-filter-clear-all
 - assertVisible:
-    id: e2e-screen-viewer__param_id
-- back
-- tapOn:
-    id: e2e-action-map__index-open-session
-- assertVisible:
-    id: e2e-screen-session__param_id
-- back
-- tapOn:
-    id: e2e-action-map__index-open-target
-- assertVisible:
-    id: e2e-screen-target__param_id
+    id: e2e-action-map__index-filter-object-all

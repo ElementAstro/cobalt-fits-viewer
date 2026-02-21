@@ -4,6 +4,13 @@ import Screen from "../targets";
 
 const mockPush = jest.fn();
 const mockAddTarget = jest.fn();
+const mockScanAndAutoDetect = jest.fn(() => ({
+  scannedCount: 12,
+  newCount: 3,
+  updatedCount: 4,
+  skippedCount: 5,
+}));
+const mockAlert = jest.spyOn(require("react-native").Alert, "alert");
 const mockAddTargetSheet = jest.fn((props: Record<string, unknown>) => {
   const ReactNative = require("react-native");
   const { Pressable, Text, View } = ReactNative;
@@ -58,7 +65,7 @@ jest.mock("../../../hooks/useTargets", () => ({
     addGroup: jest.fn(),
     updateGroup: jest.fn(),
     removeGroup: jest.fn(),
-    scanAndAutoDetect: jest.fn(() => ({ newCount: 0 })),
+    scanAndAutoDetect: mockScanAndAutoDetect,
     getTargetStats: jest.fn(() => ({
       imageCount: 0,
       exposureStats: { totalExposure: 0 },
@@ -169,5 +176,16 @@ describe("(tabs)/targets.tsx", () => {
       }),
     );
     expect(mockAddTargetSheet).toHaveBeenCalled();
+  });
+
+  it("shows full scan summary alert", () => {
+    render(<Screen />);
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__targets-scan"));
+
+    expect(mockScanAndAutoDetect).toHaveBeenCalled();
+    expect(mockAlert).toHaveBeenCalledWith(
+      "targets.scanSummaryTitle",
+      "targets.scanSummaryScanned: 12\ntargets.scanSummaryAdded: 3\ntargets.scanSummaryUpdated: 4\ntargets.scanSummarySkipped: 5",
+    );
   });
 });

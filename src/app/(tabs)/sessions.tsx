@@ -48,7 +48,10 @@ export default function SessionsScreen() {
     calendarSyncEnabled,
     syncSession,
     unsyncSession,
+    syncSessionsBatch,
     syncAllSessions,
+    unsyncSessionsBatch,
+    refreshSessionsBatch,
     syncAllObservationPlans,
     refreshSessionFromCalendar,
     refreshPlanFromCalendar,
@@ -132,6 +135,38 @@ export default function SessionsScreen() {
       },
     ]);
   }, [selectedIds, t, removeMultipleSessions, exitSelectionMode]);
+
+  const buildDetectSummaryMessage = useCallback(
+    (result: {
+      totalDetected: number;
+      newCount: number;
+      updatedCount: number;
+      mergedCount: number;
+      skippedCount: number;
+    }) =>
+      [
+        `${t("sessions.detectSummaryDetected")}: ${result.totalDetected}`,
+        `${t("sessions.detectSummaryNew")}: ${result.newCount}`,
+        `${t("sessions.detectSummaryUpdated")}: ${result.updatedCount}`,
+        `${t("sessions.detectSummaryMerged")}: ${result.mergedCount}`,
+        `${t("sessions.detectSummarySkipped")}: ${result.skippedCount}`,
+      ].join("\n"),
+    [t],
+  );
+
+  const handleDetectSessions = useCallback(() => {
+    const result = autoDetectSessions();
+    Alert.alert(
+      t("sessions.detectSummaryTitle"),
+      buildDetectSummaryMessage({
+        totalDetected: result.totalDetected,
+        newCount: result.newCount,
+        updatedCount: result.updatedCount,
+        mergedCount: result.mergedCount,
+        skippedCount: result.skippedCount,
+      }),
+    );
+  }, [autoDetectSessions, buildDetectSummaryMessage, t]);
 
   const observationDates = getObservationDates(calYear, calMonth);
   const plannedDates = getPlannedDates(calYear, calMonth);
@@ -338,6 +373,77 @@ export default function SessionsScreen() {
         return sorted.sort((a, b) => b.startTime - a.startTime);
     }
   }, [filteredSessions, sortBy]);
+
+  const selectedSessions = useMemo(
+    () => sessions.filter((session) => selectedIds.has(session.id)),
+    [sessions, selectedIds],
+  );
+
+  const handleBatchSyncSelected = useCallback(async () => {
+    if (selectedSessions.length === 0) {
+      Alert.alert(t("common.error"), t("sessions.noSelectedSessions"));
+      return;
+    }
+
+    const summary = await syncSessionsBatch(selectedSessions);
+    if (summary.permissionDenied) {
+      Alert.alert(t("common.error"), t("sessions.permissionDenied"));
+      return;
+    }
+
+    Alert.alert(
+      t("sessions.batchSyncSessions"),
+      [
+        `${t("sessions.batchSummaryTotal")}: ${summary.total}`,
+        `${t("sessions.batchSummarySuccess")}: ${summary.success}`,
+        `${t("sessions.batchSummarySkipped")}: ${summary.skipped}`,
+        `${t("sessions.batchSummaryFailed")}: ${summary.failed}`,
+      ].join("\n"),
+    );
+  }, [selectedSessions, syncSessionsBatch, t]);
+
+  const handleBatchUnsyncSelected = useCallback(async () => {
+    if (selectedSessions.length === 0) {
+      Alert.alert(t("common.error"), t("sessions.noSelectedSessions"));
+      return;
+    }
+
+    const summary = await unsyncSessionsBatch(selectedSessions);
+    Alert.alert(
+      t("sessions.batchUnsyncSessions"),
+      [
+        `${t("sessions.batchSummaryTotal")}: ${summary.total}`,
+        `${t("sessions.batchSummarySuccess")}: ${summary.success}`,
+        `${t("sessions.batchSummarySkipped")}: ${summary.skipped}`,
+        `${t("sessions.batchSummaryFailed")}: ${summary.failed}`,
+      ].join("\n"),
+    );
+  }, [selectedSessions, t, unsyncSessionsBatch]);
+
+  const handleBatchRefreshSelected = useCallback(async () => {
+    if (selectedSessions.length === 0) {
+      Alert.alert(t("common.error"), t("sessions.noSelectedSessions"));
+      return;
+    }
+
+    const summary = await refreshSessionsBatch(selectedSessions);
+    if (summary.permissionDenied) {
+      Alert.alert(t("common.error"), t("sessions.permissionDenied"));
+      return;
+    }
+
+    Alert.alert(
+      t("sessions.batchRefreshSessions"),
+      [
+        `${t("sessions.batchSummaryTotal")}: ${summary.total}`,
+        `${t("sessions.batchSummaryUpdated")}: ${summary.updated}`,
+        `${t("sessions.batchSummaryCleared")}: ${summary.cleared}`,
+        `${t("sessions.batchSummaryUnchanged")}: ${summary.unchanged}`,
+        `${t("sessions.batchSummarySkipped")}: ${summary.skipped}`,
+        `${t("sessions.batchSummaryErrors")}: ${summary.errors}`,
+      ].join("\n"),
+    );
+  }, [refreshSessionsBatch, selectedSessions, t]);
 
   const renderSessionItem = useCallback(
     ({ item: session }: { item: ObservationSession }) => (
@@ -715,7 +821,7 @@ export default function SessionsScreen() {
           icon="calendar-outline"
           title={t("sessions.noSessions")}
           actionLabel={files.length > 0 ? t("sessions.detectSessions") : undefined}
-          onAction={files.length > 0 ? autoDetectSessions : undefined}
+          onAction={files.length > 0 ? handleDetectSessions : undefined}
         />
       )}
     </>
@@ -748,7 +854,12 @@ export default function SessionsScreen() {
             <Ionicons name="calendar-outline" size={14} color={mutedColor} />
           </Button>
           {sessions.length > 1 && (
-            <Button size="sm" variant="outline" onPress={() => setIsSelectionMode(true)}>
+            <Button
+              testID="e2e-action-tabs__sessions-open-selection"
+              size="sm"
+              variant="outline"
+              onPress={() => setIsSelectionMode(true)}
+            >
               <Ionicons name="checkbox-outline" size={14} color={mutedColor} />
             </Button>
           )}
@@ -762,23 +873,7 @@ export default function SessionsScreen() {
               <Ionicons name="sync-outline" size={14} color={mutedColor} />
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="outline"
-            onPress={() => {
-              const result = autoDetectSessions();
-              if (result.newCount > 0) {
-                Alert.alert(
-                  t("common.success"),
-                  `${t("sessions.detectSessions")}: ${result.newCount} ${t("sessions.session")}`,
-                );
-              } else if (result.totalDetected > 0) {
-                Alert.alert(t("common.success"), t("sessions.synced"));
-              } else {
-                Alert.alert(t("common.success"), t("sessions.noSessions"));
-              }
-            }}
-          >
+          <Button size="sm" variant="outline" onPress={handleDetectSessions}>
             <Ionicons name="scan-outline" size={14} color={mutedColor} />
           </Button>
         </View>
@@ -875,6 +970,7 @@ export default function SessionsScreen() {
       </View>
       <View className="flex-row items-center gap-2">
         <Button
+          testID="e2e-action-tabs__sessions-selection-select-all"
           size="sm"
           variant="ghost"
           onPress={() => {
@@ -887,7 +983,42 @@ export default function SessionsScreen() {
         >
           <Ionicons name="checkmark-done" size={16} color={mutedColor} />
         </Button>
+        {calendarSyncEnabled && (
+          <>
+            <Button
+              testID="e2e-action-tabs__sessions-selection-batch-sync"
+              size="sm"
+              variant="ghost"
+              isDisabled={selectedIds.size === 0 || syncing}
+              onPress={() => void handleBatchSyncSelected()}
+            >
+              <Ionicons name="sync-outline" size={16} color={mutedColor} />
+              <Button.Label className="text-[10px]">{t("sessions.batchSync")}</Button.Label>
+            </Button>
+            <Button
+              testID="e2e-action-tabs__sessions-selection-batch-refresh"
+              size="sm"
+              variant="ghost"
+              isDisabled={selectedIds.size === 0 || syncing}
+              onPress={() => void handleBatchRefreshSelected()}
+            >
+              <Ionicons name="refresh-outline" size={16} color={mutedColor} />
+              <Button.Label className="text-[10px]">{t("sessions.batchRefresh")}</Button.Label>
+            </Button>
+            <Button
+              testID="e2e-action-tabs__sessions-selection-batch-unsync"
+              size="sm"
+              variant="ghost"
+              isDisabled={selectedIds.size === 0 || syncing}
+              onPress={() => void handleBatchUnsyncSelected()}
+            >
+              <Ionicons name="link-outline" size={16} color={mutedColor} />
+              <Button.Label className="text-[10px]">{t("sessions.batchUnsync")}</Button.Label>
+            </Button>
+          </>
+        )}
         <Button
+          testID="e2e-action-tabs__sessions-selection-delete"
           size="sm"
           variant="ghost"
           isDisabled={selectedIds.size === 0}
@@ -932,6 +1063,16 @@ export default function SessionsScreen() {
                 >
                   <Ionicons name="calendar-outline" size={14} color={mutedColor} />
                 </Button>
+                {sessions.length > 1 && (
+                  <Button
+                    testID="e2e-action-tabs__sessions-open-selection"
+                    size="sm"
+                    variant="outline"
+                    onPress={() => setIsSelectionMode(true)}
+                  >
+                    <Ionicons name="checkbox-outline" size={14} color={mutedColor} />
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -940,13 +1081,7 @@ export default function SessionsScreen() {
                 >
                   <Ionicons name="sync-outline" size={14} color={mutedColor} />
                 </Button>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onPress={() => {
-                    autoDetectSessions();
-                  }}
-                >
+                <Button size="sm" variant="outline" onPress={handleDetectSessions}>
                   <Ionicons name="scan-outline" size={14} color={mutedColor} />
                 </Button>
               </View>

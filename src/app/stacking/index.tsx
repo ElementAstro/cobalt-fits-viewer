@@ -1,6 +1,7 @@
 import { View, Text, ScrollView, Alert } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
+import { File as FSFile } from "expo-file-system";
 import {
   Accordion,
   Alert as HAlert,
@@ -14,7 +15,7 @@ import {
   useThemeColor,
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -29,9 +30,16 @@ import {
   type StackMethod,
   type CalibrationFrames,
   type AlignmentMode,
+  type StackResult,
+  type StackingWarning,
 } from "../../hooks/useStacking";
 import { useExport } from "../../hooks/useExport";
-import type { ExportFormat } from "../../lib/fits/types";
+import type { ExportFormat, FitsMetadata, GeoLocation } from "../../lib/fits/types";
+import { isFitsFamilyFilename, splitFilenameExtension } from "../../lib/import/fileFormat";
+import { getFitsDir, generateFileId } from "../../lib/utils/fileManager";
+import { writeFitsImage } from "../../lib/fits/writer";
+import { extractMetadata, loadFitsFromBufferAuto } from "../../lib/fits/parser";
+import { generateAndSaveThumbnail } from "../../lib/gallery/thumbnailCache";
 
 const METHODS: { key: StackMethod; icon: keyof typeof Ionicons.glyphMap; labelKey: string }[] = [
   { key: "average", icon: "calculator-outline", labelKey: "editor.average" },
@@ -64,29 +72,124 @@ const DETECTION_PROFILES: {
   { key: "accurate", labelKey: "settings.stackingProfileAccurate" },
 ];
 
+function isStackableFile(file: FitsMetadata): boolean {
+  if (file.mediaKind === "video" || file.mediaKind === "audio") return false;
+  if (file.sourceType === "video" || file.sourceType === "audio") return false;
+  return file.sourceType === "fits" || isFitsFamilyFilename(file.filename);
+}
+
+function parseIdsParam(idsParam: string | string[] | undefined): string[] {
+  if (!idsParam) return [];
+  const raw = Array.isArray(idsParam) ? idsParam.join(",") : idsParam;
+  return raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+function filenameFromUri(uri: string): string {
+  const normalized = uri.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || uri;
+}
+
+function createUniqueFitsFilename(baseName: string): string {
+  const fitsDir = getFitsDir();
+  const trimmed = baseName.trim();
+  const fallback = trimmed.length > 0 ? trimmed : `stacked_${Date.now()}`;
+  const { baseName: parsedBaseName } = splitFilenameExtension(fallback);
+  const safeBase = (parsedBaseName || fallback).replace(/[<>:"/\\|?*]/g, "_");
+
+  let suffix = 0;
+  while (true) {
+    const filename = `${safeBase}${suffix > 0 ? `_${suffix}` : ""}.fits`;
+    const candidate = new FSFile(fitsDir, filename);
+    if (!candidate.exists) return filename;
+    suffix++;
+  }
+}
+
+function isSameLocation(a?: GeoLocation, b?: GeoLocation): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return (
+    a.latitude === b.latitude &&
+    a.longitude === b.longitude &&
+    a.altitude === b.altitude &&
+    a.placeName === b.placeName &&
+    a.city === b.city &&
+    a.region === b.region &&
+    a.country === b.country
+  );
+}
+
+function toPositiveExposure(value: number | undefined): number | null {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
 export default function StackingScreen() {
   useKeepAwake();
   const router = useRouter();
+  const params = useLocalSearchParams<{ ids?: string | string[] }>();
   const { t } = useI18n();
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
+  const addFile = useFitsStore((s) => s.addFile);
+  const updateFile = useFitsStore((s) => s.updateFile);
+  const stackableFiles = useMemo(() => files.filter(isStackableFile), [files]);
+  const stackableFileIdSet = useMemo(
+    () => new Set(stackableFiles.map((file) => file.id)),
+    [stackableFiles],
+  );
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [uiWarnings, setUiWarnings] = useState<string[]>([]);
+  const [isPersisting, setIsPersisting] = useState(false);
+  const [idsPreselectionSummary, setIdsPreselectionSummary] = useState<{
+    requested: number;
+    selected: number;
+    ignored: number;
+  } | null>(null);
 
-  const toggleSelection = useCallback((id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id],
-    );
-  }, []);
+  const toggleSelection = useCallback(
+    (id: string) => {
+      if (!stackableFileIdSet.has(id)) return;
+      setSelectedIds((prev) =>
+        prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id],
+      );
+    },
+    [stackableFileIdSet],
+  );
 
   const selectAll = useCallback(() => {
-    setSelectedIds(files.map((f) => f.id));
-  }, [files]);
+    setSelectedIds(stackableFiles.map((f) => f.id));
+  }, [stackableFiles]);
 
   const clearSelection = useCallback(() => {
     setSelectedIds([]);
   }, []);
+
+  useEffect(() => {
+    setSelectedIds((prev) => prev.filter((id) => stackableFileIdSet.has(id)));
+  }, [stackableFileIdSet]);
+
+  useEffect(() => {
+    const requestedIds = parseIdsParam(params.ids);
+    if (requestedIds.length === 0) {
+      setIdsPreselectionSummary(null);
+      return;
+    }
+
+    const deduped = Array.from(new Set(requestedIds));
+    const valid = deduped.filter((id) => stackableFileIdSet.has(id));
+    setSelectedIds(valid);
+    setIdsPreselectionSummary({
+      requested: deduped.length,
+      selected: valid.length,
+      ignored: deduped.length - valid.length,
+    });
+  }, [params.ids, stackableFileIdSet]);
 
   const settingsStackMethod = useSettingsStore((s) => s.defaultStackMethod) as StackMethod;
   const settingsSigma = useSettingsStore((s) => s.defaultSigmaValue);
@@ -121,6 +224,8 @@ export default function StackingScreen() {
   const settingsAlignmentInlierThreshold = useSettingsStore(
     (s) => s.stackingAlignmentInlierThreshold,
   );
+  const thumbnailSize = useSettingsStore((s) => s.thumbnailSize);
+  const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
 
   const [method, setMethod] = useState<StackMethod>(settingsStackMethod);
   const [sigmaValue, setSigmaValue] = useState(settingsSigma);
@@ -163,27 +268,393 @@ export default function StackingScreen() {
   const stacking = useStacking();
   const { saveImage, shareImage } = useExport();
 
-  const selectedFiles = files.filter((f) => selectedIds.includes(f.id));
+  const selectedFiles = stackableFiles.filter((f) => selectedIds.includes(f.id));
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const calibrationCandidates = useMemo(
+    () => stackableFiles.filter((file) => !selectedIdSet.has(file.id)),
+    [selectedIdSet, stackableFiles],
+  );
+
+  const precheck = useMemo(() => {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+
+    if (selectedFiles.length < 2) return { errors, warnings };
+
+    const dimsCounts = new Map<string, number>();
+    let knownDimsCount = 0;
+    for (const file of selectedFiles) {
+      const w = file.naxis1;
+      const h = file.naxis2;
+      if (
+        typeof w === "number" &&
+        typeof h === "number" &&
+        Number.isFinite(w) &&
+        Number.isFinite(h) &&
+        w > 0 &&
+        h > 0
+      ) {
+        const key = `${w}×${h}`;
+        dimsCounts.set(key, (dimsCounts.get(key) ?? 0) + 1);
+        knownDimsCount++;
+      }
+    }
+
+    if (dimsCounts.size > 1) {
+      const summary = Array.from(dimsCounts.entries())
+        .map(([dims, count]) => `${dims} (${count})`)
+        .join(", ");
+      errors.push(t("editor.stackPrecheckMixedDimensions", { dims: summary }));
+    } else if (dimsCounts.size === 1 && knownDimsCount !== selectedFiles.length) {
+      warnings.push(
+        t("editor.stackPrecheckMissingDimensions", {
+          count: selectedFiles.length - knownDimsCount,
+        }),
+      );
+    }
+
+    const missingExposureCount = selectedFiles.filter(
+      (file) => toPositiveExposure(file.exptime) === null,
+    ).length;
+    if (missingExposureCount > 0) {
+      warnings.push(t("editor.stackPrecheckMissingExposure", { count: missingExposureCount }));
+    }
+
+    const sessionIds = selectedFiles.map((file) => file.sessionId);
+    const targetIds = selectedFiles.map((file) => file.targetId);
+    const derivedFromIds = selectedFiles.map((file) => file.derivedFromId);
+    const locations = selectedFiles.map((file) => file.location);
+    const objects = selectedFiles.map((file) => file.object);
+    const filters = selectedFiles.map((file) => file.filter);
+    const instruments = selectedFiles.map((file) => file.instrument);
+    const telescopes = selectedFiles.map((file) => file.telescope);
+
+    const sessionId = sessionIds[0];
+    const targetId = targetIds[0];
+    const derivedFromId = derivedFromIds[0];
+    const location = locations[0];
+    const object = objects[0];
+    const filter = filters[0];
+    const instrument = instruments[0];
+    const telescope = telescopes[0];
+
+    if (!sessionIds.every((value) => value === sessionId)) {
+      warnings.push(t("editor.stackMetadataSessionInconsistent"));
+    }
+    if (!targetIds.every((value) => value === targetId)) {
+      warnings.push(t("editor.stackMetadataTargetInconsistent"));
+    }
+    if (!derivedFromIds.every((value) => value === derivedFromId)) {
+      warnings.push(t("editor.stackMetadataDerivedInconsistent"));
+    }
+    if (!locations.every((value) => isSameLocation(value, location))) {
+      warnings.push(t("editor.stackMetadataLocationInconsistent"));
+    }
+    if (!objects.every((value) => value === object)) {
+      warnings.push(t("editor.stackMetadataObjectInconsistent"));
+    }
+    if (!filters.every((value) => value === filter)) {
+      warnings.push(t("editor.stackMetadataFilterInconsistent"));
+    }
+    if (!instruments.every((value) => value === instrument)) {
+      warnings.push(t("editor.stackMetadataInstrumentInconsistent"));
+    }
+    if (!telescopes.every((value) => value === telescope)) {
+      warnings.push(t("editor.stackMetadataTelescopeInconsistent"));
+    }
+
+    if (dimsCounts.size === 1) {
+      const expectedDims = Array.from(dimsCounts.keys())[0];
+      const filesByFilepath = new Map(stackableFiles.map((file) => [file.filepath, file] as const));
+      const calibrationPaths = new Set<string>();
+      const darkPaths =
+        calibration.darkFilepaths ?? (calibration.darkFilepath ? [calibration.darkFilepath] : []);
+      const flatPaths =
+        calibration.flatFilepaths ?? (calibration.flatFilepath ? [calibration.flatFilepath] : []);
+      for (const fp of darkPaths) calibrationPaths.add(fp);
+      for (const fp of flatPaths) calibrationPaths.add(fp);
+      if (calibration.biasFilepath) calibrationPaths.add(calibration.biasFilepath);
+
+      for (const fp of calibrationPaths) {
+        const file = filesByFilepath.get(fp);
+        if (!file) continue;
+        const w = file.naxis1;
+        const h = file.naxis2;
+        if (
+          typeof w === "number" &&
+          typeof h === "number" &&
+          Number.isFinite(w) &&
+          Number.isFinite(h) &&
+          w > 0 &&
+          h > 0
+        ) {
+          const dims = `${w}×${h}`;
+          if (dims !== expectedDims) {
+            errors.push(
+              t("editor.stackPrecheckCalibrationDimensionMismatch", {
+                filename: file.filename,
+                dims,
+                expected: expectedDims,
+              }),
+            );
+          }
+        }
+      }
+    }
+
+    return { errors, warnings };
+  }, [calibration, selectedFiles, stackableFiles, t]);
 
   // Group files by filter for quick selection
   const filterGroups = useMemo(() => {
     const groups: Record<string, number> = {};
-    for (const f of files) {
+    for (const f of stackableFiles) {
       const key = f.filter ?? "Unknown";
       groups[key] = (groups[key] ?? 0) + 1;
     }
     return groups;
-  }, [files]);
+  }, [stackableFiles]);
 
   // Filtered display list
   const displayFiles = useMemo(() => {
-    if (!filterGroup) return files;
-    return files.filter((f) => (f.filter ?? "Unknown") === filterGroup);
-  }, [files, filterGroup]);
+    if (!filterGroup) return stackableFiles;
+    return stackableFiles.filter((f) => (f.filter ?? "Unknown") === filterGroup);
+  }, [stackableFiles, filterGroup]);
+
+  const toggleCalibrationCandidate = useCallback(
+    (type: "dark" | "flat" | "bias", file: FitsMetadata) => {
+      setCalibration((prev) => {
+        const canonicalDark = prev.darkFilepaths ?? (prev.darkFilepath ? [prev.darkFilepath] : []);
+        const canonicalFlat = prev.flatFilepaths ?? (prev.flatFilepath ? [prev.flatFilepath] : []);
+
+        if (type === "bias") {
+          const nextBias = prev.biasFilepath === file.filepath ? undefined : file.filepath;
+          if (!nextBias) {
+            return {
+              ...prev,
+              biasFilepath: undefined,
+            };
+          }
+
+          const nextDark = canonicalDark.filter((fp) => fp !== nextBias);
+          const nextFlat = canonicalFlat.filter((fp) => fp !== nextBias);
+
+          return {
+            ...prev,
+            biasFilepath: nextBias,
+            darkFilepaths: nextDark.length > 0 ? nextDark : undefined,
+            darkFilepath: nextDark.length > 0 ? nextDark[0] : undefined,
+            flatFilepaths: nextFlat.length > 0 ? nextFlat : undefined,
+            flatFilepath: nextFlat.length > 0 ? nextFlat[0] : undefined,
+          };
+        }
+
+        if (type === "dark") {
+          const darkSet = new Set(canonicalDark);
+          const isRemoving = darkSet.has(file.filepath);
+          if (isRemoving) {
+            darkSet.delete(file.filepath);
+          } else {
+            darkSet.add(file.filepath);
+          }
+          const nextDark = Array.from(darkSet);
+          const nextFlat = isRemoving
+            ? canonicalFlat
+            : canonicalFlat.filter((fp) => fp !== file.filepath);
+          const nextBias =
+            !isRemoving && prev.biasFilepath === file.filepath ? undefined : prev.biasFilepath;
+
+          return {
+            ...prev,
+            biasFilepath: nextBias,
+            darkFilepaths: nextDark.length > 0 ? nextDark : undefined,
+            darkFilepath: nextDark.length > 0 ? nextDark[0] : undefined,
+            flatFilepaths: nextFlat.length > 0 ? nextFlat : undefined,
+            flatFilepath: nextFlat.length > 0 ? nextFlat[0] : undefined,
+          };
+        }
+
+        const flatSet = new Set(canonicalFlat);
+        const isRemoving = flatSet.has(file.filepath);
+        if (isRemoving) {
+          flatSet.delete(file.filepath);
+        } else {
+          flatSet.add(file.filepath);
+        }
+        const nextFlat = Array.from(flatSet);
+        const nextDark = isRemoving
+          ? canonicalDark
+          : canonicalDark.filter((fp) => fp !== file.filepath);
+        const nextBias =
+          !isRemoving && prev.biasFilepath === file.filepath ? undefined : prev.biasFilepath;
+
+        return {
+          ...prev,
+          biasFilepath: nextBias,
+          darkFilepaths: nextDark.length > 0 ? nextDark : undefined,
+          darkFilepath: nextDark.length > 0 ? nextDark[0] : undefined,
+          flatFilepaths: nextFlat.length > 0 ? nextFlat : undefined,
+          flatFilepath: nextFlat.length > 0 ? nextFlat[0] : undefined,
+        };
+      });
+    },
+    [],
+  );
+
+  const clearCalibrationType = useCallback((type: "dark" | "flat" | "bias") => {
+    setCalibration((prev) => {
+      if (type === "bias") {
+        return { ...prev, biasFilepath: undefined };
+      }
+      if (type === "dark") {
+        return { ...prev, darkFilepath: undefined, darkFilepaths: undefined };
+      }
+      return { ...prev, flatFilepath: undefined, flatFilepaths: undefined };
+    });
+  }, []);
+
+  const persistStackResult = useCallback(
+    async (
+      stackResult: StackResult,
+      sourceFiles: FitsMetadata[],
+    ): Promise<{ id: string; warnings: string[] } | null> => {
+      const source = sourceFiles[0];
+      if (!source) return null;
+
+      const persistenceWarnings: string[] = [];
+      const sessionIds = sourceFiles.map((file) => file.sessionId);
+      const targetIds = sourceFiles.map((file) => file.targetId);
+      const derivedFromIds = sourceFiles.map((file) => file.derivedFromId);
+      const locations = sourceFiles.map((file) => file.location);
+      const objects = sourceFiles.map((file) => file.object);
+      const filters = sourceFiles.map((file) => file.filter);
+      const instruments = sourceFiles.map((file) => file.instrument);
+      const telescopes = sourceFiles.map((file) => file.telescope);
+
+      const sessionId = sessionIds[0];
+      const targetId = targetIds[0];
+      const derivedFromId = derivedFromIds[0];
+      const location = locations[0];
+      const object = objects[0];
+      const filter = filters[0];
+      const instrument = instruments[0];
+      const telescope = telescopes[0];
+
+      if (!sessionIds.every((value) => value === sessionId)) {
+        persistenceWarnings.push(t("editor.stackMetadataSessionInconsistent"));
+      }
+      if (!targetIds.every((value) => value === targetId)) {
+        persistenceWarnings.push(t("editor.stackMetadataTargetInconsistent"));
+      }
+      if (!derivedFromIds.every((value) => value === derivedFromId)) {
+        persistenceWarnings.push(t("editor.stackMetadataDerivedInconsistent"));
+      }
+      if (!locations.every((value) => isSameLocation(value, location))) {
+        persistenceWarnings.push(t("editor.stackMetadataLocationInconsistent"));
+      }
+      if (!objects.every((value) => value === object)) {
+        persistenceWarnings.push(t("editor.stackMetadataObjectInconsistent"));
+      }
+      if (!filters.every((value) => value === filter)) {
+        persistenceWarnings.push(t("editor.stackMetadataFilterInconsistent"));
+      }
+      if (!instruments.every((value) => value === instrument)) {
+        persistenceWarnings.push(t("editor.stackMetadataInstrumentInconsistent"));
+      }
+      if (!telescopes.every((value) => value === telescope)) {
+        persistenceWarnings.push(t("editor.stackMetadataTelescopeInconsistent"));
+      }
+
+      const totalExposure = sourceFiles.reduce((sum, file) => {
+        const exposure = toPositiveExposure(file.exptime);
+        return sum + (exposure ?? 0);
+      }, 0);
+
+      const outputName = createUniqueFitsFilename(
+        `stacked_${stackResult.method}_${stackResult.frameCount}f`,
+      );
+      const outputFile = new FSFile(getFitsDir(), outputName);
+
+      const bytes = writeFitsImage({
+        image: {
+          kind: "mono2d",
+          width: stackResult.width,
+          height: stackResult.height,
+          pixels: stackResult.pixels,
+        },
+        bitpix: -32,
+        preserveOriginalHeader: false,
+        preserveWcs: false,
+        metadata: {
+          object,
+          filter,
+          instrument,
+          telescope,
+          exptime: totalExposure > 0 ? totalExposure : undefined,
+        },
+        history: [`Stacked ${stackResult.frameCount} frames with ${stackResult.method}`],
+        exportMode: "scientific",
+        sourceFormat: "fits",
+        targetFormat: "fits",
+      });
+
+      outputFile.write(bytes);
+      const outputBuffer = await outputFile.arrayBuffer();
+      const parsed = loadFitsFromBufferAuto(outputBuffer);
+      const outputFilename = outputFile.name ?? filenameFromUri(outputFile.uri);
+      const partialMeta = extractMetadata(parsed, {
+        filename: outputFilename,
+        filepath: outputFile.uri,
+        fileSize: outputFile.size ?? outputBuffer.byteLength,
+      });
+
+      const id = generateFileId();
+      addFile({
+        ...partialMeta,
+        id,
+        importDate: Date.now(),
+        isFavorite: false,
+        tags: [],
+        albumIds: [],
+        sourceType: "fits",
+        sourceFormat: "fits",
+        mediaKind: "image",
+        frameType: "light",
+        processingTag: "stacking",
+        exptime: totalExposure > 0 ? totalExposure : undefined,
+        sessionId,
+        targetId,
+        derivedFromId,
+        location,
+      });
+
+      const thumbUri = generateAndSaveThumbnail(
+        id,
+        stackResult.rgbaData,
+        stackResult.width,
+        stackResult.height,
+        thumbnailSize,
+        thumbnailQuality,
+      );
+
+      if (thumbUri) {
+        updateFile(id, { thumbnailUri: thumbUri });
+      }
+
+      return { id, warnings: persistenceWarnings };
+    },
+    [addFile, t, thumbnailQuality, thumbnailSize, updateFile],
+  );
 
   const handleStack = useCallback(async () => {
+    setUiWarnings([]);
     if (selectedFiles.length < 2) {
       Alert.alert(t("common.error"), t("editor.selectAtLeast2"));
+      return;
+    }
+
+    if (precheck.errors.length > 0) {
+      Alert.alert(t("common.error"), precheck.errors.join("\n"));
       return;
     }
 
@@ -195,13 +666,13 @@ export default function StackingScreen() {
     }));
 
     const hasCalibration =
-      calibration.darkFilepath ||
-      calibration.flatFilepath ||
       calibration.biasFilepath ||
       (calibration.darkFilepaths && calibration.darkFilepaths.length > 0) ||
-      (calibration.flatFilepaths && calibration.flatFilepaths.length > 0);
+      (calibration.flatFilepaths && calibration.flatFilepaths.length > 0) ||
+      calibration.darkFilepath ||
+      calibration.flatFilepath;
 
-    await stacking.stackFiles({
+    const stackResult = await stacking.stackFiles({
       files: fileInfos,
       method,
       sigma: sigmaValue,
@@ -266,38 +737,76 @@ export default function StackingScreen() {
         },
       },
     });
+
+    if (!stackResult) {
+      return;
+    }
+
+    const calibrationWarnings = stackResult.calibrationWarnings.map((warning: StackingWarning) =>
+      t(warning.messageKey, { filename: warning.filename }),
+    );
+
+    let didNavigate = false;
+    setIsPersisting(true);
+    try {
+      const persisted = await persistStackResult(stackResult, selectedFiles);
+      if (!persisted) {
+        Alert.alert(t("common.error"), t("editor.autoSaveFailed"));
+        setUiWarnings(Array.from(new Set([...precheck.warnings, ...calibrationWarnings])));
+        return;
+      }
+
+      const mergedWarnings = Array.from(
+        new Set([...precheck.warnings, ...calibrationWarnings, ...persisted.warnings]),
+      );
+      setUiWarnings(mergedWarnings);
+      Alert.alert(t("common.success"), t("editor.autoSaveSuccess"));
+      didNavigate = true;
+      setIsPersisting(false);
+      router.push(`/viewer/${persisted.id}`);
+    } catch {
+      Alert.alert(t("common.error"), t("editor.autoSaveFailed"));
+      setUiWarnings(Array.from(new Set([...precheck.warnings, ...calibrationWarnings])));
+    } finally {
+      if (!didNavigate) {
+        setIsPersisting(false);
+      }
+    }
   }, [
-    selectedFiles,
-    method,
-    sigmaValue,
-    calibration,
+    alignmentInlierThreshold,
     alignmentMode,
-    enableQuality,
-    t,
-    stacking,
-    detectionProfile,
-    detectSigmaThreshold,
+    backgroundMeshSize,
+    calibration,
+    deblendMinContrast,
+    deblendNLevels,
+    detectApplyMatchedFilter,
+    detectBorderMargin,
+    detectConnectivity,
+    detectMaxArea,
+    detectMaxSharpness,
     detectMaxStars,
     detectMinArea,
-    detectMaxArea,
-    detectBorderMargin,
-    detectSigmaClipIters,
-    detectApplyMatchedFilter,
-    detectConnectivity,
-    backgroundMeshSize,
-    deblendNLevels,
-    deblendMinContrast,
-    filterFwhm,
     detectMinFwhm,
-    maxFwhm,
-    maxEllipticity,
     detectMinSharpness,
-    detectMaxSharpness,
     detectPeakMax,
+    detectSigmaClipIters,
+    detectSigmaThreshold,
     detectSnrMin,
-    useAnnotatedForAlignment,
+    detectionProfile,
+    enableQuality,
+    filterFwhm,
+    maxEllipticity,
+    maxFwhm,
+    method,
+    persistStackResult,
     ransacMaxIterations,
-    alignmentInlierThreshold,
+    router,
+    selectedFiles,
+    sigmaValue,
+    stacking,
+    t,
+    useAnnotatedForAlignment,
+    precheck,
   ]);
 
   const handleExport = useCallback(async () => {
@@ -338,13 +847,13 @@ export default function StackingScreen() {
   const handleSelectByFilter = useCallback(
     (filter: string) => {
       clearSelection();
-      for (const f of files) {
+      for (const f of stackableFiles) {
         if ((f.filter ?? "Unknown") === filter) {
           toggleSelection(f.id);
         }
       }
     },
-    [files, clearSelection, toggleSelection],
+    [clearSelection, stackableFiles, toggleSelection],
   );
 
   const resultStats = useMemo(
@@ -357,32 +866,19 @@ export default function StackingScreen() {
     return Math.round((stacking.progress.current / stacking.progress.total) * 100);
   }, [stacking.progress]);
 
-  const handleSelectCalibrationFrame = useCallback(
-    (type: "dark" | "flat" | "bias") => {
-      // Find files that could serve as calibration frames
-      const available = files.filter((f) => !selectedIds.includes(f.id));
-      if (available.length === 0) {
-        Alert.alert(t("common.error"), "No unselected files available for calibration");
-        return;
-      }
+  const selectedDarkPaths = useMemo(() => {
+    if (calibration.darkFilepaths && calibration.darkFilepaths.length > 0) {
+      return calibration.darkFilepaths;
+    }
+    return calibration.darkFilepath ? [calibration.darkFilepath] : [];
+  }, [calibration.darkFilepath, calibration.darkFilepaths]);
 
-      const options = available.slice(0, 10).map((f) => ({
-        text: f.filename,
-        onPress: () => {
-          setCalibration((prev) => ({
-            ...prev,
-            [`${type}Filepath`]: f.filepath,
-          }));
-        },
-      }));
-
-      Alert.alert(t(`editor.${type}Frame`), undefined, [
-        ...options,
-        { text: t("common.cancel"), style: "cancel" },
-      ]);
-    },
-    [files, selectedIds, t],
-  );
+  const selectedFlatPaths = useMemo(() => {
+    if (calibration.flatFilepaths && calibration.flatFilepaths.length > 0) {
+      return calibration.flatFilepaths;
+    }
+    return calibration.flatFilepath ? [calibration.flatFilepath] : [];
+  }, [calibration.flatFilepath, calibration.flatFilepaths]);
 
   return (
     <View testID="e2e-screen-stacking__index" className="flex-1 bg-background">
@@ -394,6 +890,7 @@ export default function StackingScreen() {
         total={stacking.progress?.total}
         onCancel={stacking.cancel}
       />
+      <LoadingOverlay visible={isPersisting} message={t("editor.autoSaving")} />
 
       <ScrollView
         className="flex-1"
@@ -410,15 +907,32 @@ export default function StackingScreen() {
           <View className="flex-1">
             <Text className="text-lg font-bold text-foreground">{t("editor.stacking")}</Text>
             <Text className="text-[10px] text-muted">
-              {t("editor.framesSelected", { selected: selectedFiles.length, total: files.length })}
+              {t("editor.framesSelected", {
+                selected: selectedFiles.length,
+                total: stackableFiles.length,
+              })}
             </Text>
+            {idsPreselectionSummary && (
+              <Text className="text-[10px] text-muted">
+                {t("editor.idsPreselectionSummary", {
+                  selected: idsPreselectionSummary.selected,
+                  requested: idsPreselectionSummary.requested,
+                })}
+                {idsPreselectionSummary.ignored > 0
+                  ? ` · ${t("editor.idsPreselectionIgnored", { count: idsPreselectionSummary.ignored })}`
+                  : ""}
+              </Text>
+            )}
           </View>
           {stacking.result && (
             <Button
               testID="e2e-action-stacking__index-reset"
               size="sm"
               variant="outline"
-              onPress={stacking.reset}
+              onPress={() => {
+                setUiWarnings([]);
+                stacking.reset();
+              }}
             >
               <Ionicons name="refresh-outline" size={14} color={mutedColor} />
             </Button>
@@ -426,6 +940,15 @@ export default function StackingScreen() {
         </View>
 
         <Separator className="mb-4" />
+
+        {stackableFiles.length === 0 && (
+          <HAlert status="warning" className="mb-4">
+            <HAlert.Indicator />
+            <HAlert.Content>
+              <HAlert.Description>{t("editor.noStackableFiles")}</HAlert.Description>
+            </HAlert.Content>
+          </HAlert>
+        )}
 
         {/* Method Selection */}
         <Text className="mb-2 text-xs font-semibold uppercase text-muted">
@@ -780,8 +1303,8 @@ export default function StackingScreen() {
                 <Text className="text-xs font-semibold uppercase text-muted">
                   {t("editor.calibrationFrames")}
                 </Text>
-                {(calibration.darkFilepath ||
-                  calibration.flatFilepath ||
+                {(selectedDarkPaths.length > 0 ||
+                  selectedFlatPaths.length > 0 ||
                   calibration.biasFilepath) && (
                   <View className="h-1.5 w-1.5 rounded-full bg-success" />
                 )}
@@ -789,68 +1312,88 @@ export default function StackingScreen() {
               <Accordion.Indicator />
             </Accordion.Trigger>
             <Accordion.Content>
-              <View className="gap-1.5">
-                {(["dark", "flat", "bias"] as const).map((type) => {
-                  const key = `${type}Filepath` as "darkFilepath" | "flatFilepath" | "biasFilepath";
-                  const filepath = calibration[key];
-                  const labelKey: string = `editor.${type}Frame`;
-                  const filename = filepath?.split("/").pop();
-                  return (
-                    <View key={type} className="flex-row items-center gap-2">
-                      <PressableFeedback
-                        className="flex-1"
-                        onPress={() => handleSelectCalibrationFrame(type)}
-                      >
-                        <Card variant="secondary">
-                          <Card.Body className="flex-row items-center gap-2 p-2.5">
-                            <Ionicons
-                              name="flask-outline"
-                              size={14}
-                              color={filepath ? successColor : mutedColor}
-                            />
-                            <View className="flex-1 min-w-0">
-                              <Text className="text-[10px] font-semibold text-muted">
-                                {t(labelKey)}
-                              </Text>
-                              {filename ? (
-                                <Text className="text-xs text-foreground" numberOfLines={1}>
-                                  {filename}
-                                </Text>
-                              ) : (
-                                <Text className="text-[10px] text-muted italic">
-                                  {t(
-                                    `editor.select${type.charAt(0).toUpperCase() + type.slice(1)}`,
-                                  )}
-                                </Text>
-                              )}
-                            </View>
-                            {filepath && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                isIconOnly
-                                onPress={() =>
-                                  setCalibration((prev) => ({
-                                    ...prev,
-                                    [key]: undefined,
-                                  }))
-                                }
-                              >
-                                <Ionicons name="close-circle" size={16} color={mutedColor} />
-                              </Button>
-                            )}
-                          </Card.Body>
-                        </Card>
-                      </PressableFeedback>
+              <View className="gap-3">
+                {[
+                  {
+                    type: "dark" as const,
+                    label: t("editor.darkFrame"),
+                    selectedPaths: selectedDarkPaths,
+                    multi: true,
+                  },
+                  {
+                    type: "flat" as const,
+                    label: t("editor.flatFrame"),
+                    selectedPaths: selectedFlatPaths,
+                    multi: true,
+                  },
+                  {
+                    type: "bias" as const,
+                    label: t("editor.biasFrame"),
+                    selectedPaths: calibration.biasFilepath ? [calibration.biasFilepath] : [],
+                    multi: false,
+                  },
+                ].map((group) => (
+                  <View key={group.type} className="gap-1.5">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-[10px] font-semibold text-muted">
+                        {group.label} ·{" "}
+                        {t("editor.calibrationSelectedCount", {
+                          count: group.selectedPaths.length,
+                        })}
+                      </Text>
+                      {group.selectedPaths.length > 0 && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          isIconOnly
+                          onPress={() => clearCalibrationType(group.type)}
+                        >
+                          <Ionicons name="close-circle" size={16} color={mutedColor} />
+                        </Button>
+                      )}
                     </View>
-                  );
-                })}
+                    <View className="flex-row flex-wrap gap-1.5">
+                      {calibrationCandidates.map((candidate) => {
+                        const isSelected = group.selectedPaths.includes(candidate.filepath);
+                        return (
+                          <Chip
+                            key={`${group.type}-${candidate.id}`}
+                            size="sm"
+                            variant={isSelected ? "primary" : "secondary"}
+                            onPress={() => toggleCalibrationCandidate(group.type, candidate)}
+                          >
+                            <Chip.Label className="text-[9px]">
+                              {candidate.filename}
+                              {group.multi ? "" : isSelected ? " ✓" : ""}
+                            </Chip.Label>
+                          </Chip>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ))}
+                {calibrationCandidates.length === 0 && (
+                  <Text className="text-[10px] text-muted italic">
+                    {t("editor.calibrationNoCandidates")}
+                  </Text>
+                )}
               </View>
             </Accordion.Content>
           </Accordion.Item>
         </Accordion>
 
         <Separator className="mb-4" />
+
+        {uiWarnings.length > 0 && (
+          <HAlert status="warning" className="mb-4">
+            <HAlert.Indicator />
+            <HAlert.Content>
+              {uiWarnings.map((warning, index) => (
+                <HAlert.Description key={`stack-warning-${index}`}>{warning}</HAlert.Description>
+              ))}
+            </HAlert.Content>
+          </HAlert>
+        )}
 
         {/* Error */}
         {stacking.error && (
@@ -1000,7 +1543,7 @@ export default function StackingScreen() {
         {/* Frame Selection Header */}
         <View className="flex-row items-center justify-between mb-2">
           <Text className="text-xs font-semibold uppercase text-muted">
-            {t("editor.frames")} ({selectedFiles.length}/{files.length})
+            {t("editor.frames")} ({selectedFiles.length}/{stackableFiles.length})
           </Text>
           <View className="flex-row gap-2">
             <Button size="sm" variant="ghost" onPress={selectAll}>
@@ -1045,7 +1588,14 @@ export default function StackingScreen() {
         )}
 
         {displayFiles.length === 0 ? (
-          <EmptyState icon="images-outline" title={t("editor.noFitsAvailable")} />
+          <EmptyState
+            icon="images-outline"
+            title={
+              stackableFiles.length === 0
+                ? t("editor.noStackableFiles")
+                : t("editor.noFitsAvailable")
+            }
+          />
         ) : (
           <View className="gap-1.5">
             {displayFiles.map((file) => {
@@ -1081,13 +1631,46 @@ export default function StackingScreen() {
           </View>
         )}
 
+        {(precheck.errors.length > 0 || precheck.warnings.length > 0) &&
+          selectedFiles.length >= 2 && (
+            <View className="mt-4 gap-2">
+              {precheck.errors.length > 0 && (
+                <HAlert status="danger">
+                  <HAlert.Indicator />
+                  <HAlert.Content>
+                    {precheck.errors.map((message, index) => (
+                      <HAlert.Description key={`stack-precheck-error-${index}`}>
+                        {message}
+                      </HAlert.Description>
+                    ))}
+                  </HAlert.Content>
+                </HAlert>
+              )}
+
+              {precheck.warnings.length > 0 && (
+                <HAlert status="warning">
+                  <HAlert.Indicator />
+                  <HAlert.Content>
+                    {precheck.warnings.map((message, index) => (
+                      <HAlert.Description key={`stack-precheck-warning-${index}`}>
+                        {message}
+                      </HAlert.Description>
+                    ))}
+                  </HAlert.Content>
+                </HAlert>
+              )}
+            </View>
+          )}
+
         {/* Stack Button */}
         <View className="mt-6">
           <Button
             testID="e2e-action-stacking__index-start"
             variant="primary"
             onPress={handleStack}
-            isDisabled={selectedFiles.length < 2 || stacking.isStacking}
+            isDisabled={
+              selectedFiles.length < 2 || stacking.isStacking || precheck.errors.length > 0
+            }
           >
             <Ionicons name="layers-outline" size={16} color="#fff" />
             <Button.Label>

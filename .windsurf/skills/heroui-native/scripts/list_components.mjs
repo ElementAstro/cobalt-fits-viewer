@@ -5,10 +5,7 @@ import { parseCommonArgs } from "./_core/args.mjs";
 import { createHttpClient } from "./_core/client.mjs";
 import { EXIT_CODE, SkillError, failureEnvelope, successEnvelope } from "./_core/errors.mjs";
 import { resolveWithFallback } from "./_core/fallback.mjs";
-import {
-  normalizeComponentItems,
-  parseComponentsFromLlmsTxt,
-} from "./_core/normalize.mjs";
+import { normalizeComponentItems, parseComponentsFromLlmsTxt } from "./_core/normalize.mjs";
 import { createRuntime, emitEnvelope, log, writeStdout, writeStderr } from "./_core/output.mjs";
 
 const LLMS_TXT_URL = "https://v3.heroui.com/native/llms.txt";

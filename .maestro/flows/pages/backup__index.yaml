@@ -3,7 +3,17 @@
 - openLink: cobalt://backup
 - assertVisible:
     id: e2e-screen-backup__index
+- assertVisible:
+    id: e2e-action-backup__index-local-export
+- assertVisible:
+    id: e2e-action-backup__index-local-import
+- assertVisible:
+    id: e2e-action-backup__index-network-wifi
+- assertVisible:
+    id: e2e-action-backup__index-network-any
 - tapOn:
     id: e2e-action-backup__index-network-any
 - tapOn:
     id: e2e-action-backup__index-network-wifi
+- assertVisible:
+    id: e2e-action-backup__index-toggle-auto-backup

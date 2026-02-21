@@ -5,13 +5,12 @@
  */
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
-import { InteractionManager, Platform } from "react-native";
+import { InteractionManager } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { File, Directory, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
-import * as VideoThumbnails from "expo-video-thumbnails";
+import { shareFile, ShareNotAvailableError } from "../lib/utils/imageExport";
 import { convertHiPSToFITS } from "fitsjs-ng";
 import { LOG_TAGS, Logger } from "../lib/logger";
 import { useFitsStore } from "../stores/useFitsStore";
@@ -45,8 +44,8 @@ import {
 } from "../lib/fits/parser";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
 import {
-  copyThumbnailToCache,
   generateAndSaveThumbnail,
+  generateVideoThumbnailToCache,
   deleteThumbnails,
 } from "../lib/gallery/thumbnailCache";
 import { LocationService } from "./useLocation";
@@ -63,11 +62,8 @@ import {
 } from "../lib/import/fileFormat";
 import { extractRasterMetadata, parseRasterFromBufferAsync } from "../lib/image/rasterParser";
 import { parseHiPSCutoutRequest } from "../lib/import/hipsUrl";
-import {
-  buildMissingLogEntries,
-  deriveSessionMetadataFromFiles,
-  resolveImportSessionId,
-} from "../lib/sessions/sessionLinking";
+import { resolveImportSessionId } from "../lib/sessions/sessionLinking";
+import { reconcileSessionsFromLinkedFilesGraph } from "../lib/sessions/sessionReconciliation";
 import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
 import { normalizeGeoLocation } from "../lib/map/geo";
 
@@ -288,25 +284,6 @@ function resolvePickedAssetName(
   return `picked_${Date.now()}${inferredExt}`;
 }
 
-async function generateVideoThumbnailToCache(
-  fileId: string,
-  filepath: string,
-  timeMs: number,
-  qualityPercent: number,
-): Promise<string | null> {
-  if (Platform.OS === "web") return null;
-  try {
-    const result = await VideoThumbnails.getThumbnailAsync(filepath, {
-      time: Math.max(0, Math.round(timeMs)),
-      quality: Math.min(1, Math.max(0.1, qualityPercent / 100)),
-    });
-    return copyThumbnailToCache(fileId, result.uri);
-  } catch (error) {
-    Logger.warn(LOG_TAGS.FileManager, `Video thumbnail generation failed for ${fileId}`, error);
-    return null;
-  }
-}
-
 export function useFileManager() {
   const [isImporting, setIsImporting] = useState(false);
   const [importProgress, setImportProgress] = useState<ImportProgress>({
@@ -399,80 +376,21 @@ export function useFileManager() {
   );
 
   const reconcileSessionsFromLinkedFiles = useCallback((sessionIds: string[]) => {
-    const normalizedIds = [
-      ...new Set(sessionIds.map((id) => id?.trim()).filter((id): id is string => Boolean(id))),
-    ];
-    if (normalizedIds.length === 0) return;
-
-    const targetCatalog = useTargetStore.getState().targets;
-    const allFiles = useFitsStore.getState().files;
-    const filesBySessionId = new Map<string, FitsMetadata[]>();
-    for (const sessionId of normalizedIds) {
-      filesBySessionId.set(
-        sessionId,
-        allFiles.filter((file) => file.sessionId === sessionId),
-      );
-    }
-
-    const normalizedIdSet = new Set(normalizedIds);
-    useSessionStore.setState((state) => {
-      const sessions = state.sessions.map((session) => {
-        if (!normalizedIdSet.has(session.id)) return session;
-
-        const linkedFiles = filesBySessionId.get(session.id) ?? [];
-        if (linkedFiles.length === 0) {
-          return {
-            ...session,
-            imageIds: [],
-            targetRefs: [],
-            equipment: {},
-            location: undefined,
-          };
-        }
-
-        const derived = deriveSessionMetadataFromFiles(linkedFiles, targetCatalog);
-        const nextFilters =
-          derived.equipment.filters && derived.equipment.filters.length > 0
-            ? derived.equipment.filters
-            : session.equipment.filters;
-        const nextEquipment = {
-          ...session.equipment,
-          ...derived.equipment,
-          ...(nextFilters && nextFilters.length > 0 ? { filters: nextFilters } : {}),
-        };
-
-        return {
-          ...session,
-          imageIds: derived.imageIds,
-          targetRefs: derived.targetRefs,
-          equipment: nextEquipment,
-          location: derived.location ?? session.location,
-        };
-      });
-
-      const validImageIdsBySession = new Map(
-        sessions.map((session) => [session.id, new Set(session.imageIds)]),
-      );
-      const nextLogEntries = state.logEntries.filter((entry) => {
-        if (!normalizedIdSet.has(entry.sessionId)) return true;
-        const validImageIds = validImageIdsBySession.get(entry.sessionId);
-        return validImageIds ? validImageIds.has(entry.imageId) : false;
-      });
-
-      for (const sessionId of normalizedIds) {
-        const sessionFiles = filesBySessionId.get(sessionId) ?? [];
-        if (sessionFiles.length === 0) continue;
-        const missing = buildMissingLogEntries(sessionFiles, sessionId, nextLogEntries);
-        if (missing.length > 0) {
-          nextLogEntries.push(...missing);
-        }
-      }
-
-      return {
-        sessions,
-        logEntries: nextLogEntries,
-      };
+    const state = useSessionStore.getState();
+    const { sessions, logEntries, summary } = reconcileSessionsFromLinkedFilesGraph({
+      sessionIds,
+      sessions: state.sessions,
+      files: useFitsStore.getState().files,
+      logEntries: state.logEntries,
+      targetCatalog: useTargetStore.getState().targets,
     });
+
+    if (summary.changed) {
+      useSessionStore.setState({
+        sessions,
+        logEntries,
+      });
+    }
   }, []);
 
   const restoreReferences = useCallback(
@@ -710,6 +628,9 @@ export function useFileManager() {
               frameIndex: 0,
               cacheSize: 3,
               preferTiffDecoder: true,
+              sourceUri: importedUri,
+              filename: finalName,
+              formatHint: detectedFormat.id,
             });
           } catch (decodeError) {
             if (detectedFormat.id !== "tiff") {
@@ -1898,22 +1819,20 @@ export function useFileManager() {
       };
     }
 
-    const canShare = await Sharing.isAvailableAsync();
-    if (!canShare) {
-      return {
-        success: false,
-        exported: 0,
-        failed: selectedFiles.length,
-        shared: false,
-        error: "shareUnavailable",
-      };
-    }
-
     if (selectedFiles.length === 1) {
       try {
-        await Sharing.shareAsync(selectedFiles[0].filepath);
+        await shareFile(selectedFiles[0].filepath);
         return { success: true, exported: 1, failed: 0, shared: true };
       } catch (error) {
+        if (error instanceof ShareNotAvailableError) {
+          return {
+            success: false,
+            exported: 0,
+            failed: 1,
+            shared: false,
+            error: "shareUnavailable",
+          };
+        }
         return {
           success: false,
           exported: 0,
@@ -1980,7 +1899,7 @@ export function useFileManager() {
     const zipFile = new File(Paths.cache, `files_export_${Date.now()}.zip`);
     try {
       await zipFn(exportDir.uri, zipFile.uri);
-      await Sharing.shareAsync(zipFile.uri, {
+      await shareFile(zipFile.uri, {
         mimeType: "application/zip",
         UTI: "public.zip-archive",
       });

@@ -8,6 +8,8 @@ import {
   escapeCSV,
   exportSessionToJSON,
   exportAllSessionsToJSON,
+  exportSessionToCSV,
+  exportAllSessionsToCSV,
 } from "../observationLog";
 
 const makeFile = (overrides: Partial<FitsMetadata> = {}): FitsMetadata =>
@@ -329,5 +331,54 @@ describe("exportAllSessionsToJSON", () => {
     expect(parsed.sessions[0].rating).toBe(3);
     expect(parsed.sessions[0].bortle).toBe(6);
     expect(parsed.sessions[0].tags).toEqual(["planetary"]);
+  });
+});
+
+// ===== exportSessionToCSV =====
+
+describe("exportSessionToCSV", () => {
+  it("includes session header and CSV body", () => {
+    const session = makeSession({ notes: "Clear sky" });
+    const entries = [makeEntry()];
+    const csv = exportSessionToCSV(session, entries);
+
+    expect(csv).toContain("# Session: 2024-01-15");
+    expect(csv).toContain("# Targets: M42");
+    expect(csv).toContain("# Notes: Clear sky");
+    expect(csv).toContain("DateTime,Object,Filter");
+    expect(csv).toContain("M42,Ha,300");
+  });
+
+  it("omits notes line when no notes", () => {
+    const session = makeSession({ notes: undefined });
+    const csv = exportSessionToCSV(session, [makeEntry()]);
+    expect(csv).not.toContain("# Notes:");
+  });
+});
+
+// ===== exportAllSessionsToCSV =====
+
+describe("exportAllSessionsToCSV", () => {
+  it("produces CSV with headers and session rows", () => {
+    const sessions = [
+      makeSession({ id: "s1", date: "2024-01-15" }),
+      makeSession({ id: "s2", date: "2024-01-16" }),
+    ];
+    const csv = exportAllSessionsToCSV(sessions);
+    const lines = csv.split("\n");
+
+    expect(lines[0]).toBe(
+      "Date,Targets,Duration(min),Images,Equipment,Weather,Seeing,Bortle,Rating,Notes",
+    );
+    expect(lines).toHaveLength(3);
+    expect(lines[1]).toContain("2024-01-15");
+    expect(lines[2]).toContain("2024-01-16");
+  });
+
+  it("handles empty sessions array", () => {
+    const csv = exportAllSessionsToCSV([]);
+    const lines = csv.split("\n");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain("Date,Targets");
   });
 });

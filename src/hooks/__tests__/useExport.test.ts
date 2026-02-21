@@ -64,6 +64,12 @@ jest.mock("../../lib/import/fileFormat", () => ({
   },
 }));
 
+const mockSetImageAsync = jest.fn();
+
+jest.mock("expo-clipboard", () => ({
+  setImageAsync: (...args: any[]) => (mockSetImageAsync as any)(...args),
+}));
+
 jest.mock("../../lib/logger", () => ({
   LOG_TAGS: {
     Export: "export",
@@ -156,6 +162,36 @@ describe("useExport", () => {
     expect(detailed!.diagnostics.fallbackApplied).toBe(true);
     expect(detailed!.diagnostics.fallbackReasonCode).toBe("scientific_unavailable");
     expect(detailed!.diagnostics.effectiveFitsMode).toBe("rendered");
+  });
+
+  it("copies image to clipboard successfully", async () => {
+    mockSetImageAsync.mockResolvedValue(undefined);
+    const { result } = renderHook(() => useExport());
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+
+    let ok: boolean;
+    await act(async () => {
+      ok = await result.current.copyImageToClipboard(rgba, 1, 1);
+    });
+
+    expect(ok!).toBe(true);
+    expect(mockSetImageAsync).toHaveBeenCalledWith(expect.any(String));
+    expect(result.current.isExporting).toBe(false);
+    expect(result.current.exportPhase).toBe("idle");
+  });
+
+  it("returns false when clipboard copy fails", async () => {
+    mockSetImageAsync.mockRejectedValue(new Error("clipboard error"));
+    const { result } = renderHook(() => useExport());
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+
+    let ok: boolean;
+    await act(async () => {
+      ok = await result.current.copyImageToClipboard(rgba, 1, 1);
+    });
+
+    expect(ok!).toBe(false);
+    expect(result.current.isExporting).toBe(false);
   });
 
   it("prints image and pdf with iOS orientation and shared pdf", async () => {

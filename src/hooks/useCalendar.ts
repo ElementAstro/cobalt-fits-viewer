@@ -39,6 +39,24 @@ interface CalendarRefreshSummary {
   permissionDenied?: boolean;
 }
 
+interface CalendarBatchSummary {
+  total: number;
+  success: number;
+  skipped: number;
+  failed: number;
+  permissionDenied?: boolean;
+}
+
+interface SessionRefreshBatchSummary {
+  total: number;
+  updated: number;
+  cleared: number;
+  unchanged: number;
+  skipped: number;
+  errors: number;
+  permissionDenied?: boolean;
+}
+
 function toLocalDateString(timestamp: number): string {
   const d = new Date(timestamp);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -159,33 +177,260 @@ export function useCalendar() {
     [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession, targets],
   );
 
-  const syncAllSessions = useCallback(
-    async (sessions: ObservationSession[]): Promise<number> => {
+  const refreshSessionFromCalendarCore = useCallback(
+    async (session: ObservationSession): Promise<CalendarRefreshOutcome> => {
+      if (!session.calendarEventId) return "skipped";
+      try {
+        const event = await getCalendarEvent(session.calendarEventId);
+        if (!event) {
+          updateSession(session.id, { calendarEventId: undefined });
+          return "cleared";
+        }
+
+        const startMs = event.startDate ? new Date(event.startDate).getTime() : Number.NaN;
+        const endMs = event.endDate ? new Date(event.endDate).getTime() : Number.NaN;
+        if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
+          return "unchanged";
+        }
+
+        const nextDuration = Math.max(0, Math.round((endMs - startMs) / 1000));
+        const nextDate = toLocalDateString(startMs);
+        const updates: Partial<ObservationSession> = {};
+
+        if (session.startTime !== startMs) updates.startTime = startMs;
+        if (session.endTime !== endMs) updates.endTime = endMs;
+        if (session.duration !== nextDuration) updates.duration = nextDuration;
+        if (session.date !== nextDate) updates.date = nextDate;
+
+        if (Object.keys(updates).length === 0) {
+          return "unchanged";
+        }
+
+        updateSession(session.id, updates);
+        return "updated";
+      } catch (e) {
+        Logger.warn(LOG_TAGS.Calendar, `Refresh session from calendar failed: ${session.id}`, e);
+        return "error";
+      }
+    },
+    [updateSession],
+  );
+
+  const refreshPlanFromCalendarCore = useCallback(
+    async (plan: ObservationPlan): Promise<CalendarRefreshOutcome> => {
+      if (!plan.calendarEventId) return "skipped";
+      try {
+        const event = await getCalendarEvent(plan.calendarEventId);
+        if (!event) {
+          updatePlan(plan.id, { calendarEventId: undefined });
+          return "cleared";
+        }
+
+        const updates: Partial<ObservationPlan> = {};
+
+        const startMs = event.startDate ? new Date(event.startDate).getTime() : Number.NaN;
+        const endMs = event.endDate ? new Date(event.endDate).getTime() : Number.NaN;
+        if (Number.isFinite(startMs)) {
+          const nextStartDate = new Date(startMs).toISOString();
+          if (nextStartDate !== plan.startDate) {
+            updates.startDate = nextStartDate;
+          }
+        }
+        if (Number.isFinite(endMs)) {
+          const nextEndDate = new Date(endMs).toISOString();
+          if (nextEndDate !== plan.endDate) {
+            updates.endDate = nextEndDate;
+          }
+        }
+
+        if (typeof event.title === "string") {
+          const nextTitle = event.title.replace(/^🔭\s*/u, "").trim();
+          if (nextTitle !== plan.title) {
+            updates.title = nextTitle;
+          }
+        }
+
+        if (typeof event.notes === "string" || event.notes === null) {
+          const nextNotes = event.notes ? event.notes : undefined;
+          if ((plan.notes ?? undefined) !== nextNotes) {
+            updates.notes = nextNotes;
+          }
+        }
+
+        const nextReminderMinutes = parseReminderMinutesFromAlarms(
+          event.alarms as Array<{ relativeOffset?: number }> | undefined,
+        );
+        if (
+          typeof nextReminderMinutes === "number" &&
+          nextReminderMinutes !== plan.reminderMinutes
+        ) {
+          updates.reminderMinutes = nextReminderMinutes;
+        }
+
+        if (Object.keys(updates).length === 0) {
+          return "unchanged";
+        }
+
+        updatePlan(plan.id, updates);
+        return "updated";
+      } catch (e) {
+        Logger.warn(LOG_TAGS.Calendar, `Refresh plan from calendar failed: ${plan.id}`, e);
+        return "error";
+      }
+    },
+    [updatePlan],
+  );
+
+  const syncSessionsBatch = useCallback(
+    async (sessions: ObservationSession[]): Promise<CalendarBatchSummary> => {
+      const summary: CalendarBatchSummary = {
+        total: sessions.length,
+        success: 0,
+        skipped: 0,
+        failed: 0,
+      };
+
       const permitted = await ensurePermission(true);
-      if (!permitted) return 0;
+      if (!permitted) {
+        return { ...summary, permissionDenied: true };
+      }
 
       setSyncing(true);
-      let count = 0;
       try {
         for (const session of sessions) {
-          if (session.calendarEventId) continue;
+          if (session.calendarEventId) {
+            summary.skipped++;
+            continue;
+          }
           try {
             const eventId = await syncSessionToCalendar(session, defaultReminderMinutes, targets);
             updateSession(session.id, { calendarEventId: eventId });
-            count++;
+            summary.success++;
           } catch {
-            // 跳过失败的单个会话
+            summary.failed++;
           }
         }
-        if (count > 0) {
+        if (summary.success > 0) {
           notifyHaptic(Haptics.NotificationFeedbackType.Success);
+        } else if (summary.failed > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         }
       } finally {
         setSyncing(false);
       }
-      return count;
+
+      return summary;
     },
     [ensurePermission, defaultReminderMinutes, notifyHaptic, updateSession, targets],
+  );
+
+  const syncAllSessions = useCallback(
+    async (sessions: ObservationSession[]): Promise<number> => {
+      const summary = await syncSessionsBatch(sessions);
+      return summary.success;
+    },
+    [syncSessionsBatch],
+  );
+
+  const unsyncSessionsBatch = useCallback(
+    async (sessions: ObservationSession[]): Promise<CalendarBatchSummary> => {
+      const summary: CalendarBatchSummary = {
+        total: sessions.length,
+        success: 0,
+        skipped: 0,
+        failed: 0,
+      };
+
+      setSyncing(true);
+      try {
+        for (const session of sessions) {
+          const eventId = session.calendarEventId;
+          if (!eventId) {
+            summary.skipped++;
+            continue;
+          }
+
+          let deleted = false;
+          if (calendarSyncEnabled) {
+            try {
+              await deleteCalendarEvent(eventId);
+              deleted = true;
+            } catch {
+              deleted = false;
+            }
+          }
+
+          updateSession(session.id, { calendarEventId: undefined });
+          if (deleted || !calendarSyncEnabled) {
+            summary.success++;
+          } else {
+            summary.failed++;
+          }
+        }
+
+        if (summary.success > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
+        } else if (summary.failed > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
+        }
+      } finally {
+        setSyncing(false);
+      }
+
+      return summary;
+    },
+    [calendarSyncEnabled, notifyHaptic, updateSession],
+  );
+
+  const refreshSessionsBatch = useCallback(
+    async (sessions: ObservationSession[]): Promise<SessionRefreshBatchSummary> => {
+      const summary: SessionRefreshBatchSummary = {
+        total: sessions.length,
+        updated: 0,
+        cleared: 0,
+        unchanged: 0,
+        skipped: 0,
+        errors: 0,
+      };
+
+      if (!calendarSyncEnabled) {
+        return { ...summary, skipped: sessions.length, permissionDenied: true };
+      }
+
+      const permitted = await ensurePermission(true);
+      if (!permitted) {
+        return { ...summary, permissionDenied: true };
+      }
+
+      try {
+        setSyncing(true);
+        for (const session of sessions) {
+          const outcome = await refreshSessionFromCalendarCore(session);
+          if (outcome === "updated") {
+            summary.updated++;
+          } else if (outcome === "cleared") {
+            summary.cleared++;
+          } else if (outcome === "unchanged") {
+            summary.unchanged++;
+          } else if (outcome === "skipped") {
+            summary.skipped++;
+          } else if (outcome === "error") {
+            summary.errors++;
+          }
+        }
+
+        if (summary.updated > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
+        } else if (summary.cleared > 0 || summary.errors > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
+        }
+      } finally {
+        setSyncing(false);
+      }
+
+      return summary;
+    },
+    [calendarSyncEnabled, ensurePermission, refreshSessionFromCalendarCore, notifyHaptic],
   );
 
   const unsyncSession = useCallback(
@@ -399,110 +644,6 @@ export function useCalendar() {
       return count;
     },
     [calendarSyncEnabled, plans, ensurePermission, updatePlan, notifyHaptic, targets],
-  );
-
-  const refreshSessionFromCalendarCore = useCallback(
-    async (session: ObservationSession): Promise<CalendarRefreshOutcome> => {
-      if (!session.calendarEventId) return "skipped";
-      try {
-        const event = await getCalendarEvent(session.calendarEventId);
-        if (!event) {
-          updateSession(session.id, { calendarEventId: undefined });
-          return "cleared";
-        }
-
-        const startMs = event.startDate ? new Date(event.startDate).getTime() : Number.NaN;
-        const endMs = event.endDate ? new Date(event.endDate).getTime() : Number.NaN;
-        if (!Number.isFinite(startMs) || !Number.isFinite(endMs)) {
-          return "unchanged";
-        }
-
-        const nextDuration = Math.max(0, Math.round((endMs - startMs) / 1000));
-        const nextDate = toLocalDateString(startMs);
-        const updates: Partial<ObservationSession> = {};
-
-        if (session.startTime !== startMs) updates.startTime = startMs;
-        if (session.endTime !== endMs) updates.endTime = endMs;
-        if (session.duration !== nextDuration) updates.duration = nextDuration;
-        if (session.date !== nextDate) updates.date = nextDate;
-
-        if (Object.keys(updates).length === 0) {
-          return "unchanged";
-        }
-
-        updateSession(session.id, updates);
-        return "updated";
-      } catch (e) {
-        Logger.warn(LOG_TAGS.Calendar, `Refresh session from calendar failed: ${session.id}`, e);
-        return "error";
-      }
-    },
-    [updateSession],
-  );
-
-  const refreshPlanFromCalendarCore = useCallback(
-    async (plan: ObservationPlan): Promise<CalendarRefreshOutcome> => {
-      if (!plan.calendarEventId) return "skipped";
-      try {
-        const event = await getCalendarEvent(plan.calendarEventId);
-        if (!event) {
-          updatePlan(plan.id, { calendarEventId: undefined });
-          return "cleared";
-        }
-
-        const updates: Partial<ObservationPlan> = {};
-
-        const startMs = event.startDate ? new Date(event.startDate).getTime() : Number.NaN;
-        const endMs = event.endDate ? new Date(event.endDate).getTime() : Number.NaN;
-        if (Number.isFinite(startMs)) {
-          const nextStartDate = new Date(startMs).toISOString();
-          if (nextStartDate !== plan.startDate) {
-            updates.startDate = nextStartDate;
-          }
-        }
-        if (Number.isFinite(endMs)) {
-          const nextEndDate = new Date(endMs).toISOString();
-          if (nextEndDate !== plan.endDate) {
-            updates.endDate = nextEndDate;
-          }
-        }
-
-        if (typeof event.title === "string") {
-          const nextTitle = event.title.replace(/^🔭\s*/u, "").trim();
-          if (nextTitle !== plan.title) {
-            updates.title = nextTitle;
-          }
-        }
-
-        if (typeof event.notes === "string" || event.notes === null) {
-          const nextNotes = event.notes ? event.notes : undefined;
-          if ((plan.notes ?? undefined) !== nextNotes) {
-            updates.notes = nextNotes;
-          }
-        }
-
-        const nextReminderMinutes = parseReminderMinutesFromAlarms(
-          event.alarms as Array<{ relativeOffset?: number }> | undefined,
-        );
-        if (
-          typeof nextReminderMinutes === "number" &&
-          nextReminderMinutes !== plan.reminderMinutes
-        ) {
-          updates.reminderMinutes = nextReminderMinutes;
-        }
-
-        if (Object.keys(updates).length === 0) {
-          return "unchanged";
-        }
-
-        updatePlan(plan.id, updates);
-        return "updated";
-      } catch (e) {
-        Logger.warn(LOG_TAGS.Calendar, `Refresh plan from calendar failed: ${plan.id}`, e);
-        return "error";
-      }
-    },
-    [updatePlan],
   );
 
   const refreshSessionFromCalendar = useCallback(
@@ -926,8 +1067,11 @@ export function useCalendar() {
     syncing,
     calendarSyncEnabled,
     syncSession,
+    syncSessionsBatch,
     syncAllSessions,
     unsyncSession,
+    unsyncSessionsBatch,
+    refreshSessionsBatch,
     unsyncObservationPlan,
     createObservationPlan,
     updateObservationPlan,

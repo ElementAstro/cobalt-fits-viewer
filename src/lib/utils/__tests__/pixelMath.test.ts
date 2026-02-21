@@ -9,6 +9,13 @@ import {
   computeAutoStretch,
   computePercentile,
   computeZScale,
+  stackAverage,
+  stackMax,
+  stackMedian,
+  stackMin,
+  stackSigmaClip,
+  stackWeightedAverage,
+  stackWinsorizedSigmaClip,
 } from "../pixelMath";
 
 // ===== Helpers =====
@@ -264,5 +271,57 @@ describe("zscale and percentile intervals", () => {
     expect(r.z1).toBeLessThanOrEqual(r.z2);
     expect(Number.isFinite(r.z1)).toBe(true);
     expect(Number.isFinite(r.z2)).toBe(true);
+  });
+});
+
+describe("stack combiners handle non-finite values", () => {
+  const frames = [
+    new Float32Array([1, Number.NaN, 9, Number.POSITIVE_INFINITY]),
+    new Float32Array([3, 5, Number.NaN, Number.NEGATIVE_INFINITY]),
+    new Float32Array([5, 7, 11, Number.NaN]),
+  ];
+
+  it("stackAverage ignores non-finite values and yields NaN for all-invalid pixels", () => {
+    const stacked = stackAverage(frames);
+    expect(stacked[0]).toBeCloseTo(3, 5);
+    expect(stacked[1]).toBeCloseTo(6, 5);
+    expect(stacked[2]).toBeCloseTo(10, 5);
+    expect(Number.isNaN(stacked[3])).toBe(true);
+  });
+
+  it("stackMedian ignores non-finite values", () => {
+    const stacked = stackMedian(frames);
+    expect(stacked[0]).toBeCloseTo(3, 5);
+    expect(stacked[1]).toBeCloseTo(7, 5);
+    expect(stacked[2]).toBeCloseTo(11, 5);
+    expect(Number.isNaN(stacked[3])).toBe(true);
+  });
+
+  it("stack min/max ignore non-finite values", () => {
+    const min = stackMin(frames);
+    const max = stackMax(frames);
+    expect(min[0]).toBe(1);
+    expect(max[0]).toBe(5);
+    expect(min[1]).toBe(5);
+    expect(max[1]).toBe(7);
+    expect(Number.isNaN(min[3])).toBe(true);
+    expect(Number.isNaN(max[3])).toBe(true);
+  });
+
+  it("sigma and winsorized stackers ignore non-finite values", () => {
+    const sigma = stackSigmaClip(frames, 2.5);
+    const winsor = stackWinsorizedSigmaClip(frames, 2.5);
+    expect(Number.isFinite(sigma[0])).toBe(true);
+    expect(Number.isFinite(winsor[0])).toBe(true);
+    expect(Number.isNaN(sigma[3])).toBe(true);
+    expect(Number.isNaN(winsor[3])).toBe(true);
+  });
+
+  it("weighted average re-normalizes weights over finite samples", () => {
+    const weighted = stackWeightedAverage(frames, [1, 2, 3]);
+    expect(weighted[0]).toBeCloseTo((1 * 1 + 3 * 2 + 5 * 3) / 6, 5);
+    expect(weighted[1]).toBeCloseTo((5 * 2 + 7 * 3) / 5, 5);
+    expect(weighted[2]).toBeCloseTo((9 * 1 + 11 * 3) / 4, 5);
+    expect(Number.isNaN(weighted[3])).toBe(true);
   });
 });

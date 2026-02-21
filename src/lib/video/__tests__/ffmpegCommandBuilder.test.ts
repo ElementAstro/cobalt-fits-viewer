@@ -211,6 +211,156 @@ describe("ffmpeg command builder", () => {
     expect(command).toContain('"file:///out/cover.jpg"');
   });
 
+  it("builds rotate 90° command", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "rotate",
+        rotateNormalize: { rotationDeg: 90 },
+      },
+      "file:///out/rotate.mp4",
+    );
+    expect(command).toContain('"transpose=1"');
+    expect(command).toContain('"file:///out/rotate.mp4"');
+  });
+
+  it("builds rotate 180° command", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "rotate",
+        rotateNormalize: { rotationDeg: 180 },
+      },
+      "file:///out/rotate180.mp4",
+    );
+    expect(command).toContain('"transpose=1,transpose=1"');
+  });
+
+  it("builds rotate 270° command", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "rotate",
+        rotateNormalize: { rotationDeg: 270 },
+      },
+      "file:///out/rotate270.mp4",
+    );
+    expect(command).toContain('"transpose=2"');
+  });
+
+  it("builds speed 2x command with video and audio filters", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "speed",
+        speed: { factor: 2 },
+      },
+      "file:///out/speed.mp4",
+    );
+    expect(command).toContain('"setpts=PTS/2"');
+    expect(command).toContain('"atempo=2.0000"');
+    expect(command).toContain('"file:///out/speed.mp4"');
+  });
+
+  it("builds speed 0.5x command", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "speed",
+        speed: { factor: 0.5 },
+      },
+      "file:///out/slow.mp4",
+    );
+    expect(command).toContain('"setpts=PTS/0.5"');
+    expect(command).toContain('"atempo=0.5000"');
+  });
+
+  it("builds speed command with removeAudio", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "speed",
+        speed: { factor: 1.5 },
+        removeAudio: true,
+      },
+      "file:///out/speed_noaudio.mp4",
+    );
+    expect(command).toContain('"-an"');
+    expect(command).not.toContain("atempo");
+  });
+
+  it("builds watermark command with text and position", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "watermark",
+        watermark: {
+          text: "Cobalt",
+          position: "bottom-right",
+          fontSize: 32,
+          fontColor: "yellow",
+          opacity: 0.8,
+        },
+      },
+      "file:///out/watermark.mp4",
+    );
+    expect(command).toContain("drawtext=");
+    expect(command).toContain("Cobalt");
+    expect(command).toContain("fontsize=32");
+    expect(command).toContain("fontcolor=yellow@0.8");
+    expect(command).toContain("x=w-tw-10:y=h-th-10");
+    expect(command).toContain('"file:///out/watermark.mp4"');
+  });
+
+  it("throws when watermark text is missing", () => {
+    expect(() =>
+      buildFfmpegCommandForRequest(
+        {
+          ...baseRequest,
+          operation: "watermark",
+          watermark: { text: "", position: "center" },
+        },
+        "file:///out/wm.mp4",
+      ),
+    ).toThrow("watermark_text_required");
+  });
+
+  it("builds gif command with palette pipeline", () => {
+    const command = buildFfmpegCommandForRequest(
+      {
+        ...baseRequest,
+        operation: "gif",
+        gif: {
+          startMs: 2000,
+          durationMs: 3000,
+          width: 320,
+          fps: 15,
+        },
+      },
+      "file:///out/output.gif",
+    );
+    expect(command).toContain('"-ss" "2.000"');
+    expect(command).toContain('"-t" "3.000"');
+    expect(command).toContain('"-lavfi"');
+    expect(command).toContain("palettegen");
+    expect(command).toContain("paletteuse");
+    expect(command).toContain("fps=15");
+    expect(command).toContain("scale=320");
+    expect(command).toContain('"file:///out/output.gif"');
+  });
+
+  it("throws when gif options are missing", () => {
+    expect(() =>
+      buildFfmpegCommandForRequest(
+        {
+          ...baseRequest,
+          operation: "gif",
+        },
+        "file:///out/output.gif",
+      ),
+    ).toThrow("gif_options_required");
+  });
+
   it("parses ffmpeg timestamp and progress", () => {
     expect(parseFfmpegTimestampToMs("00:00:03.250")).toBe(3250);
     const progress = parseProgressFromFfmpegLog(

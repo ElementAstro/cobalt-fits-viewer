@@ -41,6 +41,11 @@ describe("useLogger hooks", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     const state = {
+      entries: [
+        { id: "1", level: "warn", tag: "Viewer", message: "needle", timestamp: 1 },
+        { id: "2", level: "info", tag: "Network", message: "connected", timestamp: 2 },
+        { id: "3", level: "warn", tag: "Viewer", message: "timeout", timestamp: 3 },
+      ],
       getFilteredEntries: () => [{ id: "1" }],
       totalCount: 3,
       filterLevel: "warn",
@@ -88,12 +93,46 @@ describe("useLogger hooks", () => {
     expect(result.current.getFormattedInfo()).toBe("");
   });
 
+  it("computes levelCounts and availableTags from entries", () => {
+    const state = {
+      entries: [
+        { id: "1", level: "warn", tag: "Viewer", message: "a", timestamp: 1 },
+        { id: "2", level: "info", tag: "Network", message: "b", timestamp: 2 },
+        { id: "3", level: "warn", tag: "Viewer", message: "c", timestamp: 3 },
+        { id: "4", level: "error", tag: "Auth", message: "d", timestamp: 4 },
+      ],
+      totalCount: 4,
+      filterLevel: null,
+      filterTag: "",
+      filterQuery: "",
+      setFilterLevel: jest.fn(),
+      setFilterTag: jest.fn(),
+      setFilterQuery: jest.fn(),
+      clearLogs: jest.fn(),
+      systemInfo: null,
+      isCollecting: false,
+      refreshSystemInfo: jest.fn(),
+    };
+    useLogStore.mockImplementation((selector: (s: typeof state) => unknown) => selector(state));
+
+    const { result } = renderHook(() => useLogViewer());
+
+    expect(result.current.levelCounts).toEqual({
+      debug: 0,
+      info: 1,
+      warn: 2,
+      error: 1,
+    });
+    expect(result.current.availableTags).toEqual(["Auth", "Network", "Viewer"]);
+  });
+
   it("manages log viewer filters and export lifecycle", async () => {
     const setFilterLevel = jest.fn();
     const setFilterTag = jest.fn();
     const setFilterQuery = jest.fn();
     const clearLogs = jest.fn();
     const state = {
+      entries: [{ id: "1", level: "warn", tag: "Viewer", message: "needle", timestamp: 1 }],
       getFilteredEntries: () => [{ id: "1" }],
       totalCount: 3,
       filterLevel: "warn",

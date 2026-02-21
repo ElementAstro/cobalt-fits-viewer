@@ -378,14 +378,25 @@ export function useTargets() {
 
   const reconcileTargetGraph = useCallback(() => reconcileTargetGraphStores(), []);
 
-  const scanAndAutoDetect = useCallback((): { newCount: number; updatedCount: number } => {
+  const scanAndAutoDetect = useCallback((): {
+    newCount: number;
+    updatedCount: number;
+    scannedCount: number;
+    skippedCount: number;
+  } => {
     let newCount = 0;
     let updatedCount = 0;
+    let scannedCount = 0;
+    let skippedCount = 0;
     const fileList = useFitsStore.getState().files;
 
     for (const file of fileList) {
       if (file.targetId) continue;
-      if (!file.object && file.ra === undefined && file.dec === undefined) continue;
+      scannedCount++;
+      if (!file.object && file.ra === undefined && file.dec === undefined) {
+        skippedCount++;
+        continue;
+      }
 
       const result = upsertAndLinkFileTarget(
         file.id,
@@ -396,7 +407,10 @@ export function useTargets() {
         },
         "scan",
       );
-      if (!result) continue;
+      if (!result) {
+        skippedCount++;
+        continue;
+      }
       if (result.isNew) {
         newCount++;
       } else {
@@ -404,8 +418,44 @@ export function useTargets() {
       }
     }
 
-    return { newCount, updatedCount };
+    return { newCount, updatedCount, scannedCount, skippedCount };
   }, [upsertAndLinkFileTarget]);
+
+  const getTargetGroupIds = useCallback(
+    (targetId: string): string[] =>
+      useTargetGroupStore
+        .getState()
+        .groups.filter((group) => group.targetIds.includes(targetId))
+        .map((group) => group.id),
+    [],
+  );
+
+  const setTargetGroupMembership = useCallback((targetId: string, groupIds: string[]) => {
+    const desiredIds = new Set(groupIds);
+    const store = useTargetGroupStore.getState();
+    const currentGroups = store.groups;
+
+    for (const group of currentGroups) {
+      const hasTarget = group.targetIds.includes(targetId);
+      const shouldHaveTarget = desiredIds.has(group.id);
+      if (shouldHaveTarget && !hasTarget) {
+        store.addTargetToGroup(group.id, targetId);
+      } else if (!shouldHaveTarget && hasTarget) {
+        store.removeTargetFromGroup(group.id, targetId);
+      }
+    }
+  }, []);
+
+  const toggleTargetGroupMembership = useCallback((targetId: string, groupId: string) => {
+    const store = useTargetGroupStore.getState();
+    const group = store.groups.find((item) => item.id === groupId);
+    if (!group) return;
+    if (group.targetIds.includes(targetId)) {
+      store.removeTargetFromGroup(groupId, targetId);
+      return;
+    }
+    store.addTargetToGroup(groupId, targetId);
+  }, []);
 
   const createNewTarget = useCallback(
     (
@@ -705,6 +755,9 @@ export function useTargets() {
     addTargetToGroup,
     removeTargetFromGroup,
     getGroupById,
+    getTargetGroupIds,
+    setTargetGroupMembership,
+    toggleTargetGroupMembership,
 
     // Equipment
     updateEquipment,

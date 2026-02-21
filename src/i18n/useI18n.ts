@@ -3,6 +3,8 @@ import i18n, { getI18nLocale, setI18nLocale, subscribeI18nChange } from "./index
 
 type TranslateOptions = Parameters<typeof i18n.t>[1];
 
+export type TranslationKey = Parameters<ReturnType<typeof useI18n>["t"]>[0];
+
 function getSnapshot() {
   return getI18nLocale();
 }

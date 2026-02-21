@@ -5,7 +5,12 @@
 
 import { useState, useCallback, useRef } from "react";
 import { InteractionManager } from "react-native";
-import { fitsToRGBA, fitsToRGBAChunked, downsamplePixels } from "../lib/converter/formatConverter";
+import {
+  fitsToRGBA,
+  fitsToRGBAChunked,
+  downsamplePixels,
+  getExtent,
+} from "../lib/converter/formatConverter";
 import {
   calculateStats,
   calculateHistogram,
@@ -22,7 +27,7 @@ import { executeProcessingPipeline } from "../lib/processing/executor";
 import { normalizeProcessingPipelineSnapshot } from "../lib/processing/recipe";
 
 const PREVIEW_MAX_DIM = 512;
-const LARGE_IMAGE_THRESHOLD = 1_000_000;
+const LARGE_IMAGE_THRESHOLD = 2_000_000;
 
 interface PipelineProcessingOptions {
   profile?: ProcessingAlgorithmProfile;
@@ -103,6 +108,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
     null,
   );
   const abortRef = useRef<AbortController | null>(null);
+  const extentCacheRef = useRef<{ pixels: Float32Array; extent: [number, number] } | null>(null);
 
   const processImage = useCallback(
     (
@@ -133,6 +139,15 @@ export function useImageProcessing(): UseImageProcessingReturn {
       );
       const recipeEnabled = hasRecipeNodes(normalizedRecipe);
       const totalPixels = width * height;
+
+      let cachedExtent: [number, number] | undefined;
+      if (extentCacheRef.current && extentCacheRef.current.pixels === pixels) {
+        cachedExtent = extentCacheRef.current.extent;
+      } else {
+        cachedExtent = getExtent(pixels);
+        extentCacheRef.current = { pixels, extent: cachedExtent };
+      }
+
       const opts = {
         stretch,
         colormap,
@@ -146,6 +161,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
         mtfMidtone,
         curvePreset,
         profile: pipelineOptions?.profile ?? normalizedRecipe.profile,
+        precomputedExtent: cachedExtent,
       };
 
       if (recipeEnabled) {
@@ -241,6 +257,15 @@ export function useImageProcessing(): UseImageProcessingReturn {
       );
       const recipeEnabled = hasRecipeNodes(normalizedRecipe);
       const totalPixels = width * height;
+
+      let cachedExtent: [number, number] | undefined;
+      if (extentCacheRef.current && extentCacheRef.current.pixels === pixels) {
+        cachedExtent = extentCacheRef.current.extent;
+      } else {
+        cachedExtent = getExtent(pixels);
+        extentCacheRef.current = { pixels, extent: cachedExtent };
+      }
+
       const opts = {
         stretch,
         colormap,
@@ -254,6 +279,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
         mtfMidtone,
         curvePreset,
         profile: pipelineOptions?.profile ?? normalizedRecipe.profile,
+        precomputedExtent: cachedExtent,
       };
 
       if (recipeEnabled) {
@@ -270,19 +296,28 @@ export function useImageProcessing(): UseImageProcessingReturn {
           setDisplayWidth(previewResult.colorOutput.width);
           setDisplayHeight(previewResult.colorOutput.height);
 
-          const fullResult = executeProcessingPipeline({
-            input: { pixels, width, height },
-            snapshot: normalizedRecipe,
-            renderOptions: opts,
-            options: { mode: "full" },
+          // Defer full pipeline to next frame so the preview renders first
+          requestAnimationFrame(() => {
+            try {
+              const fullResult = executeProcessingPipeline({
+                input: { pixels, width, height },
+                snapshot: normalizedRecipe,
+                renderOptions: opts,
+                options: { mode: "full" },
+              });
+              setRgbaData(fullResult.colorOutput.rgbaData);
+              setDisplayWidth(fullResult.colorOutput.width);
+              setDisplayHeight(fullResult.colorOutput.height);
+            } catch (e) {
+              setProcessingError(e instanceof Error ? e.message : "Image processing failed");
+              setRgbaData(null);
+            } finally {
+              setIsProcessing(false);
+            }
           });
-          setRgbaData(fullResult.colorOutput.rgbaData);
-          setDisplayWidth(fullResult.colorOutput.width);
-          setDisplayHeight(fullResult.colorOutput.height);
         } catch (e) {
           setProcessingError(e instanceof Error ? e.message : "Image processing failed");
           setRgbaData(null);
-        } finally {
           setIsProcessing(false);
         }
         return;

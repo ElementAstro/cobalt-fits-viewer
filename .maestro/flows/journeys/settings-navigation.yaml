@@ -1,0 +1,74 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+# Journey: Settings hub → Sub-pages → Back
+# Verifies settings navigation across all category pages
+
+- runFlow: ../common/bootstrap.yaml
+
+# Start at settings
+- openLink: cobalt://settings
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# Navigate to Viewer settings and back
+- tapOn:
+    id: e2e-action-settings__index-open-viewer
+- assertVisible:
+    id: e2e-screen-settings__viewer
+- back
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# Navigate to Gallery settings and back
+- tapOn:
+    id: e2e-action-settings__index-open-gallery
+- assertVisible:
+    id: e2e-screen-settings__gallery
+- back
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# Navigate to Processing settings and back
+- tapOn:
+    id: e2e-action-settings__index-open-processing
+- assertVisible:
+    id: e2e-screen-settings__processing
+- back
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# Navigate to Observation settings and back
+- tapOn:
+    id: e2e-action-settings__index-open-observation
+- assertVisible:
+    id: e2e-screen-settings__observation
+- back
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# Navigate to Appearance settings and back
+- tapOn:
+    id: e2e-action-settings__index-open-appearance
+- assertVisible:
+    id: e2e-screen-settings__appearance
+- back
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# Navigate to Storage settings and back
+- tapOn:
+    id: e2e-action-settings__index-open-storage
+- assertVisible:
+    id: e2e-screen-settings__storage
+- back
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# Navigate to About and back
+- tapOn:
+    id: e2e-action-settings__index-open-about
+- assertVisible:
+    id: e2e-screen-settings__about
+- back
+- assertVisible:
+    id: e2e-screen-settings__index

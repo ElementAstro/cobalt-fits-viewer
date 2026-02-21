@@ -3,7 +3,17 @@
 - openLink: cobalt://target/target-001
 - assertVisible:
     id: e2e-screen-target__param_id
+- assertVisible: M42
+- assertVisible:
+    id: e2e-action-target__param_id-toggle-favorite
+- assertVisible:
+    id: e2e-action-target__param_id-open-plan
+- tapOn:
+    id: e2e-action-target__param_id-toggle-favorite
 - tapOn:
     id: e2e-action-target__param_id-toggle-favorite
 - tapOn:
     id: e2e-action-target__param_id-open-plan
+- back
+- assertVisible:
+    id: e2e-screen-target__param_id

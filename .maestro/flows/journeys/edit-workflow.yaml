@@ -1,0 +1,55 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+# Journey: Files list → Editor → Edit → Export → Back
+# Verifies the core editing and export workflow
+
+- runFlow: ../common/bootstrap.yaml
+
+# Start at files list
+- openLink: cobalt://
+- assertVisible:
+    id: e2e-screen-tabs__index
+- assertVisible: M42_Light_001.fits
+
+# Open editor for first file
+- openLink: cobalt://editor/fits-001
+- assertVisible:
+    id: e2e-screen-editor__param_id
+- assertVisible: M42_Light_001.fits
+
+# Verify toolbar controls
+- assertVisible:
+    id: e2e-action-editor__param_id-undo
+- assertVisible:
+    id: e2e-action-editor__param_id-redo
+- assertVisible:
+    id: e2e-action-editor__param_id-toggle-original
+
+# Toggle original view
+- tapOn:
+    id: e2e-action-editor__param_id-toggle-original
+- tapOn:
+    id: e2e-action-editor__param_id-toggle-original
+
+# Open export dialog
+- tapOn:
+    id: e2e-action-editor__param_id-open-export
+- assertVisible:
+    id: e2e-action-export-dialog-export
+
+# Go back to files list
+- back
+- tapOn:
+    id: e2e-action-editor__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__index
+
+# Verify we can also access header view
+- openLink: cobalt://header/fits-001
+- assertVisible:
+    id: e2e-screen-header__param_id
+- assertVisible: M42_Light_001.fits
+- tapOn:
+    id: e2e-action-header__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__index

@@ -4,6 +4,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button, Chip, Dialog, Input, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -28,12 +29,13 @@ import {
   type ViewerOverlays,
 } from "../../lib/viewer/model";
 import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";
+import { syncCompareTransform } from "../../lib/viewer/compareTransformSync";
 import { computeAutoStretch } from "../../lib/utils/pixelMath";
 
-const MODES: { key: CompareMode; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "blink", label: "Blink", icon: "eye-outline" },
-  { key: "side-by-side", label: "Side by Side", icon: "git-compare-outline" },
-  { key: "split", label: "Split", icon: "swap-horizontal-outline" },
+const MODES: { key: CompareMode; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { key: "blink", labelKey: "compare.modeBlink", icon: "eye-outline" },
+  { key: "side-by-side", labelKey: "compare.modeSideBySide", icon: "git-compare-outline" },
+  { key: "split", labelKey: "compare.modeSplit", icon: "swap-horizontal-outline" },
 ];
 
 const STRETCHES: ViewerAdjustments["stretch"][] = [
@@ -66,6 +68,10 @@ const COLORMAPS: ViewerAdjustments["colormap"][] = [
   "blue",
 ];
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export default function CompareScreen() {
   const router = useRouter();
   const { t } = useI18n();
@@ -85,6 +91,9 @@ export default function CompareScreen() {
   const defaultShowCrosshair = useSettingsStore((s) => s.defaultShowCrosshair);
   const defaultShowPixelInfo = useSettingsStore((s) => s.defaultShowPixelInfo);
   const defaultShowMinimap = useSettingsStore((s) => s.defaultShowMinimap);
+  const defaultCompareMode = useSettingsStore((s) => s.compareDefaultMode);
+  const defaultCompareBlinkSpeed = useSettingsStore((s) => s.compareBlinkSpeed);
+  const defaultCompareSplitPosition = useSettingsStore((s) => s.compareSplitPosition);
   const debounceMs = useSettingsStore((s) => s.imageProcessingDebounce);
   const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
   const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
@@ -94,6 +103,7 @@ export default function CompareScreen() {
   const settingsPinchOverzoomFactor = useSettingsStore((s) => s.canvasPinchOverzoomFactor);
   const settingsPanRubberBandFactor = useSettingsStore((s) => s.canvasPanRubberBandFactor);
   const settingsWheelZoomSensitivity = useSettingsStore((s) => s.canvasWheelZoomSensitivity);
+  const applySettingsPatch = useSettingsStore((s) => s.applySettingsPatch);
 
   const canvasGestureConfig = useMemo(
     () => ({
@@ -152,7 +162,12 @@ export default function CompareScreen() {
     nextImage,
     prevImage,
     toggleBlinkPlay,
-  } = useImageComparison({ initialIds });
+  } = useImageComparison({
+    initialIds,
+    initialMode: defaultCompareMode,
+    initialBlinkSpeed: defaultCompareBlinkSpeed,
+    initialSplitPosition: defaultCompareSplitPosition,
+  });
 
   const fileA = useMemo(() => files.find((f) => f.id === imageIds[0]), [files, imageIds]);
   const fileB = useMemo(() => files.find((f) => f.id === imageIds[1]), [files, imageIds]);
@@ -161,6 +176,22 @@ export default function CompareScreen() {
   const fitsB = useFitsFile();
   const procA = useImageProcessing();
   const procB = useImageProcessing();
+  const { pixels: pixelsA, dimensions: dimensionsA, loadFromPath: loadFromPathA } = fitsA;
+  const { pixels: pixelsB, dimensions: dimensionsB, loadFromPath: loadFromPathB } = fitsB;
+  const {
+    rgbaData: rgbaDataA,
+    displayWidth: displayWidthA,
+    displayHeight: displayHeightA,
+    processImage: processImageA,
+    processImagePreview: processImagePreviewA,
+  } = procA;
+  const {
+    rgbaData: rgbaDataB,
+    displayWidth: displayWidthB,
+    displayHeight: displayHeightB,
+    processImage: processImageB,
+    processImagePreview: processImagePreviewB,
+  } = procB;
 
   const [adjustmentsA, setAdjustmentsA] = useState(defaultAdjustments);
   const [adjustmentsB, setAdjustmentsB] = useState(defaultAdjustments);
@@ -190,9 +221,11 @@ export default function CompareScreen() {
   const [pickerTarget, setPickerTarget] = useState<"A" | "B">("B");
   const [pickerQuery, setPickerQuery] = useState("");
   const [splitLayoutWidth, setSplitLayoutWidth] = useState(viewportWidth);
+  const [displayedSide, setDisplayedSide] = useState<"A" | "B">("A");
 
   const canvasARef = useRef<FitsCanvasHandle>(null);
   const canvasBRef = useRef<FitsCanvasHandle>(null);
+  const splitStartRef = useRef(splitPosition);
   const prevPixelsA = useRef<Float32Array | null>(null);
   const prevPixelsB = useRef<Float32Array | null>(null);
   const syncedTargetTransformRef = useRef<
@@ -210,48 +243,76 @@ export default function CompareScreen() {
     }
   }, [imageIds.length, initialIds, setImageIds]);
 
-  useEffect(() => {
-    if (fileA) {
-      fitsA.loadFromPath(fileA.filepath, fileA.filename, fileA.fileSize);
-      setAdjustmentsA(resolveAdjustmentsFromPreset(fileA.viewerPreset, defaultAdjustments));
-      if (activeSide === "A") {
-        const overlays = resolveOverlaysFromPreset(fileA.viewerPreset, defaultOverlays);
-        setShowGrid(overlays.showGrid);
-        setShowCrosshair(overlays.showCrosshair);
-        setShowPixelInfo(overlays.showPixelInfo);
-        setShowMinimap(overlays.showMinimap);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileA?.id, activeSide, defaultAdjustments, defaultOverlays]);
+  const handleModeChange = useCallback(
+    (nextMode: CompareMode) => {
+      setMode(nextMode);
+      applySettingsPatch({ compareDefaultMode: nextMode });
+    },
+    [applySettingsPatch, setMode],
+  );
+
+  const handleBlinkSpeedChange = useCallback(
+    (value: number) => {
+      const next = clamp(value, 0.3, 5);
+      setBlinkSpeed(next);
+      applySettingsPatch({ compareBlinkSpeed: next });
+    },
+    [applySettingsPatch, setBlinkSpeed],
+  );
+
+  const handleSplitPositionChange = useCallback(
+    (value: number) => {
+      const next = clamp(value, 0.1, 0.9);
+      setSplitPosition(next);
+      applySettingsPatch({ compareSplitPosition: next });
+    },
+    [applySettingsPatch, setSplitPosition],
+  );
 
   useEffect(() => {
-    if (fileB) {
-      fitsB.loadFromPath(fileB.filepath, fileB.filename, fileB.fileSize);
-      setAdjustmentsB(resolveAdjustmentsFromPreset(fileB.viewerPreset, defaultAdjustments));
-      if (activeSide === "B") {
-        const overlays = resolveOverlaysFromPreset(fileB.viewerPreset, defaultOverlays);
-        setShowGrid(overlays.showGrid);
-        setShowCrosshair(overlays.showCrosshair);
-        setShowPixelInfo(overlays.showPixelInfo);
-        setShowMinimap(overlays.showMinimap);
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fileB?.id, activeSide, defaultAdjustments, defaultOverlays]);
+    if (mode !== "blink") return;
+    const side = activeIndex === 0 ? "A" : "B";
+    setDisplayedSide((prev) => (prev === side ? prev : side));
+    setActiveSide((prev) => (prev === side ? prev : side));
+  }, [mode, activeIndex]);
 
   useEffect(() => {
-    const pixels = fitsA.pixels;
-    const dimensions = fitsA.dimensions;
-    if (!pixels || !dimensions) return;
-    const isNew = prevPixelsA.current !== pixels;
-    prevPixelsA.current = pixels;
+    if (!fileA?.filepath) return;
+    loadFromPathA(fileA.filepath, fileA.filename, fileA.fileSize);
+  }, [fileA?.id, fileA?.filepath, fileA?.filename, fileA?.fileSize, loadFromPathA]);
+
+  useEffect(() => {
+    setAdjustmentsA(resolveAdjustmentsFromPreset(fileA?.viewerPreset, defaultAdjustments));
+  }, [fileA?.id, fileA?.viewerPreset, defaultAdjustments]);
+
+  useEffect(() => {
+    if (!fileB?.filepath) return;
+    loadFromPathB(fileB.filepath, fileB.filename, fileB.fileSize);
+  }, [fileB?.id, fileB?.filepath, fileB?.filename, fileB?.fileSize, loadFromPathB]);
+
+  useEffect(() => {
+    setAdjustmentsB(resolveAdjustmentsFromPreset(fileB?.viewerPreset, defaultAdjustments));
+  }, [fileB?.id, fileB?.viewerPreset, defaultAdjustments]);
+
+  useEffect(() => {
+    const preset = activeSide === "A" ? fileA?.viewerPreset : fileB?.viewerPreset;
+    const overlays = resolveOverlaysFromPreset(preset, defaultOverlays);
+    setShowGrid(overlays.showGrid);
+    setShowCrosshair(overlays.showCrosshair);
+    setShowPixelInfo(overlays.showPixelInfo);
+    setShowMinimap(overlays.showMinimap);
+  }, [activeSide, fileA?.viewerPreset, fileB?.viewerPreset, defaultOverlays]);
+
+  useEffect(() => {
+    if (!pixelsA || !dimensionsA) return;
+    const isNew = prevPixelsA.current !== pixelsA;
+    prevPixelsA.current = pixelsA;
     if (isNew) {
-      const processFn = useHighQualityPreview ? procA.processImage : procA.processImagePreview;
+      const processFn = useHighQualityPreview ? processImageA : processImagePreviewA;
       processFn(
-        pixels,
-        dimensions.width,
-        dimensions.height,
+        pixelsA,
+        dimensionsA.width,
+        dimensionsA.height,
         adjustmentsA.stretch,
         adjustmentsA.colormap,
         adjustmentsA.blackPoint,
@@ -267,10 +328,10 @@ export default function CompareScreen() {
       return;
     }
     const timer = setTimeout(() => {
-      procA.processImage(
-        pixels,
-        dimensions.width,
-        dimensions.height,
+      processImageA(
+        pixelsA,
+        dimensionsA.width,
+        dimensionsA.height,
         adjustmentsA.stretch,
         adjustmentsA.colormap,
         adjustmentsA.blackPoint,
@@ -285,20 +346,26 @@ export default function CompareScreen() {
       );
     }, debounceMs);
     return () => clearTimeout(timer);
-  }, [fitsA.pixels, fitsA.dimensions, adjustmentsA, procA, debounceMs, useHighQualityPreview]);
+  }, [
+    pixelsA,
+    dimensionsA,
+    adjustmentsA,
+    processImageA,
+    processImagePreviewA,
+    debounceMs,
+    useHighQualityPreview,
+  ]);
 
   useEffect(() => {
-    const pixels = fitsB.pixels;
-    const dimensions = fitsB.dimensions;
-    if (!pixels || !dimensions) return;
-    const isNew = prevPixelsB.current !== pixels;
-    prevPixelsB.current = pixels;
+    if (!pixelsB || !dimensionsB) return;
+    const isNew = prevPixelsB.current !== pixelsB;
+    prevPixelsB.current = pixelsB;
     if (isNew) {
-      const processFn = useHighQualityPreview ? procB.processImage : procB.processImagePreview;
+      const processFn = useHighQualityPreview ? processImageB : processImagePreviewB;
       processFn(
-        pixels,
-        dimensions.width,
-        dimensions.height,
+        pixelsB,
+        dimensionsB.width,
+        dimensionsB.height,
         adjustmentsB.stretch,
         adjustmentsB.colormap,
         adjustmentsB.blackPoint,
@@ -314,10 +381,10 @@ export default function CompareScreen() {
       return;
     }
     const timer = setTimeout(() => {
-      procB.processImage(
-        pixels,
-        dimensions.width,
-        dimensions.height,
+      processImageB(
+        pixelsB,
+        dimensionsB.width,
+        dimensionsB.height,
         adjustmentsB.stretch,
         adjustmentsB.colormap,
         adjustmentsB.blackPoint,
@@ -332,7 +399,15 @@ export default function CompareScreen() {
       );
     }, debounceMs);
     return () => clearTimeout(timer);
-  }, [fitsB.pixels, fitsB.dimensions, adjustmentsB, procB, debounceMs, useHighQualityPreview]);
+  }, [
+    pixelsB,
+    dimensionsB,
+    adjustmentsB,
+    processImageB,
+    processImagePreviewB,
+    debounceMs,
+    useHighQualityPreview,
+  ]);
 
   const activeAdjustments = activeSide === "A" ? adjustmentsA : adjustmentsB;
 
@@ -350,7 +425,7 @@ export default function CompareScreen() {
   );
 
   const handleAutoStretch = useCallback(() => {
-    const pixels = activeSide === "A" ? fitsA.pixels : fitsB.pixels;
+    const pixels = activeSide === "A" ? pixelsA : pixelsB;
     if (!pixels) return;
     const { blackPoint, whitePoint } = computeAutoStretch(pixels);
     updateAdjustments({
@@ -359,7 +434,7 @@ export default function CompareScreen() {
       midtone: 0.5,
       stretch: "asinh",
     });
-  }, [activeSide, fitsA.pixels, fitsB.pixels, updateAdjustments]);
+  }, [activeSide, pixelsA, pixelsB, updateAdjustments]);
 
   const handleResetActive = useCallback(() => {
     const file = activeSide === "A" ? fileA : fileB;
@@ -430,8 +505,8 @@ export default function CompareScreen() {
   }, [pickerQuery, files]);
 
   const activeCursor = activeSide === "A" ? cursorA : cursorB;
-  const activePixels = activeSide === "A" ? fitsA.pixels : fitsB.pixels;
-  const activeDims = activeSide === "A" ? fitsA.dimensions : fitsB.dimensions;
+  const activePixels = activeSide === "A" ? pixelsA : pixelsB;
+  const activeDims = activeSide === "A" ? dimensionsA : dimensionsB;
   const activeValue =
     activePixels && activeDims && activeCursor.x >= 0 && activeCursor.y >= 0
       ? (activePixels[activeCursor.y * activeDims.width + activeCursor.x] ?? null)
@@ -460,16 +535,55 @@ export default function CompareScreen() {
       const targetSide = side === "A" ? "B" : "A";
       const targetRef = targetSide === "A" ? canvasARef.current : canvasBRef.current;
       if (!targetRef) return;
+      const targetTransform = targetSide === "A" ? canvasA : canvasB;
+      const sourceImage =
+        side === "A"
+          ? {
+              width: displayWidthA || dimensionsA?.width || 0,
+              height: displayHeightA || dimensionsA?.height || 0,
+            }
+          : {
+              width: displayWidthB || dimensionsB?.width || 0,
+              height: displayHeightB || dimensionsB?.height || 0,
+            };
+      const targetImage =
+        targetSide === "A"
+          ? {
+              width: displayWidthA || dimensionsA?.width || 0,
+              height: displayHeightA || dimensionsA?.height || 0,
+            }
+          : {
+              width: displayWidthB || dimensionsB?.width || 0,
+              height: displayHeightB || dimensionsB?.height || 0,
+            };
+      const next = syncCompareTransform({
+        sourceTransform: transform,
+        targetTransform,
+        sourceImage,
+        targetImage,
+      });
       syncedTargetTransformRef.current[targetSide] = {
-        scale: transform.scale,
-        translateX: transform.translateX,
-        translateY: transform.translateY,
+        scale: next.scale,
+        translateX: next.translateX,
+        translateY: next.translateY,
       };
-      targetRef.setTransform(transform.translateX, transform.translateY, transform.scale, {
+      targetRef.setTransform(next.translateX, next.translateY, next.scale, {
         animated: false,
       });
     },
-    [linked],
+    [
+      linked,
+      canvasA,
+      canvasB,
+      displayWidthA,
+      displayHeightA,
+      displayWidthB,
+      displayHeightB,
+      dimensionsA?.width,
+      dimensionsA?.height,
+      dimensionsB?.width,
+      dimensionsB?.height,
+    ],
   );
 
   useEffect(() => {
@@ -481,29 +595,85 @@ export default function CompareScreen() {
     syncMetaRef.current = { linked, aId, bId };
 
     if ((!justEnabled && !pairChanged) || !linked || !aId || !bId) return;
-    const source = canvasA;
     if (!canvasBRef.current) return;
+    const next = syncCompareTransform({
+      sourceTransform: canvasA,
+      targetTransform: canvasB,
+      sourceImage: {
+        width: displayWidthA || dimensionsA?.width || 0,
+        height: displayHeightA || dimensionsA?.height || 0,
+      },
+      targetImage: {
+        width: displayWidthB || dimensionsB?.width || 0,
+        height: displayHeightB || dimensionsB?.height || 0,
+      },
+    });
     syncedTargetTransformRef.current.B = {
-      scale: source.scale,
-      translateX: source.translateX,
-      translateY: source.translateY,
+      scale: next.scale,
+      translateX: next.translateX,
+      translateY: next.translateY,
     };
-    canvasBRef.current.setTransform(source.translateX, source.translateY, source.scale, {
+    canvasBRef.current.setTransform(next.translateX, next.translateY, next.scale, {
       animated: false,
     });
-  }, [linked, fileA?.id, fileB?.id, canvasA]);
+  }, [
+    linked,
+    fileA?.id,
+    fileB?.id,
+    canvasA,
+    canvasB,
+    displayWidthA,
+    displayHeightA,
+    displayWidthB,
+    displayHeightB,
+    dimensionsA?.width,
+    dimensionsA?.height,
+    dimensionsB?.width,
+    dimensionsB?.height,
+  ]);
+
+  const splitPanGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(mode === "split" && !!fileA && !!fileB)
+        .runOnJS(true)
+        .onStart(() => {
+          splitStartRef.current = splitPosition;
+        })
+        .onUpdate((event) => {
+          if (splitLayoutWidth <= 0) return;
+          const next = clamp(
+            splitStartRef.current + event.translationX / splitLayoutWidth,
+            0.1,
+            0.9,
+          );
+          setSplitPosition(next);
+        })
+        .onEnd((event) => {
+          if (splitLayoutWidth <= 0) return;
+          const next = clamp(
+            splitStartRef.current + event.translationX / splitLayoutWidth,
+            0.1,
+            0.9,
+          );
+          applySettingsPatch({ compareSplitPosition: next });
+        }),
+    [mode, fileA, fileB, splitPosition, splitLayoutWidth, setSplitPosition, applySettingsPatch],
+  );
 
   const renderCanvas = useCallback(
     (side: "A" | "B", forceInteractive = false) => {
-      const proc = side === "A" ? procA : procB;
-      const fits = side === "A" ? fitsA : fitsB;
+      const rgbaData = side === "A" ? rgbaDataA : rgbaDataB;
+      const displayWidth = side === "A" ? displayWidthA : displayWidthB;
+      const displayHeight = side === "A" ? displayHeightA : displayHeightB;
+      const dimensions = side === "A" ? dimensionsA : dimensionsB;
       const transform = side === "A" ? canvasA : canvasB;
       const ref = side === "A" ? canvasARef : canvasBRef;
       const cursor = side === "A" ? cursorA : cursorB;
       const setCursor = side === "A" ? setCursorA : setCursorB;
       const interactive = forceInteractive || activeSide === side;
 
-      if (!proc.rgbaData || !fits.dimensions) {
+      if (!rgbaData || !dimensions) {
         return (
           <View className="flex-1 items-center justify-center bg-black">
             <Text className="text-xs text-muted">{side}</Text>
@@ -515,11 +685,11 @@ export default function CompareScreen() {
           <Pressable className="flex-1" onPress={() => setActiveSide(side)}>
             <FitsCanvas
               ref={ref}
-              rgbaData={proc.rgbaData}
-              width={proc.displayWidth || fits.dimensions.width}
-              height={proc.displayHeight || fits.dimensions.height}
-              sourceWidth={fits.dimensions.width}
-              sourceHeight={fits.dimensions.height}
+              rgbaData={rgbaData}
+              width={displayWidth || dimensions.width}
+              height={displayHeight || dimensions.height}
+              sourceWidth={dimensions.width}
+              sourceHeight={dimensions.height}
               showGrid={showGrid && interactive}
               showCrosshair={showCrosshair && interactive}
               cursorX={interactive ? cursor.x : -1}
@@ -540,9 +710,9 @@ export default function CompareScreen() {
             />
           </Pressable>
           <Minimap
-            rgbaData={proc.rgbaData}
-            imgWidth={proc.displayWidth || fits.dimensions.width}
-            imgHeight={proc.displayHeight || fits.dimensions.height}
+            rgbaData={rgbaData}
+            imgWidth={displayWidth || dimensions.width}
+            imgHeight={displayHeight || dimensions.height}
             visible={showMinimap && interactive}
             viewportScale={transform.scale}
             viewportTranslateX={transform.translateX}
@@ -555,10 +725,14 @@ export default function CompareScreen() {
       );
     },
     [
-      procA,
-      procB,
-      fitsA,
-      fitsB,
+      rgbaDataA,
+      rgbaDataB,
+      displayWidthA,
+      displayHeightA,
+      displayWidthB,
+      displayHeightB,
+      dimensionsA,
+      dimensionsB,
       canvasA,
       canvasB,
       cursorA,
@@ -619,14 +793,14 @@ export default function CompareScreen() {
                 key={m.key}
                 size="sm"
                 variant={mode === m.key ? "primary" : "secondary"}
-                onPress={() => setMode(m.key)}
+                onPress={() => handleModeChange(m.key)}
               >
                 <Ionicons
                   name={m.icon}
                   size={10}
                   color={mode === m.key ? successColor : mutedColor}
                 />
-                <Chip.Label className="text-[10px]">{m.label}</Chip.Label>
+                <Chip.Label className="text-[10px]">{t(m.labelKey)}</Chip.Label>
               </Chip>
             ))}
           </View>
@@ -642,7 +816,7 @@ export default function CompareScreen() {
       >
         {mode === "blink" && (
           <View className="flex-1">
-            {activeIndex === 0 ? renderCanvas("A", true) : renderCanvas("B", true)}
+            {displayedSide === "A" ? renderCanvas("A", true) : renderCanvas("B", true)}
           </View>
         )}
 
@@ -674,16 +848,49 @@ export default function CompareScreen() {
               </View>
             )}
             {showBoth && (
-              <View
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  bottom: 0,
-                  left: splitLayoutWidth * splitPosition - 1,
-                  width: 2,
-                  backgroundColor: "#22c55e",
-                }}
-              />
+              <>
+                <View
+                  pointerEvents="none"
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    bottom: 0,
+                    left: splitLayoutWidth * splitPosition - 1,
+                    width: 2,
+                    backgroundColor: "#22c55e",
+                  }}
+                />
+                <GestureDetector gesture={splitPanGesture}>
+                  <View
+                    accessibilityRole="adjustable"
+                    accessibilityLabel={t("compare.splitHandle")}
+                    accessibilityValue={{
+                      min: 10,
+                      max: 90,
+                      now: Math.round(splitPosition * 100),
+                    }}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      bottom: 0,
+                      left: splitLayoutWidth * splitPosition - 16,
+                      width: 32,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <View
+                      pointerEvents="none"
+                      style={{
+                        width: 4,
+                        height: 32,
+                        borderRadius: 999,
+                        backgroundColor: "#22c55e",
+                      }}
+                    />
+                  </View>
+                </GestureDetector>
+              </>
             )}
           </View>
         )}
@@ -692,7 +899,7 @@ export default function CompareScreen() {
           x={activeCursor.x}
           y={activeCursor.y}
           value={activeValue}
-          visible={showPixelInfo && activeSide !== "B" ? !!fileA : !!fileB}
+          visible={showPixelInfo && (activeSide === "A" ? !!fileA : !!fileB)}
         />
       </View>
 
@@ -708,7 +915,9 @@ export default function CompareScreen() {
               variant={linked ? "primary" : "outline"}
               onPress={() => setLinked((v) => !v)}
             >
-              <Button.Label className="text-[10px]">{linked ? "Linked" : "Unlinked"}</Button.Label>
+              <Button.Label className="text-[10px]">
+                {linked ? t("compare.linked") : t("compare.unlinked")}
+              </Button.Label>
             </Button>
             <Button
               testID="e2e-action-compare__index-auto-stretch"
@@ -792,12 +1001,12 @@ export default function CompareScreen() {
               </Pressable>
             </View>
             <SimpleSlider
-              label="Blink"
+              label={t("compare.blinkLabel")}
               value={blinkSpeed}
               min={0.3}
               max={5}
               step={0.1}
-              onValueChange={setBlinkSpeed}
+              onValueChange={handleBlinkSpeedChange}
             />
           </View>
         )}
@@ -805,12 +1014,12 @@ export default function CompareScreen() {
         {mode === "split" && (
           <View className="mb-2">
             <SimpleSlider
-              label="Split"
+              label={t("compare.splitLabel")}
               value={splitPosition}
               min={0.1}
               max={0.9}
               step={0.01}
-              onValueChange={setSplitPosition}
+              onValueChange={handleSplitPositionChange}
             />
           </View>
         )}
@@ -911,7 +1120,9 @@ export default function CompareScreen() {
         <Dialog.Portal>
           <Dialog.Overlay />
           <Dialog.Content className="mx-6 w-full max-w-md rounded-2xl bg-background p-4">
-            <Dialog.Title>{pickerTarget === "A" ? "Select A" : "Select B"}</Dialog.Title>
+            <Dialog.Title>
+              {pickerTarget === "A" ? t("compare.selectA") : t("compare.selectB")}
+            </Dialog.Title>
             <Input
               value={pickerQuery}
               onChangeText={setPickerQuery}

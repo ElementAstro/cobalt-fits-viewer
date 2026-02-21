@@ -517,4 +517,167 @@ describe("useCalendar", () => {
     expect(updated.title).toBe("Refreshed Plan");
     expect(updated.reminderMinutes).toBe(20);
   });
+
+  it("syncSessionsBatch returns summary counts", async () => {
+    const sessions = [
+      makeSession({ id: "s1", calendarEventId: undefined }),
+      makeSession({ id: "s2", calendarEventId: "event-existing" }),
+      makeSession({ id: "s3", calendarEventId: undefined }),
+    ];
+    useSessionStore.setState({ sessions });
+    calendarApi.syncSessionToCalendar.mockResolvedValueOnce("event-s1");
+    calendarApi.syncSessionToCalendar.mockRejectedValueOnce(new Error("sync failed"));
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const summary = await result.current.syncSessionsBatch(sessions);
+      expect(summary).toEqual({
+        total: 3,
+        success: 1,
+        skipped: 1,
+        failed: 1,
+      });
+    });
+
+    expect(
+      useSessionStore.getState().sessions.find((session) => session.id === "s1")?.calendarEventId,
+    ).toBe("event-s1");
+    expect(calendarApi.syncSessionToCalendar).toHaveBeenCalledTimes(2);
+  });
+
+  it("syncAllSessions keeps legacy success-count return", async () => {
+    const sessions = [
+      makeSession({ id: "s1", calendarEventId: undefined }),
+      makeSession({ id: "s2", calendarEventId: undefined }),
+    ];
+    useSessionStore.setState({ sessions });
+    calendarApi.syncSessionToCalendar.mockResolvedValueOnce("event-s1");
+    calendarApi.syncSessionToCalendar.mockRejectedValueOnce(new Error("sync failed"));
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const count = await result.current.syncAllSessions(sessions);
+      expect(count).toBe(1);
+    });
+  });
+
+  it("syncSessionsBatch reports permission denied", async () => {
+    const sessions = [makeSession({ id: "s1", calendarEventId: undefined })];
+    calendarApi.checkCalendarPermission.mockResolvedValueOnce(false);
+    calendarApi.requestCalendarPermission.mockResolvedValueOnce(false);
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const summary = await result.current.syncSessionsBatch(sessions);
+      expect(summary).toEqual({
+        total: 1,
+        success: 0,
+        skipped: 0,
+        failed: 0,
+        permissionDenied: true,
+      });
+    });
+    expect(calendarApi.syncSessionToCalendar).not.toHaveBeenCalled();
+  });
+
+  it("unsyncSessionsBatch returns success/skipped/failed summary", async () => {
+    const sessions = [
+      makeSession({ id: "s1", calendarEventId: "event-s1" }),
+      makeSession({ id: "s2", calendarEventId: undefined }),
+      makeSession({ id: "s3", calendarEventId: "event-s3" }),
+    ];
+    useSessionStore.setState({ sessions });
+    calendarApi.deleteCalendarEvent.mockResolvedValueOnce(undefined);
+    calendarApi.deleteCalendarEvent.mockRejectedValueOnce(new Error("cannot delete"));
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const summary = await result.current.unsyncSessionsBatch(sessions);
+      expect(summary).toEqual({
+        total: 3,
+        success: 1,
+        skipped: 1,
+        failed: 1,
+      });
+    });
+
+    const state = useSessionStore.getState();
+    expect(state.sessions.find((session) => session.id === "s1")?.calendarEventId).toBeUndefined();
+    expect(state.sessions.find((session) => session.id === "s3")?.calendarEventId).toBeUndefined();
+  });
+
+  it("refreshSessionsBatch returns detailed summary", async () => {
+    const unchangedStart = new Date("2025-06-01T01:00:00.000Z").getTime();
+    const unchangedEnd = new Date("2025-06-01T02:00:00.000Z").getTime();
+    const sessions = [
+      makeSession({
+        id: "s-updated",
+        date: "2025-06-01",
+        startTime: unchangedStart,
+        endTime: unchangedEnd,
+        duration: 3600,
+        calendarEventId: "event-updated",
+      }),
+      makeSession({ id: "s-cleared", calendarEventId: "event-cleared" }),
+      makeSession({ id: "s-skipped", calendarEventId: undefined }),
+      makeSession({
+        id: "s-unchanged",
+        date: "2025-06-01",
+        startTime: unchangedStart,
+        endTime: unchangedEnd,
+        duration: 3600,
+        calendarEventId: "event-unchanged",
+      }),
+      makeSession({ id: "s-error", calendarEventId: "event-error" }),
+    ];
+    useSessionStore.setState({ sessions });
+
+    calendarApi.getCalendarEvent
+      .mockResolvedValueOnce({
+        id: "event-updated",
+        startDate: new Date("2025-06-01T03:00:00.000Z"),
+        endDate: new Date("2025-06-01T04:30:00.000Z"),
+      })
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: "event-unchanged",
+        startDate: new Date(unchangedStart),
+        endDate: new Date(unchangedEnd),
+      })
+      .mockRejectedValueOnce(new Error("event lookup failed"));
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const summary = await result.current.refreshSessionsBatch(sessions);
+      expect(summary).toEqual({
+        total: 5,
+        updated: 1,
+        cleared: 1,
+        unchanged: 1,
+        skipped: 1,
+        errors: 1,
+      });
+    });
+  });
+
+  it("refreshSessionsBatch reports permission denied", async () => {
+    const sessions = [makeSession({ id: "s1", calendarEventId: "event-s1" })];
+    calendarApi.checkCalendarPermission.mockResolvedValueOnce(false);
+    calendarApi.requestCalendarPermission.mockResolvedValueOnce(false);
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const summary = await result.current.refreshSessionsBatch(sessions);
+      expect(summary).toEqual({
+        total: 1,
+        updated: 0,
+        cleared: 0,
+        unchanged: 0,
+        skipped: 0,
+        errors: 0,
+        permissionDenied: true,
+      });
+    });
+    expect(calendarApi.getCalendarEvent).not.toHaveBeenCalled();
+  });
 });

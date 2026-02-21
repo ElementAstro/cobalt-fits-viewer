@@ -1,7 +1,12 @@
 import { act, renderHook } from "@testing-library/react-native";
-import { Alert } from "react-native";
 import * as Haptics from "expo-haptics";
 import { useViewerExport } from "../useViewerExport";
+
+const mockToastShow = jest.fn();
+
+jest.mock("heroui-native", () => ({
+  useToast: () => ({ toast: { show: mockToastShow } }),
+}));
 
 jest.mock("../useExport", () => ({
   useExport: jest.fn(),
@@ -37,13 +42,13 @@ describe("useViewerExport", () => {
   const exportImageDetailed = jest.fn();
   const shareImage = jest.fn();
   const saveImage = jest.fn();
+  const copyImageToClipboard = jest.fn();
   const printImage = jest.fn();
   const printToPdf = jest.fn();
   const onDone = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(Alert, "alert").mockImplementation(jest.fn());
     useHapticFeedback.mockReturnValue({
       hapticsEnabled: true,
       selection: jest.fn(),
@@ -52,9 +57,11 @@ describe("useViewerExport", () => {
     });
     useExport.mockReturnValue({
       isExporting: false,
+      exportPhase: "idle",
       exportImageDetailed,
       shareImage,
       saveImage,
+      copyImageToClipboard,
       printImage,
       printToPdf,
     });
@@ -89,7 +96,7 @@ describe("useViewerExport", () => {
       await result.current.handleExport(90);
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith("common.error", "viewer.noImageData");
+    expect(mockToastShow).toHaveBeenCalledWith({ variant: "warning", label: "viewer.noImageData" });
     expect(onDone).not.toHaveBeenCalled();
   });
 
@@ -111,7 +118,11 @@ describe("useViewerExport", () => {
     });
     expect(exportImageDetailed).toHaveBeenCalled();
     expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Success);
-    expect(Alert.alert).toHaveBeenCalledWith("common.success", "viewer.exportSuccess");
+    expect(mockToastShow).toHaveBeenCalledWith({
+      variant: "success",
+      label: "viewer.exportSuccess",
+      description: undefined,
+    });
     expect(onDone).toHaveBeenCalledTimes(1);
 
     exportImageDetailed.mockResolvedValueOnce({
@@ -127,7 +138,7 @@ describe("useViewerExport", () => {
       await result.current.handleExport(90);
     });
     expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);
-    expect(Alert.alert).toHaveBeenCalledWith("common.error", "viewer.exportFailed");
+    expect(mockToastShow).toHaveBeenCalledWith({ variant: "danger", label: "viewer.exportFailed" });
     expect(onDone).toHaveBeenCalledTimes(2);
   });
 
@@ -159,10 +170,11 @@ describe("useViewerExport", () => {
       await result.current.handleExport(90);
     });
 
-    expect(Alert.alert).toHaveBeenCalledWith(
-      "common.success",
-      "viewer.exportSuccess\nconverter.fitsFallbackScientificUnavailable",
-    );
+    expect(mockToastShow).toHaveBeenCalledWith({
+      variant: "success",
+      label: "viewer.exportSuccess",
+      description: "converter.fitsFallbackScientificUnavailable",
+    });
   });
 
   it("handles share/save/print actions and error alerts", async () => {
@@ -182,25 +194,61 @@ describe("useViewerExport", () => {
     await act(async () => {
       await result.current.handleShare(80);
     });
-    expect(Alert.alert).toHaveBeenCalledWith("common.error", "share.failed");
+    expect(mockToastShow).toHaveBeenCalledWith({ variant: "danger", label: "share.failed" });
 
     saveImage.mockResolvedValueOnce(null);
     await act(async () => {
       await result.current.handleSaveToDevice(80);
     });
-    expect(Alert.alert).toHaveBeenCalledWith("common.error", "viewer.exportFailed");
+    expect(mockToastShow).toHaveBeenCalledWith({ variant: "danger", label: "viewer.exportFailed" });
 
     printImage.mockRejectedValueOnce(new Error("print fail"));
     await act(async () => {
       await result.current.handlePrint();
     });
-    expect(Alert.alert).toHaveBeenCalledWith("common.error", "viewer.printFailed");
+    expect(mockToastShow).toHaveBeenCalledWith({ variant: "danger", label: "viewer.printFailed" });
 
     printToPdf.mockRejectedValueOnce(new Error("pdf fail"));
     await act(async () => {
       await result.current.handlePrintToPdf();
     });
-    expect(Alert.alert).toHaveBeenCalledWith("common.error", "viewer.printFailed");
+    expect(mockToastShow).toHaveBeenCalledWith({ variant: "danger", label: "viewer.printFailed" });
     expect(onDone).toHaveBeenCalledTimes(4);
+  });
+
+  it("handles copy to clipboard success and failure", async () => {
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+    const { result } = renderHook(() =>
+      useViewerExport({
+        rgbaData: rgba,
+        width: 1,
+        height: 1,
+        filename: "x",
+        format: "png",
+        onDone,
+      }),
+    );
+
+    copyImageToClipboard.mockResolvedValueOnce(true);
+    await act(async () => {
+      await result.current.handleCopyToClipboard();
+    });
+    expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Success);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      variant: "success",
+      label: "viewer.copiedToClipboard",
+    });
+
+    mockToastShow.mockClear();
+    copyImageToClipboard.mockResolvedValueOnce(false);
+    await act(async () => {
+      await result.current.handleCopyToClipboard();
+    });
+    expect(notifyMock).toHaveBeenCalledWith(Haptics.NotificationFeedbackType.Error);
+    expect(mockToastShow).toHaveBeenCalledWith({
+      variant: "danger",
+      label: "viewer.copyFailed",
+    });
+    expect(onDone).toHaveBeenCalledTimes(2);
   });
 });

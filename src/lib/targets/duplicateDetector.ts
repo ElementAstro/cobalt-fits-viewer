@@ -18,6 +18,35 @@ export interface DuplicateDetectionResult {
   potentialSavings: number;
 }
 
+function duplicateMergePriorityComparator(a: Target, b: Target): number {
+  if (a.imageIds.length !== b.imageIds.length) {
+    return b.imageIds.length - a.imageIds.length;
+  }
+
+  const aUpdatedAt = a.updatedAt ?? 0;
+  const bUpdatedAt = b.updatedAt ?? 0;
+  if (aUpdatedAt !== bUpdatedAt) {
+    return bUpdatedAt - aUpdatedAt;
+  }
+
+  const aCreatedAt = a.createdAt ?? 0;
+  const bCreatedAt = b.createdAt ?? 0;
+  if (aCreatedAt !== bCreatedAt) {
+    return bCreatedAt - aCreatedAt;
+  }
+
+  return a.id.localeCompare(b.id);
+}
+
+export function sortDuplicateTargetsByMergePriority(targets: Target[]): Target[] {
+  return [...targets].sort(duplicateMergePriorityComparator);
+}
+
+export function selectPrimaryDuplicateTarget(targets: Target[]): Target | null {
+  if (targets.length === 0) return null;
+  return sortDuplicateTargetsByMergePriority(targets)[0];
+}
+
 /**
  * 检测重复目标
  */
@@ -185,11 +214,16 @@ export function findDuplicatesOf(targets: Target[], targetId: string): Target[] 
 
     // 别名匹配
     const tAliases = new Set(t.aliases.map((a) => normalizeName(a)));
+    let aliasMatched = false;
     for (const alias of targetAliases) {
       if (tAliases.has(alias) || normalizeName(t.name) === alias) {
-        duplicates.push(t);
+        aliasMatched = true;
         break;
       }
+    }
+    if (aliasMatched) {
+      duplicates.push(t);
+      continue;
     }
 
     // 坐标匹配
@@ -218,9 +252,8 @@ export function suggestMergeStrategy(group: DuplicateGroup): {
 } | null {
   if (group.targets.length < 2) return null;
 
-  // 选择主目标：优先选择有最多图片的
-  const sorted = [...group.targets].sort((a, b) => b.imageIds.length - a.imageIds.length);
-  const primary = sorted[0];
+  const primary = selectPrimaryDuplicateTarget(group.targets);
+  if (!primary) return null;
 
   // 收集要合并的数据
   const allAliases = new Set<string>();

@@ -242,9 +242,58 @@ describe("thumbnailCache", () => {
     expect(mockLogger.warn).toHaveBeenCalled();
   });
 
-  it("downsamples RGBA and does not upscale above original size", () => {
+  it("prunes cache when over max size, keeping newest files", () => {
+    const mod = loadThumbnailCacheModule();
+    mockDirs.add("/cache/thumbnails");
+
+    // 3 files totaling 9 bytes
+    mockFiles.set("/cache/thumbnails/aaa.jpg", new Uint8Array([1, 2, 3]));
+    mockFiles.set("/cache/thumbnails/bbb.jpg", new Uint8Array([4, 5, 6]));
+    mockFiles.set("/cache/thumbnails/ccc.jpg", new Uint8Array([7, 8, 9]));
+
+    expect(mod.getThumbnailCacheSize()).toBe(9);
+
+    // Prune to max 6 bytes => should remove oldest (alphabetically first) until <= 6
+    const pruned = (
+      require("../thumbnailCache") as { pruneThumbnailCache: (max: number) => number }
+    ).pruneThumbnailCache(6);
+
+    expect(pruned).toBe(1);
+    expect(mod.getThumbnailCacheSize()).toBe(6);
+    expect(mockFiles.has("/cache/thumbnails/aaa.jpg")).toBe(false);
+    expect(mockFiles.has("/cache/thumbnails/bbb.jpg")).toBe(true);
+    expect(mockFiles.has("/cache/thumbnails/ccc.jpg")).toBe(true);
+  });
+
+  it("prune does nothing when under max size", () => {
+    const mod = loadThumbnailCacheModule();
+    mockDirs.add("/cache/thumbnails");
+    mockFiles.set("/cache/thumbnails/a.jpg", new Uint8Array([1]));
+
+    const pruned = (
+      require("../thumbnailCache") as { pruneThumbnailCache: (max: number) => number }
+    ).pruneThumbnailCache(100);
+
+    expect(pruned).toBe(0);
+    expect(mod.getThumbnailCacheSize()).toBe(1);
+  });
+
+  it("downsamples 1x1 image correctly with area-average", () => {
+    const mod = loadThumbnailCacheModule();
+    const src = new Uint8ClampedArray([100, 150, 200, 255]);
+    const result = mod.downsampleRGBA(src, 1, 1, 256);
+    expect(result.width).toBe(1);
+    expect(result.height).toBe(1);
+    expect(result.data[0]).toBe(100);
+    expect(result.data[1]).toBe(150);
+    expect(result.data[2]).toBe(200);
+    expect(result.data[3]).toBe(255);
+  });
+
+  it("downsamples RGBA using area-average and does not upscale above original size", () => {
     const mod = loadThumbnailCacheModule();
 
+    // 4x2 image, each pixel has R channel = 10,20,30,40 / 50,60,70,80
     const src = new Uint8ClampedArray([
       10, 0, 0, 255, 20, 0, 0, 255, 30, 0, 0, 255, 40, 0, 0, 255, 50, 0, 0, 255, 60, 0, 0, 255, 70,
       0, 0, 255, 80, 0, 0, 255,
@@ -253,8 +302,9 @@ describe("thumbnailCache", () => {
     const reduced = mod.downsampleRGBA(src, 4, 2, 2);
     expect(reduced.width).toBe(2);
     expect(reduced.height).toBe(1);
-    expect(reduced.data[0]).toBe(10);
-    expect(reduced.data[4]).toBe(30);
+    // Area-average: left block averages pixels (10,20,50,60)/4=35, right block (30,40,70,80)/4=55
+    expect(reduced.data[0]).toBe(35);
+    expect(reduced.data[4]).toBe(55);
 
     const noUpscale = mod.downsampleRGBA(src, 4, 2, 100);
     expect(noUpscale.width).toBe(4);

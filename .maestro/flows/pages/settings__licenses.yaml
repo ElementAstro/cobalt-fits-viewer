@@ -3,7 +3,11 @@
 - openLink: cobalt://settings/licenses
 - assertVisible:
     id: e2e-screen-settings__licenses
-- tapOn:
+- assertVisible:
+    id: e2e-action-settings__licenses-back
+- assertVisible:
     id: e2e-action-settings__licenses-open-app-license
 - tapOn:
     id: e2e-action-settings__licenses-back
+- assertVisible:
+    id: e2e-screen-settings__about

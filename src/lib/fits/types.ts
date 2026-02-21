@@ -267,7 +267,12 @@ export interface FitsMetadata {
     | "extract-audio"
     | "mute"
     | "cover"
-    | "compose-advanced";
+    | "rotate"
+    | "speed"
+    | "watermark"
+    | "gif"
+    | "compose-advanced"
+    | "stacking";
 
   // 质量评分
   qualityScore?: number; // 0-100

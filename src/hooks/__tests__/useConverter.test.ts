@@ -7,6 +7,7 @@ jest.mock("../../stores/useSettingsStore", () => ({
       defaultConverterFormat: "png",
       defaultConverterQuality: 90,
       batchNamingRule: "original",
+      imageProcessingProfile: "standard",
     }),
 }));
 

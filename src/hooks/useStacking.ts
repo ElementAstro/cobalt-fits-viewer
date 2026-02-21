@@ -9,6 +9,7 @@ import {
   loadScientificFitsFromBuffer,
   getImagePixels,
   getImageDimensions,
+  getHeaderValue,
 } from "../lib/fits/parser";
 import {
   stackAverage,
@@ -21,7 +22,13 @@ import {
 } from "../lib/utils/pixelMath";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
 import { computeAutoStretch } from "../lib/utils/pixelMath";
-import { calibrateFrame, createMasterDark, createMasterFlat } from "../lib/stacking/calibration";
+import {
+  calibrateFrame,
+  createMasterDark,
+  createMasterFlat,
+  computeMedianExposure,
+  scaleFrameByExposure,
+} from "../lib/stacking/calibration";
 import {
   alignFrameAsync,
   type AlignmentMode,
@@ -127,6 +134,13 @@ export interface StackResult {
     enabledPointCount: number;
     anchorCount: number;
   }>;
+  calibrationWarnings: StackingWarning[];
+}
+
+export interface StackingWarning {
+  code: "missing-dark-exptime" | "missing-light-exptime";
+  filename: string;
+  messageKey: "editor.missingDarkExposureWarning" | "editor.missingLightExposureWarning";
 }
 
 export interface StackProgress {
@@ -144,19 +158,43 @@ function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
 }
 
-async function loadPixelsFromPath(
-  filepath: string,
-): Promise<{ pixels: Float32Array; width: number; height: number } | null> {
+async function loadPixelsFromPath(filepath: string): Promise<{
+  pixels: Float32Array;
+  width: number;
+  height: number;
+  exposure: number | null;
+} | null> {
   try {
     const buffer = await readFileAsArrayBuffer(filepath);
     const fits = await loadScientificFitsFromBuffer(buffer, { filename: filepath });
     const dims = getImageDimensions(fits);
     const pixels = await getImagePixels(fits);
     if (!dims || !pixels) return null;
-    return { pixels, width: dims.width, height: dims.height };
+    return {
+      pixels,
+      width: dims.width,
+      height: dims.height,
+      exposure: toPositiveExposure(getHeaderValue(fits, "EXPTIME")),
+    };
   } catch {
     return null;
   }
+}
+
+function toPositiveExposure(value: unknown): number | null {
+  const numeric =
+    typeof value === "number"
+      ? value
+      : typeof value === "string"
+        ? Number.parseFloat(value)
+        : Number.NaN;
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
+}
+
+function filenameFromPath(filepath: string): string {
+  const normalized = filepath.replace(/\\/g, "/");
+  const parts = normalized.split("/");
+  return parts[parts.length - 1] || filepath;
 }
 
 function normalizeRequest(
@@ -222,7 +260,7 @@ export function useStacking() {
       alignmentMode: AlignmentMode = "none",
       enableQualityEval: boolean = false,
       advanced?: StackingAdvancedOptions,
-    ) => {
+    ): Promise<StackResult | null> => {
       const request = normalizeRequest(
         filesOrRequest,
         method,
@@ -238,7 +276,7 @@ export function useStacking() {
         Logger.warn(LOG_TAGS.Stacking, "Insufficient frames for stacking", {
           count: request.files.length,
         });
-        return;
+        return null;
       }
 
       abortRef.current?.abort();
@@ -261,6 +299,8 @@ export function useStacking() {
         let darkPixels: Float32Array | null = null;
         let flatPixels: Float32Array | null = null;
         let biasPixels: Float32Array | null = null;
+        let masterDarkExposure: number | null = null;
+        const calibrationWarnings: StackingWarning[] = [];
 
         if (request.calibration?.darkFilepaths && request.calibration.darkFilepaths.length > 0) {
           setProgress({
@@ -270,13 +310,37 @@ export function useStacking() {
             message: `Building master dark from ${request.calibration.darkFilepaths.length} frames...`,
           });
           await yieldToUI();
-          const darkFrames: Float32Array[] = [];
+          const darkFrames: Array<{
+            pixels: Float32Array;
+            exposure: number | null;
+            filename: string;
+          }> = [];
           for (const fp of request.calibration.darkFilepaths) {
-            if (isCancelled()) return;
+            if (isCancelled()) return null;
             const d = await loadPixelsFromPath(fp);
-            if (d) darkFrames.push(d.pixels);
+            if (d) {
+              darkFrames.push({
+                pixels: d.pixels,
+                exposure: d.exposure,
+                filename: filenameFromPath(fp),
+              });
+            }
           }
-          if (darkFrames.length > 0) darkPixels = createMasterDark(darkFrames);
+          if (darkFrames.length > 0) {
+            masterDarkExposure = computeMedianExposure(darkFrames.map((frame) => frame.exposure));
+            const normalizedDarkFrames = darkFrames.map((frame) => {
+              const scaled = scaleFrameByExposure(frame.pixels, frame.exposure, masterDarkExposure);
+              if (scaled.usedFallbackScale) {
+                calibrationWarnings.push({
+                  code: "missing-dark-exptime",
+                  filename: frame.filename,
+                  messageKey: "editor.missingDarkExposureWarning",
+                });
+              }
+              return scaled.pixels;
+            });
+            darkPixels = createMasterDark(normalizedDarkFrames);
+          }
         } else if (request.calibration?.darkFilepath) {
           setProgress({
             stage: "calibrating",
@@ -286,7 +350,17 @@ export function useStacking() {
           });
           await yieldToUI();
           const dark = await loadPixelsFromPath(request.calibration.darkFilepath);
-          if (dark) darkPixels = dark.pixels;
+          if (dark) {
+            darkPixels = dark.pixels;
+            masterDarkExposure = dark.exposure;
+            if (!dark.exposure) {
+              calibrationWarnings.push({
+                code: "missing-dark-exptime",
+                filename: filenameFromPath(request.calibration.darkFilepath),
+                messageKey: "editor.missingDarkExposureWarning",
+              });
+            }
+          }
         }
 
         if (request.calibration?.flatFilepaths && request.calibration.flatFilepaths.length > 0) {
@@ -299,7 +373,7 @@ export function useStacking() {
           await yieldToUI();
           const flatFrames: Float32Array[] = [];
           for (const fp of request.calibration.flatFilepaths) {
-            if (isCancelled()) return;
+            if (isCancelled()) return null;
             const f = await loadPixelsFromPath(fp);
             if (f) flatFrames.push(f.pixels);
           }
@@ -328,14 +402,14 @@ export function useStacking() {
           if (bias) biasPixels = bias.pixels;
         }
 
-        if (isCancelled()) return;
+        if (isCancelled()) return null;
 
         const frames: Float32Array[] = [];
         let refWidth = 0;
         let refHeight = 0;
 
         for (let i = 0; i < request.files.length; i++) {
-          if (isCancelled()) return;
+          if (isCancelled()) return null;
 
           setProgress({
             stage: "loading",
@@ -351,6 +425,7 @@ export function useStacking() {
           });
           const dims = getImageDimensions(fits);
           let pixels = await getImagePixels(fits);
+          const lightExposure = toPositiveExposure(getHeaderValue(fits, "EXPTIME"));
 
           if (!dims || !pixels) {
             throw new Error(`Failed to read image data from ${request.files[i].filename}`);
@@ -382,13 +457,29 @@ export function useStacking() {
                 `Bias frame size (${biasPixels.length}) does not match image size (${pixelCount})`,
               );
             }
-            pixels = calibrateFrame(pixels, darkPixels, flatPixels, biasPixels);
+            let darkPixelsForLight = darkPixels;
+            if (darkPixels) {
+              const scaledDark = scaleFrameByExposure(
+                darkPixels,
+                masterDarkExposure,
+                lightExposure,
+              );
+              darkPixelsForLight = scaledDark.pixels;
+              if (scaledDark.usedFallbackScale && !lightExposure) {
+                calibrationWarnings.push({
+                  code: "missing-light-exptime",
+                  filename: request.files[i].filename,
+                  messageKey: "editor.missingLightExposureWarning",
+                });
+              }
+            }
+            pixels = calibrateFrame(pixels, darkPixelsForLight, flatPixels, biasPixels);
           }
 
           frames.push(pixels);
         }
 
-        if (isCancelled()) return;
+        if (isCancelled()) return null;
 
         const useAnnotatedForAlignment =
           request.advanced?.annotation?.useAnnotatedForAlignment ?? true;
@@ -460,7 +551,7 @@ export function useStacking() {
         if (request.enableQualityEval || request.method === "weighted") {
           qualityMetrics = [];
           for (let i = 0; i < frames.length; i++) {
-            if (isCancelled()) return;
+            if (isCancelled()) return null;
 
             setProgress({
               stage: "evaluating",
@@ -508,14 +599,14 @@ export function useStacking() {
           weights = qualityToWeights(qualityMetrics);
         }
 
-        if (isCancelled()) return;
+        if (isCancelled()) return null;
 
         const alignmentResults: StackResult["alignmentResults"] = [];
 
         if (request.alignmentMode !== "none" && frames.length >= 2) {
           const refPixels = frames[0];
           for (let i = 1; i < frames.length; i++) {
-            if (isCancelled()) return;
+            if (isCancelled()) return null;
             setProgress({
               stage: "aligning",
               current: i,
@@ -590,7 +681,7 @@ export function useStacking() {
           });
         }
 
-        if (isCancelled()) return;
+        if (isCancelled()) return null;
 
         setProgress({
           stage: "stacking",
@@ -630,7 +721,7 @@ export function useStacking() {
 
         frames.length = 0;
 
-        if (isCancelled()) return;
+        if (isCancelled()) return null;
 
         setProgress({
           stage: "rendering",
@@ -664,6 +755,7 @@ export function useStacking() {
           alignmentResults: alignmentResults.length > 0 ? alignmentResults : undefined,
           qualityMetrics,
           annotationDiagnostics,
+          calibrationWarnings,
         };
 
         setResult(stackResult);
@@ -683,12 +775,14 @@ export function useStacking() {
           total: request.files.length,
           message: `Done - ${request.files.length} frames in ${(duration / 1000).toFixed(1)}s`,
         });
+        return stackResult;
       } catch (e) {
         if (!isCancelled() && !isAbortError(e)) {
           const msg = e instanceof Error ? e.message : "Stacking failed";
           Logger.error(LOG_TAGS.Stacking, `Failed: ${msg}`, e);
           setError(msg);
         }
+        return null;
       } finally {
         setIsStacking(false);
       }

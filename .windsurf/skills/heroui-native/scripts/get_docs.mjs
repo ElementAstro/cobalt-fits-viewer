@@ -122,7 +122,10 @@ export async function run(argv = process.argv.slice(2), runtime = createRuntime(
       emitEnvelope(runtime, { format: "json" }, envelope);
     } else {
       if (requestedPath) {
-        writeStdout(runtime, JSON.stringify({ error: envelope.error.message, path: requestedPath }, null, 2));
+        writeStdout(
+          runtime,
+          JSON.stringify({ error: envelope.error.message, path: requestedPath }, null, 2),
+        );
       } else {
         writeStderr(runtime, `${envelope.error.code}: ${envelope.error.message}`);
         if (envelope.error.detail?.usage) {

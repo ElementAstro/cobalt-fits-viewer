@@ -364,7 +364,11 @@ async function encodeFits(
 
   const scientificAvailable = canUseScientificFitsExport(source);
   diagnostics.scientificAvailable = scientificAvailable;
-  diagnostics.requestedFitsMode = fitsOptions.mode;
+  // withFitsFallback() may have already recorded the user's originally requested mode
+  // before we mutate the request. Preserve it for diagnostics/warnings.
+  if (diagnostics.requestedFitsMode == null) {
+    diagnostics.requestedFitsMode = fitsOptions.mode;
+  }
 
   let effectiveMode = fitsOptions.mode;
   if (effectiveMode === "scientific" && !scientificAvailable) {

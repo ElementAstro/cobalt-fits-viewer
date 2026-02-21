@@ -5,6 +5,7 @@ import { Image } from "expo-image";
 import { Skeleton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
+import { useThumbnailOnDemand } from "../../hooks/useThumbnailOnDemand";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
 import {
@@ -51,6 +52,7 @@ const ThumbnailItem = memo(function ThumbnailItem({
   showExposure = false,
   showLoadProgress = true,
   onSnapshotChange,
+  onRequestThumbnail,
 }: {
   file: FitsMetadata;
   size: number;
@@ -67,6 +69,7 @@ const ThumbnailItem = memo(function ThumbnailItem({
   showExposure?: boolean;
   showLoadProgress?: boolean;
   onSnapshotChange: (snapshot: ThumbnailLoadSnapshot) => void;
+  onRequestThumbnail?: (file: FitsMetadata) => void;
 }) {
   const thumbnailUri = useMemo(
     () => resolveThumbnailUri(file.id, file.thumbnailUri),
@@ -87,8 +90,9 @@ const ThumbnailItem = memo(function ThumbnailItem({
   useEffect(() => {
     if (!thumbnailUri) {
       setSnapshot((prev) => withStage(prev, "ready"));
+      onRequestThumbnail?.(file);
     }
-  }, [thumbnailUri]);
+  }, [thumbnailUri, file, onRequestThumbnail]);
 
   useEffect(() => {
     onSnapshotChange(snapshot);
@@ -140,6 +144,8 @@ const ThumbnailItem = memo(function ThumbnailItem({
         }
       }}
       onLongPress={() => onLongPress?.(file)}
+      accessibilityLabel={file.filename}
+      accessibilityRole="button"
     >
       <View
         className={`h-full w-full items-center justify-center rounded-lg bg-surface-secondary overflow-hidden ${
@@ -264,6 +270,7 @@ export function ThumbnailGrid({
   onLoadingSummaryChange,
 }: ThumbnailGridProps) {
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const { requestThumbnail } = useThumbnailOnDemand();
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isLandscapeGrid = screenWidth > screenHeight;
   const gridPadding = isLandscapeGrid ? 16 : 32;
@@ -329,6 +336,7 @@ export function ThumbnailGrid({
         showExposure={showExposure}
         showLoadProgress={showLoadProgress}
         onSnapshotChange={handleSnapshotChange}
+        onRequestThumbnail={requestThumbnail}
       />
     ),
     [
@@ -346,6 +354,7 @@ export function ThumbnailGrid({
       showExposure,
       showLoadProgress,
       handleSnapshotChange,
+      requestThumbnail,
     ],
   );
 

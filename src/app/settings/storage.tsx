@@ -11,6 +11,7 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useThumbnail } from "../../hooks/useThumbnail";
+import { pruneThumbnailCache } from "../../lib/gallery/thumbnailCache";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { formatBytes } from "../../lib/utils/format";
@@ -27,7 +28,9 @@ export default function StorageSettingsScreen() {
   const updateFile = useFitsStore((s) => s.updateFile);
   const filesCount = allFiles.length;
   const confirmDestructiveActions = useSettingsStore((s) => s.confirmDestructiveActions);
-  const { clearCache, getCacheSize, regenerateThumbnails, isGenerating } = useThumbnail();
+  const thumbnailCacheMaxSizeMB = useSettingsStore((s) => s.thumbnailCacheMaxSizeMB);
+  const { clearCache, getCacheSize, regenerateThumbnails, isGenerating, regenerateProgress } =
+    useThumbnail();
 
   // Astrometry status
   const astrometryConfig = useAstrometryStore((s) => s.config);
@@ -123,6 +126,7 @@ export default function StorageSettingsScreen() {
         }
 
         const result = await regenerateThumbnails(allFiles);
+        pruneThumbnailCache(thumbnailCacheMaxSizeMB * 1024 * 1024);
 
         for (const item of result.results) {
           if (item.uri) {
@@ -175,6 +179,12 @@ export default function StorageSettingsScreen() {
           />
           <Separator />
           <SettingsRow
+            icon="resize-outline"
+            label={t("settings.thumbnailCacheMaxSize")}
+            value={`${thumbnailCacheMaxSizeMB} MB`}
+          />
+          <Separator />
+          <SettingsRow
             icon="trash-outline"
             label={t("settings.clearCache")}
             onPress={handleClearCache}
@@ -184,7 +194,13 @@ export default function StorageSettingsScreen() {
           <SettingsRow
             icon="refresh-outline"
             label={t("settings.regenerateThumbnails")}
-            value={isGenerating ? t("settings.regenerating") : undefined}
+            value={
+              regenerateProgress
+                ? `${regenerateProgress.current} / ${regenerateProgress.total}`
+                : isGenerating
+                  ? t("settings.regenerating")
+                  : undefined
+            }
             onPress={handleRegenerateThumbnails}
             disabled={filesCount === 0 || isGenerating}
           />

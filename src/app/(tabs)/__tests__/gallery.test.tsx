@@ -171,8 +171,8 @@ jest.mock("../../../components/gallery/IntegrationReportSheet", () => ({
 jest.mock("../../../components/gallery/SmartAlbumModal", () => ({
   SmartAlbumModal: () => null,
 }));
-jest.mock("../../../components/gallery/AlbumSearchBar", () => ({
-  AlbumSearchBar: () => null,
+jest.mock("../../../components/common/SearchBar", () => ({
+  SearchBar: () => null,
 }));
 jest.mock("../../../components/gallery/AlbumSortControl", () => ({
   AlbumSortControl: () => null,
@@ -268,7 +268,7 @@ describe("(tabs)/gallery.tsx routing", () => {
 
   it("renders tabbed layout controls", () => {
     render(<GalleryScreen />);
-    expect(screen.getByTestId("gallery-tab-images")).toBeTruthy();
-    expect(screen.getByTestId("gallery-tab-albums")).toBeTruthy();
+    expect(screen.getByTestId("e2e-action-tabs__gallery-tab-images")).toBeTruthy();
+    expect(screen.getByTestId("e2e-action-tabs__gallery-tab-albums")).toBeTruthy();
   });
 });

@@ -10,6 +10,18 @@ describe("useImageComparison", () => {
     expect(result.current.imageIds).toEqual(["a", "b"]);
   });
 
+  it("clamps initial blink and split values", () => {
+    const { result } = renderHook(() =>
+      useImageComparison({
+        initialIds: ["a", "b"],
+        initialBlinkSpeed: 20,
+        initialSplitPosition: -1,
+      }),
+    );
+    expect(result.current.blinkSpeed).toBe(5);
+    expect(result.current.splitPosition).toBe(0.1);
+  });
+
   it("limits ids to two and replaces second on add", () => {
     const { result } = renderHook(() => useImageComparison({ initialIds: ["a", "b"] }));
     act(() => {

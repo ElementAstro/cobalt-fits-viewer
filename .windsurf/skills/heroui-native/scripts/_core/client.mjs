@@ -72,7 +72,10 @@ export function createHttpClient(options = {}) {
         );
       }
 
-      throw new SkillError("NETWORK_ERROR", "Network request failed", { url, cause: String(error) });
+      throw new SkillError("NETWORK_ERROR", "Network request failed", {
+        url,
+        cause: String(error),
+      });
     } finally {
       timer.clear();
     }

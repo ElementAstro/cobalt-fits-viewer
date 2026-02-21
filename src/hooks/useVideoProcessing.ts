@@ -15,7 +15,7 @@ import { detectSupportedMediaFormat, toImageSourceFormat } from "../lib/import/f
 import { generateFileId, importFile } from "../lib/utils/fileManager";
 import { copyThumbnailToCache, generateAndSaveThumbnail } from "../lib/gallery/thumbnailCache";
 import { classifyWithDetail } from "../lib/gallery/frameClassifier";
-import { parseRasterFromBuffer, extractRasterMetadata } from "../lib/image/rasterParser";
+import { parseRasterFromBufferAsync, extractRasterMetadata } from "../lib/image/rasterParser";
 import type { FitsMetadata } from "../lib/fits/types";
 
 function deriveOutputEntries(taskOutput: string, extraOutputs?: string[]): string[] {
@@ -102,7 +102,11 @@ export function useVideoProcessing() {
       const importedFile = new File(imported.uri);
       const format = detectSupportedMediaFormat(importedFile.name);
       const sourceType =
-        request.operation === "extract-audio" ? "audio" : (format?.sourceType ?? "video");
+        request.operation === "extract-audio"
+          ? "audio"
+          : request.operation === "cover" || request.operation === "gif"
+            ? "raster"
+            : (format?.sourceType ?? "video");
       const fileId = generateFileId();
       const fileSize = importedFile.size ?? 0;
       const now = Date.now();
@@ -232,7 +236,14 @@ export function useVideoProcessing() {
       }
 
       const buffer = await importedFile.arrayBuffer();
-      const parsed = parseRasterFromBuffer(buffer);
+      const parsed = await parseRasterFromBufferAsync(buffer, {
+        frameIndex: 0,
+        cacheSize: 1,
+        preferTiffDecoder: true,
+        sourceUri: importedFile.uri,
+        filename: importedFile.name,
+        formatHint: format?.id,
+      });
       const rgba = new Uint8ClampedArray(
         parsed.rgba.buffer,
         parsed.rgba.byteOffset,

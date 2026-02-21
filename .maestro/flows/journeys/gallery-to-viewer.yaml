@@ -1,0 +1,43 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+# Journey: Gallery → Album → Viewer → Back
+# Verifies the core browsing workflow from gallery to viewing images
+
+- runFlow: ../common/bootstrap.yaml
+
+# Start at gallery
+- openLink: cobalt://gallery
+- assertVisible:
+    id: e2e-screen-tabs__gallery
+
+# Switch to albums tab and open seeded album
+- tapOn:
+    id: e2e-action-tabs__gallery-tab-albums
+- assertVisible: E2E Album
+- tapOn: E2E Album
+- assertVisible:
+    id: e2e-screen-album__param_id
+- assertVisible: E2E Album
+
+# Navigate back to gallery
+- back
+- assertVisible:
+    id: e2e-screen-tabs__gallery
+
+# Switch to images tab and verify files
+- tapOn:
+    id: e2e-action-tabs__gallery-tab-images
+- assertVisible: M42_Light_001.fits
+
+# Open viewer via deep link (simulating file tap)
+- openLink: cobalt://viewer/fits-001
+- assertVisible:
+    id: e2e-screen-viewer__param_id
+- assertVisible:
+    id: e2e-action-viewer__param_id-astrometry
+
+# Go back to gallery
+- tapOn:
+    id: e2e-action-viewer__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__index

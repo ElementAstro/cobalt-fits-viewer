@@ -3,8 +3,8 @@
  */
 
 import * as FileSystem from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import type { FitsMetadata, Album } from "../fits/types";
+import { shareFile } from "../utils/imageExport";
 import { calculateAlbumStatistics, formatExposureTime, formatFileSize } from "./albumStatistics";
 import { LOG_TAGS, Logger } from "../logger";
 
@@ -120,35 +120,13 @@ export async function exportAlbum(
  */
 export async function shareAlbumExport(exportPath: string): Promise<boolean> {
   try {
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (!isAvailable) {
-      return false;
-    }
-
     const zipInfo = await fs.getInfoAsync(exportPath);
     if (!zipInfo.exists) return false;
 
-    await Sharing.shareAsync(exportPath, {
+    await shareFile(exportPath, {
       mimeType: "application/zip",
       UTI: "public.zip-archive",
     });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * 分享单个文件
- */
-export async function shareFile(filePath: string): Promise<boolean> {
-  try {
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (!isAvailable) {
-      return false;
-    }
-
-    await Sharing.shareAsync(filePath);
     return true;
   } catch {
     return false;

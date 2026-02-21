@@ -70,11 +70,19 @@ jest.mock("../../lib/gallery/thumbnailCache", () => ({
 }));
 
 jest.mock("../../lib/image/rasterParser", () => ({
-  parseRasterFromBuffer: () => ({
+  parseRasterFromBufferAsync: jest.fn(async () => ({
     width: 2,
     height: 2,
+    depth: 1,
+    isMultiFrame: false,
+    frameIndex: 0,
+    bitDepth: 8,
     rgba: new Uint8Array([0, 1, 2, 255]),
-  }),
+    pixels: new Float32Array([0, 0, 0, 0]),
+    channels: null,
+    headers: [],
+    decodeStatus: "ready",
+  })),
   extractRasterMetadata: () => ({
     filename: "cover.jpg",
     filepath: "file:///managed/cover.jpg",

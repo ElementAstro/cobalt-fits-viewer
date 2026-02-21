@@ -187,6 +187,68 @@ export function exportAllSessionsToJSON(
 }
 
 /**
+ * 导出单个会话为 CSV（含会话头信息）
+ */
+export function exportSessionToCSV(
+  session: import("../fits/types").ObservationSession,
+  entries: ObservationLogEntry[],
+): string {
+  const targetRefs = normalizeSessionTargetRefs(session);
+  const targetNames = targetRefs.map((ref) => ref.name).join("; ");
+  const header = [
+    `# Session: ${session.date}`,
+    `# Targets: ${targetNames}`,
+    `# Duration: ${Math.round(session.duration / 60)}min`,
+    `# Images: ${session.imageIds.length}`,
+    session.notes ? `# Notes: ${session.notes}` : null,
+    "",
+  ]
+    .filter((l) => l !== null)
+    .join("\n");
+
+  return header + exportToCSV(entries);
+}
+
+/**
+ * 导出所有会话汇总为 CSV
+ */
+export function exportAllSessionsToCSV(
+  sessions: import("../fits/types").ObservationSession[],
+): string {
+  const headers = [
+    "Date",
+    "Targets",
+    "Duration(min)",
+    "Images",
+    "Equipment",
+    "Weather",
+    "Seeing",
+    "Bortle",
+    "Rating",
+    "Notes",
+  ];
+
+  const rows = sessions.map((s) => {
+    const targetRefs = normalizeSessionTargetRefs(s);
+    const targetNames = targetRefs.map((ref) => ref.name).join("; ");
+    return [
+      escapeCSV(s.date),
+      escapeCSV(targetNames),
+      Math.round(s.duration / 60),
+      s.imageIds.length,
+      escapeCSV(s.equipment?.mount),
+      escapeCSV(s.weather),
+      escapeCSV(s.seeing),
+      s.bortle ?? "",
+      s.rating ?? "",
+      escapeCSV(s.notes),
+    ].join(",");
+  });
+
+  return [headers.join(","), ...rows].join("\n");
+}
+
+/**
  * 搜索日志条目
  */
 export function searchLogEntries(

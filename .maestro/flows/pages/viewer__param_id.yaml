@@ -3,6 +3,13 @@
 - openLink: cobalt://viewer/fits-001
 - assertVisible:
     id: e2e-screen-viewer__param_id
+- assertVisible:
+    id: e2e-action-viewer__param_id-back
+- assertVisible:
+    id: e2e-action-viewer__param_id-astrometry
+- assertVisible:
+    id: e2e-action-viewer__param_id-toggle-controls
+- takeScreenshot: screenshots/viewer__param_id
 - tapOn:
     id: e2e-action-viewer__param_id-open-menu
 - tapOn:
@@ -16,3 +23,7 @@
 - tapOn:
     id: e2e-action-export-dialog-export
 - assertVisible: Scientific FITS cannot embed annotations/watermark. Export switched to rendered mode.
+- tapOn:
+    id: e2e-action-viewer__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__index

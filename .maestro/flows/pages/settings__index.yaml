@@ -3,6 +3,8 @@
 - openLink: cobalt://settings
 - assertVisible:
     id: e2e-screen-settings__index
+- assertVisible:
+    id: e2e-action-settings__index-search
 - tapOn:
     id: e2e-action-settings__index-search
 - inputText: compose
@@ -10,3 +12,6 @@
     id: e2e-action-settings__index-open-processing
 - assertVisible:
     id: e2e-screen-settings__processing
+- back
+- assertVisible:
+    id: e2e-screen-settings__index

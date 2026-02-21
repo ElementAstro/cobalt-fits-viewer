@@ -2,16 +2,19 @@
  * 文件快速预览模态框 — 轻量级预览文件缩略图和元数据
  */
 
-import { useEffect, useMemo } from "react";
-import { View, Text, Image } from "react-native";
-import { Button, Dialog, Separator } from "heroui-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { View, Text } from "react-native";
+import { Image } from "expo-image";
+import { Button, Dialog, Separator, Spinner } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useI18n } from "../../i18n/useI18n";
 import { formatBytes } from "../../lib/utils/format";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
+import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import { isMediaWorkspaceFile } from "../../lib/media/routing";
+import { useFitsStore } from "../../stores/useFitsStore";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 interface QuickLookModalProps {
@@ -30,6 +33,8 @@ export function QuickLookModal({
   onOpenEditor,
 }: QuickLookModalProps) {
   const { t } = useI18n();
+  const updateFile = useFitsStore((s) => s.updateFile);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const thumbnailUri = useMemo(
     () => (file ? resolveThumbnailUri(file.id, file.thumbnailUri) : null),
     [file],
@@ -37,6 +42,19 @@ export function QuickLookModal({
   const isVideo = file?.mediaKind === "video" || file?.sourceType === "video";
   const isAudio = file?.mediaKind === "audio" || file?.sourceType === "audio";
   const isMedia = file ? isMediaWorkspaceFile(file) : false;
+
+  const handleRegenerateThumbnail = useCallback(async () => {
+    if (!file || isRegenerating) return;
+    setIsRegenerating(true);
+    try {
+      const result = await regenerateFileThumbnail(file);
+      if (result.uri) {
+        updateFile(result.fileId, { thumbnailUri: result.uri });
+      }
+    } finally {
+      setIsRegenerating(false);
+    }
+  }, [file, isRegenerating, updateFile]);
   const player = useVideoPlayer(isVideo && file ? { uri: file.filepath } : null, (instance) => {
     instance.muted = true;
     instance.loop = true;
@@ -86,13 +104,29 @@ export function QuickLookModal({
               <Image
                 source={{ uri: thumbnailUri }}
                 className="w-full h-full"
-                resizeMode="contain"
+                contentFit="contain"
+                cachePolicy="memory-disk"
+                transition={200}
               />
             </View>
           ) : (
             <View className="mt-3 h-48 rounded-lg bg-black/50 items-center justify-center">
-              <Ionicons name="image-outline" size={48} color="#555" />
-              <Text className="mt-2 text-xs text-muted">{t("common.noData")}</Text>
+              {isRegenerating ? (
+                <Spinner size="sm" />
+              ) : (
+                <>
+                  <Ionicons name="image-outline" size={48} color="#555" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onPress={handleRegenerateThumbnail}
+                  >
+                    <Ionicons name="refresh-outline" size={12} color="#888" />
+                    <Button.Label>{t("settings.regenerateThumbnail")}</Button.Label>
+                  </Button>
+                </>
+              )}
             </View>
           )}
 

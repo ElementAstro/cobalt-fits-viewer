@@ -231,6 +231,8 @@ function dilateMask(mask: boolean[], kernelSize: number): boolean[] {
   return out;
 }
 
+const zscaleCache = new WeakMap<Float32Array, { z1: number; z2: number }>();
+
 export function computeZScale(
   pixels: Float32Array,
   nSamples: number = 1000,
@@ -240,6 +242,9 @@ export function computeZScale(
   kRej: number = 2.5,
   maxIterations: number = 5,
 ): { z1: number; z2: number } {
+  const cached = zscaleCache.get(pixels);
+  if (cached) return cached;
+
   const finite = collectFinitePixels(pixels);
   if (finite.length === 0) return { z1: 0, z2: 1 };
 
@@ -335,21 +340,30 @@ export function computeZScale(
     vmax = Math.min(vmax, median + (npix - centerPixel) * slope);
   }
 
+  let result: { z1: number; z2: number };
   if (!Number.isFinite(vmin) || !Number.isFinite(vmax) || vmin === vmax) {
-    return { z1: samples[0], z2: samples[npix - 1] };
+    result = { z1: samples[0], z2: samples[npix - 1] };
+  } else {
+    result = { z1: Math.min(vmin, vmax), z2: Math.max(vmin, vmax) };
   }
-  return { z1: Math.min(vmin, vmax), z2: Math.max(vmin, vmax) };
+  zscaleCache.set(pixels, result);
+  return result;
 }
 
 /**
  * Percentile clipping
  * 返回指定百分位对应的像素值作为 black/white point
  */
+const percentileCache = new WeakMap<Float32Array, { z1: number; z2: number }>();
+
 export function computePercentile(
   pixels: Float32Array,
   lowPercentile: number = 1,
   highPercentile: number = 99,
 ): { z1: number; z2: number } {
+  const cached = percentileCache.get(pixels);
+  if (cached) return cached;
+
   const finite = collectFinitePixels(pixels);
   if (finite.length === 0) return { z1: 0, z2: 1 };
 
@@ -366,10 +380,12 @@ export function computePercentile(
   }
 
   values.sort((a, b) => a - b);
-  return {
+  const result = {
     z1: percentileFromSorted(values, p1),
     z2: percentileFromSorted(values, p2),
   };
+  percentileCache.set(pixels, result);
+  return result;
 }
 
 /**
@@ -530,10 +546,14 @@ export function stackAverage(frames: Float32Array[]): Float32Array {
 
   for (let i = 0; i < n; i++) {
     let sum = 0;
+    let count = 0;
     for (const frame of frames) {
-      sum += frame[i];
+      const value = frame[i];
+      if (!Number.isFinite(value)) continue;
+      sum += value;
+      count++;
     }
-    result[i] = sum / frames.length;
+    result[i] = count > 0 ? sum / count : Number.NaN;
   }
   return result;
 }
@@ -547,13 +567,19 @@ export function stackMedian(frames: Float32Array[]): Float32Array {
   const fCount = frames.length;
   const result = new Float32Array(n);
   const vals = new Float32Array(fCount);
-  const mid = Math.floor(fCount / 2);
 
   for (let i = 0; i < n; i++) {
+    let count = 0;
     for (let f = 0; f < fCount; f++) {
-      vals[f] = frames[f][i];
+      const value = frames[f][i];
+      if (!Number.isFinite(value)) continue;
+      vals[count++] = value;
     }
-    result[i] = quickSelect(vals, 0, fCount - 1, mid);
+    if (count === 0) {
+      result[i] = Number.NaN;
+      continue;
+    }
+    result[i] = quickSelect(vals, 0, count - 1, Math.floor(count / 2));
   }
   return result;
 }
@@ -570,21 +596,32 @@ export function stackSigmaClip(frames: Float32Array[], sigma: number = 2.5): Flo
   const mask = new Uint8Array(fCount);
 
   for (let i = 0; i < n; i++) {
+    let validCount = 0;
     for (let f = 0; f < fCount; f++) {
-      vals[f] = frames[f][i];
+      const value = frames[f][i];
+      if (!Number.isFinite(value)) continue;
+      vals[validCount++] = value;
     }
-    mask.fill(1);
-    let count = fCount;
+    if (validCount === 0) {
+      result[i] = Number.NaN;
+      continue;
+    }
+
+    mask.fill(0);
+    for (let f = 0; f < validCount; f++) {
+      mask[f] = 1;
+    }
+    let count = validCount;
 
     for (let iter = 0; iter < 3; iter++) {
       let sum = 0;
-      for (let f = 0; f < fCount; f++) {
+      for (let f = 0; f < validCount; f++) {
         if (mask[f]) sum += vals[f];
       }
       const mean = sum / count;
 
       let sumSq = 0;
-      for (let f = 0; f < fCount; f++) {
+      for (let f = 0; f < validCount; f++) {
         if (mask[f]) {
           const d = vals[f] - mean;
           sumSq += d * d;
@@ -595,7 +632,7 @@ export function stackSigmaClip(frames: Float32Array[], sigma: number = 2.5): Flo
 
       const threshold = sigma * std;
       let newCount = 0;
-      for (let f = 0; f < fCount; f++) {
+      for (let f = 0; f < validCount; f++) {
         if (mask[f]) {
           if (Math.abs(vals[f] - mean) > threshold) {
             mask[f] = 0;
@@ -605,8 +642,11 @@ export function stackSigmaClip(frames: Float32Array[], sigma: number = 2.5): Flo
         }
       }
       if (newCount === 0) {
-        mask.fill(1);
-        count = fCount;
+        mask.fill(0);
+        for (let f = 0; f < validCount; f++) {
+          mask[f] = 1;
+        }
+        count = validCount;
         break;
       }
       if (newCount === count) break;
@@ -614,10 +654,10 @@ export function stackSigmaClip(frames: Float32Array[], sigma: number = 2.5): Flo
     }
 
     let sum = 0;
-    for (let f = 0; f < fCount; f++) {
+    for (let f = 0; f < validCount; f++) {
       if (mask[f]) sum += vals[f];
     }
-    result[i] = sum / count;
+    result[i] = count > 0 ? sum / count : Number.NaN;
   }
   return result;
 }
@@ -629,14 +669,17 @@ export function stackMin(frames: Float32Array[]): Float32Array {
   if (frames.length === 0) return new Float32Array(0);
   const n = frames[0].length;
   const result = new Float32Array(n);
-  result.set(frames[0]);
 
-  for (let f = 1; f < frames.length; f++) {
-    const frame = frames[f];
-    for (let i = 0; i < n; i++) {
-      if (frame[i] < result[i]) result[i] = frame[i];
+  for (let i = 0; i < n; i++) {
+    let min = Infinity;
+    for (const frame of frames) {
+      const value = frame[i];
+      if (!Number.isFinite(value)) continue;
+      if (value < min) min = value;
     }
+    result[i] = min === Infinity ? Number.NaN : min;
   }
+
   return result;
 }
 
@@ -647,14 +690,17 @@ export function stackMax(frames: Float32Array[]): Float32Array {
   if (frames.length === 0) return new Float32Array(0);
   const n = frames[0].length;
   const result = new Float32Array(n);
-  result.set(frames[0]);
 
-  for (let f = 1; f < frames.length; f++) {
-    const frame = frames[f];
-    for (let i = 0; i < n; i++) {
-      if (frame[i] > result[i]) result[i] = frame[i];
+  for (let i = 0; i < n; i++) {
+    let max = -Infinity;
+    for (const frame of frames) {
+      const value = frame[i];
+      if (!Number.isFinite(value)) continue;
+      if (value > max) max = value;
     }
+    result[i] = max === -Infinity ? Number.NaN : max;
   }
+
   return result;
 }
 
@@ -673,27 +719,34 @@ export function stackWinsorizedSigmaClip(
   const vals = new Float32Array(fCount);
 
   for (let i = 0; i < n; i++) {
+    let validCount = 0;
     for (let f = 0; f < fCount; f++) {
-      vals[f] = frames[f][i];
+      const value = frames[f][i];
+      if (!Number.isFinite(value)) continue;
+      vals[validCount++] = value;
+    }
+    if (validCount === 0) {
+      result[i] = Number.NaN;
+      continue;
     }
 
     for (let iter = 0; iter < 3; iter++) {
       let sum = 0;
-      for (let f = 0; f < fCount; f++) sum += vals[f];
-      const mean = sum / fCount;
+      for (let f = 0; f < validCount; f++) sum += vals[f];
+      const mean = sum / validCount;
 
       let sumSq = 0;
-      for (let f = 0; f < fCount; f++) {
+      for (let f = 0; f < validCount; f++) {
         const d = vals[f] - mean;
         sumSq += d * d;
       }
-      const std = Math.sqrt(sumSq / fCount);
+      const std = Math.sqrt(sumSq / validCount);
       if (std === 0) break;
 
       const lo = mean - sigma * std;
       const hi = mean + sigma * std;
       let changed = false;
-      for (let f = 0; f < fCount; f++) {
+      for (let f = 0; f < validCount; f++) {
         if (vals[f] < lo) {
           vals[f] = lo;
           changed = true;
@@ -706,8 +759,8 @@ export function stackWinsorizedSigmaClip(
     }
 
     let sum = 0;
-    for (let f = 0; f < fCount; f++) sum += vals[f];
-    result[i] = sum / fCount;
+    for (let f = 0; f < validCount; f++) sum += vals[f];
+    result[i] = sum / validCount;
   }
   return result;
 }
@@ -721,17 +774,31 @@ export function stackWeightedAverage(frames: Float32Array[], weights: number[]):
   const n = frames[0].length;
   const fCount = frames.length;
   const result = new Float32Array(n);
+  const safeWeights = new Float32Array(fCount);
 
   let totalWeight = 0;
-  for (let f = 0; f < fCount; f++) totalWeight += weights[f];
+  for (let f = 0; f < fCount; f++) {
+    const weight = weights[f];
+    if (Number.isFinite(weight) && weight > 0) {
+      safeWeights[f] = weight;
+      totalWeight += weight;
+    } else {
+      safeWeights[f] = 0;
+    }
+  }
   if (totalWeight === 0) return stackAverage(frames);
 
   for (let i = 0; i < n; i++) {
-    let wsum = 0;
+    let weightedSum = 0;
+    let weightSum = 0;
     for (let f = 0; f < fCount; f++) {
-      wsum += frames[f][i] * weights[f];
+      const value = frames[f][i];
+      const weight = safeWeights[f];
+      if (!Number.isFinite(value) || weight <= 0) continue;
+      weightedSum += value * weight;
+      weightSum += weight;
     }
-    result[i] = wsum / totalWeight;
+    result[i] = weightSum > 0 ? weightedSum / weightSum : Number.NaN;
   }
   return result;
 }

@@ -360,6 +360,44 @@ describe("FilesScreen", () => {
     expect(screen.getByText("Batch Convert")).toBeTruthy();
   });
 
+  it("shows stack selected button in selection mode", () => {
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-1" })],
+      selectedIds: ["file-1"],
+      isSelectionMode: true,
+    });
+
+    render(<FilesScreen />);
+
+    expect(screen.getByTestId("files-go-to-stacking-button")).toBeTruthy();
+  });
+
+  it("routes to /stacking with selected ids from selection toolbar", () => {
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-1" }), makeFile({ id: "file-2" })],
+      selectedIds: ["file-1", "file-2"],
+      isSelectionMode: true,
+    });
+
+    render(<FilesScreen />);
+    fireEvent.press(screen.getByTestId("files-go-to-stacking-button"));
+
+    expect(mockPush).toHaveBeenCalledWith("/stacking?ids=file-1%2Cfile-2");
+  });
+
+  it("routes to /stacking when no files are selected", () => {
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-1" })],
+      selectedIds: [],
+      isSelectionMode: true,
+    });
+
+    render(<FilesScreen />);
+    fireEvent.press(screen.getByTestId("files-go-to-stacking-button"));
+
+    expect(mockPush).toHaveBeenCalledWith("/stacking");
+  });
+
   it("should select all visible files then invert selection", () => {
     useFitsStore.setState({
       files: [makeFile({ id: "file-1" }), makeFile({ id: "file-2" })],
@@ -369,7 +407,7 @@ describe("FilesScreen", () => {
 
     render(<FilesScreen />);
 
-    fireEvent.press(screen.getByTestId("files-select-all-visible-button"));
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__index-select-all"));
     expect(useFitsStore.getState().selectedIds).toEqual(["file-1", "file-2"]);
 
     fireEvent.press(screen.getByTestId("files-invert-selection-button"));
@@ -461,7 +499,7 @@ describe("FilesScreen", () => {
     });
 
     render(<FilesScreen />);
-    fireEvent.press(screen.getByTestId("files-open-trash-button"));
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__index-open-trash"));
     fireEvent.press(screen.getByTestId("trash-sheet-empty-button"));
 
     expect(Alert.alert).toHaveBeenCalled();
@@ -474,7 +512,7 @@ describe("FilesScreen", () => {
     mockFileManager.emptyTrash.mockReturnValueOnce({ deleted: 1, failed: 0 });
 
     render(<FilesScreen />);
-    fireEvent.press(screen.getByTestId("files-open-trash-button"));
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__index-open-trash"));
     fireEvent.press(screen.getByTestId("trash-sheet-empty-button"));
 
     expect(mockFileManager.emptyTrash).toHaveBeenCalled();

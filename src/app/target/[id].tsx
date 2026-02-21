@@ -17,6 +17,7 @@ import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ImageRatingSheet } from "../../components/targets/ImageRatingSheet";
 import { BestImageSelector } from "../../components/targets/BestImageSelector";
+import { TargetGroupAssignmentSheet } from "../../components/targets/TargetGroupAssignmentSheet";
 import {
   EquipmentCard,
   EquipmentRecommendations,
@@ -61,6 +62,10 @@ export default function TargetDetailScreen() {
     updateEquipment,
     allCategories,
     allTags,
+    groups,
+    addGroup,
+    getTargetGroupIds,
+    setTargetGroupMembership,
   } = useTargets();
   const target = targets.find((tgt) => tgt.id === id);
   const files = useFitsStore((s) => s.files);
@@ -80,6 +85,7 @@ export default function TargetDetailScreen() {
   const [showBestSelector, setShowBestSelector] = useState(false);
   const [showEquipmentSheet, setShowEquipmentSheet] = useState(false);
   const [showHistorySheet, setShowHistorySheet] = useState(false);
+  const [showGroupAssignmentSheet, setShowGroupAssignmentSheet] = useState(false);
 
   if (!target) {
     return (
@@ -105,6 +111,8 @@ export default function TargetDetailScreen() {
         percent: data.percent,
       }))
     : [];
+  const targetGroupIds = getTargetGroupIds(target.id);
+  const targetGroups = groups.filter((group) => targetGroupIds.includes(group.id));
   const controlGapClassName = targetActionControlMode === "checkbox" ? "gap-1.5" : "gap-2";
   const toolbarButtonSize = interactionUi.buttonSize;
   const chipSize = interactionUi.chipSize;
@@ -304,6 +312,16 @@ export default function TargetDetailScreen() {
               {t("targets.changeLog.title")}
             </Button.Label>
           </Button>
+          <Button
+            size={toolbarButtonSize}
+            variant="outline"
+            onPress={() => setShowGroupAssignmentSheet(true)}
+          >
+            <Ionicons name="folder-open-outline" size={compactIconSize} color={mutedColor} />
+            <Button.Label className={smallLabelClassName}>
+              {t("targets.groups.manageMembership")}
+            </Button.Label>
+          </Button>
         </View>
 
         <View className="flex-row gap-1.5 mb-4">
@@ -375,8 +393,26 @@ export default function TargetDetailScreen() {
           </View>
         )}
 
-        {(target.category || target.tags.length > 0) && (
+        {(targetGroups.length > 0 || target.category || target.tags.length > 0) && (
           <View className="mb-4">
+            {targetGroups.length > 0 && (
+              <View className="mb-2 flex-row items-start gap-2">
+                <Ionicons
+                  name="folder-open-outline"
+                  size={miniIconSize}
+                  color={mutedColor}
+                  style={{ marginTop: 2 }}
+                />
+                <Text className="w-12 text-xs text-muted">{t("targets.groups.title")}</Text>
+                <View className="flex-1 flex-row flex-wrap gap-1">
+                  {targetGroups.map((group) => (
+                    <Chip key={group.id} size={chipSize} variant="secondary">
+                      <Chip.Label className={tinyLabelClassName}>{group.name}</Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              </View>
+            )}
             {target.category && (
               <View className="mb-2 flex-row items-start gap-2">
                 <Ionicons
@@ -552,6 +588,23 @@ export default function TargetDetailScreen() {
         visible={showHistorySheet}
         target={target}
         onClose={() => setShowHistorySheet(false)}
+      />
+
+      <TargetGroupAssignmentSheet
+        visible={showGroupAssignmentSheet}
+        targetName={target.name}
+        groups={groups}
+        initialSelectedGroupIds={targetGroupIds}
+        onClose={() => setShowGroupAssignmentSheet(false)}
+        onSave={(groupIds) => setTargetGroupMembership(target.id, groupIds)}
+        onCreateGroup={(name, description, color) =>
+          addGroup({
+            name,
+            description,
+            color,
+            targetIds: [target.id],
+          })
+        }
       />
     </>
   );

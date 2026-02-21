@@ -24,7 +24,11 @@ import {
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { formatFileSize } from "../../lib/utils/fileManager";
-import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
+import {
+  formatVideoDuration,
+  formatVideoDurationWithMs,
+  formatVideoResolution,
+} from "../../lib/video/format";
 import { shareFile, type MediaExportFormat } from "../../lib/utils/imageExport";
 import { useMediaLibrary } from "../../hooks/useMediaLibrary";
 import { useVideoProcessing } from "../../hooks/useVideoProcessing";
@@ -32,6 +36,7 @@ import { VideoProcessingSheet } from "../../components/video/VideoProcessingShee
 import { TaskQueueSheet } from "../../components/video/TaskQueueSheet";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
 import { isMediaWorkspaceFile, routeForMedia } from "../../lib/media/routing";
+import { useI18n } from "../../i18n/useI18n";
 
 const RATE_OPTIONS = [0.5, 1, 1.5, 2];
 
@@ -66,6 +71,7 @@ function toMediaExportFormat(
 export default function VideoDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { t } = useI18n();
   const [, mutedColor] = useThemeColor(["success", "muted"]);
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
@@ -108,6 +114,8 @@ export default function VideoDetailScreen() {
   const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<string | null>(null);
   const [showProcessingSheet, setShowProcessingSheet] = useState(false);
   const [showQueueSheet, setShowQueueSheet] = useState(false);
+  const [abLoopA, setAbLoopA] = useState<number | null>(null);
+  const [abLoopB, setAbLoopB] = useState<number | null>(null);
 
   const videoViewRef = useRef<VideoView | null>(null);
   const isVideo = file?.mediaKind === "video" || file?.sourceType === "video";
@@ -179,6 +187,9 @@ export default function VideoDetailScreen() {
     });
     const subTime = player.addListener("timeUpdate", ({ currentTime }) => {
       setCurrentTimeSec(currentTime);
+      if (abLoopA !== null && abLoopB !== null && currentTime >= abLoopB) {
+        player.currentTime = abLoopA;
+      }
     });
     const subLoad = player.addListener(
       "sourceLoad",
@@ -253,7 +264,7 @@ export default function VideoDetailScreen() {
       subAudioTrack.remove();
       subSubtitleTrack.remove();
     };
-  }, [player]);
+  }, [player, abLoopA, abLoopB]);
 
   const fileTasks = useMemo(
     () => tasks.filter((task) => task.request.sourceId === file?.id),
@@ -299,6 +310,28 @@ export default function VideoDetailScreen() {
     player.loop = !player.loop;
   }, [player]);
 
+  const handleVolumeChange = useCallback(
+    (next: number) => {
+      player.volume = Math.max(0, Math.min(1, next));
+    },
+    [player],
+  );
+
+  const handleSetAbLoopA = useCallback(() => {
+    setAbLoopA(currentTimeSec);
+  }, [currentTimeSec]);
+
+  const handleSetAbLoopB = useCallback(() => {
+    if (abLoopA !== null && currentTimeSec > abLoopA) {
+      setAbLoopB(currentTimeSec);
+    }
+  }, [abLoopA, currentTimeSec]);
+
+  const handleClearAbLoop = useCallback(() => {
+    setAbLoopA(null);
+    setAbLoopB(null);
+  }, []);
+
   const handleSelectAudioTrack = useCallback(
     (trackId: string | null) => {
       if (!trackId) {
@@ -334,32 +367,32 @@ export default function VideoDetailScreen() {
     try {
       await videoViewRef.current?.enterFullscreen();
     } catch {
-      Alert.alert("Fullscreen is unavailable on this device.");
+      Alert.alert(t("settings.videoFullscreenError"));
     }
-  }, []);
+  }, [t]);
 
   const handlePip = useCallback(async () => {
     if (!pipSupported) {
-      Alert.alert("Picture in Picture is not supported.");
+      Alert.alert(t("settings.videoPipError"));
       return;
     }
     try {
       await videoViewRef.current?.startPictureInPicture();
     } catch {
-      Alert.alert("Unable to start Picture in Picture.");
+      Alert.alert(t("settings.videoPipError"));
     }
-  }, [pipSupported]);
+  }, [pipSupported, t]);
 
   const handleSaveToLibrary = useCallback(async () => {
     if (!file) return;
     const intent = isVideo ? "video" : "unknown";
     const uri = await saveToDevice(file.filepath, intent);
     if (uri) {
-      Alert.alert("Saved to media library.");
+      Alert.alert(t("settings.videoSavedToLibrary"));
       return;
     }
-    Alert.alert("Unable to save to media library.");
-  }, [file, isVideo, saveToDevice]);
+    Alert.alert(t("settings.videoSaveError"));
+  }, [file, isVideo, saveToDevice, t]);
 
   const handleShare = useCallback(async () => {
     if (!file) return;
@@ -372,17 +405,19 @@ export default function VideoDetailScreen() {
         filename: file.filename,
       });
     } catch {
-      Alert.alert("Unable to share this file.");
+      Alert.alert(t("settings.videoShareError"));
     }
-  }, [file, isAudio, isVideo]);
+  }, [file, isAudio, isVideo, t]);
 
   if (!file) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Ionicons name="alert-circle-outline" size={52} color={mutedColor} />
-        <Text className="mt-4 text-center text-sm text-muted">Media file not found.</Text>
+        <Text className="mt-4 text-center text-sm text-muted">
+          {t("settings.videoFileNotFound")}
+        </Text>
         <Button variant="outline" className="mt-4" onPress={() => router.back()}>
-          <Button.Label>Back</Button.Label>
+          <Button.Label>{t("settings.videoBack")}</Button.Label>
         </Button>
       </View>
     );
@@ -393,10 +428,10 @@ export default function VideoDetailScreen() {
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Ionicons name="videocam-off-outline" size={52} color={mutedColor} />
         <Text className="mt-4 text-center text-sm text-muted">
-          Video features are disabled by current settings.
+          {t("settings.videoFeaturesDisabled")}
         </Text>
         <Button variant="outline" className="mt-4" onPress={() => router.back()}>
-          <Button.Label>Back</Button.Label>
+          <Button.Label>{t("settings.videoBack")}</Button.Label>
         </Button>
       </View>
     );
@@ -469,7 +504,7 @@ export default function VideoDetailScreen() {
                   {playerError ?? "Unable to play this media."}
                 </Text>
                 <Button size="sm" variant="outline" className="mt-3" onPress={handleRetryPlayback}>
-                  <Button.Label>Retry</Button.Label>
+                  <Button.Label>{t("settings.videoRetry")}</Button.Label>
                 </Button>
               </View>
             )}
@@ -523,7 +558,7 @@ export default function VideoDetailScreen() {
 
           <View className="mt-2 px-1">
             <SimpleSlider
-              label="Seek"
+              label={t("settings.videoSeek")}
               value={Math.max(0, Math.min(durationSec || 0, currentTimeSec))}
               min={0}
               max={Math.max(0.1, durationSec || 0)}
@@ -534,7 +569,7 @@ export default function VideoDetailScreen() {
 
           <View className="mt-2 flex-row items-center justify-between">
             <Text className="text-xs text-muted">
-              {formatVideoDuration(Math.round(currentTimeSec * 1000))}
+              {formatVideoDurationWithMs(Math.round(currentTimeSec * 1000))}
             </Text>
             <Text className="text-xs text-muted">
               {formatVideoDuration(Math.round(durationSec * 1000))}
@@ -544,17 +579,49 @@ export default function VideoDetailScreen() {
             <Text className="text-[10px] text-muted">Status: {playerStatus}</Text>
             <Text className="text-[10px] text-muted">Volume: {Math.round(volume * 100)}%</Text>
           </View>
+          <View className="mt-2 px-1">
+            <SimpleSlider
+              label={t("settings.videoVolume")}
+              value={volume}
+              min={0}
+              max={1}
+              step={0.05}
+              onValueChange={handleVolumeChange}
+            />
+          </View>
+          <View className="mt-2 flex-row items-center gap-1">
+            <Button
+              size="sm"
+              variant={abLoopA !== null ? "primary" : "outline"}
+              onPress={handleSetAbLoopA}
+            >
+              <Button.Label>A{abLoopA !== null ? ` ${abLoopA.toFixed(1)}s` : ""}</Button.Label>
+            </Button>
+            <Button
+              size="sm"
+              variant={abLoopB !== null ? "primary" : "outline"}
+              onPress={handleSetAbLoopB}
+              isDisabled={abLoopA === null}
+            >
+              <Button.Label>B{abLoopB !== null ? ` ${abLoopB.toFixed(1)}s` : ""}</Button.Label>
+            </Button>
+            {(abLoopA !== null || abLoopB !== null) && (
+              <Button size="sm" variant="outline" onPress={handleClearAbLoop}>
+                <Button.Label>Clear A-B</Button.Label>
+              </Button>
+            )}
+          </View>
         </Card.Body>
       </Card>
 
       <View className="mt-3 flex-row items-center gap-2">
         <Switch isSelected={player.loop} onSelectedChange={handleToggleLoop}>
           <Switch.Thumb />
-          <Text className="text-xs text-foreground">Loop</Text>
+          <Text className="text-xs text-foreground">{t("settings.videoLoop")}</Text>
         </Switch>
         <Switch isSelected={!isMuted} onSelectedChange={handleToggleMute}>
           <Switch.Thumb />
-          <Text className="text-xs text-foreground">Audio</Text>
+          <Text className="text-xs text-foreground">{t("settings.videoAudio")}</Text>
         </Switch>
       </View>
 
@@ -626,11 +693,11 @@ export default function VideoDetailScreen() {
       <View className="mt-3 flex-row items-center gap-2">
         <Button variant="outline" onPress={handleSaveToLibrary} isDisabled={isSaving}>
           <Ionicons name="download-outline" size={14} color={mutedColor} />
-          <Button.Label>Save</Button.Label>
+          <Button.Label>{t("settings.videoSave")}</Button.Label>
         </Button>
         <Button variant="outline" onPress={handleShare}>
           <Ionicons name="share-social-outline" size={14} color={mutedColor} />
-          <Button.Label>Share</Button.Label>
+          <Button.Label>{t("settings.videoShare")}</Button.Label>
         </Button>
         <Button
           variant="primary"
@@ -638,7 +705,7 @@ export default function VideoDetailScreen() {
           isDisabled={!videoProcessingEnabled || !isEngineAvailable || !isVideo}
         >
           <Ionicons name="build-outline" size={14} color="#fff" />
-          <Button.Label>Process</Button.Label>
+          <Button.Label>{t("settings.videoProcess")}</Button.Label>
         </Button>
         <Button
           testID="e2e-action-video__param_id-open-queue"
@@ -646,7 +713,7 @@ export default function VideoDetailScreen() {
           onPress={() => setShowQueueSheet(true)}
         >
           <Ionicons name="list-outline" size={14} color={mutedColor} />
-          <Button.Label>Queue</Button.Label>
+          <Button.Label>{t("settings.videoQueue")}</Button.Label>
         </Button>
       </View>
 
@@ -659,10 +726,10 @@ export default function VideoDetailScreen() {
         <Tabs.List>
           <Tabs.Indicator />
           <Tabs.Trigger value="info">
-            <Tabs.Label>Info</Tabs.Label>
+            <Tabs.Label>{t("settings.videoInfoTab")}</Tabs.Label>
           </Tabs.Trigger>
           <Tabs.Trigger value="tasks">
-            <Tabs.Label>Tasks</Tabs.Label>
+            <Tabs.Label>{t("settings.videoTasksTab")}</Tabs.Label>
           </Tabs.Trigger>
         </Tabs.List>
 
@@ -738,7 +805,7 @@ export default function VideoDetailScreen() {
                 <Card variant="secondary">
                   <Card.Body className="p-3">
                     <Text className="text-xs text-muted">
-                      Local FFmpeg adapter is unavailable:{" "}
+                      {t("settings.videoEngineUnavailable")}:{" "}
                       {engineCapabilities?.unavailableReason ?? "ffmpeg_executor_unavailable"}.
                     </Text>
                   </Card.Body>
@@ -747,7 +814,7 @@ export default function VideoDetailScreen() {
               {fileTasks.length === 0 && (
                 <Card variant="secondary">
                   <Card.Body className="p-3">
-                    <Text className="text-xs text-muted">No tasks for this media.</Text>
+                    <Text className="text-xs text-muted">{t("settings.videoNoTasks")}</Text>
                   </Card.Body>
                 </Card>
               )}
@@ -814,7 +881,7 @@ export default function VideoDetailScreen() {
         onSubmit={(request) => {
           const result = enqueueProcessingTask(request);
           if (!result.taskId) {
-            Alert.alert(result.errorMessage ?? "Unable to enqueue processing task.");
+            Alert.alert(result.errorMessage ?? t("settings.videoEngineUnavailable"));
             return;
           }
           setShowQueueSheet(true);

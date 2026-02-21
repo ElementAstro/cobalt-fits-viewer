@@ -8,9 +8,19 @@ interface EmptyStateProps {
   description?: string;
   actionLabel?: string;
   onAction?: () => void;
+  secondaryLabel?: string;
+  onSecondaryAction?: () => void;
 }
 
-export function EmptyState({ icon, title, description, actionLabel, onAction }: EmptyStateProps) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  actionLabel,
+  onAction,
+  secondaryLabel,
+  onSecondaryAction,
+}: EmptyStateProps) {
   const mutedColor = useThemeColor("muted");
 
   return (
@@ -23,6 +33,11 @@ export function EmptyState({ icon, title, description, actionLabel, onAction }: 
       {actionLabel && onAction && (
         <Button variant="outline" className="mt-4" onPress={onAction}>
           <Button.Label>{actionLabel}</Button.Label>
+        </Button>
+      )}
+      {secondaryLabel && onSecondaryAction && (
+        <Button variant="ghost" size="sm" className="mt-2" onPress={onSecondaryAction}>
+          <Button.Label>{secondaryLabel}</Button.Label>
         </Button>
       )}
     </View>

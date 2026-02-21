@@ -2,7 +2,10 @@
 - runFlow: ../common/bootstrap.yaml
 - assertVisible:
     id: e2e-screen-tabs__index
+- assertVisible: M42_Light_001.fits
 - tapOn:
-    id: files-enter-selection-mode-button
+    id: e2e-action-tabs__index-enter-selection
 - tapOn:
-    id: files-select-all-visible-button
+    id: e2e-action-tabs__index-select-all
+- assertVisible:
+    id: e2e-action-tabs__index-open-trash

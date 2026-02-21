@@ -1,6 +1,16 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useStacking } from "../useStacking";
 
+type StackResultLike = {
+  method: string;
+  frameCount: number;
+  calibrationWarnings: Array<{
+    code: string;
+    filename: string;
+    messageKey: string;
+  }>;
+};
+
 jest.mock("../../lib/utils/fileManager", () => ({
   readFileAsArrayBuffer: jest.fn(),
 }));
@@ -8,6 +18,7 @@ jest.mock("../../lib/fits/parser", () => ({
   loadScientificFitsFromBuffer: jest.fn(),
   getImagePixels: jest.fn(),
   getImageDimensions: jest.fn(),
+  getHeaderValue: jest.fn(),
 }));
 jest.mock("../../lib/utils/pixelMath", () => ({
   stackAverage: jest.fn(),
@@ -26,6 +37,33 @@ jest.mock("../../lib/stacking/calibration", () => ({
   calibrateFrame: jest.fn((p: Float32Array) => p),
   createMasterDark: jest.fn((frames: Float32Array[]) => frames[0]),
   createMasterFlat: jest.fn((frames: Float32Array[]) => frames[0]),
+  computeMedianExposure: jest.fn((values: Array<number | null>) => {
+    const valid = values.filter((value) => typeof value === "number" && value > 0) as number[];
+    if (valid.length === 0) return null;
+    valid.sort((a, b) => a - b);
+    return valid[Math.floor(valid.length / 2)];
+  }),
+  scaleFrameByExposure: jest.fn((frame: Float32Array, from: number | null, to: number | null) => {
+    const validFrom = typeof from === "number" && Number.isFinite(from) && from > 0;
+    const validTo = typeof to === "number" && Number.isFinite(to) && to > 0;
+    if (!validFrom || !validTo) {
+      return {
+        pixels: new Float32Array(frame),
+        scale: 1,
+        usedFallbackScale: true,
+      };
+    }
+    const scale = to / from;
+    const pixels = new Float32Array(frame.length);
+    for (let i = 0; i < frame.length; i++) {
+      pixels[i] = frame[i] * scale;
+    }
+    return {
+      pixels,
+      scale,
+      usedFallbackScale: false,
+    };
+  }),
 }));
 jest.mock("../../lib/stacking/alignment", () => ({
   alignFrameAsync: jest.fn(async (ref: Float32Array, cur: Float32Array) => ({
@@ -72,6 +110,7 @@ const parserLib = jest.requireMock("../../lib/fits/parser") as {
   loadScientificFitsFromBuffer: jest.Mock;
   getImagePixels: jest.Mock;
   getImageDimensions: jest.Mock;
+  getHeaderValue: jest.Mock;
 };
 const mathLib = jest.requireMock("../../lib/utils/pixelMath") as {
   stackAverage: jest.Mock;
@@ -89,6 +128,9 @@ const qualityLib = jest.requireMock("../../lib/stacking/frameQuality") as {
 const alignLib = jest.requireMock("../../lib/stacking/alignment") as {
   alignFrameAsync: jest.Mock;
 };
+const calibrationLib = jest.requireMock("../../lib/stacking/calibration") as {
+  scaleFrameByExposure: jest.Mock;
+};
 
 describe("useStacking", () => {
   beforeEach(() => {
@@ -96,6 +138,7 @@ describe("useStacking", () => {
     fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
     parserLib.loadScientificFitsFromBuffer.mockResolvedValue({ fits: true });
     parserLib.getImageDimensions.mockReturnValue({ width: 2, height: 2 });
+    parserLib.getHeaderValue.mockReturnValue(30);
     parserLib.getImagePixels
       .mockResolvedValueOnce(new Float32Array([1, 2, 3, 4]))
       .mockResolvedValueOnce(new Float32Array([5, 6, 7, 8]))
@@ -118,18 +161,26 @@ describe("useStacking", () => {
 
   it("stacks average successfully and sets result/progress", async () => {
     const { result } = renderHook(() => useStacking());
+    let stackResult: StackResultLike | null = null;
 
     await act(async () => {
-      await result.current.stackFiles(
+      stackResult = (await result.current.stackFiles(
         [
           { filepath: "/tmp/a.fits", filename: "a.fits" },
           { filepath: "/tmp/b.fits", filename: "b.fits" },
         ],
         "average",
-      );
+      )) as StackResultLike | null;
     });
 
     expect(mathLib.stackAverage).toHaveBeenCalled();
+    expect(stackResult).toEqual(
+      expect.objectContaining({
+        method: "average",
+        frameCount: 2,
+        calibrationWarnings: [],
+      }),
+    );
     expect(result.current.result).toEqual(
       expect.objectContaining({
         method: "average",
@@ -162,6 +213,55 @@ describe("useStacking", () => {
     });
 
     expect(result.current.error).toContain("Dimension mismatch");
+  });
+
+  it("generates EXPTIME warnings and keeps stacking running with scale=1 fallback", async () => {
+    parserLib.getHeaderValue
+      .mockReset()
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(30)
+      .mockReturnValueOnce(null)
+      .mockReturnValueOnce(60);
+    parserLib.getImagePixels
+      .mockReset()
+      .mockResolvedValueOnce(new Float32Array([1, 1, 1, 1]))
+      .mockResolvedValueOnce(new Float32Array([2, 2, 2, 2]))
+      .mockResolvedValueOnce(new Float32Array([5, 6, 7, 8]))
+      .mockResolvedValueOnce(new Float32Array([9, 10, 11, 12]));
+
+    const { result } = renderHook(() => useStacking());
+    let stackResult: StackResultLike | null = null;
+
+    await act(async () => {
+      stackResult = (await result.current.stackFiles({
+        files: [
+          { filepath: "/tmp/light-a.fits", filename: "light-a.fits" },
+          { filepath: "/tmp/light-b.fits", filename: "light-b.fits" },
+        ],
+        method: "average",
+        calibration: {
+          darkFilepaths: ["/tmp/dark-a.fits", "/tmp/dark-b.fits"],
+        },
+      })) as StackResultLike | null;
+    });
+
+    expect(stackResult).not.toBeNull();
+    expect((stackResult as unknown as StackResultLike).calibrationWarnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: "missing-dark-exptime",
+          filename: "dark-a.fits",
+          messageKey: "editor.missingDarkExposureWarning",
+        }),
+        expect.objectContaining({
+          code: "missing-light-exptime",
+          filename: "light-a.fits",
+          messageKey: "editor.missingLightExposureWarning",
+        }),
+      ]),
+    );
+    expect(calibrationLib.scaleFrameByExposure).toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
   });
 
   it("runs weighted/quality/alignment branches and supports cancel/reset", async () => {

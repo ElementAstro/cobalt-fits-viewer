@@ -3,7 +3,15 @@
 - openLink: cobalt://settings/observation
 - assertVisible:
     id: e2e-screen-settings__observation
+- assertVisible:
+    id: e2e-action-settings__observation-open-target-sort-by
+- assertVisible:
+    id: e2e-action-settings__observation-open-session-gap
 - tapOn:
     id: e2e-action-settings__observation-open-target-sort-by
+- back
 - tapOn:
     id: e2e-action-settings__observation-open-session-gap
+- back
+- assertVisible:
+    id: e2e-screen-settings__observation

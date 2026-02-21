@@ -1,0 +1,30 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+# Journey: Sessions list → Session detail → Edit → Back
+# Verifies the session browsing and editing workflow
+
+- runFlow: ../common/bootstrap.yaml
+
+# Start at sessions tab
+- openLink: cobalt://sessions
+- assertVisible:
+    id: e2e-screen-tabs__sessions
+- assertVisible: E2E seeded session
+
+# Open session detail
+- tapOn: E2E seeded session
+- assertVisible:
+    id: e2e-screen-session__param_id
+- assertVisible: E2E seeded session
+
+# Open edit sheet and dismiss
+- tapOn:
+    id: e2e-action-session__param_id-open-edit
+- back
+
+# Go back to sessions list
+- tapOn:
+    id: e2e-action-session__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__sessions
+- assertVisible: E2E seeded session

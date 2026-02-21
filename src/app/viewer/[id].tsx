@@ -1,8 +1,8 @@
-import { View, Text, Alert, ScrollView, StatusBar } from "react-native";
+import { View, Text, ScrollView, StatusBar } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Alert as HAlert, Button, Skeleton, useThemeColor } from "heroui-native";
+import { Alert as HAlert, Button, Skeleton, useThemeColor, useToast } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
@@ -150,6 +150,7 @@ export default function ViewerDetailScreen() {
   const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
   const viewerApplyEditorRecipe = useSettingsStore((s) => s.viewerApplyEditorRecipe);
   const haptics = useHapticFeedback();
+  const { toast } = useToast();
   const activeViewerRecipe = useMemo(() => {
     if (!viewerApplyEditorRecipe || !file?.editorRecipe) return null;
     return normalizeProcessingPipelineSnapshot(
@@ -279,9 +280,11 @@ export default function ViewerDetailScreen() {
   const closeExportDialog = useCallback(() => setShowExport(false), []);
   const {
     isExporting,
+    exportPhase,
     handleExport,
     handleShare,
     handleSaveToDevice,
+    handleCopyToClipboard,
     handlePrint,
     handlePrintToPdf,
   } = useViewerExport({
@@ -318,13 +321,13 @@ export default function ViewerDetailScreen() {
 
   const handleSolveThis = useCallback(() => {
     if (!astrometryConfig.apiKey) {
-      Alert.alert(t("common.error"), t("astrometry.noApiKey"));
+      toast.show({ variant: "danger", label: t("astrometry.noApiKey") });
       return;
     }
     if (!id) return;
     astrometrySubmit(id);
     haptics.notify();
-  }, [astrometryConfig.apiKey, id, astrometrySubmit, haptics, t]);
+  }, [astrometryConfig.apiKey, id, astrometrySubmit, haptics, toast, t]);
 
   const handleViewerExportWCS = useCallback(async () => {
     if (!latestSolvedJob?.result || !file) return;
@@ -334,9 +337,9 @@ export default function ViewerDetailScreen() {
         haptics.notify();
       }
     } catch {
-      Alert.alert(t("common.error"), "Failed to export WCS.");
+      toast.show({ variant: "danger", label: t("viewer.exportFailed") });
     }
-  }, [latestSolvedJob, file, haptics, t]);
+  }, [latestSolvedJob, file, haptics, toast, t]);
 
   const navigateTo = useCallback(
     (fileId: string) => {
@@ -1181,7 +1184,15 @@ export default function ViewerDetailScreen() {
     >
       <LoadingOverlay
         visible={isFitsLoading || isProcessing || isExporting}
-        message={t("common.loading")}
+        message={
+          isExporting && exportPhase !== "idle"
+            ? t(
+                `viewer.exportPhase${exportPhase.charAt(0).toUpperCase() + exportPhase.slice(1)}` as Parameters<
+                  typeof t
+                >[0],
+              )
+            : t("common.loading")
+        }
       />
 
       {/* Top Bar - hidden in fullscreen */}
@@ -1247,6 +1258,7 @@ export default function ViewerDetailScreen() {
         onExport={handleExport}
         onShare={handleShare}
         onSaveToDevice={handleSaveToDevice}
+        onCopyToClipboard={handleCopyToClipboard}
         fitsScientificAvailable={fitsScientificAvailable}
         onPrint={handlePrint}
         onPrintToPdf={handlePrintToPdf}

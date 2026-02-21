@@ -35,19 +35,11 @@ function routeToFlowName(rel) {
 
   if (route.startsWith("(tabs)/")) {
     const rest = route.slice("(tabs)/".length);
-    const normalized = rest
-      .split("/")
-      .filter(Boolean)
-      .map(normalizeSegment)
-      .join("__");
+    const normalized = rest.split("/").filter(Boolean).map(normalizeSegment).join("__");
     return `tabs__${normalized}.yaml`;
   }
 
-  const normalized = route
-    .split("/")
-    .filter(Boolean)
-    .map(normalizeSegment)
-    .join("__");
+  const normalized = route.split("/").filter(Boolean).map(normalizeSegment).join("__");
 
   return `${normalized}.yaml`;
 }
@@ -66,9 +58,7 @@ for (const file of routeFiles) {
 
 const expectedFlowSet = new Set(expected.values());
 const actualFlowFiles = fs.existsSync(FLOWS_DIR)
-  ? fs
-      .readdirSync(FLOWS_DIR)
-      .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
+  ? fs.readdirSync(FLOWS_DIR).filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
   : [];
 const actualFlowSet = new Set(actualFlowFiles);
 

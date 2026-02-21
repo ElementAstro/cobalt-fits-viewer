@@ -3,6 +3,8 @@
 - openLink: cobalt://convert
 - assertVisible:
     id: e2e-screen-convert__index
+- assertVisible:
+    id: e2e-action-convert__index-back
 - tapOn:
     id: e2e-action-convert__index-select-file-fits-001
 - tapOn:
@@ -14,3 +16,5 @@
 - tapOn:
     id: e2e-action-convert__index-convert
 - assertVisible: Scientific FITS cannot embed annotations/watermark. Export switched to rendered mode.
+- assertVisible:
+    id: e2e-screen-convert__index

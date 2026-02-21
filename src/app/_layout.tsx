@@ -20,7 +20,7 @@ import { UpdateBanner } from "../components/common/UpdateBanner";
 import { AnimatedSplashScreen } from "../components/common/AnimatedSplashScreen";
 import { FontProvider } from "../components/common/FontProvider";
 import { useFontLoader } from "../hooks/useFontLoader";
-import { cleanOldExports } from "../lib/utils/imageExport";
+import { cleanExpiredExports } from "../lib/utils/imageExport";
 import { useAutoSolve } from "../hooks/useAutoSolve";
 import { useAutoBackup } from "../hooks/useAutoBackup";
 import { Logger, cleanLogExports, initLoggerRuntime } from "../lib/logger";
@@ -188,7 +188,7 @@ export default function RootLayout() {
   const [e2eReady, setE2eReady] = useState(!e2eMode);
 
   useEffect(() => {
-    cleanOldExports();
+    cleanExpiredExports();
     cleanLogExports();
     void initLoggerRuntime();
   }, []);

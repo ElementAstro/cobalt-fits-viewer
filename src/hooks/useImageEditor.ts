@@ -14,6 +14,7 @@ import type {
   StretchType,
 } from "../lib/fits/types";
 import { executeProcessingPipeline } from "../lib/processing/executor";
+import { fitsToRGBA } from "../lib/converter/formatConverter";
 import { normalizeProcessingPipelineSnapshot } from "../lib/processing/recipe";
 import { getProcessingOperation } from "../lib/processing/registry";
 import type { ImageEditOperation } from "../lib/utils/imageOperations";
@@ -28,6 +29,7 @@ interface ImageState {
 interface EditorState {
   current: ImageState | null;
   rgbaData: Uint8ClampedArray | null;
+  originalRgbaData: Uint8ClampedArray | null;
   recipe: ProcessingPipelineSnapshot | null;
   isProcessing: boolean;
   error: string | null;
@@ -109,6 +111,7 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
   onOperationRef.current = options.onOperation;
   const [current, setCurrent] = useState<ImageState | null>(null);
   const [rgbaData, setRgbaData] = useState<Uint8ClampedArray | null>(null);
+  const [originalRgbaData, setOriginalRgbaData] = useState<Uint8ClampedArray | null>(null);
   const [recipe, setRecipe] = useState<ProcessingPipelineSnapshot | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +119,8 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
   const historyRef = useRef<ProcessingPipelineSnapshot[]>([]);
   const historyIndexRef = useRef(-1);
   const originalRef = useRef<ImageState | null>(null);
+  const intermediatesRef = useRef<{ pixels: Float32Array; width: number; height: number }[]>([]);
+  const lastRecipeScientificCountRef = useRef(0);
 
   const [historyLength, setHistoryLength] = useState(0);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -185,6 +190,16 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
       pendingTask.current = InteractionManager.runAfterInteractions(() => {
         try {
           const normalized = normalizeProcessingPipelineSnapshot(nextRecipe, profileRef.current);
+          const prevCount = lastRecipeScientificCountRef.current;
+          const nextCount = normalized.scientificNodes.length;
+          const cachedIntermediates = intermediatesRef.current;
+          const canReuse =
+            opts?.pushHistory && nextCount > prevCount && cachedIntermediates.length >= prevCount;
+          const startNodeIndex = canReuse ? prevCount : 0;
+          const previousIntermediates = canReuse
+            ? cachedIntermediates.slice(0, prevCount)
+            : undefined;
+
           const result = executeProcessingPipeline({
             input: original,
             snapshot: normalized,
@@ -196,8 +211,14 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
               gamma: 1,
               profile: normalized.profile,
             },
-            options: { mode: "full" },
+            options: {
+              mode: "full",
+              startNodeIndex,
+              previousIntermediates,
+            },
           });
+          intermediatesRef.current = result.scientificIntermediates ?? [];
+          lastRecipeScientificCountRef.current = nextCount;
           setCurrent(result.scientificOutput);
           setRgbaData(result.colorOutput.rgbaData);
           setRecipe(normalized);
@@ -242,8 +263,20 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
       initialRecipe?: ProcessingPipelineSnapshot | null,
     ) => {
       originalRef.current = { pixels, width, height };
+      intermediatesRef.current = [];
+      lastRecipeScientificCountRef.current = 0;
       stretchRef.current = stretch;
       colormapRef.current = colormap;
+      setOriginalRgbaData(
+        fitsToRGBA(pixels, width, height, {
+          stretch,
+          colormap,
+          blackPoint: 0,
+          whitePoint: 1,
+          gamma: 1,
+          profile: profileRef.current,
+        }),
+      );
 
       const normalized = normalizeProcessingPipelineSnapshot(initialRecipe, profileRef.current);
       profileRef.current = normalized.profile;
@@ -301,6 +334,8 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     setHistoryIndex(newIdx);
     const target = historyRef.current[newIdx];
     if (!target) return;
+    intermediatesRef.current = [];
+    lastRecipeScientificCountRef.current = 0;
     queueOperationEvent(
       "undo",
       undefined,
@@ -321,6 +356,8 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     setHistoryIndex(newIdx);
     const target = historyRef.current[newIdx];
     if (!target) return;
+    intermediatesRef.current = [];
+    lastRecipeScientificCountRef.current = 0;
     queueOperationEvent(
       "redo",
       undefined,
@@ -355,9 +392,14 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     [executeRecipe, options, recipe],
   );
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   const state: EditorState = {
     current,
     rgbaData,
+    originalRgbaData,
     recipe,
     isProcessing,
     error,
@@ -375,5 +417,6 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     redo,
     updateDisplay,
     setProfile,
+    clearError,
   };
 }

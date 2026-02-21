@@ -8,7 +8,11 @@ export type VideoProcessingTag =
   | "merge"
   | "extract-audio"
   | "mute"
-  | "cover";
+  | "cover"
+  | "rotate"
+  | "speed"
+  | "watermark"
+  | "gif";
 
 export type VideoProfile = "compatibility" | "balanced" | "quality";
 export type VideoTargetPreset = "1080p" | "720p" | "custom";
@@ -57,6 +61,32 @@ export interface RotateNormalizeOptions {
   rotationDeg: 0 | 90 | 180 | 270;
 }
 
+export type WatermarkPosition =
+  | "top-left"
+  | "top-right"
+  | "bottom-left"
+  | "bottom-right"
+  | "center";
+
+export interface SpeedOptions {
+  factor: number;
+}
+
+export interface WatermarkOptions {
+  text: string;
+  position: WatermarkPosition;
+  fontSize?: number;
+  fontColor?: string;
+  opacity?: number;
+}
+
+export interface GifOptions {
+  startMs: number;
+  durationMs: number;
+  width?: number;
+  fps?: number;
+}
+
 export interface VideoProcessingRequest {
   sourceId: string;
   sourceFilename: string;
@@ -75,6 +105,9 @@ export interface VideoProcessingRequest {
   extractAudio?: ExtractAudioOptions;
   cover?: CoverOptions;
   rotateNormalize?: RotateNormalizeOptions;
+  speed?: SpeedOptions;
+  watermark?: WatermarkOptions;
+  gif?: GifOptions;
 }
 
 export interface VideoProcessingProgress {

@@ -8,7 +8,12 @@ import { Ionicons as Icons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { Target } from "../../lib/fits/types";
-import type { DuplicateGroup, DuplicateDetectionResult } from "../../lib/targets/duplicateDetector";
+import {
+  selectPrimaryDuplicateTarget,
+  sortDuplicateTargetsByMergePriority,
+  type DuplicateGroup,
+  type DuplicateDetectionResult,
+} from "../../lib/targets/duplicateDetector";
 
 interface DuplicateMergeSheetProps {
   visible: boolean;
@@ -74,6 +79,11 @@ export function DuplicateMergeSheet({
             <Text className={`text-sm ${isPrimary ? "font-semibold" : ""} text-foreground`}>
               {target.name}
             </Text>
+            {isPrimary && (
+              <Chip size="sm" variant="secondary">
+                <Chip.Label className="text-[9px]">{t("targets.search.primaryTarget")}</Chip.Label>
+              </Chip>
+            )}
           </View>
           <View className="flex-row items-center gap-3 mt-1">
             <Text className="text-[10px] text-muted">
@@ -182,39 +192,48 @@ export function DuplicateMergeSheet({
                   </View>
                 ) : (
                   <View className="gap-3">
-                    {detectionResult.groups.map((group) => (
-                      <Card key={group.id} variant="secondary">
-                        <Card.Body className="p-3">
-                          {/* 组头部 */}
-                          <View className="flex-row items-center justify-between mb-2">
-                            <View className="flex-row items-center gap-2">
-                              <View
-                                className="h-2 w-2 rounded-full"
-                                style={{ backgroundColor: getConfidenceColor(group.confidence) }}
-                              />
-                              <Text className="text-xs text-muted">
-                                {getMatchReasonLabel(group.matchReason)}
-                              </Text>
-                              <Chip size="sm" variant="secondary">
-                                <Chip.Label className="text-[9px]">{group.confidence}</Chip.Label>
-                              </Chip>
+                    {detectionResult.groups.map((group) => {
+                      const sortedTargets = sortDuplicateTargetsByMergePriority(group.targets);
+                      const primaryTarget = selectPrimaryDuplicateTarget(sortedTargets);
+                      const primaryTargetId = primaryTarget?.id;
+                      return (
+                        <Card key={group.id} variant="secondary">
+                          <Card.Body className="p-3">
+                            {/* 组头部 */}
+                            <View className="flex-row items-center justify-between mb-2">
+                              <View className="flex-row items-center gap-2">
+                                <View
+                                  className="h-2 w-2 rounded-full"
+                                  style={{ backgroundColor: getConfidenceColor(group.confidence) }}
+                                />
+                                <Text className="text-xs text-muted">
+                                  {getMatchReasonLabel(group.matchReason)}
+                                </Text>
+                                <Chip size="sm" variant="secondary">
+                                  <Chip.Label className="text-[9px]">{group.confidence}</Chip.Label>
+                                </Chip>
+                              </View>
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onPress={() => onMergeGroup(group)}
+                              >
+                                <Button.Label>{t("targets.search.mergeSelected")}</Button.Label>
+                              </Button>
                             </View>
-                            <Button size="sm" variant="primary" onPress={() => onMergeGroup(group)}>
-                              <Button.Label>{t("targets.search.mergeSelected")}</Button.Label>
-                            </Button>
-                          </View>
 
-                          <Separator className="mb-2" />
+                            <Separator className="mb-2" />
 
-                          {/* 目标列表 */}
-                          <View className="gap-2">
-                            {group.targets.map((target, index) =>
-                              renderTargetItem(target, index === 0),
-                            )}
-                          </View>
-                        </Card.Body>
-                      </Card>
-                    ))}
+                            {/* 目标列表 */}
+                            <View className="gap-2">
+                              {sortedTargets.map((target) =>
+                                renderTargetItem(target, target.id === primaryTargetId),
+                              )}
+                            </View>
+                          </Card.Body>
+                        </Card>
+                      );
+                    })}
                   </View>
                 )}
 

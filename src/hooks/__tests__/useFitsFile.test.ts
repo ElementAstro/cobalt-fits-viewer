@@ -185,6 +185,35 @@ describe("useFitsFile", () => {
     expect(result.current.sourceBuffer).toBeNull();
   });
 
+  it("clears previous loaded state when a subsequent load fails", async () => {
+    const { result } = renderHook(() => useFitsFile());
+
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+    });
+    expect(result.current.metadata).not.toBeNull();
+    expect(result.current.pixels).not.toBeNull();
+    expect(result.current.sourceBuffer).toBeInstanceOf(ArrayBuffer);
+
+    formatLib.detectPreferredSupportedImageFormat.mockReturnValueOnce(null);
+
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/b.bin", "b.bin", 20);
+    });
+
+    expect(result.current.error).toBe("Unsupported image format");
+    expect(result.current.fits).toBeNull();
+    expect(result.current.metadata).toBeNull();
+    expect(result.current.headers).toEqual([]);
+    expect(result.current.comments).toEqual([]);
+    expect(result.current.history).toEqual([]);
+    expect(result.current.pixels).toBeNull();
+    expect(result.current.rgbChannels).toBeNull();
+    expect(result.current.sourceBuffer).toBeNull();
+    expect(result.current.dimensions).toBeNull();
+    expect(result.current.hduList).toEqual([]);
+  });
+
   it("loads scientific wrappers (.xisf/.ser) through scientific parser", async () => {
     const { result } = renderHook(() => useFitsFile());
     const xisfFormat = { id: "xisf", sourceType: "fits" };

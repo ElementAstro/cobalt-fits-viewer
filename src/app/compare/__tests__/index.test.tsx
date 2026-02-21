@@ -6,6 +6,7 @@ const mockUseImageComparison = jest.fn();
 const mockUseFitsFile = jest.fn();
 const mockUseImageProcessing = jest.fn();
 const mockUpdateFile = jest.fn();
+const mockApplySettingsPatch = jest.fn();
 
 const mockFiles = [
   {
@@ -32,6 +33,31 @@ const mockFiles = [
   },
 ];
 
+const mockSettingsState: Record<string, unknown> = {
+  defaultStretch: "asinh",
+  defaultColormap: "grayscale",
+  defaultBlackPoint: 0,
+  defaultWhitePoint: 1,
+  defaultGamma: 1,
+  defaultShowGrid: false,
+  defaultShowCrosshair: false,
+  defaultShowPixelInfo: true,
+  defaultShowMinimap: false,
+  compareDefaultMode: "blink",
+  compareBlinkSpeed: 1.5,
+  compareSplitPosition: 0.5,
+  imageProcessingDebounce: 0,
+  useHighQualityPreview: true,
+  canvasMinScale: 0.5,
+  canvasMaxScale: 10,
+  canvasDoubleTapScale: 3,
+  canvasPinchSensitivity: 1,
+  canvasPinchOverzoomFactor: 1.25,
+  canvasPanRubberBandFactor: 0.55,
+  canvasWheelZoomSensitivity: 0.0015,
+  applySettingsPatch: mockApplySettingsPatch,
+};
+
 jest.mock("expo-router", () => ({
   useRouter: () => ({
     back: jest.fn(),
@@ -57,25 +83,7 @@ jest.mock("../../../stores/useFitsStore", () => ({
 
 jest.mock("../../../stores/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      defaultStretch: "asinh",
-      defaultColormap: "grayscale",
-      defaultBlackPoint: 0,
-      defaultWhitePoint: 1,
-      defaultGamma: 1,
-      defaultShowGrid: false,
-      defaultShowCrosshair: false,
-      defaultShowPixelInfo: true,
-      defaultShowMinimap: false,
-      imageProcessingDebounce: 0,
-      canvasMinScale: 0.5,
-      canvasMaxScale: 10,
-      canvasDoubleTapScale: 3,
-      canvasPinchSensitivity: 1,
-      canvasPinchOverzoomFactor: 1.25,
-      canvasPanRubberBandFactor: 0.55,
-      canvasWheelZoomSensitivity: 0.0015,
-    }),
+    selector(mockSettingsState),
 }));
 
 jest.mock("../../../hooks/useFitsFile", () => ({
@@ -130,7 +138,8 @@ jest.mock("../../../components/fits/Minimap", () => ({
 }));
 
 jest.mock("../../../components/fits/PixelInspector", () => ({
-  PixelInspector: () => {
+  PixelInspector: ({ visible }: { visible: boolean }) => {
+    if (!visible) return null;
     const ReactLocal = require("react");
     const { View } = require("react-native");
     return ReactLocal.createElement(View, { testID: "pixel-inspector" });
@@ -138,12 +147,58 @@ jest.mock("../../../components/fits/PixelInspector", () => ({
 }));
 
 jest.mock("../../../components/common/SimpleSlider", () => ({
-  SimpleSlider: ({ label }: { label: string }) => {
+  SimpleSlider: ({
+    label,
+    value,
+    onValueChange,
+  }: {
+    label: string;
+    value: number;
+    onValueChange: (value: number) => void;
+  }) => {
     const ReactLocal = require("react");
-    const { Text } = require("react-native");
-    return ReactLocal.createElement(Text, { testID: `slider-${label}` }, label);
+    const { Text, Pressable } = require("react-native");
+    return ReactLocal.createElement(
+      Pressable,
+      {
+        testID: `slider-${label}`,
+        onPress: () => {
+          if (label === "compare.blinkLabel") {
+            onValueChange(6);
+            return;
+          }
+          if (label === "compare.splitLabel") {
+            onValueChange(0.95);
+            return;
+          }
+          onValueChange(value);
+        },
+      },
+      ReactLocal.createElement(Text, null, label),
+    );
   },
 }));
+
+jest.mock("react-native-gesture-handler", () => {
+  const ReactLocal = require("react");
+  const { View } = require("react-native");
+  return {
+    GestureDetector: ({ children }: { children: React.ReactNode }) =>
+      ReactLocal.createElement(View, null, children),
+    Gesture: {
+      Pan: () => {
+        const chain = {
+          enabled: () => chain,
+          runOnJS: () => chain,
+          onStart: () => chain,
+          onUpdate: () => chain,
+          onEnd: () => chain,
+        };
+        return chain;
+      },
+    },
+  };
+});
 
 jest.mock("heroui-native", () => {
   const ReactLocal = require("react");
@@ -199,6 +254,13 @@ describe("CompareScreen", () => {
   ) as FitsCanvasMockModule;
 
   beforeEach(() => {
+    Object.assign(mockSettingsState, {
+      defaultShowPixelInfo: true,
+      compareDefaultMode: "blink",
+      compareBlinkSpeed: 1.5,
+      compareSplitPosition: 0.5,
+    });
+    mockApplySettingsPatch.mockReset();
     fitsCanvasMock.__resetCanvasEntries();
     mockUseLocalSearchParams.mockReturnValue({ ids: "a,b" });
     mockUseFitsFile.mockImplementation(() => ({
@@ -235,7 +297,12 @@ describe("CompareScreen", () => {
 
   it("passes legacy /compare?ids query into comparison hook", () => {
     render(<CompareScreen />);
-    expect(mockUseImageComparison).toHaveBeenCalledWith({ initialIds: ["a", "b"] });
+    expect(mockUseImageComparison).toHaveBeenCalledWith({
+      initialIds: ["a", "b"],
+      initialMode: "blink",
+      initialBlinkSpeed: 1.5,
+      initialSplitPosition: 0.5,
+    });
   });
 
   it("passes zoom limits and gestureConfig into FitsCanvas", () => {
@@ -256,24 +323,48 @@ describe("CompareScreen", () => {
   it("renders blink/side-by-side/split branches", () => {
     const { rerender } = render(<CompareScreen />);
     expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(1);
-    expect(screen.getByTestId("slider-Blink")).toBeTruthy();
+    expect(screen.getByTestId("slider-compare.blinkLabel")).toBeTruthy();
 
     comparisonState = { ...comparisonState, mode: "side-by-side" };
     rerender(<CompareScreen />);
     expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(2);
-    expect(screen.queryByTestId("slider-Split")).toBeNull();
+    expect(screen.queryByTestId("slider-compare.splitLabel")).toBeNull();
 
     comparisonState = { ...comparisonState, mode: "split" };
     rerender(<CompareScreen />);
     expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(2);
-    expect(screen.getByTestId("slider-Split")).toBeTruthy();
+    expect(screen.getByTestId("slider-compare.splitLabel")).toBeTruthy();
   });
 
   it("toggles linked state in controls", () => {
     render(<CompareScreen />);
-    expect(screen.getByText("Linked")).toBeTruthy();
-    fireEvent.press(screen.getByText("Linked"));
-    expect(screen.getByText("Unlinked")).toBeTruthy();
+    expect(screen.getByText("compare.linked")).toBeTruthy();
+    fireEvent.press(screen.getByText("compare.linked"));
+    expect(screen.getByText("compare.unlinked")).toBeTruthy();
+  });
+
+  it("persists compare mode/blink/split controls", () => {
+    const { rerender } = render(<CompareScreen />);
+
+    fireEvent.press(screen.getByText("compare.modeSplit"));
+    expect(comparisonState.setMode).toHaveBeenCalledWith("split");
+    expect(mockApplySettingsPatch).toHaveBeenCalledWith({ compareDefaultMode: "split" });
+
+    fireEvent.press(screen.getByTestId("slider-compare.blinkLabel"));
+    expect(comparisonState.setBlinkSpeed).toHaveBeenCalledWith(5);
+    expect(mockApplySettingsPatch).toHaveBeenCalledWith({ compareBlinkSpeed: 5 });
+
+    comparisonState = { ...comparisonState, mode: "split" };
+    rerender(<CompareScreen />);
+    fireEvent.press(screen.getByTestId("slider-compare.splitLabel"));
+    expect(comparisonState.setSplitPosition).toHaveBeenCalledWith(0.9);
+    expect(mockApplySettingsPatch).toHaveBeenCalledWith({ compareSplitPosition: 0.9 });
+  });
+
+  it("does not render pixel inspector when showPixelInfo is disabled", () => {
+    mockSettingsState.defaultShowPixelInfo = false;
+    render(<CompareScreen />);
+    expect(screen.queryByTestId("pixel-inspector")).toBeNull();
   });
 
   it("syncs transform to paired canvas when linked", async () => {
@@ -305,7 +396,7 @@ describe("CompareScreen", () => {
     render(<CompareScreen />);
     expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(2);
 
-    fireEvent.press(screen.getByText("Linked"));
+    fireEvent.press(screen.getByText("compare.linked"));
 
     const entries = fitsCanvasMock.__getCanvasEntries();
     const source = entries[entries.length - 2];
@@ -331,7 +422,7 @@ describe("CompareScreen", () => {
     render(<CompareScreen />);
     expect(screen.queryAllByTestId("fits-canvas")).toHaveLength(2);
 
-    fireEvent.press(screen.getByText("Linked"));
+    fireEvent.press(screen.getByText("compare.linked"));
 
     let entries = fitsCanvasMock.__getCanvasEntries();
     const source = entries[entries.length - 2];
@@ -349,7 +440,7 @@ describe("CompareScreen", () => {
     });
     expect(target.setTransform).not.toHaveBeenCalled();
 
-    fireEvent.press(screen.getByText("Unlinked"));
+    fireEvent.press(screen.getByText("compare.unlinked"));
 
     await waitFor(() => {
       entries = fitsCanvasMock.__getCanvasEntries();

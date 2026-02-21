@@ -5,9 +5,11 @@ import {
   Button,
   Card,
   Chip,
+  Input,
   PressableFeedback,
   Separator,
   Tabs,
+  TextField,
   useThemeColor,
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -19,6 +21,7 @@ import { useExport } from "../../hooks/useExport";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { FormatSelector } from "../../components/converter/FormatSelector";
 import { BatchConvertContent } from "../../components/converter/BatchConvertContent";
@@ -27,18 +30,18 @@ import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { formatFileSize } from "../../lib/utils/fileManager";
 import { formatBytes } from "../../lib/utils/format";
+import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";
 import {
   DEFAULT_FITS_TARGET_OPTIONS,
   DEFAULT_TIFF_TARGET_OPTIONS,
   type ExportFormat,
   type StretchType,
   type ColormapType,
-  type FitsCompression,
-  type FitsExportMode,
-  type FitsTargetOptions,
-  type TiffCompression,
+  type ProcessingAlgorithmProfile,
 } from "../../lib/fits/types";
 import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
+import { FitsExportOptions } from "../../components/common/FitsExportOptions";
+import { TiffExportOptions } from "../../components/common/TiffExportOptions";
 
 const STRETCH_OPTIONS: { key: StretchType; label: string }[] = [
   { key: "linear", label: "Linear" },
@@ -61,10 +64,10 @@ const COLORMAP_OPTIONS: { key: ColormapType; label: string }[] = [
 ];
 
 const DPI_OPTIONS = [72, 150, 300, 600];
-const FITS_BITPIX_PRESETS: Array<FitsTargetOptions["bitpix"]> = [8, 16, 32, -32, -64];
-const FITS_MODE_PRESETS: FitsExportMode[] = ["scientific", "rendered"];
-const FITS_COMPRESSION_PRESETS: FitsCompression[] = ["none", "gzip"];
-const TIFF_COMPRESSION_PRESETS: TiffCompression[] = ["lzw", "deflate", "none"];
+const PROFILE_PRESETS: Array<{ key: ProcessingAlgorithmProfile; labelKey: string }> = [
+  { key: "standard", labelKey: "settings.imageProcessingProfileStandard" },
+  { key: "legacy", labelKey: "settings.imageProcessingProfileLegacy" },
+];
 
 export default function ConvertScreen() {
   const router = useRouter();
@@ -77,7 +80,19 @@ export default function ConvertScreen() {
 
   const files = useFitsStore((s) => s.files);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
-  const selectedFile = files.find((f) => f.id === selectedFileId);
+  const convertibleFiles = useMemo(
+    () =>
+      files.filter((file) => {
+        if (file.mediaKind && file.mediaKind !== "image") return false;
+        if (file.sourceType === "video" || file.sourceType === "audio") return false;
+        return true;
+      }),
+    [files],
+  );
+  const selectedFile = useMemo(
+    () => convertibleFiles.find((file) => file.id === selectedFileId),
+    [convertibleFiles, selectedFileId],
+  );
   const astrometryJobs = useAstrometryStore((s) => s.jobs);
   const latestSolvedJob = useMemo(
     () =>
@@ -114,6 +129,14 @@ export default function ConvertScreen() {
     setActiveTab("batch");
   }, [params.ids, files]);
 
+  // If the selected file is no longer convertible (e.g. video/audio), clear selection to avoid
+  // exporting stale preview data from a previous file.
+  useEffect(() => {
+    if (!selectedFileId) return;
+    if (convertibleFiles.some((file) => file.id === selectedFileId)) return;
+    setSelectedFileId(null);
+  }, [selectedFileId, convertibleFiles]);
+
   const {
     currentOptions,
     setFormat,
@@ -138,11 +161,14 @@ export default function ConvertScreen() {
     sourceBuffer,
     dimensions,
     isLoading: isFitsLoading,
+    error: fitsError,
     loadFromPath,
     reset: resetFits,
   } = useFitsFile();
   const { rgbaData, processImage } = useImageProcessing();
   const { isExporting, exportImageDetailed } = useExport();
+  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
+  const effectiveProcessingProfile = currentOptions.profile ?? imageProcessingProfile;
 
   const exportSource = useMemo(
     () => ({
@@ -177,6 +203,36 @@ export default function ConvertScreen() {
   const showQuality = checkSupportsQuality(currentOptions.format);
   const bitDepths = checkBitDepths(currentOptions.format);
 
+  const clamp01 = useCallback((value: number) => Math.max(0, Math.min(1, value)), []);
+  const handleBlackPointChange = useCallback(
+    (value: number) => {
+      const next = Math.min(clamp01(value), Math.max(0, currentOptions.whitePoint - 0.01));
+      setOptions({ blackPoint: next });
+    },
+    [clamp01, currentOptions.whitePoint, setOptions],
+  );
+  const handleWhitePointChange = useCallback(
+    (value: number) => {
+      const next = Math.max(clamp01(value), Math.min(1, currentOptions.blackPoint + 0.01));
+      setOptions({ whitePoint: next });
+    },
+    [clamp01, currentOptions.blackPoint, setOptions],
+  );
+  const handleOutputBlackChange = useCallback(
+    (value: number) => {
+      const next = Math.min(clamp01(value), Math.max(0, currentOptions.outputWhite - 0.01));
+      setOptions({ outputBlack: next });
+    },
+    [clamp01, currentOptions.outputWhite, setOptions],
+  );
+  const handleOutputWhiteChange = useCallback(
+    (value: number) => {
+      const next = Math.max(clamp01(value), Math.min(1, currentOptions.outputBlack + 0.01));
+      setOptions({ outputWhite: next });
+    },
+    [clamp01, currentOptions.outputBlack, setOptions],
+  );
+
   // Load selected file
   useEffect(() => {
     if (selectedFile) {
@@ -186,6 +242,12 @@ export default function ConvertScreen() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFileId]);
+
+  // If loading fails, clear selection to avoid exporting stale RGBA data.
+  useEffect(() => {
+    if (!fitsError || !selectedFileId) return;
+    setSelectedFileId(null);
+  }, [fitsError, selectedFileId]);
 
   // Process image for preview when pixels or options change
   useEffect(() => {
@@ -205,6 +267,7 @@ export default function ConvertScreen() {
         currentOptions.contrast,
         currentOptions.mtfMidtone,
         currentOptions.curvePreset,
+        { profile: effectiveProcessingProfile },
       );
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -222,6 +285,8 @@ export default function ConvertScreen() {
     currentOptions.contrast,
     currentOptions.mtfMidtone,
     currentOptions.curvePreset,
+    currentOptions.profile,
+    imageProcessingProfile,
   ]);
 
   const estimatedSize = dimensions ? getEstimatedSize(dimensions.width, dimensions.height) : null;
@@ -324,10 +389,19 @@ export default function ConvertScreen() {
                     <Text className="text-xs text-muted mt-1">{t("common.noData")}</Text>
                   </Card.Body>
                 </Card>
+              ) : convertibleFiles.length === 0 ? (
+                <Card variant="secondary">
+                  <Card.Body className="items-center p-4">
+                    <Ionicons name="image-outline" size={24} color={mutedColor} />
+                    <Text className="text-xs text-muted mt-1">
+                      {t("converter.noConvertibleFiles")}
+                    </Text>
+                  </Card.Body>
+                </Card>
               ) : (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                   <View className="flex-row gap-2">
-                    {files.map((f) => (
+                    {convertibleFiles.map((f) => (
                       <PressableFeedback
                         key={f.id}
                         testID={
@@ -496,185 +570,120 @@ export default function ConvertScreen() {
                       </View>
 
                       {currentOptions.format === "fits" && (
-                        <View className="gap-3">
-                          <View>
-                            <Text className="mb-2 text-xs font-semibold text-muted">
-                              {t("converter.fitsMode")}
-                            </Text>
-                            <View className="flex-row gap-2">
-                              {FITS_MODE_PRESETS.map((mode) => (
-                                <Chip
-                                  key={mode}
-                                  testID={`e2e-action-convert__index-fits-mode-${mode}`}
-                                  size="sm"
-                                  variant={
-                                    (currentOptions.fits?.mode ??
-                                      DEFAULT_FITS_TARGET_OPTIONS.mode) === mode
-                                      ? "primary"
-                                      : "secondary"
-                                  }
-                                  onPress={() => {
-                                    if (mode === "scientific" && !fitsScientificAvailable) return;
-                                    setOptions({
-                                      fits: {
-                                        ...DEFAULT_FITS_TARGET_OPTIONS,
-                                        ...(currentOptions.fits ?? {}),
-                                        mode,
-                                      },
-                                    });
-                                  }}
-                                >
-                                  <Chip.Label className="text-[9px]">
-                                    {mode === "scientific"
-                                      ? t("converter.fitsModeScientific")
-                                      : t("converter.fitsModeRendered")}
-                                  </Chip.Label>
-                                </Chip>
-                              ))}
-                            </View>
-                            {!fitsScientificAvailable && (
-                              <Text className="mt-1 text-[10px] text-muted">
-                                {t("converter.fitsScientificUnavailable")}
-                              </Text>
-                            )}
-                          </View>
-
-                          <View>
-                            <Text className="mb-2 text-xs font-semibold text-muted">
-                              {t("converter.fitsCompression")}
-                            </Text>
-                            <View className="flex-row gap-2">
-                              {FITS_COMPRESSION_PRESETS.map((compression) => (
-                                <Chip
-                                  key={compression}
-                                  size="sm"
-                                  variant={
-                                    (currentOptions.fits?.compression ??
-                                      DEFAULT_FITS_TARGET_OPTIONS.compression) === compression
-                                      ? "primary"
-                                      : "secondary"
-                                  }
-                                  onPress={() =>
-                                    setOptions({
-                                      fits: {
-                                        ...DEFAULT_FITS_TARGET_OPTIONS,
-                                        ...(currentOptions.fits ?? {}),
-                                        compression,
-                                      },
-                                    })
-                                  }
-                                >
-                                  <Chip.Label className="text-[9px] uppercase">
-                                    {compression}
-                                  </Chip.Label>
-                                </Chip>
-                              ))}
-                            </View>
-                          </View>
-
-                          <View>
-                            <Text className="mb-2 text-xs font-semibold text-muted">
-                              {t("converter.bitpix")}
-                            </Text>
-                            <View className="flex-row flex-wrap gap-1.5">
-                              {FITS_BITPIX_PRESETS.map((bitpix) => (
-                                <Chip
-                                  key={bitpix}
-                                  size="sm"
-                                  variant={
-                                    (currentOptions.fits?.bitpix ??
-                                      DEFAULT_FITS_TARGET_OPTIONS.bitpix) === bitpix
-                                      ? "primary"
-                                      : "secondary"
-                                  }
-                                  onPress={() =>
-                                    setOptions({
-                                      fits: {
-                                        ...DEFAULT_FITS_TARGET_OPTIONS,
-                                        ...(currentOptions.fits ?? {}),
-                                        bitpix,
-                                      },
-                                    })
-                                  }
-                                >
-                                  <Chip.Label className="text-[9px]">{bitpix}</Chip.Label>
-                                </Chip>
-                              ))}
-                            </View>
-                          </View>
-                        </View>
+                        <FitsExportOptions
+                          fitsMode={currentOptions.fits?.mode ?? DEFAULT_FITS_TARGET_OPTIONS.mode}
+                          fitsCompression={
+                            currentOptions.fits?.compression ??
+                            DEFAULT_FITS_TARGET_OPTIONS.compression
+                          }
+                          fitsBitpix={
+                            currentOptions.fits?.bitpix ?? DEFAULT_FITS_TARGET_OPTIONS.bitpix
+                          }
+                          fitsColorLayout={
+                            currentOptions.fits?.colorLayout ??
+                            DEFAULT_FITS_TARGET_OPTIONS.colorLayout
+                          }
+                          fitsPreserveOriginalHeader={
+                            currentOptions.fits?.preserveOriginalHeader ??
+                            DEFAULT_FITS_TARGET_OPTIONS.preserveOriginalHeader
+                          }
+                          fitsPreserveWcs={
+                            currentOptions.fits?.preserveWcs ??
+                            DEFAULT_FITS_TARGET_OPTIONS.preserveWcs
+                          }
+                          fitsScientificAvailable={fitsScientificAvailable}
+                          fitsPreserveWcsDisabled={
+                            !(
+                              currentOptions.fits?.preserveOriginalHeader ??
+                              DEFAULT_FITS_TARGET_OPTIONS.preserveOriginalHeader
+                            )
+                          }
+                          onFitsModeChange={(mode) =>
+                            setOptions({
+                              fits: {
+                                ...DEFAULT_FITS_TARGET_OPTIONS,
+                                ...(currentOptions.fits ?? {}),
+                                mode,
+                              },
+                            })
+                          }
+                          onFitsCompressionChange={(compression) =>
+                            setOptions({
+                              fits: {
+                                ...DEFAULT_FITS_TARGET_OPTIONS,
+                                ...(currentOptions.fits ?? {}),
+                                compression,
+                              },
+                            })
+                          }
+                          onFitsBitpixChange={(bitpix) =>
+                            setOptions({
+                              fits: {
+                                ...DEFAULT_FITS_TARGET_OPTIONS,
+                                ...(currentOptions.fits ?? {}),
+                                bitpix,
+                              },
+                            })
+                          }
+                          onFitsColorLayoutChange={(colorLayout) =>
+                            setOptions({
+                              fits: {
+                                ...DEFAULT_FITS_TARGET_OPTIONS,
+                                ...(currentOptions.fits ?? {}),
+                                colorLayout,
+                              },
+                            })
+                          }
+                          onFitsPreserveOriginalHeaderChange={(preserveOriginalHeader) =>
+                            setOptions({
+                              fits: {
+                                ...DEFAULT_FITS_TARGET_OPTIONS,
+                                ...(currentOptions.fits ?? {}),
+                                preserveOriginalHeader,
+                                ...(preserveOriginalHeader ? {} : { preserveWcs: false }),
+                              },
+                            })
+                          }
+                          onFitsPreserveWcsChange={(preserveWcs) =>
+                            setOptions({
+                              fits: {
+                                ...DEFAULT_FITS_TARGET_OPTIONS,
+                                ...(currentOptions.fits ?? {}),
+                                preserveWcs,
+                              },
+                            })
+                          }
+                        />
                       )}
 
                       {currentOptions.format === "tiff" && (
-                        <View className="gap-3">
-                          <View>
-                            <Text className="mb-2 text-xs font-semibold text-muted">
-                              {t("converter.tiffCompression")}
-                            </Text>
-                            <View className="flex-row gap-2">
-                              {TIFF_COMPRESSION_PRESETS.map((compression) => (
-                                <Chip
-                                  key={compression}
-                                  size="sm"
-                                  variant={
-                                    (currentOptions.tiff?.compression ??
-                                      DEFAULT_TIFF_TARGET_OPTIONS.compression) === compression
-                                      ? "primary"
-                                      : "secondary"
-                                  }
-                                  onPress={() =>
-                                    setOptions({
-                                      tiff: {
-                                        ...DEFAULT_TIFF_TARGET_OPTIONS,
-                                        ...(currentOptions.tiff ?? {}),
-                                        compression,
-                                      },
-                                    })
-                                  }
-                                >
-                                  <Chip.Label className="text-[9px] uppercase">
-                                    {compression}
-                                  </Chip.Label>
-                                </Chip>
-                              ))}
-                            </View>
-                          </View>
-
-                          <View>
-                            <Text className="mb-2 text-xs font-semibold text-muted">
-                              {t("converter.multipage")}
-                            </Text>
-                            <View className="flex-row gap-2">
-                              {(["preserve", "firstFrame"] as const).map((multipage) => (
-                                <Chip
-                                  key={multipage}
-                                  size="sm"
-                                  variant={
-                                    (currentOptions.tiff?.multipage ??
-                                      DEFAULT_TIFF_TARGET_OPTIONS.multipage) === multipage
-                                      ? "primary"
-                                      : "secondary"
-                                  }
-                                  onPress={() =>
-                                    setOptions({
-                                      tiff: {
-                                        ...DEFAULT_TIFF_TARGET_OPTIONS,
-                                        ...(currentOptions.tiff ?? {}),
-                                        multipage,
-                                      },
-                                    })
-                                  }
-                                >
-                                  <Chip.Label className="text-[9px]">
-                                    {multipage === "preserve"
-                                      ? t("converter.multipagePreserve")
-                                      : t("converter.multipageFirstFrame")}
-                                  </Chip.Label>
-                                </Chip>
-                              ))}
-                            </View>
-                          </View>
-                        </View>
+                        <TiffExportOptions
+                          tiffCompression={
+                            currentOptions.tiff?.compression ??
+                            DEFAULT_TIFF_TARGET_OPTIONS.compression
+                          }
+                          tiffMultipage={
+                            currentOptions.tiff?.multipage ?? DEFAULT_TIFF_TARGET_OPTIONS.multipage
+                          }
+                          onTiffCompressionChange={(compression) =>
+                            setOptions({
+                              tiff: {
+                                ...DEFAULT_TIFF_TARGET_OPTIONS,
+                                ...(currentOptions.tiff ?? {}),
+                                compression,
+                              },
+                            })
+                          }
+                          onTiffMultipageChange={(multipage) =>
+                            setOptions({
+                              tiff: {
+                                ...DEFAULT_TIFF_TARGET_OPTIONS,
+                                ...(currentOptions.tiff ?? {}),
+                                multipage,
+                              },
+                            })
+                          }
+                        />
                       )}
 
                       <View>
@@ -707,6 +716,22 @@ export default function ConvertScreen() {
                             </Chip.Label>
                           </Chip>
                         </View>
+                        {currentOptions.includeWatermark && (
+                          <View className="mt-3">
+                            <Text className="mb-2 text-xs font-semibold text-muted">
+                              {t("converter.watermarkText")}
+                            </Text>
+                            <TextField>
+                              <Input
+                                testID="e2e-input-convert__watermark-text"
+                                value={currentOptions.watermarkText ?? ""}
+                                onChangeText={(value) => setOptions({ watermarkText: value })}
+                                placeholder={t("converter.watermarkTextPlaceholder")}
+                                className="text-xs"
+                              />
+                            </TextField>
+                          </View>
+                        )}
                       </View>
                     </View>
                   </Accordion.Content>
@@ -727,7 +752,9 @@ export default function ConvertScreen() {
                     <View className="gap-4 px-1">
                       {/* Stretch */}
                       <View>
-                        <Text className="mb-2 text-xs font-semibold text-muted">Stretch</Text>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("viewer.stretch")}
+                        </Text>
                         <View className="flex-row flex-wrap gap-1.5">
                           {STRETCH_OPTIONS.map((s) => (
                             <Chip
@@ -744,7 +771,9 @@ export default function ConvertScreen() {
 
                       {/* Colormap */}
                       <View>
-                        <Text className="mb-2 text-xs font-semibold text-muted">Colormap</Text>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("viewer.colormap")}
+                        </Text>
                         <View className="flex-row flex-wrap gap-1.5">
                           {COLORMAP_OPTIONS.map((c) => (
                             <Chip
@@ -757,6 +786,156 @@ export default function ConvertScreen() {
                             </Chip>
                           ))}
                         </View>
+                      </View>
+                    </View>
+                  </Accordion.Content>
+                </Accordion.Item>
+
+                {/* Advanced Processing */}
+                <Accordion.Item value="advanced">
+                  <Accordion.Trigger>
+                    <View className="flex-row items-center flex-1 gap-3">
+                      <Ionicons name="options-outline" size={16} color={mutedColor} />
+                      <Text className="text-sm text-foreground">
+                        {t("converter.advancedSettings")}
+                      </Text>
+                    </View>
+                    <Accordion.Indicator />
+                  </Accordion.Trigger>
+                  <Accordion.Content>
+                    <View className="gap-4 px-1">
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("settings.imageProcessingProfile")}
+                        </Text>
+                        <View className="flex-row flex-wrap gap-2">
+                          {PROFILE_PRESETS.map((preset) => (
+                            <Chip
+                              key={preset.key}
+                              size="sm"
+                              variant={
+                                effectiveProcessingProfile === preset.key ? "primary" : "secondary"
+                              }
+                              onPress={() => setOptions({ profile: preset.key })}
+                            >
+                              <Chip.Label className="text-[9px]">{t(preset.labelKey)}</Chip.Label>
+                            </Chip>
+                          ))}
+                        </View>
+                      </View>
+
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("viewer.inputLevels")}
+                        </Text>
+                        <SimpleSlider
+                          label={t("viewer.blackPoint")}
+                          value={currentOptions.blackPoint}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onValueChange={handleBlackPointChange}
+                        />
+                        <SimpleSlider
+                          label={t("viewer.whitePoint")}
+                          value={currentOptions.whitePoint}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onValueChange={handleWhitePointChange}
+                        />
+                        <SimpleSlider
+                          label={t("editor.gamma")}
+                          value={currentOptions.gamma}
+                          min={0.1}
+                          max={5}
+                          step={0.1}
+                          onValueChange={(value) =>
+                            setOptions({ gamma: Math.max(0.1, Math.min(5, value)) })
+                          }
+                        />
+                      </View>
+
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("viewer.outputLevels")}
+                        </Text>
+                        <SimpleSlider
+                          label={t("viewer.outputBlack")}
+                          value={currentOptions.outputBlack}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onValueChange={handleOutputBlackChange}
+                        />
+                        <SimpleSlider
+                          label={t("viewer.outputWhite")}
+                          value={currentOptions.outputWhite}
+                          min={0}
+                          max={1}
+                          step={0.01}
+                          onValueChange={handleOutputWhiteChange}
+                        />
+                      </View>
+
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("editor.adjust")}
+                        </Text>
+                        <SimpleSlider
+                          label={t("editor.brightness")}
+                          value={currentOptions.brightness ?? 0}
+                          min={-0.5}
+                          max={0.5}
+                          step={0.01}
+                          onValueChange={(value) =>
+                            setOptions({ brightness: Math.max(-0.5, Math.min(0.5, value)) })
+                          }
+                        />
+                        <SimpleSlider
+                          label={t("editor.contrast")}
+                          value={currentOptions.contrast ?? 1}
+                          min={0.2}
+                          max={2.5}
+                          step={0.05}
+                          onValueChange={(value) =>
+                            setOptions({ contrast: Math.max(0.2, Math.min(2.5, value)) })
+                          }
+                        />
+                        <SimpleSlider
+                          label={t("editor.mtf")}
+                          value={currentOptions.mtfMidtone ?? 0.25}
+                          min={0.01}
+                          max={0.99}
+                          step={0.01}
+                          onValueChange={(value) =>
+                            setOptions({ mtfMidtone: Math.max(0.01, Math.min(0.99, value)) })
+                          }
+                        />
+                      </View>
+
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("editor.curves")}
+                        </Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View className="flex-row gap-2">
+                            {VIEWER_CURVE_PRESETS.map((preset) => (
+                              <Chip
+                                key={preset.key}
+                                size="sm"
+                                variant={
+                                  (currentOptions.curvePreset ?? "linear") === preset.key
+                                    ? "primary"
+                                    : "secondary"
+                                }
+                                onPress={() => setOptions({ curvePreset: preset.key })}
+                              >
+                                <Chip.Label className="text-[9px]">{t(preset.labelKey)}</Chip.Label>
+                              </Chip>
+                            ))}
+                          </View>
+                        </ScrollView>
                       </View>
                     </View>
                   </Accordion.Content>

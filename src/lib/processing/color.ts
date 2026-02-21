@@ -1,5 +1,6 @@
 import type { ProcessingParamValue } from "../fits/types";
 import type { ProcessingRGBAState } from "./types";
+import { asNumber, asString } from "./paramHelpers";
 
 function clampByte(value: number) {
   if (!Number.isFinite(value)) return 0;
@@ -99,16 +100,6 @@ export function applyColorBalanceRGBA(
     result[i + 2] = clampByte(rgbaData[i + 2] * bGain);
   }
   return result;
-}
-
-function asNumber(params: Record<string, ProcessingParamValue>, key: string, fallback: number) {
-  const value = params[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
-}
-
-function asString(params: Record<string, ProcessingParamValue>, key: string, fallback: string) {
-  const value = params[key];
-  return typeof value === "string" ? value : fallback;
 }
 
 export type ColorImageOperationId = "scnr" | "colorCalibration" | "saturation" | "colorBalance";

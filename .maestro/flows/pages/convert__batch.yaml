@@ -3,7 +3,11 @@
 - openLink: cobalt://convert?tab=batch
 - assertVisible:
     id: e2e-screen-convert__index
+- assertVisible:
+    id: e2e-action-convert__batch-start
 - tapOn:
     id: e2e-action-convert__batch-start
-- assertVisible:
-    id: e2e-text-batch-task-summary
+- extendedWaitUntil:
+    visible:
+      id: e2e-text-batch-task-summary
+    timeout: 10000

@@ -3,7 +3,11 @@
 - openLink: cobalt://settings/about
 - assertVisible:
     id: e2e-screen-settings__about
+- assertVisible:
+    id: e2e-action-settings__about-restart-guide
+- assertVisible:
+    id: e2e-action-settings__about-reset-all
 - tapOn:
     id: e2e-action-settings__about-restart-guide
-- tapOn:
-    id: e2e-action-settings__about-reset-all
+- assertVisible:
+    id: e2e-screen-settings__about

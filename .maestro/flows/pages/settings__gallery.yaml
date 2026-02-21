@@ -3,7 +3,15 @@
 - openLink: cobalt://settings/gallery
 - assertVisible:
     id: e2e-screen-settings__gallery
+- assertVisible:
+    id: e2e-action-settings__gallery-open-grid-columns
+- assertVisible:
+    id: e2e-action-settings__gallery-open-file-list-style
 - tapOn:
     id: e2e-action-settings__gallery-open-grid-columns
+- back
 - tapOn:
     id: e2e-action-settings__gallery-open-file-list-style
+- back
+- assertVisible:
+    id: e2e-screen-settings__gallery

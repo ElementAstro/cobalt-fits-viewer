@@ -3,7 +3,12 @@
 - openLink: cobalt://album/album-001
 - assertVisible:
     id: e2e-screen-album__param_id
-- tapOn:
-    id: e2e-action-album__param_id-open-rename
+- assertVisible: E2E Album
 - tapOn:
     id: e2e-action-album__param_id-open-stats
+- back
+- tapOn:
+    id: e2e-action-album__param_id-open-rename
+- back
+- assertVisible:
+    id: e2e-screen-album__param_id

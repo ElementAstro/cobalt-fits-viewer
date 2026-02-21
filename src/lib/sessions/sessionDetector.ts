@@ -136,12 +136,38 @@ export function isSessionDuplicate(
   candidate: ObservationSession,
   existingSessions: ObservationSession[],
 ): boolean {
-  return existingSessions.some((s) => {
-    if (s.date === candidate.date && s.startTime === candidate.startTime) return true;
-    if (candidate.imageIds.length === 0) return false;
-    const overlap = candidate.imageIds.filter((id) => s.imageIds.includes(id)).length;
-    return overlap > candidate.imageIds.length * 0.5;
-  });
+  return findMatchingSession(candidate, existingSessions) !== null;
+}
+
+export function findMatchingSession(
+  candidate: ObservationSession,
+  existingSessions: ObservationSession[],
+): ObservationSession | null {
+  const exactMatch =
+    existingSessions.find(
+      (session) => session.date === candidate.date && session.startTime === candidate.startTime,
+    ) ?? null;
+  if (exactMatch) return exactMatch;
+  if (candidate.imageIds.length === 0) return null;
+
+  let bestMatch: ObservationSession | null = null;
+  let bestOverlap = 0;
+  let bestStartDiff = Number.POSITIVE_INFINITY;
+
+  for (const session of existingSessions) {
+    const overlap = candidate.imageIds.filter((id) => session.imageIds.includes(id)).length;
+    const overlapRatio = overlap / candidate.imageIds.length;
+    if (overlapRatio <= 0.5) continue;
+
+    const startDiff = Math.abs(session.startTime - candidate.startTime);
+    if (overlapRatio > bestOverlap || (overlapRatio === bestOverlap && startDiff < bestStartDiff)) {
+      bestMatch = session;
+      bestOverlap = overlapRatio;
+      bestStartDiff = startDiff;
+    }
+  }
+
+  return bestMatch;
 }
 
 /**

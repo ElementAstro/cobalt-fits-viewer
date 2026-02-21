@@ -1,0 +1,42 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+# Journey: Targets list → Target detail → Stats → Back
+# Verifies the target management workflow
+
+- runFlow: ../common/bootstrap.yaml
+
+# Start at targets tab
+- openLink: cobalt://targets
+- assertVisible:
+    id: e2e-screen-tabs__targets
+- assertVisible: M42
+
+# Open target detail
+- tapOn: M42
+- assertVisible:
+    id: e2e-screen-target__param_id
+- assertVisible: M42
+
+# Toggle favorite and verify it stays on screen
+- tapOn:
+    id: e2e-action-target__param_id-toggle-favorite
+- assertVisible:
+    id: e2e-screen-target__param_id
+
+# Go back to targets list
+- back
+- assertVisible:
+    id: e2e-screen-tabs__targets
+
+# Navigate to stats
+- tapOn:
+    id: e2e-action-tabs__targets-open-stats
+- assertVisible:
+    id: e2e-screen-target__stats
+
+# Go back to targets list
+- tapOn:
+    id: e2e-action-target__stats-back
+- assertVisible:
+    id: e2e-screen-tabs__targets
+- assertVisible: M42

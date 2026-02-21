@@ -58,6 +58,39 @@ jest.mock("expo-video", () => {
   };
 });
 
+jest.mock("../../../i18n/useI18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = {
+        "settings.videoBack": "Back",
+        "settings.videoFileNotFound": "Media file not found.",
+        "settings.videoFeaturesDisabled": "Video features are disabled by current settings.",
+        "settings.videoRetry": "Retry",
+        "settings.videoSeek": "Seek",
+        "settings.videoVolume": "Volume",
+        "settings.videoLoop": "Loop",
+        "settings.videoAudio": "Audio",
+        "settings.videoSave": "Save",
+        "settings.videoShare": "Share",
+        "settings.videoProcess": "Process",
+        "settings.videoQueue": "Queue",
+        "settings.videoInfoTab": "Info",
+        "settings.videoTasksTab": "Tasks",
+        "settings.videoNoTasks": "No tasks for this media.",
+        "settings.videoEngineUnavailable": "Local FFmpeg adapter is unavailable",
+        "settings.videoFullscreenError": "Fullscreen is unavailable on this device.",
+        "settings.videoPipError": "Picture in Picture is not supported.",
+        "settings.videoSavedToLibrary": "Saved to media library.",
+        "settings.videoSaveError": "Unable to save to media library.",
+        "settings.videoShareError": "Unable to share this file.",
+      };
+      return map[key] ?? key;
+    },
+    locale: "en",
+    setLocale: jest.fn(),
+  }),
+}));
+
 jest.mock("../../../hooks/useMediaLibrary", () => ({
   useMediaLibrary: () => ({
     saveToDevice: jest.fn(),
@@ -165,6 +198,19 @@ describe("/video/[id]", () => {
     render(<VideoDetailScreen />);
     fireEvent.press(screen.getByText("Tasks"));
     expect(screen.getByText(/ffmpeg_executor_unavailable/)).toBeTruthy();
+  });
+
+  it("renders volume slider and A-B loop controls", () => {
+    render(<VideoDetailScreen />);
+    expect(screen.getByText("Volume: 100%")).toBeTruthy();
+    expect(screen.getByText("A")).toBeTruthy();
+    expect(screen.getByText("B")).toBeTruthy();
+  });
+
+  it("renders sub-second time display format", () => {
+    render(<VideoDetailScreen />);
+    // Current time at 0 should show sub-second format with tenths
+    expect(screen.getByText("00:00.0")).toBeTruthy();
   });
 
   it("redirects to image viewer when current file is not video", async () => {

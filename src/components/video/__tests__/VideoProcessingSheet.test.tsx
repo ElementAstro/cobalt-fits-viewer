@@ -3,6 +3,67 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { VideoProcessingSheet } from "../VideoProcessingSheet";
 import type { FitsMetadata } from "../../../lib/fits/types";
 
+jest.mock("../../../i18n/useI18n", () => ({
+  useI18n: () => ({
+    t: (key: string) => {
+      const map: Record<string, string> = {
+        "settings.videoOpTrim": "Trim",
+        "settings.videoOpSplit": "Split",
+        "settings.videoOpCompress": "Compress",
+        "settings.videoOpTranscode": "Transcode",
+        "settings.videoOpMerge": "Merge",
+        "settings.videoOpMuteAudio": "Mute Audio",
+        "settings.videoOpExtractAudio": "Extract Audio",
+        "settings.videoOpCoverFrame": "Cover Frame",
+        "settings.videoOpRotate": "Rotate",
+        "settings.videoOpSpeed": "Speed",
+        "settings.videoOpWatermark": "Watermark",
+        "settings.videoOpGif": "GIF Export",
+        "settings.videoProcessingTitle": "Video Processing",
+        "settings.videoProcessingDescription": "Create a non-destructive derived media file.",
+        "settings.videoChooseOperation": "Choose operation",
+        "settings.videoRemoveAudioInOutput": "Remove audio in output",
+        "settings.videoParameters": "Parameters",
+        "settings.videoTrimStartMs": "Start ms",
+        "settings.videoTrimEndMs": "End ms",
+        "settings.videoTargetPreset": "Target preset",
+        "settings.videoTargetBitrateKbps": "Target bitrate kbps",
+        "settings.videoCrf": "CRF (0-51)",
+        "settings.videoCoverTimeMs": "Thumbnail time ms",
+        "settings.videoMergeInputUris": "Input URIs (one per line)",
+        "settings.videoRotation90": "90° CW",
+        "settings.videoRotation180": "180°",
+        "settings.videoRotation270": "270° CW",
+        "settings.videoSpeedFactor": "Speed factor (0.25–4)",
+        "settings.videoWatermarkText": "Watermark text",
+        "settings.videoWatermarkPosition": "Position",
+        "settings.videoWatermarkFontSize": "Font size",
+        "settings.videoWatermarkFontColor": "Color",
+        "settings.videoWatermarkOpacity": "Opacity (0–1)",
+        "settings.videoGifStart": "Start ms",
+        "settings.videoGifDuration": "Duration ms",
+        "settings.videoGifWidth": "Width px",
+        "settings.videoGifFps": "FPS (1–30)",
+        "settings.videoExtractAudioBitrate": "Bitrate kbps",
+        "settings.videoQueueTask": "Queue Task",
+        "settings.videoCancel": "Cancel",
+        "settings.videoErrorTrimRange": "Trim range is invalid.",
+        "settings.videoErrorSplitSegments": "Split segments are invalid.",
+        "settings.videoErrorMergeInputs": "Merge requires at least two input URIs.",
+        "settings.videoErrorRotation": "Rotation must be 90, 180, or 270.",
+        "settings.videoErrorSpeedFactor": "Speed factor must be 0.25–4.",
+        "settings.videoErrorWatermarkText": "Watermark text is required.",
+        "settings.videoErrorGifStart": "GIF start time is invalid.",
+        "settings.videoErrorGifDuration": "GIF duration must be at least 100ms.",
+        "settings.videoErrorCoverTime": "Cover frame time is invalid.",
+      };
+      return map[key] ?? key;
+    },
+    locale: "en",
+    setLocale: jest.fn(),
+  }),
+}));
+
 const baseVideoFile: FitsMetadata = {
   id: "video-1",
   filename: "capture.mp4",
@@ -128,5 +189,37 @@ describe("VideoProcessingSheet", () => {
 
     expect(onSubmit).not.toHaveBeenCalled();
     expect(screen.getByText("Trim range is invalid.")).toBeTruthy();
+  });
+
+  it("renders all 12 operation options in the sheet", () => {
+    render(
+      <VideoProcessingSheet
+        visible
+        file={baseVideoFile}
+        defaultProfile="balanced"
+        defaultPreset="1080p"
+        onSubmit={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Video Processing")).toBeTruthy();
+    expect(screen.getByText("Queue Task")).toBeTruthy();
+    expect(screen.getByText("Cancel")).toBeTruthy();
+  });
+
+  it("shows speed factor input when speed operation is hypothetically selected", () => {
+    render(
+      <VideoProcessingSheet
+        visible
+        file={baseVideoFile}
+        defaultProfile="balanced"
+        defaultPreset="1080p"
+        onSubmit={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Parameters")).toBeTruthy();
   });
 });

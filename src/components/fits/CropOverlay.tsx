@@ -3,12 +3,19 @@
  * 支持拖拽四角和边来调整裁剪区域
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { View, Text } from "react-native";
 import { Button, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from "react-native-reanimated";
+import {
+  clampCropRegion,
+  moveCropRegion,
+  resizeCropRegion,
+  type CropResizeHandle,
+  type CropRegion,
+} from "./cropMath";
 
 interface CropOverlayProps {
   imageWidth: number;
@@ -20,6 +27,38 @@ interface CropOverlayProps {
 }
 
 const MIN_CROP_SIZE = 20;
+const HANDLE_TOUCH_SIZE = 24;
+const HANDLE_DOT_SIZE = 10;
+const RESIZE_HANDLES: CropResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+function getHandlePosition(
+  cropDisplay: { left: number; top: number; width: number; height: number },
+  handle: CropResizeHandle,
+) {
+  const centerX = cropDisplay.left + cropDisplay.width / 2;
+  const centerY = cropDisplay.top + cropDisplay.height / 2;
+  const right = cropDisplay.left + cropDisplay.width;
+  const bottom = cropDisplay.top + cropDisplay.height;
+
+  switch (handle) {
+    case "nw":
+      return { x: cropDisplay.left, y: cropDisplay.top };
+    case "n":
+      return { x: centerX, y: cropDisplay.top };
+    case "ne":
+      return { x: right, y: cropDisplay.top };
+    case "e":
+      return { x: right, y: centerY };
+    case "se":
+      return { x: right, y: bottom };
+    case "s":
+      return { x: centerX, y: bottom };
+    case "sw":
+      return { x: cropDisplay.left, y: bottom };
+    case "w":
+      return { x: cropDisplay.left, y: centerY };
+  }
+}
 
 export function CropOverlay({
   imageWidth,
@@ -36,7 +75,7 @@ export function CropOverlay({
   // Scale factor from image coords to container coords
   const scaleX = containerWidth / imageWidth;
   const scaleY = containerHeight / imageHeight;
-  const scale = Math.min(scaleX, scaleY);
+  const scale = Math.max(0.0001, Math.min(scaleX, scaleY));
 
   const displayW = imageWidth * scale;
   const displayH = imageHeight * scale;
@@ -51,46 +90,137 @@ export function CropOverlay({
     w: Math.floor(imageWidth * (1 - 2 * margin)),
     h: Math.floor(imageHeight * (1 - 2 * margin)),
   });
+  const cropRegionRef = useRef(cropRegion);
 
-  // Shared values for gesture tracking
+  useEffect(() => {
+    cropRegionRef.current = cropRegion;
+  }, [cropRegion]);
+
+  // Shared values for gesture tracking (image coordinates)
   const startX = useSharedValue(0);
   const startY = useSharedValue(0);
+  const startW = useSharedValue(0);
+  const startH = useSharedValue(0);
 
-  const updateCrop = useCallback(
-    (x: number, y: number, w: number, h: number) => {
-      const clampedX = Math.max(0, Math.min(x, imageWidth - MIN_CROP_SIZE));
-      const clampedY = Math.max(0, Math.min(y, imageHeight - MIN_CROP_SIZE));
-      const clampedW = Math.max(MIN_CROP_SIZE, Math.min(w, imageWidth - clampedX));
-      const clampedH = Math.max(MIN_CROP_SIZE, Math.min(h, imageHeight - clampedY));
+  const applyCropRegion = useCallback(
+    (next: CropRegion) => {
+      const clamped = clampCropRegion(next, imageWidth, imageHeight, MIN_CROP_SIZE);
       setCropRegion({
-        x: Math.round(clampedX),
-        y: Math.round(clampedY),
-        w: Math.round(clampedW),
-        h: Math.round(clampedH),
+        x: Math.round(clamped.x),
+        y: Math.round(clamped.y),
+        w: Math.round(clamped.w),
+        h: Math.round(clamped.h),
       });
     },
-    [imageWidth, imageHeight],
+    [imageHeight, imageWidth],
   );
 
-  // Move the entire crop region
-  const moveGesture = Gesture.Pan()
-    .onBegin(() => {
-      startX.value = cropRegion.x;
-      startY.value = cropRegion.y;
-    })
-    .onUpdate((e) => {
-      const dx = e.translationX / scale;
-      const dy = e.translationY / scale;
-      runOnJS(updateCrop)(startX.value + dx, startY.value + dy, cropRegion.w, cropRegion.h);
-    });
+  const moveGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .onBegin(() => {
+          const current = cropRegionRef.current;
+          startX.value = current.x;
+          startY.value = current.y;
+          startW.value = current.w;
+          startH.value = current.h;
+        })
+        .onUpdate((e) => {
+          const next = moveCropRegion(
+            {
+              x: startX.value,
+              y: startY.value,
+              w: startW.value,
+              h: startH.value,
+            },
+            e.translationX / scale,
+            e.translationY / scale,
+            imageWidth,
+            imageHeight,
+            MIN_CROP_SIZE,
+          );
+          runOnJS(applyCropRegion)(next);
+        }),
+    [applyCropRegion, imageHeight, imageWidth, scale, startH, startW, startX, startY],
+  );
 
-  // Display coordinates
-  const cropDisplay = {
-    left: offsetX + cropRegion.x * scale,
-    top: offsetY + cropRegion.y * scale,
-    width: cropRegion.w * scale,
-    height: cropRegion.h * scale,
-  };
+  const createResizeGesture = useCallback(
+    (handle: CropResizeHandle) =>
+      Gesture.Pan()
+        .onBegin(() => {
+          const current = cropRegionRef.current;
+          startX.value = current.x;
+          startY.value = current.y;
+          startW.value = current.w;
+          startH.value = current.h;
+        })
+        .onUpdate((e) => {
+          const next = resizeCropRegion(
+            {
+              x: startX.value,
+              y: startY.value,
+              w: startW.value,
+              h: startH.value,
+            },
+            handle,
+            e.translationX / scale,
+            e.translationY / scale,
+            imageWidth,
+            imageHeight,
+            MIN_CROP_SIZE,
+          );
+          runOnJS(applyCropRegion)(next);
+        }),
+    [applyCropRegion, imageHeight, imageWidth, scale, startH, startW, startX, startY],
+  );
+
+  const resizeGestures = useMemo(
+    () =>
+      RESIZE_HANDLES.reduce<Record<CropResizeHandle, ReturnType<typeof Gesture.Pan>>>(
+        (acc, handle) => {
+          acc[handle] = createResizeGesture(handle);
+          return acc;
+        },
+        {} as Record<CropResizeHandle, ReturnType<typeof Gesture.Pan>>,
+      ),
+    [createResizeGesture],
+  );
+
+  const cropDisplay = useMemo(
+    () => ({
+      left: offsetX + cropRegion.x * scale,
+      top: offsetY + cropRegion.y * scale,
+      width: cropRegion.w * scale,
+      height: cropRegion.h * scale,
+    }),
+    [cropRegion.h, cropRegion.w, cropRegion.x, cropRegion.y, offsetX, offsetY, scale],
+  );
+
+  const handleDisplayPositions = useMemo(() => {
+    return RESIZE_HANDLES.map((handle) => ({
+      handle,
+      ...getHandlePosition(cropDisplay, handle),
+    }));
+  }, [cropDisplay]);
+
+  const infoTop = Math.max(4, cropDisplay.top - 20);
+
+  useEffect(() => {
+    const safe = clampCropRegion(cropRegionRef.current, imageWidth, imageHeight, MIN_CROP_SIZE);
+    if (
+      safe.x !== cropRegionRef.current.x ||
+      safe.y !== cropRegionRef.current.y ||
+      safe.w !== cropRegionRef.current.w ||
+      safe.h !== cropRegionRef.current.h
+    ) {
+      setCropRegion({
+        x: Math.round(safe.x),
+        y: Math.round(safe.y),
+        w: Math.round(safe.w),
+        h: Math.round(safe.h),
+      });
+    }
+  }, [imageHeight, imageWidth]);
 
   const cropStyle = useAnimatedStyle(() => ({
     position: "absolute" as const,
@@ -170,12 +300,43 @@ export function CropOverlay({
         />
       </GestureDetector>
 
+      {/* Resize handles */}
+      {handleDisplayPositions.map((handlePosition) => (
+        <GestureDetector
+          key={handlePosition.handle}
+          gesture={resizeGestures[handlePosition.handle]}
+        >
+          <View
+            style={{
+              position: "absolute",
+              left: handlePosition.x - HANDLE_TOUCH_SIZE / 2,
+              top: handlePosition.y - HANDLE_TOUCH_SIZE / 2,
+              width: HANDLE_TOUCH_SIZE,
+              height: HANDLE_TOUCH_SIZE,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <View
+              style={{
+                width: HANDLE_DOT_SIZE,
+                height: HANDLE_DOT_SIZE,
+                borderWidth: 1.5,
+                borderColor: successColor,
+                borderRadius: 3,
+                backgroundColor: "#ffffff",
+              }}
+            />
+          </View>
+        </GestureDetector>
+      ))}
+
       {/* Dimension info */}
       <View
         style={{
           position: "absolute",
           left: cropDisplay.left,
-          top: cropDisplay.top - 20,
+          top: infoTop,
           flexDirection: "row",
           gap: 4,
         }}

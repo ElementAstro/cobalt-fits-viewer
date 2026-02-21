@@ -44,6 +44,7 @@ export function useConverter() {
   const defaultConverterFormat = useSettingsStore((s) => s.defaultConverterFormat);
   const defaultConverterQuality = useSettingsStore((s) => s.defaultConverterQuality);
   const batchNamingRule = useSettingsStore((s) => s.batchNamingRule);
+  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
 
   const abortControllers = useRef<Map<string, AbortController>>(new Map());
   const initializedRef = useRef(false);
@@ -59,8 +60,15 @@ export function useConverter() {
       ...defaults,
       format: initialFormat,
       quality: defaultConverterQuality,
+      profile: imageProcessingProfile,
     });
-  }, [defaultConverterFormat, defaultConverterQuality, setFormat, setOptions]);
+  }, [
+    defaultConverterFormat,
+    defaultConverterQuality,
+    imageProcessingProfile,
+    setFormat,
+    setOptions,
+  ]);
 
   const changeFormat = useCallback(
     (format: ExportFormat) => {
@@ -80,9 +88,16 @@ export function useConverter() {
         blackPoint: currentOptions.blackPoint,
         whitePoint: currentOptions.whitePoint,
         gamma: currentOptions.gamma ?? 1,
+        outputBlack: currentOptions.outputBlack,
+        outputWhite: currentOptions.outputWhite,
+        brightness: currentOptions.brightness,
+        contrast: currentOptions.contrast,
+        mtfMidtone: currentOptions.mtfMidtone,
+        curvePreset: currentOptions.curvePreset,
+        profile: currentOptions.profile ?? imageProcessingProfile,
       });
     },
-    [currentOptions],
+    [currentOptions, imageProcessingProfile],
   );
 
   const getEstimatedSize = useCallback(

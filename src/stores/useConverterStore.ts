@@ -79,7 +79,20 @@ export const useConverterStore = create<ConverterStoreState>((set, get) => ({
     const allPresets = [...DEFAULT_CONVERT_PRESETS, ...get().presets];
     const preset = allPresets.find((p) => p.id === presetId);
     if (preset) {
-      set({ currentOptions: { ...preset.options } });
+      const previous = get().currentOptions;
+      set({
+        currentOptions: {
+          ...previous,
+          ...preset.options,
+          // Keep nested option defaults and avoid blowing away fields added in newer versions.
+          tiff: { ...previous.tiff, ...(preset.options.tiff ?? {}) },
+          fits: { ...previous.fits, ...(preset.options.fits ?? {}) },
+          // Preserve the effective processing profile unless the preset explicitly overrides it.
+          profile: preset.options.profile ?? previous.profile,
+          // Preserve watermark text unless the preset explicitly overrides it.
+          watermarkText: preset.options.watermarkText ?? previous.watermarkText,
+        },
+      });
     }
   },
 

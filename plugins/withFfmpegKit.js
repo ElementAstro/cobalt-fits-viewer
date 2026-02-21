@@ -8,7 +8,11 @@ const {
   withProjectBuildGradle,
   createRunOncePlugin,
 } = require("expo/config-plugins");
-const { createGeneratedHeaderComment, removeGeneratedContents, mergeContents } = require("@expo/config-plugins/build/utils/generateCode");
+const {
+  createGeneratedHeaderComment,
+  removeGeneratedContents,
+  mergeContents,
+} = require("@expo/config-plugins/build/utils/generateCode");
 
 const DEFAULT_PACKAGE = "full";
 const TAG_ANDROID = "cobalt-ffmpeg-kit-android-package";
@@ -19,11 +23,7 @@ function appendContents({ src, newSrc, tag, comment }) {
   if (!src.includes(header)) {
     let sanitizedTarget = removeGeneratedContents(src, tag);
     if (sanitizedTarget) sanitizedTarget += "\n";
-    const contentsToAdd = [
-      header,
-      newSrc,
-      `${comment} @generated end ${tag}`,
-    ].join("\n");
+    const contentsToAdd = [header, newSrc, `${comment} @generated end ${tag}`].join("\n");
     return {
       contents: (sanitizedTarget ?? src) + contentsToAdd,
       didMerge: true,
@@ -51,7 +51,9 @@ function withAndroidFfmpegPackage(config, packageName = DEFAULT_PACKAGE) {
     const pickFirstKey = "android.packagingOptions.pickFirsts";
     const pickFirstValue =
       "lib/x86/libc++_shared.so,lib/x86_64/libc++_shared.so,lib/armeabi-v7a/libc++_shared.so,lib/arm64-v8a/libc++_shared.so";
-    const existing = nextConfig.modResults.find((entry) => entry.type === "property" && entry.key === pickFirstKey);
+    const existing = nextConfig.modResults.find(
+      (entry) => entry.type === "property" && entry.key === pickFirstKey,
+    );
     if (existing) {
       existing.value = pickFirstValue;
     } else {

@@ -6,7 +6,8 @@
       "Bash(node scripts/get_component_docs.mjs:*)",
       "WebFetch(domain:heroui.com)",
       "WebFetch(domain:github.com)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(git commit:*)"
     ]
   }
 }

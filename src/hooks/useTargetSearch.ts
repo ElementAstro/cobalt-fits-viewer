@@ -9,6 +9,8 @@ import { searchTargets, type SearchConditions } from "../lib/targets/targetSearc
 import {
   detectDuplicates,
   findDuplicatesOf,
+  selectPrimaryDuplicateTarget,
+  sortDuplicateTargetsByMergePriority,
   type DuplicateDetectionResult,
   type DuplicateGroup,
 } from "../lib/targets/duplicateDetector";
@@ -205,9 +207,9 @@ export function useDuplicateDetection() {
     (group: DuplicateGroup) => {
       if (group.targets.length < 2) return;
 
-      // 按图片数量排序，保留图片最多的
-      const sorted = [...group.targets].sort((a, b) => b.imageIds.length - a.imageIds.length);
-      const primary = sorted[0];
+      const sorted = sortDuplicateTargetsByMergePriority(group.targets);
+      const primary = selectPrimaryDuplicateTarget(sorted);
+      if (!primary) return;
 
       // 合并其他目标到主目标
       for (let i = 1; i < sorted.length; i++) {

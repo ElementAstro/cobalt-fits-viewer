@@ -1,0 +1,7 @@
+appId: com.maxqian888sorganization.cobaltfitsviewer
+---
+- openLink: cobalt://gallery
+- extendedWaitUntil:
+    visible:
+      id: e2e-screen-tabs__gallery
+    timeout: 10000

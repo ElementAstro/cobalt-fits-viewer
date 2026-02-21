@@ -232,6 +232,26 @@ describe("useImageEditor", () => {
     expect(result.current.error).toBe("Unsupported operation: unknown-op");
   });
 
+  it("clears editor error state via clearError", async () => {
+    const { result } = renderHook(() => useImageEditor());
+
+    await act(async () => {
+      result.current.initialize(new Float32Array([1, 2, 3, 4]), 2, 2);
+      await flushInteractionTasks();
+    });
+    await act(async () => {
+      result.current.applyEdit({ type: "unknown-op" } as any);
+      await flushInteractionTasks();
+    });
+    expect(result.current.error).toBe("Unsupported operation: unknown-op");
+
+    await act(async () => {
+      result.current.clearError();
+      await flushInteractionTasks();
+    });
+    expect(result.current.error).toBeNull();
+  });
+
   it("routes color operations into colorNodes", async () => {
     const onRecipeChange = jest.fn();
     const { result } = renderHook(() => useImageEditor({ onRecipeChange }));

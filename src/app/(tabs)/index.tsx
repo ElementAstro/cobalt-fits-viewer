@@ -1,17 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { View, Text, FlatList, Alert, useWindowDimensions, ScrollView } from "react-native";
-import {
-  Button,
-  BottomSheet,
-  Chip,
-  Dialog,
-  Input,
-  PressableFeedback,
-  Separator,
-  TextField,
-  useThemeColor,
-} from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, FlatList, Alert, useWindowDimensions } from "react-native";
+import { Button, Dialog, Input, TextField } from "heroui-native";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
@@ -32,19 +21,26 @@ import { FileGroupSheet } from "../../components/gallery/FileGroupSheet";
 import { EmptyState } from "../../components/common/EmptyState";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { QuickLookModal } from "../../components/common/QuickLookModal";
-import { formatFileSize } from "../../lib/utils/fileManager";
+import {
+  FilesHeader,
+  FilesToolbar,
+  FilesSelectionBar,
+  FilesSortBar,
+  FilesFilterBar,
+  ImportOptionsSheet,
+  UndoSnackbar,
+} from "../../components/files";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { routeForMedia } from "../../lib/media/routing";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 const ListItemSeparator = () => <View className="h-2" />;
-const FILE_LIST_GRID_COLUMNS: Array<2 | 3 | 4> = [2, 3, 4];
 
 export default function FilesScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
     useResponsiveLayout();
@@ -581,6 +577,15 @@ export default function FilesScreen() {
     router.push(`/convert?tab=batch&ids=${encodeURIComponent(idsParam)}`);
   }, [selectedIds, router]);
 
+  const goToStacking = useCallback(() => {
+    const idsParam = selectedIds.join(",");
+    if (!idsParam) {
+      router.push("/stacking");
+      return;
+    }
+    router.push(`/stacking?ids=${encodeURIComponent(idsParam)}`);
+  }, [selectedIds, router]);
+
   const clearLocalFilters = useCallback(() => {
     setFilterObject("");
     setFilterFilter("");
@@ -672,400 +677,108 @@ export default function FilesScreen() {
 
   const ListHeader = useMemo(
     () => (
-      <View className="gap-3">
-        <View>
-          <Text className="text-2xl font-bold text-foreground">{t("files.title")}</Text>
-          <Text className="mt-1 text-sm text-muted">
-            {t("files.subtitle")} ({displayFiles.length}/{allFiles.length})
-          </Text>
-        </View>
+      <View className={isLandscape ? "gap-1.5" : "gap-3"}>
+        <FilesHeader
+          displayCount={displayFiles.length}
+          totalCount={allFiles.length}
+          storageSize={storageStats.fitsSize}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          isLandscape={isLandscape}
+        />
 
-        {storageStats.fitsCount > 0 && (
-          <View className="flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
-            <Ionicons name="server-outline" size={14} color={mutedColor} />
-            <Text className="text-xs text-muted">
-              {t("files.storageUsed")}: {formatFileSize(storageStats.fitsSize)} ·{" "}
-              {t("files.filesCount").replace("{count}", String(storageStats.fitsCount))}
-            </Text>
-          </View>
-        )}
-
-        <Separator />
-
-        <TextField>
-          <View className="w-full flex-row items-center">
-            <Input
-              className="flex-1 pl-9 pr-9"
-              placeholder={t("files.searchPlaceholder")}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              autoCorrect={false}
-            />
-            <Ionicons
-              name="search-outline"
-              size={16}
-              color={mutedColor}
-              style={{ position: "absolute", left: 12 }}
-            />
-            {searchQuery.length > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                isIconOnly
-                onPress={() => setSearchQuery("")}
-                style={{ position: "absolute", right: 12 }}
-              >
-                <Ionicons name="close-circle" size={16} color={mutedColor} />
-              </Button>
-            )}
-          </View>
-        </TextField>
-
-        <View className="flex-row flex-wrap items-center gap-2">
-          <Button
-            variant="primary"
-            className={shouldStackTopActions ? "w-full" : "flex-1"}
-            onPress={openImportSheet}
-          >
-            <Ionicons name="add-circle-outline" size={16} color="#fff" />
-            <Button.Label>{t("files.importOptions")}</Button.Label>
-          </Button>
-          {!isSelectionMode ? (
-            <>
-              <Button
-                testID="files-enter-selection-mode-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => setSelectionMode(true)}
-              >
-                <Ionicons name="checkmark-circle-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => router.push("/convert")}
-              >
-                <Ionicons name="swap-horizontal-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                testID="files-open-trash-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => setShowTrashSheet(true)}
-              >
-                <Ionicons
-                  name={trashItems.length > 0 ? "trash-bin" : "trash-bin-outline"}
-                  size={16}
-                  color={mutedColor}
-                />
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                testID="files-select-all-visible-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={handleSelectAllVisible}
-              >
-                <Ionicons name="checkbox-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                testID="files-invert-selection-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={handleInvertSelection}
-                isDisabled={displayFiles.length === 0}
-              >
-                <Ionicons name="shuffle-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={handleBatchFavorite}
-                isDisabled={selectedIds.length === 0}
-              >
-                <Ionicons name="heart-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                testID="files-open-album-picker-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => setShowAlbumPicker(true)}
-                isDisabled={selectedIds.length === 0}
-              >
-                <Ionicons name="albums-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                testID="files-open-batch-tag-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => setShowBatchTag(true)}
-                isDisabled={selectedIds.length === 0}
-              >
-                <Ionicons name="pricetag-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                testID="files-open-batch-rename-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => setShowBatchRename(true)}
-                isDisabled={selectedIds.length === 0}
-              >
-                <Ionicons name="text-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                testID="files-open-group-sheet-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => setShowGroupSheet(true)}
-                isDisabled={selectedIds.length === 0}
-              >
-                <Ionicons name="folder-open-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={handleBatchExport}
-                isDisabled={selectedIds.length === 0}
-              >
-                <Ionicons name="share-social-outline" size={16} color={mutedColor} />
-              </Button>
-              <Button
-                testID="files-batch-delete-button"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={handleBatchDelete}
-                isDisabled={selectedIds.length === 0}
-              >
-                <Ionicons name="trash-outline" size={16} color="#ef4444" />
-              </Button>
-              <Button size="sm" isIconOnly variant="outline" onPress={clearSelection}>
-                <Ionicons name="close-outline" size={16} color={mutedColor} />
-              </Button>
-            </>
-          )}
-        </View>
+        <FilesToolbar
+          isSelectionMode={isSelectionMode}
+          selectedCount={selectedIds.length}
+          displayCount={displayFiles.length}
+          trashCount={trashItems.length}
+          shouldStack={shouldStackTopActions}
+          onImport={openImportSheet}
+          onEnterSelection={() => setSelectionMode(true)}
+          onConvert={() => router.push("/convert")}
+          onTrash={() => setShowTrashSheet(true)}
+          onSelectAllVisible={handleSelectAllVisible}
+          onInvertSelection={handleInvertSelection}
+          onBatchFavorite={handleBatchFavorite}
+          onAlbumPicker={() => setShowAlbumPicker(true)}
+          onBatchTag={() => setShowBatchTag(true)}
+          onBatchRename={() => setShowBatchRename(true)}
+          onGroupSheet={() => setShowGroupSheet(true)}
+          onBatchExport={handleBatchExport}
+          onBatchDelete={handleBatchDelete}
+          onClearSelection={clearSelection}
+        />
 
         {isSelectionMode && (
-          <View className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2">
-            <Text className="text-xs text-muted">
-              {selectedIds.length} {t("common.selected")}
-            </Text>
-            <View className="flex-row items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={handleBatchExport}
-                isDisabled={!selectedIds.length}
-              >
-                <Ionicons name="share-social-outline" size={14} color={mutedColor} />
-                <Button.Label>{t("files.exportSelected")}</Button.Label>
-              </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={goToBatchConvert}
-                isDisabled={!selectedIds.length}
-              >
-                <Ionicons name="swap-horizontal-outline" size={14} color={mutedColor} />
-                <Button.Label>{t("converter.batchConvert")}</Button.Label>
-              </Button>
-            </View>
-          </View>
+          <FilesSelectionBar
+            selectedCount={selectedIds.length}
+            isLandscape={isLandscape}
+            onExport={handleBatchExport}
+            onBatchConvert={goToBatchConvert}
+            onStacking={goToStacking}
+          />
         )}
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View className="flex-row items-center gap-2">
-            {(["name", "date", "size", "quality"] as const).map((key) => (
-              <Chip
-                key={key}
-                size="sm"
-                variant={sortBy === key ? "primary" : "secondary"}
-                onPress={() => handleSortToggle(key)}
-              >
-                <Chip.Label className="text-xs">
-                  {key === "quality"
-                    ? t("gallery.quality")
-                    : t(
-                        `files.sortBy${key.charAt(0).toUpperCase() + key.slice(1)}` as
-                          | "files.sortByName"
-                          | "files.sortByDate"
-                          | "files.sortBySize",
-                      )}
-                  {sortBy === key && (sortOrder === "asc" ? " ↑" : " ↓")}
-                </Chip.Label>
-              </Chip>
-            ))}
+        <FilesSortBar
+          sortBy={sortBy}
+          sortOrder={sortOrder}
+          fileListStyle={fileListStyle}
+          fileListGridColumns={fileListGridColumns}
+          onSortToggle={handleSortToggle}
+          onStyleChange={setFileListStyle}
+          onGridColumnsChange={setFileListGridColumns}
+        />
 
-            <View className="h-4 w-px bg-separator" />
-
-            {(["grid", "list", "compact"] as const).map((style) => (
-              <Chip
-                key={style}
-                size="sm"
-                variant={fileListStyle === style ? "primary" : "secondary"}
-                onPress={() => setFileListStyle(style)}
-              >
-                <Chip.Label className="text-xs">
-                  {style === "grid"
-                    ? t("settings.fileListGrid")
-                    : style === "list"
-                      ? t("settings.fileListList")
-                      : t("settings.fileListCompact")}
-                </Chip.Label>
-              </Chip>
-            ))}
-
-            {fileListStyle === "grid" && (
-              <>
-                <View className="h-4 w-px bg-separator" />
-                {FILE_LIST_GRID_COLUMNS.map((cols) => (
-                  <Chip
-                    key={`grid-cols-${cols}`}
-                    testID={`files-grid-columns-${cols}`}
-                    size="sm"
-                    variant={fileListGridColumns === cols ? "primary" : "secondary"}
-                    onPress={() => setFileListGridColumns(cols)}
-                  >
-                    <Chip.Label className="text-xs">{cols}</Chip.Label>
-                  </Chip>
-                ))}
-              </>
-            )}
-          </View>
-        </ScrollView>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View className="flex-row items-center gap-2">
-            <Chip
-              size="sm"
-              variant={favoriteOnly ? "primary" : "secondary"}
-              onPress={() => setFavoriteOnly((prev) => !prev)}
-            >
-              <Ionicons name="heart-outline" size={12} color={favoriteOnly ? "#fff" : mutedColor} />
-              <Chip.Label className="text-xs">{t("gallery.favoritesOnly")}</Chip.Label>
-            </Chip>
-            {metadataIndex.objects.map((objectValue) => (
-              <Chip
-                key={`obj-${objectValue}`}
-                size="sm"
-                variant={filterObject === objectValue ? "primary" : "secondary"}
-                onPress={() => setFilterObject((prev) => (prev === objectValue ? "" : objectValue))}
-              >
-                <Chip.Label className="text-xs">{objectValue}</Chip.Label>
-              </Chip>
-            ))}
-            {metadataIndex.sourceFormats.map((fmt) => (
-              <Chip
-                key={`fmt-${fmt}`}
-                size="sm"
-                variant={filterSourceFormat === fmt ? "primary" : "secondary"}
-                onPress={() => setFilterSourceFormat((prev) => (prev === fmt ? "" : fmt))}
-              >
-                <Chip.Label className="text-xs">{fmt.toUpperCase()}</Chip.Label>
-              </Chip>
-            ))}
-            {fileGroups.map((group) => (
-              <Chip
-                key={`group-${group.id}`}
-                size="sm"
-                variant={filterGroupId === group.id ? "primary" : "secondary"}
-                onPress={() => setFilterGroupId((prev) => (prev === group.id ? "" : group.id))}
-              >
-                <Chip.Label className="text-xs">{group.name}</Chip.Label>
-              </Chip>
-            ))}
-          </View>
-        </ScrollView>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View className="flex-row items-center gap-2">
-            {metadataIndex.filters.map((filterValue) => (
-              <Chip
-                key={`filter-${filterValue}`}
-                size="sm"
-                variant={filterFilter === filterValue ? "primary" : "secondary"}
-                onPress={() => setFilterFilter((prev) => (prev === filterValue ? "" : filterValue))}
-              >
-                <Chip.Label className="text-xs">{filterValue}</Chip.Label>
-              </Chip>
-            ))}
-            {frameFilters.map((frameType) => (
-              <Chip
-                key={`frame-${frameType}`}
-                size="sm"
-                variant={filterFrameType === frameType ? "primary" : "secondary"}
-                onPress={() => setFilterFrameType((prev) => (prev === frameType ? "" : frameType))}
-              >
-                <Chip.Label className="text-xs">
-                  {frameTypeLabels.get(frameType) ?? frameType}
-                </Chip.Label>
-              </Chip>
-            ))}
-            {metadataIndex.tags.map((tagValue) => (
-              <Chip
-                key={`tag-${tagValue}`}
-                size="sm"
-                variant={filterTag === tagValue ? "primary" : "secondary"}
-                onPress={() => setFilterTag((prev) => (prev === tagValue ? "" : tagValue))}
-              >
-                <Chip.Label className="text-xs">#{tagValue}</Chip.Label>
-              </Chip>
-            ))}
-          </View>
-        </ScrollView>
-
-        {activeFilterCount > 0 && (
-          <View className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2">
-            <Text className="text-xs text-muted">
-              {activeFilterCount} {t("common.selected")}
-            </Text>
-            <Button size="sm" variant="ghost" onPress={clearLocalFilters}>
-              <Button.Label>{t("targets.clearFilters")}</Button.Label>
-            </Button>
-          </View>
-        )}
-
-        <Separator />
+        <FilesFilterBar
+          favoriteOnly={favoriteOnly}
+          filterObject={filterObject}
+          filterFilter={filterFilter}
+          filterSourceFormat={filterSourceFormat}
+          filterFrameType={filterFrameType}
+          filterTag={filterTag}
+          filterGroupId={filterGroupId}
+          activeFilterCount={activeFilterCount}
+          objects={metadataIndex.objects}
+          filters={metadataIndex.filters}
+          sourceFormats={metadataIndex.sourceFormats}
+          frameFilters={frameFilters}
+          frameTypeLabels={frameTypeLabels}
+          tags={metadataIndex.tags}
+          fileGroups={fileGroups}
+          isLandscape={isLandscape}
+          onFavoriteToggle={() => setFavoriteOnly((prev) => !prev)}
+          onObjectChange={(v) => setFilterObject((prev) => (prev === v ? "" : v))}
+          onFilterChange={(v) => setFilterFilter((prev) => (prev === v ? "" : v))}
+          onSourceFormatChange={(v) => setFilterSourceFormat((prev) => (prev === v ? "" : v))}
+          onFrameTypeChange={(v) => setFilterFrameType((prev) => (prev === v ? "" : v))}
+          onTagChange={(v) => setFilterTag((prev) => (prev === v ? "" : v))}
+          onGroupChange={(v) => setFilterGroupId((prev) => (prev === v ? "" : v))}
+          onClearFilters={clearLocalFilters}
+        />
       </View>
     ),
     [
-      t,
+      isLandscape,
       displayFiles.length,
       allFiles.length,
-      storageStats,
-      mutedColor,
+      storageStats.fitsSize,
       searchQuery,
       setSearchQuery,
-      openImportSheet,
-      shouldStackTopActions,
       isSelectionMode,
+      selectedIds.length,
+      trashItems.length,
+      shouldStackTopActions,
+      openImportSheet,
       setSelectionMode,
       router,
-      setShowTrashSheet,
       handleSelectAllVisible,
       handleInvertSelection,
       handleBatchFavorite,
-      setShowGroupSheet,
       handleBatchExport,
       goToBatchConvert,
+      goToStacking,
       handleBatchDelete,
       clearSelection,
-      selectedIds.length,
-      trashItems.length,
       sortBy,
       sortOrder,
       handleSortToggle,
@@ -1074,18 +787,17 @@ export default function FilesScreen() {
       fileListGridColumns,
       setFileListGridColumns,
       favoriteOnly,
-      fileGroups,
-      metadataIndex,
-      frameFilters,
-      frameTypeLabels,
       filterObject,
       filterFilter,
       filterSourceFormat,
       filterFrameType,
       filterTag,
       filterGroupId,
-      setFilterGroupId,
       activeFilterCount,
+      metadataIndex,
+      frameFilters,
+      frameTypeLabels,
+      fileGroups,
       clearLocalFilters,
     ],
   );
@@ -1131,7 +843,12 @@ export default function FilesScreen() {
           {displayFiles.length === 0 ? (
             <View className="flex-1">
               {ListHeader}
-              <EmptyState icon="search-outline" title={t("files.noSupportedFound")} />
+              <EmptyState
+                icon="search-outline"
+                title={t("files.noSupportedFound")}
+                secondaryLabel={activeFilterCount > 0 ? t("targets.clearFilters") : undefined}
+                onSecondaryAction={activeFilterCount > 0 ? clearLocalFilters : undefined}
+              />
             </View>
           ) : (
             <ThumbnailGrid
@@ -1159,7 +876,12 @@ export default function FilesScreen() {
           numColumns={1}
           ListHeaderComponent={ListHeader}
           ListEmptyComponent={
-            <EmptyState icon="search-outline" title={t("files.noSupportedFound")} />
+            <EmptyState
+              icon="search-outline"
+              title={t("files.noSupportedFound")}
+              secondaryLabel={activeFilterCount > 0 ? t("targets.clearFilters") : undefined}
+              onSecondaryAction={activeFilterCount > 0 ? clearLocalFilters : undefined}
+            />
           }
           contentContainerStyle={{
             paddingHorizontal: horizontalPadding,
@@ -1171,157 +893,26 @@ export default function FilesScreen() {
         />
       )}
 
-      {pendingDeleteToken && (
-        <View className="absolute bottom-6 left-4 right-4 rounded-xl bg-surface-secondary px-3 py-2 border border-separator">
-          <View className="flex-row items-center justify-between gap-2">
-            <Text className="text-xs text-muted flex-1">
-              {t("files.undoDeleteHint").replace("{count}", String(pendingDeleteCount))}
-            </Text>
-            <Button size="sm" variant="ghost" onPress={handleUndoDelete}>
-              <Button.Label>{t("common.undo")}</Button.Label>
-            </Button>
-          </View>
-        </View>
-      )}
+      <UndoSnackbar
+        visible={!!pendingDeleteToken}
+        count={pendingDeleteCount}
+        onUndo={handleUndoDelete}
+      />
 
-      <BottomSheet isOpen={showImportSheet} onOpenChange={setShowImportSheet}>
-        <BottomSheet.Portal>
-          <BottomSheet.Overlay />
-          <BottomSheet.Content
-            snapPoints={[Math.min(320, screenHeight * 0.6)]}
-            enablePanDownToClose
-            backgroundStyle={{ backgroundColor: "rgba(30, 30, 30, 0.95)" }}
-            handleIndicatorStyle={{ backgroundColor: mutedColor }}
-          >
-            <View className="px-6 pb-8">
-              <Text className="mb-1 text-lg font-bold text-foreground">
-                {t("files.importOptions")}
-              </Text>
-              <Text className="mb-4 text-xs text-muted">{t("files.selectImportMethod")}</Text>
-
-              <View className="gap-2">
-                <PressableFeedback
-                  onPress={handleImportFile}
-                  className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <Ionicons name="document-outline" size={20} color={successColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {t("files.importFile")}
-                    </Text>
-                    <Text className="text-xs text-muted">{t("files.supportedFormatsShort")}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-                </PressableFeedback>
-
-                <PressableFeedback
-                  onPress={handleImportFolder}
-                  className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <Ionicons name="folder-open-outline" size={20} color={successColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {t("files.importFolder")}
-                    </Text>
-                    <Text className="text-xs text-muted">{t("files.supportedFormatsHint")}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-                </PressableFeedback>
-
-                <PressableFeedback
-                  onPress={handleImportZip}
-                  className={`flex-row items-center gap-3 rounded-xl p-4 ${
-                    isZipImportAvailable ? "bg-surface-secondary" : "bg-surface-secondary/60"
-                  }`}
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <Ionicons name="archive-outline" size={20} color={successColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {t("files.importZip")}
-                    </Text>
-                    <Text className="text-xs text-muted">
-                      {isZipImportAvailable ? "ZIP" : t("files.importZipUnavailable")}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-                </PressableFeedback>
-
-                <PressableFeedback
-                  onPress={handleImportUrl}
-                  className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <Ionicons name="cloud-download-outline" size={20} color={successColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {t("files.importFromUrl")}
-                    </Text>
-                    <Text className="text-xs text-muted">
-                      HTTP / HTTPS · {t("files.supportedFormatsShort")}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-                </PressableFeedback>
-
-                <PressableFeedback
-                  onPress={handleImportClipboard}
-                  className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <Ionicons name="clipboard-outline" size={20} color={successColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {t("files.importFromClipboard")}
-                    </Text>
-                    <Text className="text-xs text-muted">{t("files.supportedFormatsShort")}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-                </PressableFeedback>
-
-                <PressableFeedback
-                  onPress={handleImportMediaLibrary}
-                  className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <Ionicons name="images-outline" size={20} color={successColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {t("files.importFromMediaLibrary")}
-                    </Text>
-                    <Text className="text-xs text-muted">{t("files.mediaLibraryHint")}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-                </PressableFeedback>
-
-                <PressableFeedback
-                  onPress={handleRecordVideo}
-                  className="flex-row items-center gap-3 rounded-xl bg-surface-secondary p-4"
-                >
-                  <View className="h-10 w-10 items-center justify-center rounded-full bg-success/10">
-                    <Ionicons name="videocam-outline" size={20} color={successColor} />
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-sm font-semibold text-foreground">
-                      {t("files.recordVideo")}
-                    </Text>
-                    <Text className="text-xs text-muted">{t("files.recordVideoHint")}</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-                </PressableFeedback>
-              </View>
-            </View>
-          </BottomSheet.Content>
-        </BottomSheet.Portal>
-      </BottomSheet>
+      <ImportOptionsSheet
+        visible={showImportSheet}
+        onOpenChange={setShowImportSheet}
+        screenHeight={screenHeight}
+        isZipImportAvailable={isZipImportAvailable}
+        isLandscape={isLandscape}
+        onImportFile={handleImportFile}
+        onImportFolder={handleImportFolder}
+        onImportZip={handleImportZip}
+        onImportUrl={handleImportUrl}
+        onImportClipboard={handleImportClipboard}
+        onImportMediaLibrary={handleImportMediaLibrary}
+        onRecordVideo={handleRecordVideo}
+      />
 
       <Dialog isOpen={showUrlDialog} onOpenChange={setShowUrlDialog}>
         <Dialog.Portal>

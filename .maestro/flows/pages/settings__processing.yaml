@@ -5,9 +5,19 @@
     id: e2e-screen-settings__processing
 - assertVisible:
     id: e2e-action-settings__processing-toggle-use-annotated
+- assertVisible:
+    id: e2e-action-settings__processing-open-stack-method
+- assertVisible:
+    id: e2e-action-settings__processing-open-converter-format
+- tapOn:
+    id: e2e-action-settings__processing-toggle-use-annotated
 - tapOn:
     id: e2e-action-settings__processing-toggle-use-annotated
 - tapOn:
     id: e2e-action-settings__processing-open-stack-method
+- back
 - tapOn:
     id: e2e-action-settings__processing-open-converter-format
+- back
+- assertVisible:
+    id: e2e-screen-settings__processing

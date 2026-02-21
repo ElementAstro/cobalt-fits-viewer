@@ -269,6 +269,35 @@ export default function TargetsScreen() {
     [setAdvancedConditions, setIsAdvancedMode, setSearchQuery],
   );
 
+  const buildScanSummaryMessage = useCallback(
+    (result: {
+      scannedCount: number;
+      newCount: number;
+      updatedCount: number;
+      skippedCount: number;
+    }) =>
+      [
+        `${t("targets.scanSummaryScanned")}: ${result.scannedCount}`,
+        `${t("targets.scanSummaryAdded")}: ${result.newCount}`,
+        `${t("targets.scanSummaryUpdated")}: ${result.updatedCount}`,
+        `${t("targets.scanSummarySkipped")}: ${result.skippedCount}`,
+      ].join("\n"),
+    [t],
+  );
+
+  const handleScanTargets = useCallback(() => {
+    const result = scanAndAutoDetect();
+    Alert.alert(
+      t("targets.scanSummaryTitle"),
+      buildScanSummaryMessage({
+        scannedCount: result.scannedCount,
+        newCount: result.newCount,
+        updatedCount: result.updatedCount,
+        skippedCount: result.skippedCount,
+      }),
+    );
+  }, [buildScanSummaryMessage, scanAndAutoDetect, t]);
+
   const renderTargetItem = useCallback(
     ({ item: target }: { item: import("../../lib/fits/types").Target }) => {
       const stats = statsMap.get(target.id);
@@ -353,18 +382,11 @@ export default function TargetsScreen() {
                   <Ionicons name="folder-open-outline" size={actionIconSize} color={mutedColor} />
                 </Button>
                 <Button
+                  testID="e2e-action-tabs__targets-scan"
                   size={headerActionButtonSize}
                   isIconOnly
                   variant="outline"
-                  onPress={() => {
-                    const result = scanAndAutoDetect();
-                    Alert.alert(
-                      t("common.success"),
-                      result.newCount > 0
-                        ? `${t("targets.scanNow")}: ${result.newCount} ${t("targets.title")}`
-                        : t("targets.noResults"),
-                    );
-                  }}
+                  onPress={handleScanTargets}
                 >
                   <Ionicons name="scan-outline" size={actionIconSize} color={mutedColor} />
                 </Button>
@@ -427,18 +449,11 @@ export default function TargetsScreen() {
                 <Ionicons name="folder-open-outline" size={actionIconSize} color={mutedColor} />
               </Button>
               <Button
+                testID="e2e-action-tabs__targets-scan"
                 size={headerActionButtonSize}
                 isIconOnly
                 variant="outline"
-                onPress={() => {
-                  const result = scanAndAutoDetect();
-                  Alert.alert(
-                    t("common.success"),
-                    result.newCount > 0
-                      ? `${t("targets.scanNow")}: ${result.newCount} ${t("targets.title")}`
-                      : t("targets.noResults"),
-                  );
-                }}
+                onPress={handleScanTargets}
               >
                 <Ionicons name="scan-outline" size={actionIconSize} color={mutedColor} />
               </Button>
@@ -703,7 +718,7 @@ export default function TargetsScreen() {
             title={t("targets.noTargets")}
             description={t("targets.autoDetected")}
             actionLabel={files.length > 0 ? t("targets.scanNow") : undefined}
-            onAction={files.length > 0 ? scanAndAutoDetect : undefined}
+            onAction={files.length > 0 ? handleScanTargets : undefined}
           />
         )}
         {targets.length > 0 && filteredTargets.length === 0 && (
@@ -728,7 +743,7 @@ export default function TargetsScreen() {
       targetSortOrder,
       filteredTargets,
       files,
-      scanAndAutoDetect,
+      handleScanTargets,
       allCategories,
       allTags,
       hasActiveFilters,

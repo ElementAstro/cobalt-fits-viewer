@@ -3,9 +3,24 @@
 - openLink: cobalt://gallery
 - assertVisible:
     id: e2e-screen-tabs__gallery
+- assertVisible:
+    id: e2e-action-tabs__gallery-tab-images
+- assertVisible:
+    id: e2e-action-tabs__gallery-tab-albums
+- tapOn:
+    id: e2e-action-tabs__gallery-tab-albums
+- assertVisible: E2E Album
 - tapOn:
     id: e2e-action-tabs__gallery-open-create-album
+- back
+- tapOn:
+    id: e2e-action-tabs__gallery-tab-images
+- assertVisible: M42_Light_001.fits
+- takeScreenshot: screenshots/tabs__gallery
 - tapOn:
     id: e2e-action-tabs__gallery-open-map
 - assertVisible:
     id: e2e-screen-map__index
+- back
+- assertVisible:
+    id: e2e-screen-tabs__gallery

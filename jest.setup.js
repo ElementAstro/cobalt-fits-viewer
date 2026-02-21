@@ -149,7 +149,8 @@ jest.mock("heroui-native", () => {
   Card.Body = c("card-body");
   Card.Header = c("card-header");
   Card.Footer = c("card-footer");
-  Card.Title = (props) => React.createElement(Text, { testID: "card-title", ...props }, props.children);
+  Card.Title = (props) =>
+    React.createElement(Text, { testID: "card-title", ...props }, props.children);
   Card.Description = (props) =>
     React.createElement(Text, { testID: "card-description", ...props }, props.children);
 
@@ -220,11 +221,13 @@ jest.mock("heroui-native", () => {
 
   const TextField = c("textfield");
   const TextArea = (props) => React.createElement(TextInput, { testID: "text-area", ...props });
-  const FieldError = (props) => React.createElement(Text, { testID: "field-error", ...props }, props.children);
+  const FieldError = (props) =>
+    React.createElement(Text, { testID: "field-error", ...props }, props.children);
   const Alert = c("alert");
   Alert.Indicator = c("alert-indicator");
   Alert.Content = c("alert-content");
-  Alert.Title = (props) => React.createElement(Text, { testID: "alert-title", ...props }, props.children);
+  Alert.Title = (props) =>
+    React.createElement(Text, { testID: "alert-title", ...props }, props.children);
   Alert.Description = (props) =>
     React.createElement(Text, { testID: "alert-description", ...props }, props.children);
 

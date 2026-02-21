@@ -1,5 +1,6 @@
 appId: com.maxqian888sorganization.cobaltfitsviewer
 ---
+# ── Page-level flows ──
 - runFlow: ../flows/pages/root__index.yaml
 - runFlow: ../flows/pages/tabs__index.yaml
 - runFlow: ../flows/pages/tabs__gallery.yaml
@@ -34,3 +35,10 @@ appId: com.maxqian888sorganization.cobaltfitsviewer
 - runFlow: ../flows/pages/target__stats.yaml
 - runFlow: ../flows/pages/video__param_id.yaml
 - runFlow: ../flows/pages/viewer__param_id.yaml
+
+# ── Cross-route user journey flows ──
+- runFlow: ../flows/journeys/gallery-to-viewer.yaml
+- runFlow: ../flows/journeys/target-workflow.yaml
+- runFlow: ../flows/journeys/session-workflow.yaml
+- runFlow: ../flows/journeys/settings-navigation.yaml
+- runFlow: ../flows/journeys/edit-workflow.yaml

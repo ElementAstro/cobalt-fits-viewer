@@ -8,7 +8,7 @@
 
 import * as Crypto from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
+import { shareFile } from "../utils/imageExport";
 import * as DocumentPicker from "expo-document-picker";
 import { createManifest, serializeManifest, parseManifest, getManifestSummary } from "./manifest";
 import { LOG_TAGS, Logger } from "../logger";
@@ -427,11 +427,6 @@ export async function exportLocalBackup(
       outputName = `cobalt-backup-${Date.now()}.json`;
     }
 
-    const canShare = await Sharing.isAvailableAsync();
-    if (!canShare) {
-      return { success: false, error: "Sharing is not available on this device" };
-    }
-
     if (options.localEncryption.enabled) {
       if (!options.localEncryption.password) {
         return { success: false, error: "Password required for encrypted backup" };
@@ -460,9 +455,9 @@ export async function exportLocalBackup(
     }
 
     onProgress?.({ phase: "finalizing", current: 3, total: 4, currentFile: outputName });
-    await Sharing.shareAsync(tmpOutput.uri, {
+    await shareFile(tmpOutput.uri, {
       mimeType,
-      dialogTitle: outputName,
+      filename: outputName,
       UTI: uti,
     });
 

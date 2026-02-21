@@ -532,7 +532,8 @@ export function applyTransform(
       const y1 = y0 + 1;
 
       if (x0 < 0 || x1 >= width || y0 < 0 || y1 >= height) {
-        result[oy * width + ox] = 0;
+        // Keep invalid warped regions as NaN so downstream stackers can ignore them.
+        result[oy * width + ox] = Number.NaN;
         continue;
       }
 

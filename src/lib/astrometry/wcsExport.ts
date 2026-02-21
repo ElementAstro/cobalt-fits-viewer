@@ -5,7 +5,7 @@
  */
 
 import { Paths, File as FSFile } from "expo-file-system";
-import * as Sharing from "expo-sharing";
+import { shareFile } from "../utils/imageExport";
 import { LOG_TAGS, Logger } from "../logger";
 import { writeHeaderKeywords } from "../fits/headerWriter";
 import type { AstrometryCalibration, AstrometryResult } from "./types";
@@ -181,15 +181,11 @@ export async function shareWCS(result: AstrometryResult, fileName: string): Prom
   if (!path) return false;
 
   try {
-    const canShare = await Sharing.isAvailableAsync();
-    if (canShare) {
-      await Sharing.shareAsync(path, {
-        mimeType: "text/plain",
-        dialogTitle: `WCS Data - ${fileName}`,
-      });
-      return true;
-    }
-    return false;
+    await shareFile(path, {
+      mimeType: "text/plain",
+      filename: `WCS Data - ${fileName}`,
+    });
+    return true;
   } catch (error) {
     Logger.error(TAG, "Failed to share WCS", error);
     return false;

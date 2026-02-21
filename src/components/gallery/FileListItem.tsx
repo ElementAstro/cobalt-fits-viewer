@@ -99,7 +99,13 @@ export const FileListItem = memo(function FileListItem({
 
   const content =
     layout === "grid" ? (
-      <Pressable onPress={onPress} onLongPress={onLongPress} style={{ flex: 1 }}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        style={{ flex: 1 }}
+        accessibilityLabel={file.filename}
+        accessibilityRole="button"
+      >
         <Card variant="secondary" className={selected ? "border border-success" : ""}>
           <Card.Body className="p-2">
             <View className="aspect-square w-full items-center justify-center overflow-hidden rounded-lg bg-success/10">
@@ -177,7 +183,12 @@ export const FileListItem = memo(function FileListItem({
         </Card>
       </Pressable>
     ) : (
-      <Pressable onPress={onPress} onLongPress={onLongPress}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onLongPress}
+        accessibilityLabel={file.filename}
+        accessibilityRole="button"
+      >
         <Card variant="secondary" className={selected ? "border border-success" : ""}>
           <Card.Body
             className={`flex-row items-center gap-3 ${layout === "compact" ? "p-2" : "p-3"}`}

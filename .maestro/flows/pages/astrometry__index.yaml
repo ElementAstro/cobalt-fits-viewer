@@ -3,7 +3,13 @@
 - openLink: cobalt://astrometry
 - assertVisible:
     id: e2e-screen-astrometry__index
+- assertVisible: M42_Light_001.fits
+- assertVisible:
+    id: e2e-action-astrometry__index-open-file
+- assertVisible:
+    id: e2e-action-astrometry__index-open-url
 - tapOn:
     id: e2e-action-astrometry__index-open-url
+- back
 - tapOn:
     id: e2e-action-astrometry__index-open-file

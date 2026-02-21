@@ -5,6 +5,10 @@
 
 import { quickSelect } from "../utils/pixelMath";
 
+function isPositiveFiniteNumber(value: number | null | undefined): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
 /**
  * 暗场减除: result = light - dark
  * 暗场捕获传感器热噪声，需与 light 相同温度/曝光时间
@@ -146,4 +150,61 @@ export function createMasterFlat(flatFrames: Float32Array[]): Float32Array {
     result[i] = sum / flatFrames.length;
   }
   return normalizeFlat(result);
+}
+
+/**
+ * 计算有效曝光时间的中值（仅接受正数）
+ */
+export function computeMedianExposure(exposures: Array<number | null | undefined>): number | null {
+  const valid = exposures.filter(isPositiveFiniteNumber);
+  if (valid.length === 0) return null;
+  valid.sort((a, b) => a - b);
+  const mid = Math.floor(valid.length / 2);
+  if (valid.length % 2 === 1) {
+    return valid[mid];
+  }
+  return (valid[mid - 1] + valid[mid]) / 2;
+}
+
+export interface ExposureScaleResult {
+  pixels: Float32Array;
+  scale: number;
+  usedFallbackScale: boolean;
+}
+
+/**
+ * 将一帧按曝光时间缩放到目标曝光。
+ * 当任一曝光无效时，按 scale=1 兜底并返回 usedFallbackScale=true。
+ */
+export function scaleFrameByExposure(
+  frame: Float32Array,
+  frameExposure: number | null | undefined,
+  targetExposure: number | null | undefined,
+): ExposureScaleResult {
+  if (!isPositiveFiniteNumber(frameExposure) || !isPositiveFiniteNumber(targetExposure)) {
+    return {
+      pixels: new Float32Array(frame),
+      scale: 1,
+      usedFallbackScale: true,
+    };
+  }
+
+  const scale = targetExposure / frameExposure;
+  if (!Number.isFinite(scale) || scale <= 0) {
+    return {
+      pixels: new Float32Array(frame),
+      scale: 1,
+      usedFallbackScale: true,
+    };
+  }
+
+  const result = new Float32Array(frame.length);
+  for (let i = 0; i < frame.length; i++) {
+    result[i] = frame[i] * scale;
+  }
+  return {
+    pixels: result,
+    scale,
+    usedFallbackScale: false,
+  };
 }

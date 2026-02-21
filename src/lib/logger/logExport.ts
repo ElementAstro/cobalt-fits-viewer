@@ -4,7 +4,7 @@
  */
 
 import { Paths, Directory, File as FSFile } from "expo-file-system";
-import * as Sharing from "expo-sharing";
+import { shareFile, ShareNotAvailableError } from "../utils/imageExport";
 import { gzip } from "pako";
 import { getAppVersionInfo } from "../version";
 import { Logger, sanitizeLogEntry, serializeLogData } from "./logger";
@@ -179,27 +179,25 @@ export async function shareLogFile(
     const fileUri = await exportLogsToFile(options);
     if (!fileUri) return false;
 
-    const isAvailable = await Sharing.isAvailableAsync();
-    if (!isAvailable) {
-      Logger.warn(LOG_TAGS.LogExport, "Sharing is not available on this device");
-      return false;
-    }
-
     const mimeType = options.compress
       ? "application/gzip"
       : options.format === "json"
         ? "application/json"
         : "text/plain";
 
-    await Sharing.shareAsync(fileUri, {
+    await shareFile(fileUri, {
       mimeType,
-      dialogTitle: "Share App Logs",
+      filename: "Share App Logs",
     });
 
     Logger.info(LOG_TAGS.LogExport, "Logs shared successfully");
     return true;
   } catch (e) {
-    Logger.error(LOG_TAGS.LogExport, "Failed to share logs", e);
+    if (e instanceof ShareNotAvailableError) {
+      Logger.warn(LOG_TAGS.LogExport, "Sharing is not available on this device");
+    } else {
+      Logger.error(LOG_TAGS.LogExport, "Failed to share logs", e);
+    }
     return false;
   }
 }

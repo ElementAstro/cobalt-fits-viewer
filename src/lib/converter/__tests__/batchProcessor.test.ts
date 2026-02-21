@@ -108,10 +108,12 @@ const defaultOptions: ConvertOptions = {
   contrast: 1,
   mtfMidtone: 0.25,
   curvePreset: "linear",
+  profile: "legacy",
   outputBlack: 0,
   outputWhite: 1,
   includeAnnotations: false,
-  includeWatermark: false,
+  includeWatermark: true,
+  watermarkText: "Test Watermark",
 };
 
 describe("batchProcessor", () => {
@@ -171,7 +173,22 @@ describe("batchProcessor", () => {
       "task-1",
       expect.objectContaining({ status: "running" }),
     );
+    expect(mockFitsToRGBA).toHaveBeenCalledWith(
+      expect.any(Float32Array),
+      2,
+      1,
+      expect.objectContaining({
+        profile: "legacy",
+      }),
+    );
     expect(mockEncodeExportRequest).toHaveBeenCalled();
+    const request = mockEncodeExportRequest.mock.calls[0]?.[0];
+    expect(request?.renderOptions).toEqual(
+      expect.objectContaining({
+        includeWatermark: true,
+        watermarkText: "Test Watermark",
+      }),
+    );
     expect(mockWrittenFiles.get("/exports/m42.jpg")).toEqual(new Uint8Array([9, 8, 7]));
 
     const final = onProgress.mock.calls[onProgress.mock.calls.length - 1][1] as Partial<BatchTask>;

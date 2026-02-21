@@ -92,6 +92,22 @@ export function useLogViewer() {
 
   const [isExporting, setIsExporting] = useState(false);
 
+  const levelCounts = useMemo(() => {
+    const counts: Record<LogLevel, number> = { debug: 0, info: 0, warn: 0, error: 0 };
+    for (const entry of allEntries) {
+      counts[entry.level]++;
+    }
+    return counts;
+  }, [allEntries]);
+
+  const availableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const entry of allEntries) {
+      tagSet.add(entry.tag);
+    }
+    return Array.from(tagSet).sort();
+  }, [allEntries]);
+
   const entries = useMemo(() => {
     const tagQuery = filterTag.trim().toLowerCase();
     const textQuery = filterQuery.trim().toLowerCase();
@@ -180,6 +196,8 @@ export function useLogViewer() {
 
   return {
     entries,
+    levelCounts,
+    availableTags,
     filterLevel,
     filterTag,
     filterQuery,

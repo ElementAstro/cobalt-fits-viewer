@@ -8,6 +8,7 @@ jest.mock("../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(),
   fitsToRGBAChunked: jest.fn(),
   downsamplePixels: jest.fn(),
+  getExtent: jest.fn(() => [0, 1] as [number, number]),
 }));
 jest.mock("../../lib/utils/pixelMath", () => ({
   calculateStats: jest.fn(),
@@ -119,8 +120,8 @@ describe("useImageProcessing", () => {
     const { result } = renderHook(() => useImageProcessing());
 
     act(() => {
-      result.current.processImage(new Float32Array(1_200_000), 1200, 1000, "linear", "grayscale");
-      result.current.processImage(new Float32Array(1_200_000), 1200, 1000, "linear", "grayscale");
+      result.current.processImage(new Float32Array(2_400_000), 2000, 1200, "linear", "grayscale");
+      result.current.processImage(new Float32Array(2_400_000), 2000, 1200, "linear", "grayscale");
     });
 
     expect(signals[0].aborted).toBe(true);
@@ -172,9 +173,9 @@ describe("useImageProcessing", () => {
 
     act(() => {
       result.current.processImagePreview(
-        new Float32Array(1_200_000),
+        new Float32Array(2_400_000),
+        2000,
         1200,
-        1000,
         "linear",
         "grayscale",
       );

@@ -72,7 +72,10 @@ test("list_components honors --api-base over environment variable", async () => 
 
   try {
     const capture = createCaptureRuntime();
-    const code = await run(["--json", "--api-base", "https://from-arg.example.com"], capture.runtime);
+    const code = await run(
+      ["--json", "--api-base", "https://from-arg.example.com"],
+      capture.runtime,
+    );
     assert.equal(code, 0);
     assert.match(requestUrl, /^https:\/\/from-arg\.example\.com\//);
   } finally {

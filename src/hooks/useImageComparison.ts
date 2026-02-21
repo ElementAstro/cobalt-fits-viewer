@@ -10,6 +10,8 @@ type LegacyCompareMode = CompareMode | "overlay";
 interface UseImageComparisonOptions {
   initialIds?: string[];
   initialMode?: LegacyCompareMode;
+  initialBlinkSpeed?: number;
+  initialSplitPosition?: number;
 }
 
 function normalizeMode(mode: LegacyCompareMode | undefined): CompareMode {
@@ -26,12 +28,20 @@ function normalizeIds(ids: string[]) {
   return unique;
 }
 
+function clamp(value: number, min: number, max: number) {
+  return Math.max(min, Math.min(max, value));
+}
+
 export function useImageComparison(options?: UseImageComparisonOptions) {
   const [imageIds, _setImageIds] = useState<string[]>(normalizeIds(options?.initialIds ?? []));
   const [mode, setMode] = useState<CompareMode>(normalizeMode(options?.initialMode));
   const [activeIndex, setActiveIndex] = useState(0);
-  const [blinkSpeed, setBlinkSpeed] = useState(1.5); // seconds
-  const [splitPosition, setSplitPosition] = useState(0.5);
+  const [blinkSpeed, _setBlinkSpeed] = useState(() =>
+    clamp(options?.initialBlinkSpeed ?? 1.5, 0.3, 5),
+  ); // seconds
+  const [splitPosition, _setSplitPosition] = useState(() =>
+    clamp(options?.initialSplitPosition ?? 0.5, 0.1, 0.9),
+  );
   const [isBlinkPlaying, setIsBlinkPlaying] = useState(false);
   const blinkTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -66,6 +76,14 @@ export function useImageComparison(options?: UseImageComparisonOptions) {
 
   const toggleBlinkPlay = useCallback(() => {
     setIsBlinkPlaying((prev) => !prev);
+  }, []);
+
+  const setBlinkSpeed = useCallback((value: number) => {
+    _setBlinkSpeed(clamp(value, 0.3, 5));
+  }, []);
+
+  const setSplitPosition = useCallback((value: number) => {
+    _setSplitPosition(clamp(value, 0.1, 0.9));
   }, []);
 
   // Blink timer
