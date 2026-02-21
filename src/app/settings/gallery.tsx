@@ -30,6 +30,11 @@ const THUMB_SIZE_OPTIONS = [
 const GALLERY_SORT_BY_VALUES = ["name", "date", "size", "object", "filter"] as const;
 const GALLERY_SORT_ORDER_VALUES = ["asc", "desc"] as const;
 const FILE_LIST_STYLE_VALUES = ["grid", "list", "compact"] as const;
+const FILE_LIST_GRID_OPTIONS: Array<{ label: string; value: 2 | 3 | 4 }> = [
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
+  { label: "4", value: 4 },
+];
 
 export default function GallerySettingsScreen() {
   const { t } = useI18n();
@@ -55,7 +60,9 @@ export default function GallerySettingsScreen() {
 
   // File list style
   const fileListStyle = useSettingsStore((s) => s.fileListStyle);
+  const fileListGridColumns = useSettingsStore((s) => s.fileListGridColumns);
   const setFileListStyle = useSettingsStore((s) => s.setFileListStyle);
+  const setFileListGridColumns = useSettingsStore((s) => s.setFileListGridColumns);
 
   // Thumbnail info display
   const thumbnailShowFilename = useSettingsStore((s) => s.thumbnailShowFilename);
@@ -177,6 +184,13 @@ export default function GallerySettingsScreen() {
             }
             onPress={() => openPicker("fileListStyle")}
           />
+          <Separator />
+          <SettingsRow
+            icon="grid-outline"
+            label={t("settings.fileListGridColumns")}
+            value={`${fileListGridColumns}`}
+            onPress={() => openPicker("fileListGridColumns")}
+          />
         </SettingsSection>
 
         {/* Thumbnail Info */}
@@ -285,6 +299,14 @@ export default function GallerySettingsScreen() {
           options={fileListStyleOptions}
           selectedValue={fileListStyle}
           onSelect={setFileListStyle}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "fileListGridColumns"}
+          title={t("settings.fileListGridColumns")}
+          options={FILE_LIST_GRID_OPTIONS}
+          selectedValue={fileListGridColumns}
+          onSelect={setFileListGridColumns}
           onClose={closePicker}
         />
       </ScrollView>

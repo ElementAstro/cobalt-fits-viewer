@@ -1,11 +1,18 @@
 import "../global.css";
+import "../lib/polyfills/webCrypto";
 
 import { useCallback, useEffect, useState, type PropsWithChildren } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 import { Stack } from "expo-router";
+import {
+  DarkTheme,
+  DefaultTheme,
+  ThemeProvider,
+  type Theme as NavigationTheme,
+} from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { HeroUINativeProvider } from "heroui-native";
+import { HeroUINativeProvider, useThemeColor } from "heroui-native";
 import { useUniwind } from "uniwind";
 import * as SplashScreen from "expo-splash-screen";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -138,6 +145,36 @@ const ORIENTATION_LOCK_MAP = {
   landscape: ScreenOrientation.OrientationLock.LANDSCAPE,
 } as const;
 
+function ThemedRootStack() {
+  const backgroundColor = useThemeColor("background");
+  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }} />;
+}
+
+function ThemedAppContainer({ children }: PropsWithChildren) {
+  const backgroundColor = useThemeColor("background");
+  return <View style={{ flex: 1, backgroundColor }}>{children}</View>;
+}
+
+function NavigationThemeBridge({ isDark, children }: PropsWithChildren<{ isDark: boolean }>) {
+  const [backgroundColor, cardColor, textColor, borderColor, primaryColor, notificationColor] =
+    useThemeColor(["background", "surface", "foreground", "separator", "accent", "danger"]);
+
+  const theme: NavigationTheme = {
+    ...(isDark ? DarkTheme : DefaultTheme),
+    colors: {
+      ...(isDark ? DarkTheme : DefaultTheme).colors,
+      background: backgroundColor,
+      card: cardColor,
+      text: textColor,
+      border: borderColor,
+      primary: primaryColor,
+      notification: notificationColor,
+    },
+  };
+
+  return <ThemeProvider value={theme}>{children}</ThemeProvider>;
+}
+
 export default function RootLayout() {
   const e2eMode = isE2EMode();
   const { theme } = useUniwind();
@@ -207,34 +244,38 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <HeroUINativeProvider>
-        <FontProvider>
-          <AutoSolveProvider>
-            <AutoBackupProvider>
-              <TargetIntegrityProvider>
-                <AnimatedSplashScreen>
-                  <OnboardingGate>
-                    <StatusBar style={theme === "dark" ? "light" : "dark"} />
-                    <Stack screenOptions={{ headerShown: false }} />
-                    {e2eMode ? (
-                      <Text
-                        testID="e2e-bootstrap-ready"
-                        style={{
-                          position: "absolute",
-                          width: 0,
-                          height: 0,
-                          opacity: 0,
-                        }}
-                      >
-                        ready
-                      </Text>
-                    ) : null}
-                    <UpdateBanner />
-                  </OnboardingGate>
-                </AnimatedSplashScreen>
-              </TargetIntegrityProvider>
-            </AutoBackupProvider>
-          </AutoSolveProvider>
-        </FontProvider>
+        <NavigationThemeBridge isDark={theme === "dark"}>
+          <FontProvider>
+            <AutoSolveProvider>
+              <AutoBackupProvider>
+                <TargetIntegrityProvider>
+                  <AnimatedSplashScreen>
+                    <OnboardingGate>
+                      <ThemedAppContainer>
+                        <StatusBar style={theme === "dark" ? "light" : "dark"} />
+                        <ThemedRootStack />
+                        {e2eMode ? (
+                          <Text
+                            testID="e2e-bootstrap-ready"
+                            style={{
+                              position: "absolute",
+                              width: 0,
+                              height: 0,
+                              opacity: 0,
+                            }}
+                          >
+                            ready
+                          </Text>
+                        ) : null}
+                        <UpdateBanner />
+                      </ThemedAppContainer>
+                    </OnboardingGate>
+                  </AnimatedSplashScreen>
+                </TargetIntegrityProvider>
+              </AutoBackupProvider>
+            </AutoSolveProvider>
+          </FontProvider>
+        </NavigationThemeBridge>
       </HeroUINativeProvider>
     </GestureHandlerRootView>
   );

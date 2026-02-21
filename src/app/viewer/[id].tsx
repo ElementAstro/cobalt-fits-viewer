@@ -1099,6 +1099,7 @@ export default function ViewerDetailScreen() {
               min={stats.min}
               max={stats.max}
               mean={stats.mean}
+              stddev={stats.stddev}
             />
           )}
 
@@ -1225,7 +1226,13 @@ export default function ViewerDetailScreen() {
       ) : (
         <>
           {canvasArea}
-          {!isFullscreen && <ViewerBottomSheet visible={showControls} {...controlPanelProps} />}
+          {!isFullscreen && (
+            <ViewerBottomSheet
+              visible={showControls}
+              onVisibleChange={setShowControls}
+              {...controlPanelProps}
+            />
+          )}
         </>
       )}
 

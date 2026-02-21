@@ -2,8 +2,7 @@
  * 目标统计仪表板
  */
 
-import { View, Text, useWindowDimensions } from "react-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { ScrollView, View, Text, useWindowDimensions } from "react-native";
 import { Card, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -26,7 +25,7 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
   const scrollMaxHeight = screenHeight * 0.65;
 
   return (
-    <BottomSheetScrollView
+    <ScrollView
       showsVerticalScrollIndicator={false}
       style={{ maxHeight: scrollMaxHeight }}
       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
@@ -243,6 +242,6 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
           </Card.Body>
         </Card>
       </View>
-    </BottomSheetScrollView>
+    </ScrollView>
   );
 }

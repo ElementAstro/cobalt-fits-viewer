@@ -1,6 +1,6 @@
-import { View, Text, Alert } from "react-native";
-import { useState, useMemo, useCallback } from "react";
-import { Button, Chip, Separator, useThemeColor } from "heroui-native";
+import { View, Text, Alert, ScrollView } from "react-native";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { Button, Card, Chip, Separator, Tabs, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -9,12 +9,15 @@ import { useAlbumStore } from "../../stores/useAlbumStore";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
+import { ThumbnailLoadingBanner } from "../../components/gallery/ThumbnailLoadingBanner";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
 import { AlbumStatisticsSheet } from "../../components/gallery/AlbumStatisticsSheet";
 import { calculateAlbumStatistics } from "../../lib/gallery/albumStatistics";
 import { formatDate } from "../../lib/utils/format";
+import { routeForMedia } from "../../lib/media/routing";
 import type { FitsMetadata, AlbumStatistics } from "../../lib/fits/types";
+import type { ThumbnailLoadingSummary } from "../../components/gallery/thumbnailLoading";
 
 export default function AlbumDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -52,7 +55,11 @@ export default function AlbumDetailScreen() {
     enterSelectionMode,
     exitSelectionMode,
     selectAll,
+    reconcileSelection,
   } = useSelectionMode();
+  const [activeTab, setActiveTab] = useState<"photos" | "info">("photos");
+  const [thumbnailLoadingSummary, setThumbnailLoadingSummary] =
+    useState<ThumbnailLoadingSummary | null>(null);
   const [showRenamePrompt, setShowRenamePrompt] = useState(false);
   const [showNotesEdit, setShowNotesEdit] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
@@ -60,12 +67,22 @@ export default function AlbumDetailScreen() {
   const allAlbumSelected =
     albumFiles.length > 0 && albumFiles.every((file) => selectedIds.includes(file.id));
 
+  useEffect(() => {
+    reconcileSelection(albumFiles.map((file) => file.id));
+  }, [albumFiles, reconcileSelection]);
+
+  useEffect(() => {
+    if (activeTab !== "photos" || albumFiles.length === 0) {
+      setThumbnailLoadingSummary(null);
+    }
+  }, [activeTab, albumFiles.length]);
+
   const handleFilePress = useCallback(
     (file: FitsMetadata) => {
       if (isSelectionMode) {
         toggleSelection(file.id);
       } else {
-        router.push(`/viewer/${file.id}`);
+        router.push(routeForMedia(file));
       }
     },
     [isSelectionMode, toggleSelection, router],
@@ -144,62 +161,82 @@ export default function AlbumDetailScreen() {
 
   const albumColumns = isLandscapeTablet ? 6 : isLandscape ? 5 : 3;
 
+  const AlbumTopBar = useMemo(() => {
+    if (!album) return null;
+
+    return (
+      <View className="flex-row items-center justify-between">
+        <View className="flex-row items-center gap-2 flex-1">
+          <Button size="sm" variant="outline" onPress={() => router.back()}>
+            <Ionicons name="arrow-back" size={16} color={mutedColor} />
+          </Button>
+          <View className="flex-row items-center gap-1.5 flex-1">
+            <Text
+              className={
+                isLandscape
+                  ? "text-lg font-bold text-foreground"
+                  : "text-base font-bold text-foreground"
+              }
+              numberOfLines={1}
+            >
+              {album.name}
+            </Text>
+            {album.isSmart && (
+              <View className="rounded bg-success/20 px-1.5 py-0.5">
+                <Ionicons name="sparkles" size={10} color={successColor} />
+              </View>
+            )}
+            <Text className="text-xs text-muted">
+              {albumFiles.length} {t("album.images")}
+            </Text>
+          </View>
+        </View>
+        <View className="flex-row gap-1">
+          {statistics && (
+            <Button
+              testID="e2e-action-album__param_id-open-stats"
+              size="sm"
+              variant="outline"
+              onPress={() => setShowStatistics(true)}
+            >
+              <Ionicons name="stats-chart-outline" size={14} color={successColor} />
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onPress={handleEditNotes}>
+            <Ionicons name="document-text-outline" size={14} color={mutedColor} />
+          </Button>
+          <Button
+            testID="e2e-action-album__param_id-open-rename"
+            size="sm"
+            variant="outline"
+            onPress={handleRename}
+          >
+            <Ionicons name="pencil-outline" size={14} color={mutedColor} />
+          </Button>
+          <Button size="sm" variant="outline" onPress={handleDeleteAlbum}>
+            <Ionicons name="trash-outline" size={14} color="#ef4444" />
+          </Button>
+        </View>
+      </View>
+    );
+  }, [
+    album,
+    router,
+    mutedColor,
+    isLandscape,
+    successColor,
+    albumFiles.length,
+    t,
+    statistics,
+    handleEditNotes,
+    handleRename,
+    handleDeleteAlbum,
+  ]);
+
   const AlbumHeader = useMemo(() => {
     if (!album) return null;
     return (
       <View className={isLandscape ? "gap-1.5" : "gap-3"}>
-        {/* Top Bar */}
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <Button size="sm" variant="outline" onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={16} color={mutedColor} />
-            </Button>
-            {isLandscape && (
-              <View className="flex-row items-center gap-1.5">
-                <Text className="text-lg font-bold text-foreground" numberOfLines={1}>
-                  {album.name}
-                </Text>
-                {album.isSmart && (
-                  <View className="rounded bg-success/20 px-1.5 py-0.5">
-                    <Ionicons name="sparkles" size={10} color={successColor} />
-                  </View>
-                )}
-                <Text className="text-xs text-muted">
-                  {albumFiles.length} {t("album.images")}
-                </Text>
-              </View>
-            )}
-          </View>
-          <View className="flex-row gap-1">
-            {isLandscape && statistics && (
-              <Button
-                testID="e2e-action-album__param_id-open-stats"
-                size="sm"
-                variant="outline"
-                onPress={() => setShowStatistics(true)}
-              >
-                <Ionicons name="stats-chart-outline" size={14} color={successColor} />
-              </Button>
-            )}
-            {isLandscape && (
-              <Button size="sm" variant="outline" onPress={handleEditNotes}>
-                <Ionicons name="document-text-outline" size={14} color={mutedColor} />
-              </Button>
-            )}
-            <Button
-              testID="e2e-action-album__param_id-open-rename"
-              size="sm"
-              variant="outline"
-              onPress={handleRename}
-            >
-              <Ionicons name="pencil-outline" size={14} color={mutedColor} />
-            </Button>
-            <Button size="sm" variant="outline" onPress={handleDeleteAlbum}>
-              <Ionicons name="trash-outline" size={14} color="#ef4444" />
-            </Button>
-          </View>
-        </View>
-
         {/* Album Info — full in portrait, hidden in landscape (inline above) */}
         {!isLandscape && (
           <View>
@@ -316,18 +353,75 @@ export default function AlbumDetailScreen() {
     t,
     mutedColor,
     successColor,
-    router,
     exitSelectionMode,
     allAlbumSelected,
     handleSelectAllToggle,
     handleSetCover,
     handleRemoveSelected,
-    handleRename,
-    handleDeleteAlbum,
     handleEditNotes,
     statistics,
     isLandscape,
   ]);
+
+  const AlbumInfoTabContent = useMemo(() => {
+    if (!album) return null;
+
+    return (
+      <View className="gap-3">
+        <Card variant="secondary">
+          <Card.Body className="gap-2 p-3">
+            <Card.Title>{album.name}</Card.Title>
+            {!!album.description && <Card.Description>{album.description}</Card.Description>}
+            <View className="flex-row flex-wrap items-center gap-2">
+              <Chip size="sm" variant="secondary">
+                <Chip.Label>
+                  {albumFiles.length} {t("album.images")}
+                </Chip.Label>
+              </Chip>
+              <Chip size="sm" variant="secondary">
+                <Chip.Label>
+                  {t("album.created")}: {formatDate(album.createdAt)}
+                </Chip.Label>
+              </Chip>
+              {album.updatedAt !== album.createdAt && (
+                <Chip size="sm" variant="secondary">
+                  <Chip.Label>
+                    {t("album.updated")}: {formatDate(album.updatedAt)}
+                  </Chip.Label>
+                </Chip>
+              )}
+            </View>
+            {!!album.notes && (
+              <View className="rounded-lg bg-surface-tertiary p-2">
+                <Text className="text-xs text-muted">{album.notes}</Text>
+              </View>
+            )}
+          </Card.Body>
+        </Card>
+
+        {album.isSmart && album.smartRules && album.smartRules.length > 0 && (
+          <Card variant="secondary">
+            <Card.Body className="gap-2 p-3">
+              <Card.Title>{t("album.rules")}</Card.Title>
+              <View className="flex-row flex-wrap gap-1">
+                {album.smartRules.map((rule, index) => (
+                  <Chip
+                    key={`${rule.field}_${rule.operator}_${index}`}
+                    size="sm"
+                    variant="secondary"
+                  >
+                    <Chip.Label className="text-[10px]">
+                      {rule.field} {rule.operator} {String(rule.value)}
+                    </Chip.Label>
+                  </Chip>
+                ))}
+              </View>
+            </Card.Body>
+          </Card>
+        )}
+      </View>
+    );
+  }, [album, albumFiles.length, t]);
 
   if (!album) {
     return (
@@ -348,22 +442,57 @@ export default function AlbumDetailScreen() {
         className="flex-1 bg-background"
         style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
       >
-        {albumFiles.length === 0 ? (
-          <View className="flex-1">
-            {AlbumHeader}
-            <EmptyState icon="images-outline" title={t("gallery.emptyAlbum")} />
-          </View>
+        <View className="gap-3">
+          {AlbumTopBar}
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => setActiveTab(value as "photos" | "info")}
+            variant="secondary"
+          >
+            <Tabs.List>
+              <Tabs.Indicator />
+              <Tabs.Trigger value="photos" testID="album-tab-photos">
+                <Ionicons name="images-outline" size={14} color={mutedColor} />
+                <Tabs.Label>{t("gallery.imagesTab")}</Tabs.Label>
+              </Tabs.Trigger>
+              <Tabs.Trigger value="info" testID="album-tab-info">
+                <Ionicons name="information-circle-outline" size={14} color={mutedColor} />
+                <Tabs.Label>{t("gallery.infoTab")}</Tabs.Label>
+              </Tabs.Trigger>
+            </Tabs.List>
+          </Tabs>
+        </View>
+
+        {activeTab === "photos" ? (
+          albumFiles.length === 0 ? (
+            <View className="flex-1 pt-2">
+              {AlbumHeader}
+              <EmptyState icon="images-outline" title={t("gallery.emptyAlbum")} />
+            </View>
+          ) : (
+            <View className="flex-1 pt-2">
+              <ThumbnailGrid
+                files={albumFiles}
+                columns={albumColumns}
+                selectionMode={isSelectionMode}
+                selectedIds={selectedIds}
+                onPress={handleFilePress}
+                onLongPress={handleFileLongPress}
+                onSelect={toggleSelection}
+                onLoadingSummaryChange={setThumbnailLoadingSummary}
+                ListHeaderComponent={
+                  <View>
+                    {AlbumHeader}
+                    <ThumbnailLoadingBanner summary={thumbnailLoadingSummary} />
+                  </View>
+                }
+              />
+            </View>
+          )
         ) : (
-          <ThumbnailGrid
-            files={albumFiles}
-            columns={albumColumns}
-            selectionMode={isSelectionMode}
-            selectedIds={selectedIds}
-            onPress={handleFilePress}
-            onLongPress={handleFileLongPress}
-            onSelect={toggleSelection}
-            ListHeaderComponent={AlbumHeader}
-          />
+          <ScrollView className="mt-2" showsVerticalScrollIndicator={false}>
+            {AlbumInfoTabContent}
+          </ScrollView>
         )}
       </View>
 

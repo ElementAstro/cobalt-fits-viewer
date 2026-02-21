@@ -3,10 +3,9 @@
  */
 
 import { useMemo } from "react";
-import { View, Text } from "react-native";
+import { ScrollView, View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomSheet, Separator, Button, Chip, useThemeColor } from "heroui-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { useI18n } from "../../i18n/useI18n";
 import type { FitsMetadata } from "../../lib/fits/types";
 import type { MapClusterNode } from "../../lib/map/types";
@@ -153,7 +152,7 @@ export function LocationMarkerSheet({
                 ) : null}
               </View>
 
-              <BottomSheetScrollView style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+              <ScrollView style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
                 <ThumbnailGrid
                   files={cluster.files}
                   columns={3}
@@ -163,7 +162,7 @@ export function LocationMarkerSheet({
                   onLongPress={() => {}}
                   onSelect={() => {}}
                 />
-              </BottomSheetScrollView>
+              </ScrollView>
             </>
           ) : null}
         </BottomSheet.Content>

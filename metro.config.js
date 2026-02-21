@@ -18,6 +18,44 @@ const previousResolveRequest = uniwindConfig.resolver?.resolveRequest;
 uniwindConfig.resolver = {
   ...uniwindConfig.resolver,
   resolveRequest(context, moduleName, platform) {
+    const originModule = (context.originModulePath ?? "").replaceAll("\\", "/");
+    const isFitsJsNgImport = originModule.includes("/node_modules/fitsjs-ng/");
+
+    if (isFitsJsNgImport && moduleName === "fs/promises") {
+      return {
+        filePath: path.resolve(__dirname, "src/shims/fs-promises.ts"),
+        type: "sourceFile",
+      };
+    }
+
+    if (isFitsJsNgImport && moduleName === "path") {
+      return {
+        filePath: path.resolve(__dirname, "src/shims/path.ts"),
+        type: "sourceFile",
+      };
+    }
+
+    if (isFitsJsNgImport && moduleName === "crypto") {
+      return {
+        filePath: path.resolve(__dirname, "src/shims/crypto.ts"),
+        type: "sourceFile",
+      };
+    }
+
+    if (isFitsJsNgImport && moduleName === "@fxpineau/moc-wasm") {
+      return {
+        filePath: path.resolve(__dirname, "src/shims/moc-wasm.web.ts"),
+        type: "sourceFile",
+      };
+    }
+
+    if (moduleName === "web-worker") {
+      return {
+        filePath: path.resolve(__dirname, "node_modules/web-worker/dist/browser/index.cjs"),
+        type: "sourceFile",
+      };
+    }
+
     if (platform === "web" && moduleName === "@fxpineau/moc-wasm") {
       return {
         filePath: path.resolve(__dirname, "src/shims/moc-wasm.web.ts"),

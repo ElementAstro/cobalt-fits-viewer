@@ -1,7 +1,6 @@
 import { useMemo } from "react";
-import { View, Text } from "react-native";
+import { ScrollView, View, Text } from "react-native";
 import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { TrashedFitsRecord } from "../../lib/fits/types";
@@ -59,7 +58,7 @@ export function TrashSheet({
               <Text className="mt-3 text-sm text-muted">{t("files.trashEmpty")}</Text>
             </View>
           ) : (
-            <BottomSheetScrollView style={{ maxHeight: 420 }}>
+            <ScrollView style={{ maxHeight: 420 }}>
               <View className="gap-2 px-4 pb-2">
                 {items.map((item) => (
                   <View
@@ -88,7 +87,7 @@ export function TrashSheet({
                   </View>
                 ))}
               </View>
-            </BottomSheetScrollView>
+            </ScrollView>
           )}
 
           <Separator className="my-2" />

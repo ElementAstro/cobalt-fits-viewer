@@ -2,9 +2,8 @@
  * 高级搜索 Sheet
  */
 
-import { useState } from "react";
-import { View } from "react-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { useCallback, useState } from "react";
+import { ScrollView, View } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -102,7 +101,7 @@ export function AdvancedSearchSheet({
     );
   };
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(() => {
     const conditions: SearchConditions = {
       query: query.trim() || undefined,
       raMin: raMin ? parseFloat(raMin) : undefined,
@@ -121,9 +120,25 @@ export function AdvancedSearchSheet({
 
     onSearch(conditions);
     onClose();
-  };
+  }, [
+    decMax,
+    decMin,
+    hasCoordinates,
+    hasImages,
+    isFavorite,
+    notesQuery,
+    onClose,
+    onSearch,
+    query,
+    raMax,
+    raMin,
+    selectedCategories,
+    selectedStatuses,
+    selectedTags,
+    selectedTypes,
+  ]);
 
-  const handleReset = () => {
+  const handleReset = useCallback(() => {
     setQuery("");
     setRaMin("");
     setRaMax("");
@@ -137,7 +152,7 @@ export function AdvancedSearchSheet({
     setHasCoordinates(undefined);
     setHasImages(undefined);
     setNotesQuery("");
-  };
+  }, []);
 
   const hasFilters =
     query ||
@@ -161,17 +176,25 @@ export function AdvancedSearchSheet({
         <BottomSheet.Content
           detached
           bottomInset={insets.bottom + 8}
-          snapPoints={["92%"]}
+          snapPoints={["78%", "96%"]}
+          index={1}
+          enableDynamicSizing={false}
+          enableOverDrag={false}
+          enableContentPanningGesture={false}
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
+          android_keyboardInputMode="adjustResize"
           className="mx-4"
           backgroundClassName="rounded-[28px] bg-background"
+          contentContainerClassName="h-full px-0"
         >
-          <BottomSheetScrollView
+          <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               paddingHorizontal: 16,
               paddingTop: 12,
-              paddingBottom: insets.bottom + 20,
+              paddingBottom: insets.bottom + 24,
             }}
           >
             <View className="flex-row items-center justify-between mb-4">
@@ -385,8 +408,7 @@ export function AdvancedSearchSheet({
 
             <Separator className="my-4" />
 
-            {/* 操作按钮 */}
-            <View className="flex-row justify-between">
+            <View className="flex-row items-center justify-between gap-2">
               <Button variant="ghost" onPress={handleReset} isDisabled={!hasFilters}>
                 <Button.Label>{t("targets.clearFilters")}</Button.Label>
               </Button>
@@ -399,7 +421,7 @@ export function AdvancedSearchSheet({
                 </Button>
               </View>
             </View>
-          </BottomSheetScrollView>
+          </ScrollView>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

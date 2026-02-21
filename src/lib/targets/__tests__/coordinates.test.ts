@@ -1,4 +1,11 @@
-import { formatRA, formatDec, parseRA, parseDec, formatCoordinates } from "../coordinates";
+import {
+  formatRA,
+  formatDec,
+  parseRA,
+  parseDec,
+  formatCoordinates,
+  parseCoordinatePair,
+} from "../coordinates";
 
 describe("formatRA", () => {
   it("formats 0 degrees as 00h 00m 00s", () => {
@@ -71,6 +78,10 @@ describe("parseRA", () => {
     expect(result).toBeCloseTo(83.629, 1);
   });
 
+  it("parses decimal degrees when value is greater than 24", () => {
+    expect(parseRA("83.633")).toBeCloseTo(83.633, 3);
+  });
+
   it("returns null for invalid input", () => {
     expect(parseRA("abc")).toBeNull();
     expect(parseRA("400")).toBeNull();
@@ -129,5 +140,30 @@ describe("formatCoordinates", () => {
     const result = formatCoordinates(83.633, undefined);
     expect(result).toContain("h");
     expect(result).toContain("—");
+  });
+});
+
+describe("parseCoordinatePair", () => {
+  it("parses signed-dec pair with whitespace", () => {
+    const result = parseCoordinatePair("05:34:31 +22:00:52");
+    expect(result?.ra).toBeCloseTo(83.629, 1);
+    expect(result?.dec).toBeCloseTo(22.014, 2);
+  });
+
+  it("parses comma-separated decimal pair", () => {
+    const result = parseCoordinatePair("83.633, 22.014");
+    expect(result?.ra).toBeCloseTo(83.633, 3);
+    expect(result?.dec).toBeCloseTo(22.014, 3);
+  });
+
+  it("parses labelled pair", () => {
+    const result = parseCoordinatePair("RA=05:34:31 Dec=+22:00:52");
+    expect(result?.ra).toBeCloseTo(83.629, 1);
+    expect(result?.dec).toBeCloseTo(22.014, 2);
+  });
+
+  it("returns null when format cannot be split into a pair", () => {
+    expect(parseCoordinatePair("05 34 31 22 00 52")).toBeNull();
+    expect(parseCoordinatePair("not-a-coordinate")).toBeNull();
   });
 });

@@ -36,22 +36,39 @@ export function formatDec(decDeg: number): string {
  * 将 RA (HH:MM:SS 或 HHhMMmSSs) 解析为十进制度数
  */
 export function parseRA(raStr: string): number | null {
-  const cleaned = raStr
-    .trim()
-    .replace(/[hHmMsS°′″:]/g, " ")
-    .trim();
-  const parts = cleaned.split(/\s+/).map(Number);
+  const raw = raStr.trim();
+  if (!raw) return 0;
 
-  if (parts.length >= 1 && parts.length <= 3 && parts.every((p) => !isNaN(p))) {
-    const hours = parts[0] ?? 0;
+  const cleaned = raw.replace(/[hHmMsS°′″:]/g, " ").trim();
+  const parts = cleaned.length > 0 ? cleaned.split(/\s+/).map(Number) : [];
+  const hasHourMarkers = /[hHmMsS:]/.test(raw);
+  const hasDegreeMarkers = /[°dD]/.test(raw);
+
+  if (parts.length >= 1 && parts.length <= 3 && parts.every((p) => Number.isFinite(p))) {
+    const first = parts[0] ?? 0;
     const minutes = parts[1] ?? 0;
     const seconds = parts[2] ?? 0;
-    const deg = (hours + minutes / 60 + seconds / 3600) * 15;
-    return deg >= 0 && deg < 360 ? deg : null;
+
+    const shouldTreatAsHourAngle =
+      hasHourMarkers || parts.length > 1 || (!hasDegreeMarkers && first >= 0 && first <= 24);
+
+    if (shouldTreatAsHourAngle) {
+      if (minutes < 0 || minutes >= 60 || seconds < 0 || seconds >= 60 || first < 0) {
+        return null;
+      }
+      const deg = (first + minutes / 60 + seconds / 3600) * 15;
+      if (deg >= 0 && deg < 360) return deg;
+      if (parts.length === 1 && !hasHourMarkers && first >= 0 && first < 360) return first;
+      return null;
+    }
+
+    if (parts.length === 1) {
+      return first >= 0 && first < 360 ? first : null;
+    }
   }
 
-  const num = parseFloat(raStr);
-  return !isNaN(num) && num >= 0 && num < 360 ? num : null;
+  const num = parseFloat(raw);
+  return Number.isFinite(num) && num >= 0 && num < 360 ? num : null;
 }
 
 /**
@@ -77,6 +94,49 @@ export function parseDec(decStr: string): number | null {
 
   const num = parseFloat(decStr);
   return !isNaN(num) && num >= -90 && num <= 90 ? num : null;
+}
+
+function buildCoordinatePair(raRaw: string, decRaw: string): { ra: number; dec: number } | null {
+  const ra = parseRA(raRaw.trim());
+  const dec = parseDec(decRaw.trim());
+  if (ra === null || dec === null) return null;
+  return { ra, dec };
+}
+
+/**
+ * 解析“RA + Dec”组合输入
+ * 例如:
+ * - "05:34:31 +22:00:52"
+ * - "05h34m31s, +22°00′52″"
+ * - "83.633, 22.014"
+ * - "RA=05:34:31 Dec=+22:00:52"
+ */
+export function parseCoordinatePair(input: string): { ra: number; dec: number } | null {
+  const raw = input.trim();
+  if (!raw) return null;
+
+  const labelled = raw.match(/ra\s*[:=]?\s*(.+?)\s+dec\s*[:=]?\s*(.+)$/i);
+  if (labelled) {
+    return buildCoordinatePair(labelled[1], labelled[2]);
+  }
+
+  const byDelimiter = raw.split(/\s*[,;/|]\s*/).filter(Boolean);
+  if (byDelimiter.length === 2) {
+    return buildCoordinatePair(byDelimiter[0], byDelimiter[1]);
+  }
+
+  const normalized = raw.replace(/\s+/g, " ").trim();
+  const bySignedDec = normalized.match(/^(.+?)\s+([+-].+)$/);
+  if (bySignedDec) {
+    return buildCoordinatePair(bySignedDec[1], bySignedDec[2]);
+  }
+
+  const tokens = normalized.split(" ").filter(Boolean);
+  if (tokens.length === 2) {
+    return buildCoordinatePair(tokens[0], tokens[1]);
+  }
+
+  return null;
 }
 
 /**

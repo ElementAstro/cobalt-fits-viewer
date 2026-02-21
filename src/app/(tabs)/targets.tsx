@@ -28,6 +28,7 @@ import { GroupManagerSheet } from "../../components/targets/GroupManagerSheet";
 import { EmptyState } from "../../components/common/EmptyState";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
+import { resolveTargetInteractionUi } from "../../lib/targets/targetInteractionUi";
 
 type SortKey = "name" | "date" | "frames" | "exposure" | "favorite";
 
@@ -35,7 +36,7 @@ export default function TargetsScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
-  const { width: screenWidth } = useWindowDimensions();
+  const { width: screenWidth, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { isLandscapeTablet, contentPaddingTop, horizontalPadding, sidePanelWidth } =
     useResponsiveLayout();
@@ -56,6 +57,9 @@ export default function TargetsScreen() {
   const targetSortOrder = useSettingsStore((s) => s.targetSortOrder);
   const setTargetSortBy = useSettingsStore((s) => s.setTargetSortBy);
   const setTargetSortOrder = useSettingsStore((s) => s.setTargetSortOrder);
+  const targetActionControlMode = useSettingsStore((s) => s.targetActionControlMode);
+  const targetActionSizePreset = useSettingsStore((s) => s.targetActionSizePreset);
+  const targetActionAutoScaleFromFont = useSettingsStore((s) => s.targetActionAutoScaleFromFont);
 
   const {
     targets,
@@ -165,18 +169,16 @@ export default function TargetsScreen() {
   const handleAddTarget = (data: {
     name: string;
     type: TargetType;
-    ra?: string;
-    dec?: string;
+    ra?: number;
+    dec?: number;
     notes?: string;
     category?: string;
     tags?: string[];
     isFavorite?: boolean;
   }) => {
-    const raNum = data.ra ? parseFloat(data.ra) : undefined;
-    const decNum = data.dec ? parseFloat(data.dec) : undefined;
     addTarget(data.name, data.type, {
-      ra: raNum && !isNaN(raNum) ? raNum : undefined,
-      dec: decNum && !isNaN(decNum) ? decNum : undefined,
+      ra: data.ra,
+      dec: data.dec,
       notes: data.notes,
       category: data.category,
       tags: data.tags,
@@ -219,7 +221,42 @@ export default function TargetsScreen() {
     Boolean(filterGroupId) ||
     Boolean(searchQuery.trim()) ||
     (isAdvancedMode && Object.keys(advancedConditions).length > 0);
+  const resolvedInteractionUi = useMemo(
+    () =>
+      resolveTargetInteractionUi({
+        preset: targetActionSizePreset,
+        autoScaleFromFont: targetActionAutoScaleFromFont,
+        fontScale,
+      }),
+    [targetActionSizePreset, targetActionAutoScaleFromFont, fontScale],
+  );
   const useCompactHeaderActions = !isLandscapeTablet && screenWidth < 430;
+  const useCompactFilterLayout = !isLandscapeTablet && screenWidth < 430;
+  const headerActionGapClassName =
+    resolvedInteractionUi.effectivePreset === "accessible" ? "gap-2" : "gap-1";
+  const headerActionButtonSize = resolvedInteractionUi.buttonSize;
+  const chipSize = resolvedInteractionUi.chipSize;
+  const actionIconSize = resolvedInteractionUi.iconSize;
+  const compactIconSize = resolvedInteractionUi.compactIconSize;
+  const miniIconSize = resolvedInteractionUi.miniIconSize;
+  const chipLabelClassName =
+    resolvedInteractionUi.effectivePreset === "accessible"
+      ? "text-xs"
+      : resolvedInteractionUi.effectivePreset === "standard"
+        ? "text-[11px]"
+        : useCompactFilterLayout
+          ? "text-[10px]"
+          : "text-[11px]";
+  const summaryTextClassName =
+    resolvedInteractionUi.effectivePreset === "accessible"
+      ? "text-xs text-muted"
+      : resolvedInteractionUi.effectivePreset === "standard"
+        ? "text-[11px] text-muted"
+        : "text-[10px] text-muted";
+  const tinyActionLabelClassName =
+    resolvedInteractionUi.effectivePreset === "accessible"
+      ? "text-xs text-muted"
+      : "text-[10px] text-muted";
 
   const handleAdvancedSearch = useCallback(
     (conditions: SearchConditions) => {
@@ -248,11 +285,20 @@ export default function TargetsScreen() {
             onPress={() => router.push(`/target/${target.id}`)}
             onToggleFavorite={() => handleToggleFavorite(target.id)}
             onTogglePinned={() => handleTogglePinned(target.id)}
+            actionControlMode={targetActionControlMode}
+            interactionUi={resolvedInteractionUi}
           />
         </View>
       );
     },
-    [statsMap, router, handleToggleFavorite, handleTogglePinned],
+    [
+      statsMap,
+      router,
+      handleToggleFavorite,
+      handleTogglePinned,
+      targetActionControlMode,
+      resolvedInteractionUi,
+    ],
   );
 
   const ListHeader = useMemo(
@@ -267,28 +313,28 @@ export default function TargetsScreen() {
               </Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row items-center gap-1 pr-1">
+              <View className={`flex-row items-center pr-1 ${headerActionGapClassName}`}>
                 {targets.length > 0 && (
                   <Button
                     testID="e2e-action-tabs__targets-open-stats"
-                    size="sm"
+                    size={headerActionButtonSize}
                     isIconOnly
                     variant="outline"
                     onPress={() => setShowStats(true)}
                   >
-                    <Ionicons name="stats-chart-outline" size={14} color={mutedColor} />
+                    <Ionicons name="stats-chart-outline" size={actionIconSize} color={mutedColor} />
                   </Button>
                 )}
                 <Button
-                  size="sm"
+                  size={headerActionButtonSize}
                   isIconOnly
                   variant="outline"
                   onPress={() => setShowAdvancedSearch(true)}
                 >
-                  <Ionicons name="options-outline" size={14} color={mutedColor} />
+                  <Ionicons name="options-outline" size={actionIconSize} color={mutedColor} />
                 </Button>
                 <Button
-                  size="sm"
+                  size={headerActionButtonSize}
                   isIconOnly
                   variant="outline"
                   onPress={() => {
@@ -296,18 +342,18 @@ export default function TargetsScreen() {
                     setShowDuplicateMerge(true);
                   }}
                 >
-                  <Ionicons name="copy-outline" size={14} color={mutedColor} />
+                  <Ionicons name="copy-outline" size={actionIconSize} color={mutedColor} />
                 </Button>
                 <Button
-                  size="sm"
+                  size={headerActionButtonSize}
                   isIconOnly
                   variant="outline"
                   onPress={() => setShowGroupManager(true)}
                 >
-                  <Ionicons name="folder-open-outline" size={14} color={mutedColor} />
+                  <Ionicons name="folder-open-outline" size={actionIconSize} color={mutedColor} />
                 </Button>
                 <Button
-                  size="sm"
+                  size={headerActionButtonSize}
                   isIconOnly
                   variant="outline"
                   onPress={() => {
@@ -320,15 +366,15 @@ export default function TargetsScreen() {
                     );
                   }}
                 >
-                  <Ionicons name="scan-outline" size={14} color={mutedColor} />
+                  <Ionicons name="scan-outline" size={actionIconSize} color={mutedColor} />
                 </Button>
                 <Button
-                  size="sm"
+                  size={headerActionButtonSize}
                   isIconOnly
                   variant="primary"
                   onPress={() => setShowAddSheet(true)}
                 >
-                  <Ionicons name="add" size={14} color="#fff" />
+                  <Ionicons name="add" size={actionIconSize} color="#fff" />
                 </Button>
               </View>
             </ScrollView>
@@ -341,28 +387,28 @@ export default function TargetsScreen() {
                 {t("targets.subtitle")} ({targets.length})
               </Text>
             </View>
-            <View className="flex-row gap-1">
+            <View className={`flex-row ${headerActionGapClassName}`}>
               {targets.length > 0 && (
                 <Button
                   testID="e2e-action-tabs__targets-open-stats"
-                  size="sm"
+                  size={headerActionButtonSize}
                   isIconOnly
                   variant="outline"
                   onPress={() => setShowStats(true)}
                 >
-                  <Ionicons name="stats-chart-outline" size={14} color={mutedColor} />
+                  <Ionicons name="stats-chart-outline" size={actionIconSize} color={mutedColor} />
                 </Button>
               )}
               <Button
-                size="sm"
+                size={headerActionButtonSize}
                 isIconOnly
                 variant="outline"
                 onPress={() => setShowAdvancedSearch(true)}
               >
-                <Ionicons name="options-outline" size={14} color={mutedColor} />
+                <Ionicons name="options-outline" size={actionIconSize} color={mutedColor} />
               </Button>
               <Button
-                size="sm"
+                size={headerActionButtonSize}
                 isIconOnly
                 variant="outline"
                 onPress={() => {
@@ -370,18 +416,18 @@ export default function TargetsScreen() {
                   setShowDuplicateMerge(true);
                 }}
               >
-                <Ionicons name="copy-outline" size={14} color={mutedColor} />
+                <Ionicons name="copy-outline" size={actionIconSize} color={mutedColor} />
               </Button>
               <Button
-                size="sm"
+                size={headerActionButtonSize}
                 isIconOnly
                 variant="outline"
                 onPress={() => setShowGroupManager(true)}
               >
-                <Ionicons name="folder-open-outline" size={14} color={mutedColor} />
+                <Ionicons name="folder-open-outline" size={actionIconSize} color={mutedColor} />
               </Button>
               <Button
-                size="sm"
+                size={headerActionButtonSize}
                 isIconOnly
                 variant="outline"
                 onPress={() => {
@@ -394,16 +440,16 @@ export default function TargetsScreen() {
                   );
                 }}
               >
-                <Ionicons name="scan-outline" size={14} color={mutedColor} />
+                <Ionicons name="scan-outline" size={actionIconSize} color={mutedColor} />
               </Button>
               <Button
                 testID="e2e-action-tabs__targets-open-add"
-                size="sm"
+                size={headerActionButtonSize}
                 isIconOnly
                 variant="primary"
                 onPress={() => setShowAddSheet(true)}
               >
-                <Ionicons name="add" size={14} color="#fff" />
+                <Ionicons name="add" size={actionIconSize} color="#fff" />
               </Button>
             </View>
           </View>
@@ -441,8 +487,8 @@ export default function TargetsScreen() {
             })}
             {targets.filter((target) => target.isFavorite).length > 0 && (
               <View className="flex-row items-center gap-1">
-                <Ionicons name="star" size={10} color="#f59e0b" />
-                <Text className="text-[10px] text-muted">
+                <Ionicons name="star" size={miniIconSize} color="#f59e0b" />
+                <Text className={summaryTextClassName}>
                   {targets.filter((target) => target.isFavorite).length} {t("targets.favorites")}
                 </Text>
               </View>
@@ -464,19 +510,19 @@ export default function TargetsScreen() {
               />
               <Ionicons
                 name="search-outline"
-                size={14}
+                size={compactIconSize}
                 color={mutedColor}
                 style={{ position: "absolute", left: 12 }}
               />
               {searchQuery.length > 0 && (
                 <Button
-                  size="sm"
+                  size={headerActionButtonSize}
                   variant="ghost"
                   isIconOnly
                   onPress={() => setSearchQuery("")}
                   style={{ position: "absolute", right: 12 }}
                 >
-                  <Ionicons name="close-circle" size={14} color={mutedColor} />
+                  <Ionicons name="close-circle" size={compactIconSize} color={mutedColor} />
                 </Button>
               )}
             </View>
@@ -484,14 +530,22 @@ export default function TargetsScreen() {
         </View>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
-          <View className="flex-row gap-1.5">
+          <View
+            className={`flex-row items-center pr-1 ${useCompactFilterLayout ? "gap-1.5" : "gap-2"}`}
+          >
             <Chip
-              size="sm"
+              size={chipSize}
               variant={filterFavorite ? "primary" : "secondary"}
               onPress={() => setFilterFavorite(!filterFavorite)}
             >
-              <Ionicons name="star" size={10} color={filterFavorite ? "#fff" : mutedColor} />
-              <Chip.Label className="text-[9px] ml-0.5">{t("targets.favorites")}</Chip.Label>
+              <Ionicons
+                name="star"
+                size={miniIconSize}
+                color={filterFavorite ? "#fff" : mutedColor}
+              />
+              <Chip.Label className={`${chipLabelClassName} ml-0.5`}>
+                {t("targets.favorites")}
+              </Chip.Label>
             </Chip>
 
             <View className="w-px bg-separator mx-1" />
@@ -499,11 +553,11 @@ export default function TargetsScreen() {
             {(["galaxy", "nebula", "cluster", "planet", "other"] as TargetType[]).map((type) => (
               <Chip
                 key={type}
-                size="sm"
+                size={chipSize}
                 variant={filterType === type ? "primary" : "secondary"}
                 onPress={() => setFilterType(filterType === type ? null : type)}
               >
-                <Chip.Label className="text-[9px]">
+                <Chip.Label className={chipLabelClassName}>
                   {t(
                     `targets.types.${type}` as
                       | "targets.types.galaxy"
@@ -522,11 +576,11 @@ export default function TargetsScreen() {
               (status) => (
                 <Chip
                   key={status}
-                  size="sm"
+                  size={chipSize}
                   variant={filterStatus === status ? "primary" : "secondary"}
                   onPress={() => setFilterStatus(filterStatus === status ? null : status)}
                 >
-                  <Chip.Label className="text-[9px]">
+                  <Chip.Label className={chipLabelClassName}>
                     {t(
                       `targets.${status}` as
                         | "targets.planned"
@@ -545,11 +599,11 @@ export default function TargetsScreen() {
                 {groups.slice(0, 3).map((group) => (
                   <Chip
                     key={group.id}
-                    size="sm"
+                    size={chipSize}
                     variant={filterGroupId === group.id ? "primary" : "secondary"}
                     onPress={() => setFilterGroupId(filterGroupId === group.id ? null : group.id)}
                   >
-                    <Chip.Label className="text-[9px]">{group.name}</Chip.Label>
+                    <Chip.Label className={chipLabelClassName}>{group.name}</Chip.Label>
                   </Chip>
                 ))}
               </>
@@ -561,11 +615,11 @@ export default function TargetsScreen() {
                 {allCategories.slice(0, 3).map((category) => (
                   <Chip
                     key={category}
-                    size="sm"
+                    size={chipSize}
                     variant={filterCategory === category ? "primary" : "secondary"}
                     onPress={() => setFilterCategory(filterCategory === category ? null : category)}
                   >
-                    <Chip.Label className="text-[9px]">{category}</Chip.Label>
+                    <Chip.Label className={chipLabelClassName}>{category}</Chip.Label>
                   </Chip>
                 ))}
               </>
@@ -577,11 +631,11 @@ export default function TargetsScreen() {
                 {allTags.slice(0, 3).map((tag) => (
                   <Chip
                     key={tag}
-                    size="sm"
+                    size={chipSize}
                     variant={filterTag === tag ? "primary" : "secondary"}
                     onPress={() => setFilterTag(filterTag === tag ? null : tag)}
                   >
-                    <Chip.Label className="text-[9px]">{tag}</Chip.Label>
+                    <Chip.Label className={chipLabelClassName}>{tag}</Chip.Label>
                   </Chip>
                 ))}
               </>
@@ -589,55 +643,58 @@ export default function TargetsScreen() {
           </View>
         </ScrollView>
 
-        <View className="mb-3 flex-row items-center justify-between">
-          <View className="flex-row items-center gap-1.5">
+        <View className="mb-3 gap-2">
+          <View className="flex-row flex-wrap items-center gap-1.5">
             {hasActiveFilters && (
-              <Button size="sm" variant="ghost" onPress={clearFilters}>
-                <Ionicons name="close-circle-outline" size={12} color={mutedColor} />
-                <Button.Label className="text-[10px] text-muted">
+              <Button size={chipSize} variant="ghost" onPress={clearFilters}>
+                <Ionicons name="close-circle-outline" size={miniIconSize} color={mutedColor} />
+                <Button.Label className={tinyActionLabelClassName}>
                   {t("targets.clearFilters")}
                 </Button.Label>
               </Button>
             )}
             {isAdvancedMode && Object.keys(advancedConditions).length > 0 && (
-              <Chip size="sm" variant="secondary">
-                <Chip.Label className="text-[9px]">{t("targets.search.title")}</Chip.Label>
+              <Chip size={chipSize} variant="secondary">
+                <Chip.Label className={chipLabelClassName}>{t("targets.search.title")}</Chip.Label>
               </Chip>
             )}
           </View>
-          <View className="flex-row items-center gap-1.5">
-            <Ionicons name="swap-vertical-outline" size={12} color={mutedColor} />
-            {(["date", "name", "frames", "exposure", "favorite"] as SortKey[]).map((sortKey) => (
-              <Chip
-                key={sortKey}
-                size="sm"
-                variant={targetSortBy === sortKey ? "primary" : "secondary"}
-                onPress={() => setTargetSortBy(sortKey)}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View className="flex-row items-center gap-1.5 pr-1">
+              <Ionicons name="swap-vertical-outline" size={miniIconSize} color={mutedColor} />
+              {(["date", "name", "frames", "exposure", "favorite"] as SortKey[]).map((sortKey) => (
+                <Chip
+                  key={sortKey}
+                  size={chipSize}
+                  variant={targetSortBy === sortKey ? "primary" : "secondary"}
+                  onPress={() => setTargetSortBy(sortKey)}
+                >
+                  <Chip.Label className={chipLabelClassName}>
+                    {t(
+                      `targets.sort.${sortKey}` as
+                        | "targets.sort.date"
+                        | "targets.sort.name"
+                        | "targets.sort.frames"
+                        | "targets.sort.exposure"
+                        | "targets.sort.favorite",
+                    )}
+                  </Chip.Label>
+                </Chip>
+              ))}
+              <Button
+                isIconOnly
+                size={chipSize}
+                variant="outline"
+                onPress={() => setTargetSortOrder(targetSortOrder === "asc" ? "desc" : "asc")}
               >
-                <Chip.Label className="text-[9px]">
-                  {t(
-                    `targets.sort.${sortKey}` as
-                      | "targets.sort.date"
-                      | "targets.sort.name"
-                      | "targets.sort.frames"
-                      | "targets.sort.exposure"
-                      | "targets.sort.favorite",
-                  )}
-                </Chip.Label>
-              </Chip>
-            ))}
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={() => setTargetSortOrder(targetSortOrder === "asc" ? "desc" : "asc")}
-            >
-              <Ionicons
-                name={targetSortOrder === "asc" ? "arrow-up-outline" : "arrow-down-outline"}
-                size={12}
-                color={mutedColor}
-              />
-            </Button>
-          </View>
+                <Ionicons
+                  name={targetSortOrder === "asc" ? "arrow-up-outline" : "arrow-down-outline"}
+                  size={miniIconSize}
+                  color={mutedColor}
+                />
+              </Button>
+            </View>
+          </ScrollView>
         </View>
 
         {filteredTargets.length === 0 && targets.length === 0 && (
@@ -678,6 +735,16 @@ export default function TargetsScreen() {
       isAdvancedMode,
       advancedConditions,
       useCompactHeaderActions,
+      useCompactFilterLayout,
+      headerActionGapClassName,
+      headerActionButtonSize,
+      actionIconSize,
+      compactIconSize,
+      miniIconSize,
+      chipSize,
+      chipLabelClassName,
+      summaryTextClassName,
+      tinyActionLabelClassName,
       detect,
       clearFilters,
       setTargetSortBy,

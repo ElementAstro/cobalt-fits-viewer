@@ -3,12 +3,7 @@
  */
 
 import { useCallback, useState } from "react";
-import { View } from "react-native";
-import {
-  BottomSheetFooter,
-  BottomSheetScrollView,
-  type BottomSheetFooterProps,
-} from "@gorhom/bottom-sheet";
+import { ScrollView, View } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -23,7 +18,13 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { parseRA, parseDec, formatRA, formatDec } from "../../lib/targets/coordinates";
+import {
+  parseRA,
+  parseDec,
+  formatRA,
+  formatDec,
+  parseCoordinatePair,
+} from "../../lib/targets/coordinates";
 import { CategorySelector } from "./CategorySelector";
 import { TagInput } from "./TagInput";
 import type { TargetType } from "../../lib/fits/types";
@@ -47,8 +48,8 @@ interface AddTargetSheetProps {
   onConfirm: (data: {
     name: string;
     type: TargetType;
-    ra?: string;
-    dec?: string;
+    ra?: number;
+    dec?: number;
     notes?: string;
     category?: string;
     tags?: string[];
@@ -68,8 +69,11 @@ export function AddTargetSheet({
   const insets = useSafeAreaInsets();
   const [name, setName] = useState("");
   const [type, setType] = useState<TargetType>("other");
+  const [coordinatesInput, setCoordinatesInput] = useState("");
   const [ra, setRa] = useState("");
   const [dec, setDec] = useState("");
+  const [isRaManuallyEdited, setIsRaManuallyEdited] = useState(false);
+  const [isDecManuallyEdited, setIsDecManuallyEdited] = useState(false);
   const [notes, setNotes] = useState("");
   const [category, setCategory] = useState<string | undefined>();
   const [tags, setTags] = useState<string[]>([]);
@@ -77,35 +81,96 @@ export function AddTargetSheet({
 
   const raValid = ra.trim() ? parseRA(ra.trim()) !== null : true;
   const decValid = dec.trim() ? parseDec(dec.trim()) !== null : true;
+  const coordinatesValid = coordinatesInput.trim()
+    ? parseCoordinatePair(coordinatesInput.trim()) !== null
+    : true;
 
   const resetForm = useCallback(() => {
     setName("");
     setType("other");
+    setCoordinatesInput("");
     setRa("");
     setDec("");
+    setIsRaManuallyEdited(false);
+    setIsDecManuallyEdited(false);
     setNotes("");
     setCategory(undefined);
     setTags([]);
     setIsFavorite(false);
   }, []);
 
+  const handleCoordinatesInputChange = useCallback((value: string) => {
+    setCoordinatesInput(value);
+    setIsRaManuallyEdited(false);
+    setIsDecManuallyEdited(false);
+  }, []);
+
+  const handleRAChange = useCallback((value: string) => {
+    setRa(value);
+    setIsRaManuallyEdited(true);
+  }, []);
+
+  const handleDecChange = useCallback((value: string) => {
+    setDec(value);
+    setIsDecManuallyEdited(true);
+  }, []);
+
   const handleConfirm = useCallback(() => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    const pair = coordinatesInput.trim() ? parseCoordinatePair(coordinatesInput.trim()) : null;
     const parsedRA = ra.trim() ? parseRA(ra.trim()) : undefined;
     const parsedDec = dec.trim() ? parseDec(dec.trim()) : undefined;
+    if (
+      (coordinatesInput.trim() && !pair) ||
+      (ra.trim() && parsedRA === null) ||
+      (dec.trim() && parsedDec === null)
+    ) {
+      return;
+    }
+
+    const effectiveRA = isRaManuallyEdited
+      ? (parsedRA ?? undefined)
+      : (pair?.ra ?? parsedRA ?? undefined);
+    const effectiveDec = isDecManuallyEdited
+      ? (parsedDec ?? undefined)
+      : (pair?.dec ?? parsedDec ?? undefined);
+
     onConfirm({
       name: trimmed,
       type,
-      ra: parsedRA !== null && parsedRA !== undefined ? String(parsedRA) : undefined,
-      dec: parsedDec !== null && parsedDec !== undefined ? String(parsedDec) : undefined,
+      ra: effectiveRA,
+      dec: effectiveDec,
       notes: notes.trim() || undefined,
       category,
       tags: tags.length > 0 ? tags : undefined,
       isFavorite,
     });
     resetForm();
-  }, [category, dec, isFavorite, name, notes, onConfirm, ra, resetForm, tags, type]);
+  }, [
+    category,
+    coordinatesInput,
+    dec,
+    isFavorite,
+    isDecManuallyEdited,
+    isRaManuallyEdited,
+    name,
+    notes,
+    onConfirm,
+    ra,
+    resetForm,
+    tags,
+    type,
+  ]);
+
+  const handleCoordinatesBlur = useCallback(() => {
+    const pair = parseCoordinatePair(coordinatesInput.trim());
+    if (!pair) return;
+    setRa(formatRA(pair.ra));
+    setDec(formatDec(pair.dec));
+    setIsRaManuallyEdited(false);
+    setIsDecManuallyEdited(false);
+  }, [coordinatesInput]);
 
   const handleRABlur = () => {
     const parsed = parseRA(ra.trim());
@@ -122,27 +187,6 @@ export function AddTargetSheet({
     onClose();
   }, [onClose, resetForm]);
 
-  const renderFooter = useCallback(
-    (props: BottomSheetFooterProps) => (
-      <BottomSheetFooter {...props}>
-        <View
-          className="border-t border-separator bg-background px-4 pt-3"
-          style={{ paddingBottom: insets.bottom + 12 }}
-        >
-          <View className="flex-row justify-end gap-2">
-            <Button variant="outline" onPress={handleClose}>
-              <Button.Label>{t("common.cancel")}</Button.Label>
-            </Button>
-            <Button variant="primary" onPress={handleConfirm} isDisabled={!name.trim()}>
-              <Button.Label>{t("common.confirm")}</Button.Label>
-            </Button>
-          </View>
-        </View>
-      </BottomSheetFooter>
-    ),
-    [handleClose, handleConfirm, insets.bottom, name, t],
-  );
-
   return (
     <BottomSheet isOpen={visible} onOpenChange={(open) => !open && handleClose()}>
       <BottomSheet.Portal>
@@ -157,16 +201,15 @@ export function AddTargetSheet({
           keyboardBlurBehavior="restore"
           android_keyboardInputMode="adjustResize"
           backgroundClassName="rounded-t-[28px] bg-background"
-          contentContainerClassName="h-full px-0 pb-0"
-          footerComponent={renderFooter}
+          contentContainerClassName="h-full px-0"
         >
-          <BottomSheetScrollView
+          <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
               paddingHorizontal: 16,
               paddingTop: 12,
-              paddingBottom: insets.bottom + 110,
+              paddingBottom: insets.bottom + 24,
             }}
           >
             <View className="flex-row items-center justify-between mb-2">
@@ -245,16 +288,31 @@ export function AddTargetSheet({
               </Button.Label>
             </Button>
 
+            <TextField className="mt-4" isInvalid={!coordinatesValid}>
+              <Label>{t("targets.coordinates")}</Label>
+              <Input
+                placeholder="05:34:31 +22:00:52 / 83.633, 22.014"
+                value={coordinatesInput}
+                onChangeText={handleCoordinatesInputChange}
+                onBlur={handleCoordinatesBlur}
+                keyboardType="numbers-and-punctuation"
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {!coordinatesValid && <FieldError>{t("targets.invalidCoordinates")}</FieldError>}
+            </TextField>
+
             {/* RA / Dec */}
-            <View className="mt-4 flex-row gap-2">
+            <View className="mt-3 flex-row gap-2">
               <View className="flex-1">
                 <TextField isInvalid={!raValid}>
                   <Label>RA</Label>
                   <Input
-                    placeholder="RA (e.g. 05h 34m 31s)"
+                    placeholder="05h 34m 31s / 83.633"
                     value={ra}
-                    onChangeText={setRa}
+                    onChangeText={handleRAChange}
                     onBlur={handleRABlur}
+                    keyboardType="numbers-and-punctuation"
                     autoCorrect={false}
                   />
                   {!raValid && <FieldError>{t("targets.invalidRA")}</FieldError>}
@@ -264,10 +322,11 @@ export function AddTargetSheet({
                 <TextField isInvalid={!decValid}>
                   <Label>Dec</Label>
                   <Input
-                    placeholder="Dec (e.g. +22° 00′ 52″)"
+                    placeholder="+22° 00′ 52″ / 22.014"
                     value={dec}
-                    onChangeText={setDec}
+                    onChangeText={handleDecChange}
                     onBlur={handleDecBlur}
+                    keyboardType="numbers-and-punctuation"
                     autoCorrect={false}
                   />
                   {!decValid && <FieldError>{t("targets.invalidDec")}</FieldError>}
@@ -286,7 +345,20 @@ export function AddTargetSheet({
                 autoCorrect={false}
               />
             </TextField>
-          </BottomSheetScrollView>
+
+            <View className="mt-4 flex-row justify-end gap-2">
+              <Button variant="outline" onPress={handleClose}>
+                <Button.Label>{t("common.cancel")}</Button.Label>
+              </Button>
+              <Button
+                variant="primary"
+                onPress={handleConfirm}
+                isDisabled={!name.trim() || !raValid || !decValid || !coordinatesValid}
+              >
+                <Button.Label>{t("common.confirm")}</Button.Label>
+              </Button>
+            </View>
+          </ScrollView>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

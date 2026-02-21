@@ -19,6 +19,7 @@ const mockResolveThumbnailUri = jest.fn(
   (fileId: string, thumbnailUri?: string) =>
     thumbnailUri ?? `file:///cache/thumbnails/${fileId}.jpg`,
 );
+const mockThumbnailGrid = jest.fn((props: Record<string, unknown>) => props);
 
 const mockFileManager = {
   isImporting: false,
@@ -46,6 +47,8 @@ const mockFileManager = {
 const mockSettingsStore = {
   fileListStyle: "list",
   setFileListStyle: jest.fn(),
+  fileListGridColumns: 3,
+  setFileListGridColumns: jest.fn(),
   defaultGridColumns: 3,
   thumbnailShowFilename: true,
   thumbnailShowObject: false,
@@ -79,6 +82,15 @@ jest.mock("../../../hooks/useScreenOrientation", () => ({
     screenHeight: 844,
     lockOrientation: jest.fn(),
     unlockOrientation: jest.fn(),
+  }),
+}));
+
+jest.mock("../../../hooks/useResponsiveLayout", () => ({
+  useResponsiveLayout: () => ({
+    isLandscape: false,
+    isLandscapeTablet: false,
+    contentPaddingTop: 0,
+    horizontalPadding: 0,
   }),
 }));
 
@@ -151,6 +163,19 @@ jest.mock("../../../components/gallery/FileGroupSheet", () => ({
   FileGroupSheet: () => null,
 }));
 
+jest.mock("../../../components/gallery/ThumbnailGrid", () => ({
+  ThumbnailGrid: (props: Record<string, unknown>) => {
+    mockThumbnailGrid(props);
+    const React = require("react");
+    const { View } = require("react-native");
+    return React.createElement(
+      View,
+      { testID: "thumbnail-grid" },
+      props.ListHeaderComponent as React.ReactNode,
+    );
+  },
+}));
+
 jest.mock("../../../lib/gallery/thumbnailCache", () => {
   const actual = jest.requireActual("../../../lib/gallery/thumbnailCache");
   return {
@@ -210,6 +235,7 @@ describe("FilesScreen", () => {
 
     mockSettingsStore.confirmDestructiveActions = true;
     mockSettingsStore.fileListStyle = "list";
+    mockSettingsStore.fileListGridColumns = 3;
     mockTrashStore.items = [];
 
     useFitsStore.setState({
@@ -221,6 +247,7 @@ describe("FilesScreen", () => {
       searchQuery: "",
       filterTags: [],
     });
+    mockThumbnailGrid.mockClear();
   });
 
   afterEach(() => {
@@ -272,6 +299,53 @@ describe("FilesScreen", () => {
     expect(screen.getByText("List")).toBeTruthy();
     expect(screen.getByText("Compact")).toBeTruthy();
     expect(screen.getByText("Favorites Only")).toBeTruthy();
+  });
+
+  it("passes configured columns to ThumbnailGrid in grid mode", () => {
+    mockSettingsStore.fileListStyle = "grid";
+    mockSettingsStore.fileListGridColumns = 4;
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-1" })],
+      selectedIds: [],
+      isSelectionMode: false,
+    });
+
+    render(<FilesScreen />);
+
+    expect(screen.getByTestId("thumbnail-grid")).toBeTruthy();
+    expect(mockThumbnailGrid).toHaveBeenCalled();
+    const latestCall = mockThumbnailGrid.mock.calls.at(-1);
+    expect(latestCall?.[0]).toMatchObject({ columns: 4 });
+  });
+
+  it("updates file grid columns from quick chips", () => {
+    mockSettingsStore.fileListStyle = "grid";
+    mockSettingsStore.fileListGridColumns = 3;
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-1" })],
+      selectedIds: [],
+      isSelectionMode: false,
+    });
+
+    render(<FilesScreen />);
+    fireEvent.press(screen.getByTestId("files-grid-columns-2"));
+
+    expect(mockSettingsStore.setFileListGridColumns).toHaveBeenCalledWith(2);
+  });
+
+  it("keeps list/compact path without ThumbnailGrid", () => {
+    mockSettingsStore.fileListStyle = "compact";
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-1" })],
+      selectedIds: [],
+      isSelectionMode: false,
+    });
+
+    render(<FilesScreen />);
+
+    expect(screen.getByText("M42_Light.fits")).toBeTruthy();
+    expect(screen.queryByTestId("thumbnail-grid")).toBeNull();
+    expect(mockThumbnailGrid).not.toHaveBeenCalled();
   });
 
   it("should show selection toolbar with selected count", () => {

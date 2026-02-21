@@ -26,6 +26,14 @@ const REQUIRED_KEYS = [
   "settings.targetSortFrames",
   "settings.targetSortExposure",
   "settings.targetSortFavorite",
+  "settings.targetActionControlMode",
+  "settings.targetActionControlModeIcon",
+  "settings.targetActionControlModeCheckbox",
+  "settings.targetActionSizePreset",
+  "settings.targetActionSizeCompact",
+  "settings.targetActionSizeStandard",
+  "settings.targetActionSizeAccessible",
+  "settings.targetActionAutoScaleFromFont",
 ] as const;
 
 function getByPath(source: Record<string, unknown>, path: string): unknown {

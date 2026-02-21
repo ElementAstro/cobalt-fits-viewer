@@ -85,6 +85,10 @@ export interface ImportProgress {
   currentFile?: string;
   current: number;
   total: number;
+  success?: number;
+  failed?: number;
+  skippedDuplicate?: number;
+  skippedUnsupported?: number;
 }
 
 export interface ImportResult {
@@ -994,6 +998,10 @@ export function useFileManager() {
           currentFile: entry.name,
           current: processed,
           total: totalRequested,
+          success,
+          failed,
+          skippedDuplicate,
+          skippedUnsupported,
         });
 
         const outcome = await processAndImportFile(entry.uri, entry.name, entry.size);
@@ -1010,6 +1018,18 @@ export function useFileManager() {
             reason: outcome.reason ?? "unknown_error",
           });
         }
+
+        setImportProgress({
+          phase: "importing",
+          percent: Math.round((processed / totalRequested) * 100),
+          currentFile: entry.name,
+          current: processed,
+          total: totalRequested,
+          success,
+          failed,
+          skippedDuplicate,
+          skippedUnsupported,
+        });
       }
 
       return {
@@ -1287,6 +1307,10 @@ export function useFileManager() {
             currentFile: safeName,
             current: 0,
             total: 1,
+            success: 0,
+            failed: 0,
+            skippedDuplicate: 0,
+            skippedUnsupported: 0,
           });
 
           const fitsBuffer = await convertHiPSToFITS(hipsRequest.hipsInput, hipsRequest.options);
@@ -1303,12 +1327,28 @@ export function useFileManager() {
             currentFile: safeName,
             current: 1,
             total: 1,
+            success: 0,
+            failed: 0,
+            skippedDuplicate: 0,
+            skippedUnsupported: 0,
           });
 
           const outcome = await processAndImportFile(destFile.uri, safeName, fitsBytes.byteLength, {
             sourceFormatOverride: "hips",
           });
-          setLastImportResult(buildSingleImportResult(safeName, outcome));
+          const result = buildSingleImportResult(safeName, outcome);
+          setImportProgress({
+            phase: "importing",
+            percent: 100,
+            currentFile: safeName,
+            current: 1,
+            total: 1,
+            success: result.success,
+            failed: result.failed,
+            skippedDuplicate: result.skippedDuplicate,
+            skippedUnsupported: result.skippedUnsupported,
+          });
+          setLastImportResult(result);
 
           if (destFile.exists) {
             destFile.delete();
@@ -1325,6 +1365,10 @@ export function useFileManager() {
             currentFile: safeName,
             current: 0,
             total: 1,
+            success: 0,
+            failed: 0,
+            skippedDuplicate: 0,
+            skippedUnsupported: 0,
           });
 
           const destFile = new File(Paths.cache, safeName);
@@ -1337,6 +1381,10 @@ export function useFileManager() {
             currentFile: safeName,
             current: 1,
             total: 1,
+            success: 0,
+            failed: 0,
+            skippedDuplicate: 0,
+            skippedUnsupported: 0,
           });
 
           const outcome = await processAndImportFile(
@@ -1344,7 +1392,19 @@ export function useFileManager() {
             safeName,
             destFile.size ?? undefined,
           );
-          setLastImportResult(buildSingleImportResult(safeName, outcome));
+          const result = buildSingleImportResult(safeName, outcome);
+          setImportProgress({
+            phase: "importing",
+            percent: 100,
+            currentFile: safeName,
+            current: 1,
+            total: 1,
+            success: result.success,
+            failed: result.failed,
+            skippedDuplicate: result.skippedDuplicate,
+            skippedUnsupported: result.skippedUnsupported,
+          });
+          setLastImportResult(result);
 
           if (destFile.exists) {
             destFile.delete();
@@ -1373,6 +1433,10 @@ export function useFileManager() {
         percent: 0,
         current: 0,
         total: 1,
+        success: 0,
+        failed: 0,
+        skippedDuplicate: 0,
+        skippedUnsupported: 0,
       });
 
       let hasImage = false;
@@ -1402,6 +1466,10 @@ export function useFileManager() {
               currentFile: filename,
               current: 1,
               total: 1,
+              success: 0,
+              failed: 0,
+              skippedDuplicate: 0,
+              skippedUnsupported: 0,
             });
 
             const outcome = await processAndImportFile(
@@ -1409,7 +1477,19 @@ export function useFileManager() {
               filename,
               clipboardTempFile.size ?? undefined,
             );
-            setLastImportResult(buildSingleImportResult(filename, outcome));
+            const result = buildSingleImportResult(filename, outcome);
+            setImportProgress({
+              phase: "importing",
+              percent: 100,
+              currentFile: filename,
+              current: 1,
+              total: 1,
+              success: result.success,
+              failed: result.failed,
+              skippedDuplicate: result.skippedDuplicate,
+              skippedUnsupported: result.skippedUnsupported,
+            });
+            setLastImportResult(result);
             return;
           }
         } catch (error) {
@@ -1445,6 +1525,10 @@ export function useFileManager() {
           currentFile: filename,
           current: 1,
           total: 1,
+          success: 0,
+          failed: 0,
+          skippedDuplicate: 0,
+          skippedUnsupported: 0,
         });
 
         const outcome = await processAndImportFile(
@@ -1452,7 +1536,19 @@ export function useFileManager() {
           filename,
           clipboardTempFile.size ?? undefined,
         );
-        setLastImportResult(buildSingleImportResult(filename, outcome));
+        const result = buildSingleImportResult(filename, outcome);
+        setImportProgress({
+          phase: "importing",
+          percent: 100,
+          currentFile: filename,
+          current: 1,
+          total: 1,
+          success: result.success,
+          failed: result.failed,
+          skippedDuplicate: result.skippedDuplicate,
+          skippedUnsupported: result.skippedUnsupported,
+        });
+        setLastImportResult(result);
         return;
       }
 
@@ -1468,10 +1564,26 @@ export function useFileManager() {
           currentFile: filename,
           current: 1,
           total: 1,
+          success: 0,
+          failed: 0,
+          skippedDuplicate: 0,
+          skippedUnsupported: 0,
         });
 
         const outcome = await processAndImportFile(sanitizedUri, filename);
-        setLastImportResult(buildSingleImportResult(filename, outcome));
+        const result = buildSingleImportResult(filename, outcome);
+        setImportProgress({
+          phase: "importing",
+          percent: 100,
+          currentFile: filename,
+          current: 1,
+          total: 1,
+          success: result.success,
+          failed: result.failed,
+          skippedDuplicate: result.skippedDuplicate,
+          skippedUnsupported: result.skippedUnsupported,
+        });
+        setLastImportResult(result);
         return;
       }
 

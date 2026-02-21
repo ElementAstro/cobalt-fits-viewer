@@ -84,6 +84,15 @@ jest.mock("@expo/vector-icons", () => {
   };
 });
 
+// Mock expo-linear-gradient
+jest.mock("expo-linear-gradient", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    LinearGradient: (props) => React.createElement(View, { testID: "linear-gradient", ...props }),
+  };
+});
+
 // Mock expo-video
 jest.mock("expo-video", () => {
   const React = require("react");
@@ -138,6 +147,11 @@ jest.mock("heroui-native", () => {
 
   const Card = c("card");
   Card.Body = c("card-body");
+  Card.Header = c("card-header");
+  Card.Footer = c("card-footer");
+  Card.Title = (props) => React.createElement(Text, { testID: "card-title", ...props }, props.children);
+  Card.Description = (props) =>
+    React.createElement(Text, { testID: "card-description", ...props }, props.children);
 
   const Chip = c("chip");
   Chip.Label = (props) => React.createElement(Text, props, props.children);
@@ -155,12 +169,14 @@ jest.mock("heroui-native", () => {
   BottomSheet.Overlay = c("bottom-sheet-overlay");
   BottomSheet.Content = c("bottom-sheet-content");
   BottomSheet.Title = (props) => React.createElement(Text, props, props.children);
+  BottomSheet.Close = c("bottom-sheet-close");
 
   const Tabs = c("tabs");
   Tabs.List = c("tabs-list");
   Tabs.Trigger = c("tabs-trigger");
   Tabs.Content = c("tabs-content");
   Tabs.Indicator = c("tabs-indicator");
+  Tabs.ScrollView = c("tabs-scroll-view");
   Tabs.Label = (props) => React.createElement(Text, props, props.children);
 
   const Accordion = c("accordion");
@@ -177,6 +193,9 @@ jest.mock("heroui-native", () => {
         : props.children;
     return React.createElement(View, { testID: "radio-group-item", ...props }, child);
   };
+  const Radio = c("radio");
+  Radio.Indicator = c("radio-indicator");
+  Radio.IndicatorThumb = c("radio-indicator-thumb");
 
   const Select = c("select");
   Select.Trigger = c("select-trigger");
@@ -190,9 +209,24 @@ jest.mock("heroui-native", () => {
 
   const Switch = c("switch");
   Switch.Thumb = c("switch-thumb");
+  const Checkbox = c("checkbox");
+  Checkbox.Indicator = c("checkbox-indicator");
+  const ControlField = c("control-field");
+  ControlField.Indicator = c("control-field-indicator");
+  const PressableFeedback = c("pressable-feedback");
+  PressableFeedback.Highlight = c("pressable-feedback-highlight");
+  PressableFeedback.Ripple = c("pressable-feedback-ripple");
   const Skeleton = c("skeleton");
 
   const TextField = c("textfield");
+  const TextArea = (props) => React.createElement(TextInput, { testID: "text-area", ...props });
+  const FieldError = (props) => React.createElement(Text, { testID: "field-error", ...props }, props.children);
+  const Alert = c("alert");
+  Alert.Indicator = c("alert-indicator");
+  Alert.Content = c("alert-content");
+  Alert.Title = (props) => React.createElement(Text, { testID: "alert-title", ...props }, props.children);
+  Alert.Description = (props) =>
+    React.createElement(Text, { testID: "alert-description", ...props }, props.children);
 
   return {
     BottomSheet,
@@ -202,16 +236,24 @@ jest.mock("heroui-native", () => {
     Dialog,
     Tabs,
     Accordion,
+    Alert,
+    Checkbox,
+    ControlField,
     RadioGroup,
+    Radio,
     Select,
     TextField,
+    TextArea,
+    FieldError,
     Input: (props) => React.createElement(TextInput, { testID: "input", ...props }),
     Label: (props) => React.createElement(Text, { testID: "label", ...props }, props.children),
     Switch,
-    PressableFeedback: c("pressable-feedback"),
+    PressableFeedback,
     Separator: c("separator"),
     Spinner: c("spinner"),
     Skeleton,
+    Surface: c("surface"),
+    ScrollShadow: c("scroll-shadow"),
     HeroUINativeProvider: (props) => React.createElement(View, null, props.children),
     useThemeColor: (keys) => (Array.isArray(keys) ? keys.map(() => "#000000") : "#000000"),
   };

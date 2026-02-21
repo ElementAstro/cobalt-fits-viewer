@@ -1321,7 +1321,9 @@ export default function EditorDetailScreen() {
           <View className="flex-1 items-center justify-center">
             <Spinner size="lg" color={successColor} />
             <Text className="mt-4 text-sm text-neutral-500">
-              {fitsLoading ? "Loading FITS..." : "Processing..."}
+              {fitsLoading
+                ? t("editor.loadingFits" as TranslationKey)
+                : t("editor.processing" as TranslationKey)}
             </Text>
           </View>
         ) : editor.rgbaData && editor.current ? (
@@ -2150,10 +2152,12 @@ export default function EditorDetailScreen() {
         )}
 
         {/* Processing indicator overlay */}
-        {editor.isProcessing && (
+        {editor.isProcessing && editor.rgbaData && editor.current && (
           <View className="absolute inset-0 items-center justify-center bg-black/50">
             <Spinner size="sm" color={successColor} />
-            <Text className="mt-2 text-xs text-white">Processing...</Text>
+            <Text className="mt-2 text-xs text-white">
+              {t("editor.processing" as TranslationKey)}
+            </Text>
           </View>
         )}
       </View>
@@ -2163,7 +2167,7 @@ export default function EditorDetailScreen() {
         <View className="flex-row items-center gap-1 px-3 py-1 bg-background">
           <Ionicons name="time-outline" size={10} color={mutedColor} />
           <Text className="text-[9px] text-muted">
-            {editor.historyIndex}/{editor.historyLength - 1} edits
+            {editor.historyIndex}/{editor.historyLength - 1} {t("editor.edits" as TranslationKey)}
           </Text>
         </View>
       )}

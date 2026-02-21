@@ -35,6 +35,10 @@ import {
   type StylePresetKey,
 } from "../lib/theme/presets";
 import type { FontFamilyKey, MonoFontKey } from "../lib/theme/fonts";
+import type {
+  TargetActionControlMode,
+  TargetActionSizePreset,
+} from "../lib/targets/targetInteractionUi";
 
 export interface SettingsStoreState {
   // 查看器默认设置
@@ -169,6 +173,7 @@ export interface SettingsStoreState {
 
   // 文件列表显示风格
   fileListStyle: "grid" | "list" | "compact";
+  fileListGridColumns: 2 | 3 | 4;
 
   // 转换器默认设置
   defaultConverterFormat: ExportFormat;
@@ -192,6 +197,9 @@ export interface SettingsStoreState {
   // 目标排序
   targetSortBy: "name" | "date" | "frames" | "exposure" | "favorite";
   targetSortOrder: "asc" | "desc";
+  targetActionControlMode: TargetActionControlMode;
+  targetActionSizePreset: TargetActionSizePreset;
+  targetActionAutoScaleFromFont: boolean;
 
   // 合成默认设置
   defaultComposePreset: "rgb" | "sho" | "hoo" | "lrgb" | "custom";
@@ -333,6 +341,7 @@ export interface SettingsStoreState {
   setThumbnailShowFilter: (v: boolean) => void;
   setThumbnailShowExposure: (v: boolean) => void;
   setFileListStyle: (style: "grid" | "list" | "compact") => void;
+  setFileListGridColumns: (cols: 2 | 3 | 4) => void;
   setDefaultConverterFormat: (fmt: ExportFormat) => void;
   setDefaultConverterQuality: (q: number) => void;
   setBatchNamingRule: (rule: "original" | "prefix" | "suffix" | "sequence") => void;
@@ -346,6 +355,9 @@ export interface SettingsStoreState {
   setSessionShowFilters: (v: boolean) => void;
   setTargetSortBy: (v: "name" | "date" | "frames" | "exposure" | "favorite") => void;
   setTargetSortOrder: (v: "asc" | "desc") => void;
+  setTargetActionControlMode: (v: TargetActionControlMode) => void;
+  setTargetActionSizePreset: (v: TargetActionSizePreset) => void;
+  setTargetActionAutoScaleFromFont: (v: boolean) => void;
   setDefaultComposePreset: (v: "rgb" | "sho" | "hoo" | "lrgb" | "custom") => void;
   setComposeRedWeight: (v: number) => void;
   setComposeGreenWeight: (v: number) => void;
@@ -479,6 +491,7 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   thumbnailShowFilter: true,
   thumbnailShowExposure: false,
   fileListStyle: "grid",
+  fileListGridColumns: 3,
   defaultConverterFormat: "png",
   defaultConverterQuality: 90,
   batchNamingRule: "original",
@@ -492,6 +505,9 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   sessionShowFilters: true,
   targetSortBy: "name",
   targetSortOrder: "asc",
+  targetActionControlMode: "icon",
+  targetActionSizePreset: "standard",
+  targetActionAutoScaleFromFont: true,
   defaultComposePreset: "rgb",
   composeRedWeight: 1.0,
   composeGreenWeight: 1.0,
@@ -715,12 +731,15 @@ function sanitizeSettingsPatch(
     stackingDetectionProfile: ["fast", "balanced", "accurate"],
     stackingDetectConnectivity: [4, 8],
     fileListStyle: ["grid", "list", "compact"],
+    fileListGridColumns: [2, 3, 4],
     defaultExportFormat: ["png", "jpeg", "webp", "tiff", "bmp", "fits"],
     defaultConverterFormat: ["png", "jpeg", "tiff", "webp", "bmp", "fits"],
     batchNamingRule: ["original", "prefix", "suffix", "sequence"],
     timelineGrouping: ["day", "week", "month"],
     targetSortBy: ["name", "date", "frames", "exposure", "favorite"],
     targetSortOrder: ["asc", "desc"],
+    targetActionControlMode: ["icon", "checkbox"],
+    targetActionSizePreset: ["compact", "standard", "accessible"],
     defaultComposePreset: ["rgb", "sho", "hoo", "lrgb", "custom"],
     advancedComposeRegistrationMode: ["none", "translation", "full"],
     advancedComposeFramingMode: ["first", "min", "cog"],
@@ -1202,6 +1221,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setThumbnailShowFilter: (v) => set({ thumbnailShowFilter: v }),
       setThumbnailShowExposure: (v) => set({ thumbnailShowExposure: v }),
       setFileListStyle: (style) => set({ fileListStyle: style }),
+      setFileListGridColumns: (cols) => set({ fileListGridColumns: cols }),
       setDefaultConverterFormat: (fmt) => set({ defaultConverterFormat: fmt }),
       setDefaultConverterQuality: (q) => get().applySettingsPatch({ defaultConverterQuality: q }),
       setBatchNamingRule: (rule) => set({ batchNamingRule: rule }),
@@ -1215,6 +1235,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setSessionShowFilters: (v) => set({ sessionShowFilters: v }),
       setTargetSortBy: (v) => set({ targetSortBy: v }),
       setTargetSortOrder: (v) => set({ targetSortOrder: v }),
+      setTargetActionControlMode: (v) => set({ targetActionControlMode: v }),
+      setTargetActionSizePreset: (v) => set({ targetActionSizePreset: v }),
+      setTargetActionAutoScaleFromFont: (v) => set({ targetActionAutoScaleFromFont: v }),
       setDefaultComposePreset: (v) => set({ defaultComposePreset: v }),
       setComposeRedWeight: (v) => get().applySettingsPatch({ composeRedWeight: v }),
       setComposeGreenWeight: (v) => get().applySettingsPatch({ composeGreenWeight: v }),

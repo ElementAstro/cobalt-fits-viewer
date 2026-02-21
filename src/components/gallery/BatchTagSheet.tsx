@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Alert, View, Text } from "react-native";
+import { Alert, ScrollView, View, Text } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -9,7 +9,6 @@ import {
   TextField,
   useThemeColor,
 } from "heroui-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -148,7 +147,7 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
           </View>
 
           {/* Tag list */}
-          <BottomSheetScrollView style={{ maxHeight: 280 }}>
+          <ScrollView style={{ maxHeight: 280 }}>
             <View className="flex-row flex-wrap gap-1.5 px-4 py-2">
               {allTags.map((tag) => {
                 const isSelected = selectedTags.has(tag);
@@ -184,7 +183,7 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
                 <Text className="mt-2 text-xs text-muted">{t("gallery.noTags")}</Text>
               </View>
             )}
-          </BottomSheetScrollView>
+          </ScrollView>
 
           <Separator className="my-1" />
           <View className="flex-row gap-2 px-4 py-2">

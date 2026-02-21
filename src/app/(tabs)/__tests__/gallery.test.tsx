@@ -37,6 +37,7 @@ jest.mock("../../../hooks/useSelectionMode", () => ({
     enterSelectionMode: jest.fn(),
     exitSelectionMode: jest.fn(),
     selectAll: jest.fn(),
+    reconcileSelection: jest.fn(),
   }),
 }));
 
@@ -263,5 +264,11 @@ describe("(tabs)/gallery.tsx routing", () => {
     render(<GalleryScreen />);
     fireEvent.press(screen.getByTestId("thumb-audio-1"));
     expect(mockPush).toHaveBeenCalledWith("/video/audio-1");
+  });
+
+  it("renders tabbed layout controls", () => {
+    render(<GalleryScreen />);
+    expect(screen.getByTestId("gallery-tab-images")).toBeTruthy();
+    expect(screen.getByTestId("gallery-tab-albums")).toBeTruthy();
   });
 });

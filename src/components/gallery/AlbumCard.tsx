@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { View, Text, Pressable, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { Card, useThemeColor } from "heroui-native";
+import { Button, Card, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
@@ -14,6 +14,7 @@ interface AlbumCardProps {
   onLongPress?: () => void;
   /** Compact layout for landscape mode */
   compact?: boolean;
+  onActionPress?: () => void;
 }
 
 export const AlbumCard = memo(function AlbumCard({
@@ -21,6 +22,7 @@ export const AlbumCard = memo(function AlbumCard({
   onPress,
   onLongPress,
   compact = false,
+  onActionPress,
 }: AlbumCardProps) {
   const { t } = useI18n();
   const [mutedColor] = useThemeColor(["muted"]);
@@ -40,52 +42,68 @@ export const AlbumCard = memo(function AlbumCard({
   }, [album.coverImageId, album.imageIds, getFileById]);
 
   return (
-    <Pressable onPress={onPress} onLongPress={onLongPress}>
-      <Card variant="secondary" style={{ width: cardWidth }}>
-        <Card.Body className="p-0">
-          <View
-            className="w-full items-center justify-center rounded-t-lg bg-surface-secondary overflow-hidden"
-            style={{ height: coverHeight }}
-          >
-            {coverUri ? (
-              <Image
-                source={{ uri: coverUri }}
-                className="h-full w-full"
-                contentFit="cover"
-                cachePolicy="memory-disk"
-                transition={200}
-              />
-            ) : (
-              <Ionicons name="albums-outline" size={32} color={mutedColor} />
-            )}
-            {/* Smart album indicator */}
-            {album.isSmart && (
-              <View className="absolute top-1 right-1 rounded bg-success/80 px-1">
-                <Ionicons name="sparkles" size={10} color="#fff" />
+    <Pressable onLongPress={onLongPress}>
+      <PressableFeedback onPress={onPress}>
+        <PressableFeedback.Highlight />
+        <Card variant="secondary" style={{ width: cardWidth }}>
+          <Card.Body className="p-0">
+            <View
+              className="w-full items-center justify-center rounded-t-lg bg-surface-secondary overflow-hidden"
+              style={{ height: coverHeight }}
+            >
+              {coverUri ? (
+                <Image
+                  source={{ uri: coverUri }}
+                  className="h-full w-full"
+                  contentFit="cover"
+                  cachePolicy="memory-disk"
+                  transition={200}
+                />
+              ) : (
+                <Ionicons name="albums-outline" size={32} color={mutedColor} />
+              )}
+              {/* Smart album indicator */}
+              {album.isSmart && (
+                <View className="absolute top-1 right-1 rounded bg-success/80 px-1">
+                  <Ionicons name="sparkles" size={10} color="#fff" />
+                </View>
+              )}
+              {/* Pinned indicator */}
+              {album.isPinned && (
+                <View className="absolute top-1 left-1 rounded bg-primary/80 px-1">
+                  <Ionicons name="pin" size={10} color="#fff" />
+                </View>
+              )}
+              {onActionPress && (
+                <View className="absolute right-1 bottom-1">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    isIconOnly
+                    onPress={onActionPress}
+                    className="h-6 w-6 rounded-full bg-black/40"
+                  >
+                    <Ionicons name="ellipsis-vertical" size={12} color="#fff" />
+                  </Button>
+                </View>
+              )}
+            </View>
+            <View className={compact ? "p-1.5" : "p-2"}>
+              <View className="flex-row items-center gap-1">
+                <Text
+                  className={`${compact ? "text-[10px]" : "text-xs"} font-semibold text-foreground flex-1`}
+                  numberOfLines={1}
+                >
+                  {album.name}
+                </Text>
               </View>
-            )}
-            {/* Pinned indicator */}
-            {album.isPinned && (
-              <View className="absolute top-1 left-1 rounded bg-primary/80 px-1">
-                <Ionicons name="pin" size={10} color="#fff" />
-              </View>
-            )}
-          </View>
-          <View className={compact ? "p-1.5" : "p-2"}>
-            <View className="flex-row items-center gap-1">
-              <Text
-                className={`${compact ? "text-[10px]" : "text-xs"} font-semibold text-foreground flex-1`}
-                numberOfLines={1}
-              >
-                {album.name}
+              <Text className="text-[9px] text-muted">
+                {album.imageIds.length} {t("album.images")}
               </Text>
             </View>
-            <Text className="text-[9px] text-muted">
-              {album.imageIds.length} {t("album.images")}
-            </Text>
-          </View>
-        </Card.Body>
-      </Card>
+          </Card.Body>
+        </Card>
+      </PressableFeedback>
     </Pressable>
   );
 });

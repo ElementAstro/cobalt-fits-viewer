@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, ScrollView } from "react-native";
+import { View, Text, ScrollView, useWindowDimensions } from "react-native";
 import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -22,10 +22,12 @@ import {
   EquipmentRecommendations,
 } from "../../components/targets/EquipmentRecommendations";
 import { ChangeHistorySheet } from "../../components/targets/ChangeHistorySheet";
+import { FavoriteButton, PinButton } from "../../components/targets/FavoriteButton";
 import { formatCoordinates } from "../../lib/targets/coordinates";
 import { getTargetIcon } from "../../lib/targets/targetIcons";
 import { shareTarget } from "../../lib/targets/targetExport";
 import { calculateTargetExposure } from "../../lib/targets/targetManager";
+import { resolveTargetInteractionUi } from "../../lib/targets/targetInteractionUi";
 import type { FitsMetadata, Target, TargetStatus } from "../../lib/fits/types";
 
 const STATUS_FLOW: TargetStatus[] = ["planned", "acquiring", "completed", "processed"];
@@ -41,6 +43,7 @@ export default function TargetDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [_successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const { fontScale } = useWindowDimensions();
   const { contentPaddingTop, horizontalPadding, isLandscapeTablet } = useResponsiveLayout();
 
   const {
@@ -63,6 +66,14 @@ export default function TargetDetailScreen() {
   const files = useFitsStore((s) => s.files);
   const setFilterTargetId = useGalleryStore((s) => s.setFilterTargetId);
   const timelineGrouping = useSettingsStore((s) => s.timelineGrouping);
+  const targetActionControlMode = useSettingsStore((s) => s.targetActionControlMode);
+  const targetActionSizePreset = useSettingsStore((s) => s.targetActionSizePreset);
+  const targetActionAutoScaleFromFont = useSettingsStore((s) => s.targetActionAutoScaleFromFont);
+  const interactionUi = resolveTargetInteractionUi({
+    preset: targetActionSizePreset,
+    autoScaleFromFont: targetActionAutoScaleFromFont,
+    fontScale,
+  });
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [showPlanSheet, setShowPlanSheet] = useState(false);
   const [showRatingSheet, setShowRatingSheet] = useState(false);
@@ -94,6 +105,33 @@ export default function TargetDetailScreen() {
         percent: data.percent,
       }))
     : [];
+  const controlGapClassName = targetActionControlMode === "checkbox" ? "gap-1.5" : "gap-2";
+  const toolbarButtonSize = interactionUi.buttonSize;
+  const chipSize = interactionUi.chipSize;
+  const iconSize = interactionUi.iconSize;
+  const compactIconSize = interactionUi.compactIconSize;
+  const miniIconSize = interactionUi.miniIconSize;
+  const smallLabelClassName =
+    interactionUi.effectivePreset === "accessible" ? "text-xs" : "text-[10px]";
+  const tinyLabelClassName =
+    interactionUi.effectivePreset === "accessible" ? "text-[11px]" : "text-[9px]";
+  const aliasTextClassName =
+    interactionUi.effectivePreset === "accessible"
+      ? "ml-6 text-xs text-muted"
+      : "ml-6 text-[10px] text-muted";
+  const statsValueClassName =
+    interactionUi.effectivePreset === "accessible"
+      ? "text-2xl font-bold text-foreground"
+      : "text-xl font-bold text-foreground";
+  const statsLabelClassName =
+    interactionUi.effectivePreset === "accessible"
+      ? "text-xs text-muted"
+      : "text-[10px] text-muted";
+  const statusLabelClassName =
+    interactionUi.effectivePreset === "accessible" ? "text-[10px]" : "text-[9px]";
+  const statusDotSize = interactionUi.effectivePreset === "accessible" ? 10 : 8;
+  const statusButtonPaddingClassName =
+    interactionUi.effectivePreset === "accessible" ? "py-3" : "py-2";
 
   const handleFilePress = (file: FitsMetadata) => {
     router.push(`/viewer/${file.id}`);
@@ -129,14 +167,19 @@ export default function TargetDetailScreen() {
       >
         <View className="mb-4 gap-3">
           <View className="flex-row items-center gap-3">
-            <Button size="sm" isIconOnly variant="outline" onPress={() => router.back()}>
-              <Ionicons name="arrow-back" size={16} color={mutedColor} />
+            <Button
+              size={toolbarButtonSize}
+              isIconOnly
+              variant="outline"
+              onPress={() => router.back()}
+            >
+              <Ionicons name="arrow-back" size={iconSize} color={mutedColor} />
             </Button>
             <View className="min-w-0 flex-1">
               <View className="flex-row items-center gap-2">
                 <Ionicons
                   name={getTargetIcon(target.type).name as keyof typeof Ionicons.glyphMap}
-                  size={18}
+                  size={iconSize}
                   color={getTargetIcon(target.type).color}
                 />
                 <Text className="flex-1 text-lg font-bold text-foreground" numberOfLines={1}>
@@ -144,7 +187,7 @@ export default function TargetDetailScreen() {
                 </Text>
               </View>
               {target.aliases.length > 0 && (
-                <Text className="text-[10px] text-muted ml-6" numberOfLines={1}>
+                <Text className={aliasTextClassName} numberOfLines={1}>
                   {target.aliases.join(", ")}
                 </Text>
               )}
@@ -152,9 +195,9 @@ export default function TargetDetailScreen() {
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="flex-row items-center gap-2 pr-1">
-              <Chip size="sm" variant="secondary">
-                <Chip.Label className="text-[9px]">
+            <View className={`flex-row items-center ${controlGapClassName} pr-1`}>
+              <Chip size={chipSize} variant="secondary">
+                <Chip.Label className={tinyLabelClassName}>
                   {t(
                     `targets.types.${target.type}` as
                       | "targets.types.galaxy"
@@ -170,40 +213,31 @@ export default function TargetDetailScreen() {
               </Chip>
               <Button
                 testID="e2e-action-target__param_id-open-plan"
-                size="sm"
+                size={toolbarButtonSize}
                 isIconOnly
                 variant="outline"
                 onPress={() => setShowPlanSheet(true)}
               >
-                <Ionicons name="calendar-outline" size={16} color={mutedColor} />
+                <Ionicons name="calendar-outline" size={iconSize} color={mutedColor} />
               </Button>
-              <Button
+              <FavoriteButton
                 testID="e2e-action-target__param_id-toggle-favorite"
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => toggleFavorite(target.id)}
-              >
-                <Ionicons
-                  name={target.isFavorite ? "heart" : "heart-outline"}
-                  size={16}
-                  color={target.isFavorite ? "#ef4444" : mutedColor}
-                />
-              </Button>
+                isFavorite={target.isFavorite}
+                onToggleFavorite={() => toggleFavorite(target.id)}
+                mode={targetActionControlMode}
+                interactionUi={interactionUi}
+                label={t("targets.favorites")}
+              />
+              <PinButton
+                testID="target-detail-pin"
+                isPinned={target.isPinned}
+                onTogglePinned={() => togglePinned(target.id)}
+                mode={targetActionControlMode}
+                interactionUi={interactionUi}
+                label={t("targets.pin")}
+              />
               <Button
-                size="sm"
-                isIconOnly
-                variant="outline"
-                onPress={() => togglePinned(target.id)}
-              >
-                <Ionicons
-                  name={target.isPinned ? "pin" : "pin-outline"}
-                  size={16}
-                  color={target.isPinned ? "#f59e0b" : mutedColor}
-                />
-              </Button>
-              <Button
-                size="sm"
+                size={toolbarButtonSize}
                 isIconOnly
                 variant="outline"
                 onPress={() => {
@@ -215,31 +249,60 @@ export default function TargetDetailScreen() {
                   });
                 }}
               >
-                <Ionicons name="share-outline" size={16} color={mutedColor} />
+                <Ionicons name="share-outline" size={iconSize} color={mutedColor} />
               </Button>
-              <Button size="sm" isIconOnly variant="outline" onPress={() => setShowEditSheet(true)}>
-                <Ionicons name="create-outline" size={16} color={mutedColor} />
+              <Button
+                size={toolbarButtonSize}
+                isIconOnly
+                variant="outline"
+                onPress={() => setShowEditSheet(true)}
+              >
+                <Ionicons name="create-outline" size={iconSize} color={mutedColor} />
               </Button>
             </View>
           </ScrollView>
         </View>
 
         <View className="flex-row flex-wrap gap-2 mb-4">
-          <Button size="sm" variant="outline" onPress={() => setShowRatingSheet(true)}>
-            <Ionicons name="star-outline" size={14} color={mutedColor} />
-            <Button.Label className="text-[10px]">{t("targets.ratings.title")}</Button.Label>
+          <Button
+            size={toolbarButtonSize}
+            variant="outline"
+            onPress={() => setShowRatingSheet(true)}
+          >
+            <Ionicons name="star-outline" size={compactIconSize} color={mutedColor} />
+            <Button.Label className={smallLabelClassName}>
+              {t("targets.ratings.title")}
+            </Button.Label>
           </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowBestSelector(true)}>
-            <Ionicons name="images-outline" size={14} color={mutedColor} />
-            <Button.Label className="text-[10px]">{t("targets.ratings.selectBest")}</Button.Label>
+          <Button
+            size={toolbarButtonSize}
+            variant="outline"
+            onPress={() => setShowBestSelector(true)}
+          >
+            <Ionicons name="images-outline" size={compactIconSize} color={mutedColor} />
+            <Button.Label className={smallLabelClassName}>
+              {t("targets.ratings.selectBest")}
+            </Button.Label>
           </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowEquipmentSheet(true)}>
-            <Ionicons name="construct-outline" size={14} color={mutedColor} />
-            <Button.Label className="text-[10px]">{t("targets.equipment.title")}</Button.Label>
+          <Button
+            size={toolbarButtonSize}
+            variant="outline"
+            onPress={() => setShowEquipmentSheet(true)}
+          >
+            <Ionicons name="construct-outline" size={compactIconSize} color={mutedColor} />
+            <Button.Label className={smallLabelClassName}>
+              {t("targets.equipment.title")}
+            </Button.Label>
           </Button>
-          <Button size="sm" variant="outline" onPress={() => setShowHistorySheet(true)}>
-            <Ionicons name="time-outline" size={14} color={mutedColor} />
-            <Button.Label className="text-[10px]">{t("targets.changeLog.title")}</Button.Label>
+          <Button
+            size={toolbarButtonSize}
+            variant="outline"
+            onPress={() => setShowHistorySheet(true)}
+          >
+            <Ionicons name="time-outline" size={compactIconSize} color={mutedColor} />
+            <Button.Label className={smallLabelClassName}>
+              {t("targets.changeLog.title")}
+            </Button.Label>
           </Button>
         </View>
 
@@ -248,17 +311,21 @@ export default function TargetDetailScreen() {
             <Button
               key={status}
               variant={target.status === status ? "secondary" : "ghost"}
-              className={`flex-1 items-center rounded-lg py-2 ${
+              className={`flex-1 items-center rounded-lg ${statusButtonPaddingClassName} ${
                 target.status === status ? "bg-primary/15" : "bg-surface-secondary"
               }`}
               onPress={() => setStatus(target.id, status)}
             >
               <View
-                className="h-2 w-2 rounded-full mb-1"
-                style={{ backgroundColor: STATUS_COLORS[status] }}
+                className="rounded-full mb-1"
+                style={{
+                  backgroundColor: STATUS_COLORS[status],
+                  width: statusDotSize,
+                  height: statusDotSize,
+                }}
               />
               <Button.Label
-                className={`text-[9px] ${
+                className={`${statusLabelClassName} ${
                   target.status === status ? "font-bold text-primary" : "text-muted"
                 }`}
               >
@@ -279,31 +346,29 @@ export default function TargetDetailScreen() {
         <View className="flex-row gap-2 mb-4">
           <Card variant="secondary" className="flex-1">
             <Card.Body className="items-center p-3">
-              <Text className="text-xl font-bold text-foreground">{targetFiles.length}</Text>
-              <Text className="text-[10px] text-muted">{t("targets.frameCount")}</Text>
+              <Text className={statsValueClassName}>{targetFiles.length}</Text>
+              <Text className={statsLabelClassName}>{t("targets.frameCount")}</Text>
             </Card.Body>
           </Card>
           <Card variant="secondary" className="flex-1">
             <Card.Body className="items-center p-3">
-              <Text className="text-xl font-bold text-foreground">
-                {Math.round(totalExposure / 60)}m
-              </Text>
-              <Text className="text-[10px] text-muted">{t("targets.totalExposure")}</Text>
+              <Text className={statsValueClassName}>{Math.round(totalExposure / 60)}m</Text>
+              <Text className={statsLabelClassName}>{t("targets.totalExposure")}</Text>
             </Card.Body>
           </Card>
           <Card variant="secondary" className="flex-1">
             <Card.Body className="items-center p-3">
-              <Text className="text-xl font-bold text-foreground">
+              <Text className={statsValueClassName}>
                 {stats ? Object.keys(stats.completion.byFilter).length : 0}
               </Text>
-              <Text className="text-[10px] text-muted">{t("targets.byFilter")}</Text>
+              <Text className={statsLabelClassName}>{t("targets.byFilter")}</Text>
             </Card.Body>
           </Card>
         </View>
 
         {(target.ra !== undefined || target.dec !== undefined) && (
           <View className="mb-4 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
-            <Ionicons name="navigate-outline" size={14} color={mutedColor} />
+            <Ionicons name="navigate-outline" size={compactIconSize} color={mutedColor} />
             <Text className="text-xs text-foreground font-mono">
               {formatCoordinates(target.ra, target.dec)}
             </Text>
@@ -316,14 +381,14 @@ export default function TargetDetailScreen() {
               <View className="mb-2 flex-row items-start gap-2">
                 <Ionicons
                   name="folder-outline"
-                  size={12}
+                  size={miniIconSize}
                   color={mutedColor}
                   style={{ marginTop: 2 }}
                 />
                 <Text className="w-12 text-xs text-muted">{t("targets.category")}</Text>
                 <View className="flex-1 flex-row flex-wrap gap-1">
-                  <Chip size="sm" variant="secondary">
-                    <Chip.Label className="text-[9px]">{target.category}</Chip.Label>
+                  <Chip size={chipSize} variant="secondary">
+                    <Chip.Label className={tinyLabelClassName}>{target.category}</Chip.Label>
                   </Chip>
                 </View>
               </View>
@@ -332,15 +397,15 @@ export default function TargetDetailScreen() {
               <View className="flex-row items-start gap-2">
                 <Ionicons
                   name="pricetag-outline"
-                  size={12}
+                  size={miniIconSize}
                   color={mutedColor}
                   style={{ marginTop: 2 }}
                 />
                 <Text className="w-12 text-xs text-muted">{t("targets.tags")}</Text>
                 <View className="flex-1 flex-row flex-wrap gap-1">
                   {target.tags.map((tag) => (
-                    <Chip key={tag} size="sm" variant="secondary">
-                      <Chip.Label className="text-[9px]">{tag}</Chip.Label>
+                    <Chip key={tag} size={chipSize} variant="secondary">
+                      <Chip.Label className={tinyLabelClassName}>{tag}</Chip.Label>
                     </Chip>
                   ))}
                 </View>
@@ -379,15 +444,15 @@ export default function TargetDetailScreen() {
           </Text>
           {targetFiles.length > 0 && (
             <Button
-              size="sm"
+              size={toolbarButtonSize}
               variant="ghost"
               onPress={() => {
                 setFilterTargetId(target.id);
                 router.push("/(tabs)/gallery");
               }}
             >
-              <Ionicons name="grid-outline" size={12} color={mutedColor} />
-              <Button.Label className="text-[10px] text-muted">{t("gallery.title")}</Button.Label>
+              <Ionicons name="grid-outline" size={miniIconSize} color={mutedColor} />
+              <Button.Label className={smallLabelClassName}>{t("gallery.title")}</Button.Label>
             </Button>
           )}
         </View>
@@ -398,7 +463,7 @@ export default function TargetDetailScreen() {
           <>
             {target.bestImageId && (
               <View className="mb-3 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
-                <Ionicons name="star" size={12} color="#f59e0b" />
+                <Ionicons name="star" size={miniIconSize} color="#f59e0b" />
                 <Text className="text-xs text-foreground">{t("targets.ratings.bestImage")}</Text>
                 <Text className="text-xs text-muted">
                   ({targetFiles.find((file) => file.id === target.bestImageId)?.filename})

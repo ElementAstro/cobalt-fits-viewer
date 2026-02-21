@@ -2,8 +2,7 @@
  * 重复目标合并 Sheet
  */
 
-import { View, Text } from "react-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { ScrollView, View, Text } from "react-native";
 import { BottomSheet, Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons as Icons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -112,7 +111,7 @@ export function DuplicateMergeSheet({
           className="mx-4"
           backgroundClassName="rounded-[28px] bg-background"
         >
-          <BottomSheetScrollView
+          <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
@@ -227,7 +226,7 @@ export function DuplicateMergeSheet({
                 </Button>
               </>
             )}
-          </BottomSheetScrollView>
+          </ScrollView>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

@@ -10,6 +10,10 @@ interface LoadingOverlayProps {
   currentFile?: string;
   current?: number;
   total?: number;
+  success?: number;
+  failed?: number;
+  skippedDuplicate?: number;
+  skippedUnsupported?: number;
   onCancel?: () => void;
 }
 
@@ -20,6 +24,10 @@ export function LoadingOverlay({
   currentFile,
   current,
   total,
+  success,
+  failed,
+  skippedDuplicate,
+  skippedUnsupported,
   onCancel,
 }: LoadingOverlayProps) {
   const { t } = useI18n();
@@ -48,14 +56,44 @@ export function LoadingOverlay({
 
         {currentFile && (
           <Text className="mt-2 text-xs text-muted" numberOfLines={1}>
-            {currentFile}
+            {t("files.currentFile").replace("{name}", currentFile)}
           </Text>
         )}
 
         {current != null && total != null && total > 0 && (
           <Text className="mt-1 text-xs text-muted">
-            {current} / {total}
+            {t("files.progressDetail")
+              .replace("{current}", String(current))
+              .replace("{total}", String(total))}
           </Text>
+        )}
+
+        {[success, failed, skippedDuplicate, skippedUnsupported].some((value) => value != null) && (
+          <View className="mt-3 w-full rounded-lg bg-muted/10 px-3 py-2">
+            {success != null && (
+              <Text className="text-xs text-muted">
+                {t("files.progressSuccess").replace("{count}", String(success))}
+              </Text>
+            )}
+            {failed != null && (
+              <Text className="text-xs text-muted">
+                {t("files.progressFailed").replace("{count}", String(failed))}
+              </Text>
+            )}
+            {skippedDuplicate != null && (
+              <Text className="text-xs text-muted">
+                {t("files.progressSkippedDuplicate").replace("{count}", String(skippedDuplicate))}
+              </Text>
+            )}
+            {skippedUnsupported != null && (
+              <Text className="text-xs text-muted">
+                {t("files.progressSkippedUnsupported").replace(
+                  "{count}",
+                  String(skippedUnsupported),
+                )}
+              </Text>
+            )}
+          </View>
         )}
 
         {onCancel && (

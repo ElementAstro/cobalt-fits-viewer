@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { View, Text, Alert } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import {
   BottomSheet,
   Button,
@@ -13,6 +14,7 @@ import {
   useThemeColor,
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { useCalendar } from "../../hooks/useCalendar";
 import { LocationService } from "../../hooks/useLocation";
@@ -45,6 +47,7 @@ export function PlanObservationSheet({
   existingPlan,
 }: PlanObservationSheetProps) {
   const { t } = useI18n();
+  const insets = useSafeAreaInsets();
   const mutedColor = useThemeColor("muted");
   const { createObservationPlan, updateObservationPlan, syncing } = useCalendar();
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
@@ -357,7 +360,17 @@ export function PlanObservationSheet({
     >
       <BottomSheet.Portal>
         <BottomSheet.Overlay />
-        <BottomSheet.Content>
+        <BottomSheet.Content
+          snapPoints={["82%", "96%"]}
+          index={1}
+          enableDynamicSizing={false}
+          enableOverDrag={false}
+          enableContentPanningGesture={false}
+          keyboardBehavior="interactive"
+          keyboardBlurBehavior="restore"
+          android_keyboardInputMode="adjustResize"
+          contentContainerClassName="h-full"
+        >
           {/* Header */}
           <View className="mb-4 flex-row items-center justify-between">
             <BottomSheet.Title>
@@ -366,332 +379,343 @@ export function PlanObservationSheet({
             <BottomSheet.Close />
           </View>
 
-          {/* Target Name */}
-          <TextField isRequired className="mb-3">
-            <Label>{t("sessions.targetName")}</Label>
-            <Input
-              value={targetName}
-              onChangeText={(value) => {
-                setTargetName(value);
-                if (
-                  selectedTargetId &&
-                  selectedTargetName &&
-                  selectedTargetName.toLowerCase() !== value.trim().toLowerCase()
-                ) {
-                  setSelectedTargetId(undefined);
-                }
-              }}
-              placeholder="e.g. M42, NGC 7000..."
-            />
-          </TextField>
-          {targetSuggestions.length > 0 && (
-            <View className="mb-3 flex-row flex-wrap gap-2">
-              {targetSuggestions.map((target) => (
-                <Chip
-                  key={target.id}
-                  size="sm"
-                  variant={selectedTargetId === target.id ? "primary" : "secondary"}
-                  onPress={() => {
-                    setSelectedTargetId(target.id);
-                    setTargetName(target.name);
-                  }}
-                >
-                  <Chip.Label className="text-[9px]">{target.name}</Chip.Label>
-                </Chip>
-              ))}
-            </View>
-          )}
-
-          {/* Title (optional) */}
-          <TextField className="mb-3">
-            <Label>{t("sessions.planTitle")}</Label>
-            <Input
-              value={title}
-              onChangeText={setTitle}
-              placeholder={targetName || t("sessions.planTitle")}
-            />
-          </TextField>
-
-          {/* Date & Time Info */}
-          <Card variant="secondary" className="mb-3">
-            <Card.Body className="px-3 py-2">
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <Ionicons name="calendar-outline" size={14} color={mutedColor} />
-                  <Text className="text-xs text-muted">{t("sessions.plannedDate")}</Text>
-                </View>
-                <Text className="text-xs font-medium text-foreground">{formatDate(startDate)}</Text>
-              </View>
-              <Separator className="my-1.5" />
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <Ionicons name="time-outline" size={14} color={mutedColor} />
-                  <Text className="text-xs text-muted">{t("sessions.startTime")}</Text>
-                </View>
-                <View className="flex-row items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("start", "hour", -1)}
-                  >
-                    <Ionicons name="remove" size={12} color={mutedColor} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("start", "minute", -5)}
-                  >
-                    <Ionicons name="play-back-outline" size={11} color={mutedColor} />
-                  </Button>
-                  <Text className="text-xs font-medium text-foreground w-12 text-center">
-                    {formatTime(startDate)}
-                  </Text>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("start", "minute", 5)}
-                  >
-                    <Ionicons name="play-forward-outline" size={11} color={mutedColor} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("start", "hour", 1)}
-                  >
-                    <Ionicons name="add" size={12} color={mutedColor} />
-                  </Button>
-                </View>
-              </View>
-              <Separator className="my-1.5" />
-              <View className="flex-row items-center justify-between">
-                <View className="flex-row items-center gap-2">
-                  <Ionicons name="time-outline" size={14} color={mutedColor} />
-                  <Text className="text-xs text-muted">{t("sessions.endTime")}</Text>
-                </View>
-                <View className="flex-row items-center gap-1">
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("end", "hour", -1)}
-                  >
-                    <Ionicons name="remove" size={12} color={mutedColor} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("end", "minute", -5)}
-                  >
-                    <Ionicons name="play-back-outline" size={11} color={mutedColor} />
-                  </Button>
-                  <Text className="text-xs font-medium text-foreground w-12 text-center">
-                    {formatTime(endDate)}
-                  </Text>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("end", "minute", 5)}
-                  >
-                    <Ionicons name="play-forward-outline" size={11} color={mutedColor} />
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    isIconOnly
-                    onPress={() => adjustTime("end", "hour", 1)}
-                  >
-                    <Ionicons name="add" size={12} color={mutedColor} />
-                  </Button>
-                </View>
-              </View>
-            </Card.Body>
-          </Card>
-
-          {/* Equipment */}
-          <Card variant="secondary" className="mb-3">
-            <Card.Body className="gap-3 p-3">
-              <Text className="text-xs font-semibold text-foreground">
-                {t("sessions.equipment")}
-              </Text>
-              <TextField>
-                <Label>{t("sessions.telescope")}</Label>
-                <Input
-                  value={telescope}
-                  onChangeText={setTelescope}
-                  placeholder={t("sessions.telescopePlaceholder")}
-                />
-              </TextField>
-              <TextField>
-                <Label>{t("sessions.camera")}</Label>
-                <Input
-                  value={camera}
-                  onChangeText={setCamera}
-                  placeholder={t("sessions.cameraPlaceholder")}
-                />
-              </TextField>
-              <TextField>
-                <Label>{t("sessions.mount")}</Label>
-                <Input
-                  value={mount}
-                  onChangeText={setMount}
-                  placeholder={t("sessions.mountPlaceholder")}
-                />
-              </TextField>
-              <View>
-                <Text className="mb-1 text-[11px] font-medium text-muted">
-                  {t("sessions.filters")}
-                </Text>
-                <View className="flex-row items-center gap-2">
-                  <Input
-                    className="flex-1"
-                    value={filterInput}
-                    onChangeText={setFilterInput}
-                    onSubmitEditing={() =>
-                      addChipItem(filterInput, filters, setFilters, setFilterInput)
-                    }
-                    placeholder={t("sessions.filterPlaceholder")}
-                    returnKeyType="done"
-                  />
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onPress={() => addChipItem(filterInput, filters, setFilters, setFilterInput)}
-                  >
-                    <Button.Label>{t("sessions.addFilter")}</Button.Label>
-                  </Button>
-                </View>
-                {filters.length > 0 && (
-                  <View className="mt-2 flex-row flex-wrap gap-2">
-                    {filters.map((item) => (
-                      <Chip
-                        key={item}
-                        size="sm"
-                        variant="secondary"
-                        onPress={() => removeChipItem(item, filters, setFilters)}
-                      >
-                        <Chip.Label>{item}</Chip.Label>
-                      </Chip>
-                    ))}
-                  </View>
-                )}
-              </View>
-            </Card.Body>
-          </Card>
-
-          {/* Location */}
-          <Card variant="secondary" className="mb-3">
-            <Card.Body className="gap-3 p-3">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-xs font-semibold text-foreground">
-                  {t("sessions.location")}
-                </Text>
-                <Button size="sm" variant="ghost" onPress={handleUseCurrentLocation}>
-                  <Ionicons name="locate-outline" size={14} color={mutedColor} />
-                  <Button.Label>{t("sessions.useCurrentLocation")}</Button.Label>
-                </Button>
-              </View>
-              <TextField>
-                <Label>{t("sessions.locationName")}</Label>
-                <Input
-                  value={locationName}
-                  onChangeText={setLocationName}
-                  placeholder={t("sessions.locationNamePlaceholder")}
-                />
-              </TextField>
-              <View className="flex-row gap-2">
-                <TextField className="flex-1">
-                  <Label>{t("sessions.latitude")}</Label>
-                  <Input
-                    value={latitudeInput}
-                    onChangeText={setLatitudeInput}
-                    placeholder="e.g. 39.9042"
-                    keyboardType="decimal-pad"
-                  />
-                </TextField>
-                <TextField className="flex-1">
-                  <Label>{t("sessions.longitude")}</Label>
-                  <Input
-                    value={longitudeInput}
-                    onChangeText={setLongitudeInput}
-                    placeholder="e.g. 116.4074"
-                    keyboardType="decimal-pad"
-                  />
-                </TextField>
-              </View>
-            </Card.Body>
-          </Card>
-
-          {/* Reminder */}
-          <Text className="mb-1.5 text-xs font-medium text-muted">
-            {t("sessions.reminderTime")}
-          </Text>
-          <View className="mb-3 flex-row flex-wrap gap-2">
-            {REMINDER_OPTIONS.map((opt) => {
-              const isActive = reminderMinutes === opt.value;
-              return (
-                <Chip
-                  key={opt.value}
-                  size="sm"
-                  variant={isActive ? "primary" : "secondary"}
-                  color={isActive ? "accent" : "default"}
-                  onPress={() => setReminderMinutes(opt.value)}
-                >
-                  <Chip.Label>{t(`sessions.reminderOptions.${opt.labelKey}`)}</Chip.Label>
-                </Chip>
-              );
-            })}
-          </View>
-
-          {/* Status */}
-          <Text className="mb-1.5 text-xs font-medium text-muted">{t("sessions.planStatus")}</Text>
-          <View className="mb-3 flex-row flex-wrap gap-2">
-            {(["planned", "completed", "cancelled"] as const).map((s) => {
-              const isActive = status === s;
-              return (
-                <Chip
-                  key={s}
-                  size="sm"
-                  variant={isActive ? "primary" : "secondary"}
-                  onPress={() => setStatus(s)}
-                >
-                  <Chip.Label>{t(`sessions.status.${s}`)}</Chip.Label>
-                </Chip>
-              );
-            })}
-          </View>
-
-          {/* Notes */}
-          <TextField className="mb-4">
-            <Label>{t("sessions.notes")}</Label>
-            <TextArea
-              value={notes}
-              onChangeText={setNotes}
-              placeholder={t("sessions.notes")}
-              numberOfLines={2}
-            />
-          </TextField>
-
-          {/* Create Button */}
-          <Button
-            onPress={handleCreate}
-            isDisabled={syncing || !targetName.trim()}
-            className="w-full"
+          <BottomSheetScrollView
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
           >
-            <Ionicons name="calendar" size={16} color="#fff" />
-            <Button.Label>
-              {syncing
-                ? t("common.loading")
-                : isEditMode
-                  ? t("common.save")
-                  : t("sessions.createEvent")}
-            </Button.Label>
-          </Button>
+            {/* Target Name */}
+            <TextField isRequired className="mb-3">
+              <Label>{t("sessions.targetName")}</Label>
+              <Input
+                value={targetName}
+                onChangeText={(value) => {
+                  setTargetName(value);
+                  if (
+                    selectedTargetId &&
+                    selectedTargetName &&
+                    selectedTargetName.toLowerCase() !== value.trim().toLowerCase()
+                  ) {
+                    setSelectedTargetId(undefined);
+                  }
+                }}
+                placeholder="e.g. M42, NGC 7000..."
+              />
+            </TextField>
+            {targetSuggestions.length > 0 && (
+              <View className="mb-3 flex-row flex-wrap gap-2">
+                {targetSuggestions.map((target) => (
+                  <Chip
+                    key={target.id}
+                    size="sm"
+                    variant={selectedTargetId === target.id ? "primary" : "secondary"}
+                    onPress={() => {
+                      setSelectedTargetId(target.id);
+                      setTargetName(target.name);
+                    }}
+                  >
+                    <Chip.Label className="text-[9px]">{target.name}</Chip.Label>
+                  </Chip>
+                ))}
+              </View>
+            )}
+
+            {/* Title (optional) */}
+            <TextField className="mb-3">
+              <Label>{t("sessions.planTitle")}</Label>
+              <Input
+                value={title}
+                onChangeText={setTitle}
+                placeholder={targetName || t("sessions.planTitle")}
+              />
+            </TextField>
+
+            {/* Date & Time Info */}
+            <Card variant="secondary" className="mb-3">
+              <Card.Body className="px-3 py-2">
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="calendar-outline" size={14} color={mutedColor} />
+                    <Text className="text-xs text-muted">{t("sessions.plannedDate")}</Text>
+                  </View>
+                  <Text className="text-xs font-medium text-foreground">
+                    {formatDate(startDate)}
+                  </Text>
+                </View>
+                <Separator className="my-1.5" />
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="time-outline" size={14} color={mutedColor} />
+                    <Text className="text-xs text-muted">{t("sessions.startTime")}</Text>
+                  </View>
+                  <View className="flex-row items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("start", "hour", -1)}
+                    >
+                      <Ionicons name="remove" size={12} color={mutedColor} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("start", "minute", -5)}
+                    >
+                      <Ionicons name="play-back-outline" size={11} color={mutedColor} />
+                    </Button>
+                    <Text className="text-xs font-medium text-foreground w-12 text-center">
+                      {formatTime(startDate)}
+                    </Text>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("start", "minute", 5)}
+                    >
+                      <Ionicons name="play-forward-outline" size={11} color={mutedColor} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("start", "hour", 1)}
+                    >
+                      <Ionicons name="add" size={12} color={mutedColor} />
+                    </Button>
+                  </View>
+                </View>
+                <Separator className="my-1.5" />
+                <View className="flex-row items-center justify-between">
+                  <View className="flex-row items-center gap-2">
+                    <Ionicons name="time-outline" size={14} color={mutedColor} />
+                    <Text className="text-xs text-muted">{t("sessions.endTime")}</Text>
+                  </View>
+                  <View className="flex-row items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("end", "hour", -1)}
+                    >
+                      <Ionicons name="remove" size={12} color={mutedColor} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("end", "minute", -5)}
+                    >
+                      <Ionicons name="play-back-outline" size={11} color={mutedColor} />
+                    </Button>
+                    <Text className="text-xs font-medium text-foreground w-12 text-center">
+                      {formatTime(endDate)}
+                    </Text>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("end", "minute", 5)}
+                    >
+                      <Ionicons name="play-forward-outline" size={11} color={mutedColor} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => adjustTime("end", "hour", 1)}
+                    >
+                      <Ionicons name="add" size={12} color={mutedColor} />
+                    </Button>
+                  </View>
+                </View>
+              </Card.Body>
+            </Card>
+
+            {/* Equipment */}
+            <Card variant="secondary" className="mb-3">
+              <Card.Body className="gap-3 p-3">
+                <Text className="text-xs font-semibold text-foreground">
+                  {t("sessions.equipment")}
+                </Text>
+                <TextField>
+                  <Label>{t("sessions.telescope")}</Label>
+                  <Input
+                    value={telescope}
+                    onChangeText={setTelescope}
+                    placeholder={t("sessions.telescopePlaceholder")}
+                  />
+                </TextField>
+                <TextField>
+                  <Label>{t("sessions.camera")}</Label>
+                  <Input
+                    value={camera}
+                    onChangeText={setCamera}
+                    placeholder={t("sessions.cameraPlaceholder")}
+                  />
+                </TextField>
+                <TextField>
+                  <Label>{t("sessions.mount")}</Label>
+                  <Input
+                    value={mount}
+                    onChangeText={setMount}
+                    placeholder={t("sessions.mountPlaceholder")}
+                  />
+                </TextField>
+                <View>
+                  <Text className="mb-1 text-[11px] font-medium text-muted">
+                    {t("sessions.filters")}
+                  </Text>
+                  <View className="flex-row items-center gap-2">
+                    <Input
+                      className="flex-1"
+                      value={filterInput}
+                      onChangeText={setFilterInput}
+                      onSubmitEditing={() =>
+                        addChipItem(filterInput, filters, setFilters, setFilterInput)
+                      }
+                      placeholder={t("sessions.filterPlaceholder")}
+                      returnKeyType="done"
+                    />
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onPress={() => addChipItem(filterInput, filters, setFilters, setFilterInput)}
+                    >
+                      <Button.Label>{t("sessions.addFilter")}</Button.Label>
+                    </Button>
+                  </View>
+                  {filters.length > 0 && (
+                    <View className="mt-2 flex-row flex-wrap gap-2">
+                      {filters.map((item) => (
+                        <Chip
+                          key={item}
+                          size="sm"
+                          variant="secondary"
+                          onPress={() => removeChipItem(item, filters, setFilters)}
+                        >
+                          <Chip.Label>{item}</Chip.Label>
+                        </Chip>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </Card.Body>
+            </Card>
+
+            {/* Location */}
+            <Card variant="secondary" className="mb-3">
+              <Card.Body className="gap-3 p-3">
+                <View className="flex-row items-center justify-between">
+                  <Text className="text-xs font-semibold text-foreground">
+                    {t("sessions.location")}
+                  </Text>
+                  <Button size="sm" variant="ghost" onPress={handleUseCurrentLocation}>
+                    <Ionicons name="locate-outline" size={14} color={mutedColor} />
+                    <Button.Label>{t("sessions.useCurrentLocation")}</Button.Label>
+                  </Button>
+                </View>
+                <TextField>
+                  <Label>{t("sessions.locationName")}</Label>
+                  <Input
+                    value={locationName}
+                    onChangeText={setLocationName}
+                    placeholder={t("sessions.locationNamePlaceholder")}
+                  />
+                </TextField>
+                <View className="flex-row gap-2">
+                  <TextField className="flex-1">
+                    <Label>{t("sessions.latitude")}</Label>
+                    <Input
+                      value={latitudeInput}
+                      onChangeText={setLatitudeInput}
+                      placeholder="e.g. 39.9042"
+                      keyboardType="decimal-pad"
+                    />
+                  </TextField>
+                  <TextField className="flex-1">
+                    <Label>{t("sessions.longitude")}</Label>
+                    <Input
+                      value={longitudeInput}
+                      onChangeText={setLongitudeInput}
+                      placeholder="e.g. 116.4074"
+                      keyboardType="decimal-pad"
+                    />
+                  </TextField>
+                </View>
+              </Card.Body>
+            </Card>
+
+            {/* Reminder */}
+            <Text className="mb-1.5 text-xs font-medium text-muted">
+              {t("sessions.reminderTime")}
+            </Text>
+            <View className="mb-3 flex-row flex-wrap gap-2">
+              {REMINDER_OPTIONS.map((opt) => {
+                const isActive = reminderMinutes === opt.value;
+                return (
+                  <Chip
+                    key={opt.value}
+                    size="sm"
+                    variant={isActive ? "primary" : "secondary"}
+                    color={isActive ? "accent" : "default"}
+                    onPress={() => setReminderMinutes(opt.value)}
+                  >
+                    <Chip.Label>{t(`sessions.reminderOptions.${opt.labelKey}`)}</Chip.Label>
+                  </Chip>
+                );
+              })}
+            </View>
+
+            {/* Status */}
+            <Text className="mb-1.5 text-xs font-medium text-muted">
+              {t("sessions.planStatus")}
+            </Text>
+            <View className="mb-3 flex-row flex-wrap gap-2">
+              {(["planned", "completed", "cancelled"] as const).map((s) => {
+                const isActive = status === s;
+                return (
+                  <Chip
+                    key={s}
+                    size="sm"
+                    variant={isActive ? "primary" : "secondary"}
+                    onPress={() => setStatus(s)}
+                  >
+                    <Chip.Label>{t(`sessions.status.${s}`)}</Chip.Label>
+                  </Chip>
+                );
+              })}
+            </View>
+
+            {/* Notes */}
+            <TextField className="mb-4">
+              <Label>{t("sessions.notes")}</Label>
+              <TextArea
+                value={notes}
+                onChangeText={setNotes}
+                placeholder={t("sessions.notes")}
+                numberOfLines={2}
+              />
+            </TextField>
+
+            {/* Create Button */}
+            <Button
+              onPress={handleCreate}
+              isDisabled={syncing || !targetName.trim()}
+              className="w-full"
+            >
+              <Ionicons name="calendar" size={16} color="#fff" />
+              <Button.Label>
+                {syncing
+                  ? t("common.loading")
+                  : isEditMode
+                    ? t("common.save")
+                    : t("sessions.createEvent")}
+              </Button.Label>
+            </Button>
+          </BottomSheetScrollView>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

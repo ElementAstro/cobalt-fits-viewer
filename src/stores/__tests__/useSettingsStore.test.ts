@@ -73,6 +73,18 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.imageProcessingProfile).toBe("standard");
       expect(s.viewerApplyEditorRecipe).toBe(true);
     });
+
+    it("has file list grid column default", () => {
+      const s = useSettingsStore.getState();
+      expect(s.fileListGridColumns).toBe(3);
+    });
+
+    it("has target interaction defaults", () => {
+      const s = useSettingsStore.getState();
+      expect(s.targetActionControlMode).toBe("icon");
+      expect(s.targetActionSizePreset).toBe("standard");
+      expect(s.targetActionAutoScaleFromFont).toBe(true);
+    });
   });
 
   // ===== Setter =====
@@ -307,6 +319,9 @@ describe("useSettingsStore — orientationLock", () => {
         logMaxEntries?: number;
         logConsoleOutput?: boolean;
         logPersistEnabled?: boolean;
+        targetActionControlMode?: string;
+        targetActionSizePreset?: string;
+        targetActionAutoScaleFromFont?: boolean;
       };
       expect(partial?.hapticsEnabled).toBe(useSettingsStore.getState().hapticsEnabled);
       expect(partial?.confirmDestructiveActions).toBe(
@@ -317,6 +332,15 @@ describe("useSettingsStore — orientationLock", () => {
       expect(partial?.logMaxEntries).toBe(useSettingsStore.getState().logMaxEntries);
       expect(partial?.logConsoleOutput).toBe(useSettingsStore.getState().logConsoleOutput);
       expect(partial?.logPersistEnabled).toBe(useSettingsStore.getState().logPersistEnabled);
+      expect(partial?.targetActionControlMode).toBe(
+        useSettingsStore.getState().targetActionControlMode,
+      );
+      expect(partial?.targetActionSizePreset).toBe(
+        useSettingsStore.getState().targetActionSizePreset,
+      );
+      expect(partial?.targetActionAutoScaleFromFont).toBe(
+        useSettingsStore.getState().targetActionAutoScaleFromFont,
+      );
     });
 
     it("partialize includes stacking advanced settings", () => {
@@ -357,6 +381,7 @@ describe("useSettingsStore — orientationLock", () => {
       useSettingsStore.getState().applySettingsPatch({
         thumbnailQuality: 1000,
         thumbnailSize: 10,
+        fileListGridColumns: 9,
         canvasMinScale: 8,
         canvasMaxScale: 2,
         canvasDoubleTapScale: 50,
@@ -371,6 +396,7 @@ describe("useSettingsStore — orientationLock", () => {
       const s = useSettingsStore.getState();
       expect(s.thumbnailQuality).toBe(100);
       expect(s.thumbnailSize).toBe(64);
+      expect(s.fileListGridColumns).toBe(3);
       expect(s.canvasMaxScale).toBeGreaterThanOrEqual(s.canvasMinScale);
       expect(s.canvasDoubleTapScale).toBeLessThanOrEqual(s.canvasMaxScale);
       expect(s.canvasPinchSensitivity).toBe(1.8);
@@ -456,6 +482,30 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.autoCheckUpdates).toBe(true);
       expect(s.logConsoleOutput).toBe(true);
       expect(s.logPersistEnabled).toBe(true);
+    });
+
+    it("applySettingsPatch sanitizes target interaction fields", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        targetActionControlMode: "checkbox",
+        targetActionSizePreset: "accessible",
+        targetActionAutoScaleFromFont: false,
+      });
+
+      let s = useSettingsStore.getState();
+      expect(s.targetActionControlMode).toBe("checkbox");
+      expect(s.targetActionSizePreset).toBe("accessible");
+      expect(s.targetActionAutoScaleFromFont).toBe(false);
+
+      useSettingsStore.getState().applySettingsPatch({
+        targetActionControlMode: "invalid",
+        targetActionSizePreset: "bad",
+        targetActionAutoScaleFromFont: "yes",
+      } as unknown as Record<string, unknown>);
+
+      s = useSettingsStore.getState();
+      expect(s.targetActionControlMode).toBe("checkbox");
+      expect(s.targetActionSizePreset).toBe("accessible");
+      expect(s.targetActionAutoScaleFromFont).toBe(false);
     });
 
     it("applySettingsPatch keeps black/white points valid for one-sided updates", () => {
@@ -675,6 +725,7 @@ describe("useSettingsStore — orientationLock", () => {
       store.setThumbnailShowFilter(false);
       store.setThumbnailShowExposure(true);
       store.setFileListStyle("compact");
+      store.setFileListGridColumns(4);
       store.setDefaultConverterFormat("tiff");
       store.setBatchNamingRule("sequence");
       store.setTimelineGrouping("week");
@@ -683,6 +734,9 @@ describe("useSettingsStore — orientationLock", () => {
       store.setSessionShowFilters(false);
       store.setTargetSortBy("frames");
       store.setTargetSortOrder("desc");
+      store.setTargetActionControlMode("checkbox");
+      store.setTargetActionSizePreset("accessible");
+      store.setTargetActionAutoScaleFromFont(false);
       store.setDefaultComposePreset("sho");
       store.setFrameClassificationConfig({
         frameTypes: [
@@ -735,6 +789,7 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.thumbnailShowFilter).toBe(false);
       expect(s.thumbnailShowExposure).toBe(true);
       expect(s.fileListStyle).toBe("compact");
+      expect(s.fileListGridColumns).toBe(4);
       expect(s.defaultConverterFormat).toBe("tiff");
       expect(s.batchNamingRule).toBe("sequence");
       expect(s.timelineGrouping).toBe("week");
@@ -743,6 +798,9 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.sessionShowFilters).toBe(false);
       expect(s.targetSortBy).toBe("frames");
       expect(s.targetSortOrder).toBe("desc");
+      expect(s.targetActionControlMode).toBe("checkbox");
+      expect(s.targetActionSizePreset).toBe("accessible");
+      expect(s.targetActionAutoScaleFromFont).toBe(false);
       expect(s.defaultComposePreset).toBe("sho");
       expect(s.frameClassificationConfig.frameTypes.some((item) => item.key === "focus")).toBe(
         true,

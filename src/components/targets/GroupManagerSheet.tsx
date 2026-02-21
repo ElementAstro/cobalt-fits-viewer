@@ -3,8 +3,7 @@
  */
 
 import { useState } from "react";
-import { View, Text } from "react-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { ScrollView, View, Text } from "react-native";
 import { BottomSheet, Button, Card, Input, Label, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -107,7 +106,7 @@ export function GroupManagerSheet({
           className="mx-4"
           backgroundClassName="rounded-[28px] bg-background"
         >
-          <BottomSheetScrollView
+          <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{
@@ -306,7 +305,7 @@ export function GroupManagerSheet({
                 ))}
               </View>
             )}
-          </BottomSheetScrollView>
+          </ScrollView>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

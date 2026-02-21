@@ -561,7 +561,7 @@ export default function SessionsScreen() {
   const plansSection = (
     <>
       <Separator className="my-4" />
-      <View className="mb-2 flex-row items-center justify-between">
+      <View className="mb-2 flex-row items-start justify-between gap-2">
         <Text className="text-base font-semibold text-foreground">
           {t("sessions.planObservation")} ({sortedPlans.length}/{plans.length})
         </Text>

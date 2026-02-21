@@ -75,6 +75,13 @@ describe("calculateHistogram", () => {
     const pixels = new Float32Array([NaN, 0.5, NaN, 1.0]);
     expect(() => calculateHistogram(pixels, 8)).not.toThrow();
   });
+
+  it("returns empty counts for non-finite-only input", () => {
+    const pixels = new Float32Array([NaN, Infinity, -Infinity]);
+    const { counts, edges } = calculateHistogram(pixels, 8);
+    expect(counts.reduce((a, b) => a + b, 0)).toBe(0);
+    expect(edges.length).toBe(9);
+  });
 });
 
 // ===== calculateRegionHistogram =====
@@ -163,6 +170,23 @@ describe("calculateStats", () => {
     expect(stats.min).toBeCloseTo(0.5, 5);
     expect(stats.max).toBeCloseTo(0.5, 5);
     expect(stats.stddev).toBeCloseTo(0, 5);
+  });
+
+  it("ignores NaN and Infinity values when computing statistics", () => {
+    const pixels = new Float32Array([1, 2, NaN, 3, Infinity, -Infinity]);
+    const stats = calculateStats(pixels);
+    expect(stats.min).toBe(1);
+    expect(stats.max).toBe(3);
+    expect(stats.mean).toBeCloseTo(2, 5);
+  });
+
+  it("returns zero stats for non-finite-only input", () => {
+    const pixels = new Float32Array([NaN, Infinity, -Infinity]);
+    const stats = calculateStats(pixels);
+    expect(stats.min).toBe(0);
+    expect(stats.max).toBe(0);
+    expect(stats.mean).toBe(0);
+    expect(stats.stddev).toBe(0);
   });
 });
 

@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text, Pressable, useWindowDimensions } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
@@ -7,6 +7,15 @@ import { Ionicons } from "@expo/vector-icons";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
+import {
+  buildInitialSnapshot,
+  buildLoadingSummary,
+  withByteProgress,
+  withStage,
+  type ThumbnailLoadSnapshot,
+  type ThumbnailLoadingSummary,
+} from "./thumbnailLoading";
+import { ThumbnailProgressOverlay } from "./ThumbnailProgressOverlay";
 
 interface ThumbnailGridProps {
   files: FitsMetadata[];
@@ -22,6 +31,8 @@ interface ThumbnailGridProps {
   showObject?: boolean;
   showFilter?: boolean;
   showExposure?: boolean;
+  showLoadProgress?: boolean;
+  onLoadingSummaryChange?: (summary: ThumbnailLoadingSummary) => void;
 }
 
 const ThumbnailItem = memo(function ThumbnailItem({
@@ -38,6 +49,8 @@ const ThumbnailItem = memo(function ThumbnailItem({
   showObject = false,
   showFilter = true,
   showExposure = false,
+  showLoadProgress = true,
+  onSnapshotChange,
 }: {
   file: FitsMetadata;
   size: number;
@@ -52,6 +65,8 @@ const ThumbnailItem = memo(function ThumbnailItem({
   showObject?: boolean;
   showFilter?: boolean;
   showExposure?: boolean;
+  showLoadProgress?: boolean;
+  onSnapshotChange: (snapshot: ThumbnailLoadSnapshot) => void;
 }) {
   const thumbnailUri = useMemo(
     () => resolveThumbnailUri(file.id, file.thumbnailUri),
@@ -61,6 +76,58 @@ const ThumbnailItem = memo(function ThumbnailItem({
   const isAudio = file.mediaKind === "audio" || file.sourceType === "audio";
   const duration = formatVideoDuration(file.durationMs);
   const resolution = formatVideoResolution(file.videoWidth, file.videoHeight);
+  const [snapshot, setSnapshot] = useState<ThumbnailLoadSnapshot>(() =>
+    buildInitialSnapshot(file.id),
+  );
+
+  useEffect(() => {
+    setSnapshot(buildInitialSnapshot(file.id));
+  }, [file.id, thumbnailUri]);
+
+  useEffect(() => {
+    if (!thumbnailUri) {
+      setSnapshot((prev) => withStage(prev, "ready"));
+    }
+  }, [thumbnailUri]);
+
+  useEffect(() => {
+    onSnapshotChange(snapshot);
+  }, [onSnapshotChange, snapshot]);
+
+  const handleLoadStart = useCallback(() => {
+    setSnapshot((prev) => withStage(buildInitialSnapshot(prev.fileId), "loading"));
+  }, []);
+
+  const handleLoadProgress = useCallback(
+    (
+      event: { loaded: number; total: number } | { nativeEvent: { loaded: number; total: number } },
+    ) => {
+      const payload = "nativeEvent" in event ? event.nativeEvent : event;
+      setSnapshot((prev) =>
+        withByteProgress(withStage(prev, "loading"), payload.loaded, payload.total),
+      );
+    },
+    [],
+  );
+
+  const handleLoad = useCallback(() => {
+    setSnapshot((prev) => withStage(prev, "decoding"));
+  }, []);
+
+  const handleDisplay = useCallback(() => {
+    setSnapshot((prev) => ({ ...withStage(prev, "ready"), progress: 1 }));
+  }, []);
+
+  const handleLoadEnd = useCallback(() => {
+    setSnapshot((prev) => {
+      if (prev.stage === "error" || prev.stage === "ready") return prev;
+      return { ...withStage(prev, "ready"), progress: 1 };
+    });
+  }, []);
+
+  const handleError = useCallback(() => {
+    setSnapshot((prev) => ({ ...withStage(prev, "error"), progress: 1 }));
+  }, []);
 
   return (
     <Pressable
@@ -87,6 +154,12 @@ const ThumbnailItem = memo(function ThumbnailItem({
             cachePolicy="memory-disk"
             recyclingKey={file.id}
             transition={200}
+            onLoadStart={handleLoadStart}
+            onProgress={handleLoadProgress}
+            onLoad={handleLoad}
+            onDisplay={handleDisplay}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
           />
         ) : (
           <Skeleton className="h-full w-full rounded-lg">
@@ -164,6 +237,10 @@ const ThumbnailItem = memo(function ThumbnailItem({
             />
           </View>
         )}
+
+        {showLoadProgress && thumbnailUri && snapshot.stage !== "ready" && (
+          <ThumbnailProgressOverlay snapshot={snapshot} />
+        )}
       </View>
     </Pressable>
   );
@@ -183,12 +260,56 @@ export function ThumbnailGrid({
   showObject = false,
   showFilter = true,
   showExposure = false,
+  showLoadProgress = true,
+  onLoadingSummaryChange,
 }: ThumbnailGridProps) {
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const isLandscapeGrid = screenWidth > screenHeight;
   const gridPadding = isLandscapeGrid ? 16 : 32;
   const itemSize = Math.floor((screenWidth - gridPadding) / columns);
+  const [snapshots, setSnapshots] = useState<Record<string, ThumbnailLoadSnapshot>>({});
+
+  const fileIdsKey = useMemo(() => files.map((file) => file.id).join(","), [files]);
+
+  useEffect(() => {
+    const currentIds = new Set(files.map((file) => file.id));
+    setSnapshots((prev) => {
+      const next: Record<string, ThumbnailLoadSnapshot> = {};
+      for (const [fileId, snapshot] of Object.entries(prev)) {
+        if (currentIds.has(fileId)) {
+          next[fileId] = snapshot;
+        }
+      }
+      return next;
+    });
+  }, [fileIdsKey, files]);
+
+  const loadingSummary = useMemo(() => buildLoadingSummary(files, snapshots), [files, snapshots]);
+
+  useEffect(() => {
+    onLoadingSummaryChange?.(loadingSummary);
+  }, [loadingSummary, onLoadingSummaryChange]);
+
+  const handleSnapshotChange = useCallback((snapshot: ThumbnailLoadSnapshot) => {
+    setSnapshots((prev) => {
+      const existing = prev[snapshot.fileId];
+      if (
+        existing &&
+        existing.stage === snapshot.stage &&
+        existing.progress === snapshot.progress &&
+        existing.loadedBytes === snapshot.loadedBytes &&
+        existing.totalBytes === snapshot.totalBytes &&
+        existing.hasByteProgress === snapshot.hasByteProgress
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [snapshot.fileId]: snapshot,
+      };
+    });
+  }, []);
 
   const renderItem = useCallback(
     ({ item }: { item: FitsMetadata }) => (
@@ -206,6 +327,8 @@ export function ThumbnailGrid({
         showObject={showObject}
         showFilter={showFilter}
         showExposure={showExposure}
+        showLoadProgress={showLoadProgress}
+        onSnapshotChange={handleSnapshotChange}
       />
     ),
     [
@@ -221,6 +344,8 @@ export function ThumbnailGrid({
       showObject,
       showFilter,
       showExposure,
+      showLoadProgress,
+      handleSnapshotChange,
     ],
   );
 

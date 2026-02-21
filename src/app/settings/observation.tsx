@@ -11,12 +11,18 @@ import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { OptionPickerModal } from "../../components/common/OptionPickerModal";
 import { useSettingsPicker } from "../../hooks/useSettingsPicker";
+import type {
+  TargetActionControlMode,
+  TargetActionSizePreset,
+} from "../../lib/targets/targetInteractionUi";
 
 const SESSION_GAP_VALUES = [30, 60, 120, 240, 480] as const;
 const REMINDER_VALUES = [0, 15, 30, 60, 120] as const;
 const TIMELINE_GROUPING_VALUES = ["day", "week", "month"] as const;
 const TARGET_SORT_BY_VALUES = ["name", "date", "frames", "exposure", "favorite"] as const;
 const TARGET_SORT_ORDER_VALUES = ["asc", "desc"] as const;
+const TARGET_ACTION_CONTROL_MODE_VALUES = ["icon", "checkbox"] as const;
+const TARGET_ACTION_SIZE_PRESET_VALUES = ["compact", "standard", "accessible"] as const;
 const MAP_PRESET_VALUES = ["standard", "dark", "satellite", "terrain3d"] as const;
 
 export default function ObservationSettingsScreen() {
@@ -66,8 +72,16 @@ export default function ObservationSettingsScreen() {
   // Target sort
   const targetSortBy = useSettingsStore((s) => s.targetSortBy);
   const targetSortOrder = useSettingsStore((s) => s.targetSortOrder);
+  const targetActionControlMode = useSettingsStore((s) => s.targetActionControlMode);
+  const targetActionSizePreset = useSettingsStore((s) => s.targetActionSizePreset);
+  const targetActionAutoScaleFromFont = useSettingsStore((s) => s.targetActionAutoScaleFromFont);
   const setTargetSortBy = useSettingsStore((s) => s.setTargetSortBy);
   const setTargetSortOrder = useSettingsStore((s) => s.setTargetSortOrder);
+  const setTargetActionControlMode = useSettingsStore((s) => s.setTargetActionControlMode);
+  const setTargetActionSizePreset = useSettingsStore((s) => s.setTargetActionSizePreset);
+  const setTargetActionAutoScaleFromFont = useSettingsStore(
+    (s) => s.setTargetActionAutoScaleFromFont,
+  );
 
   const minuteShort = t("settings.minuteShort");
   const formatMinutes = (minutes: number) => `${minutes} ${minuteShort}`;
@@ -115,6 +129,22 @@ export default function ObservationSettingsScreen() {
   const targetSortOrderOptions = TARGET_SORT_ORDER_VALUES.map((value) => ({
     label: value === "asc" ? t("settings.sortAsc") : t("settings.sortDesc"),
     value,
+  }));
+  const targetActionControlModeOptions = TARGET_ACTION_CONTROL_MODE_VALUES.map((value) => ({
+    label:
+      value === "icon"
+        ? t("settings.targetActionControlModeIcon")
+        : t("settings.targetActionControlModeCheckbox"),
+    value: value as TargetActionControlMode,
+  }));
+  const targetActionSizePresetOptions = TARGET_ACTION_SIZE_PRESET_VALUES.map((value) => ({
+    label:
+      value === "compact"
+        ? t("settings.targetActionSizeCompact")
+        : value === "standard"
+          ? t("settings.targetActionSizeStandard")
+          : t("settings.targetActionSizeAccessible"),
+    value: value as TargetActionSizePreset,
   }));
   const mapPresetOptions = MAP_PRESET_VALUES.map((value) => ({
     label: mapPresetLabel(value),
@@ -178,6 +208,46 @@ export default function ObservationSettingsScreen() {
             label={t("settings.targetSortOrder")}
             value={targetSortOrder === "asc" ? t("settings.sortAsc") : t("settings.sortDesc")}
             onPress={() => openPicker("targetSortOrder")}
+          />
+          <Separator />
+          <SettingsRow
+            testID="e2e-action-settings__observation-open-target-action-control-mode"
+            icon="options-outline"
+            label={t("settings.targetActionControlMode")}
+            value={
+              targetActionControlMode === "icon"
+                ? t("settings.targetActionControlModeIcon")
+                : t("settings.targetActionControlModeCheckbox")
+            }
+            onPress={() => openPicker("targetActionControlMode")}
+          />
+          <Separator />
+          <SettingsRow
+            testID="e2e-action-settings__observation-open-target-action-size-preset"
+            icon="resize-outline"
+            label={t("settings.targetActionSizePreset")}
+            value={
+              targetActionSizePreset === "compact"
+                ? t("settings.targetActionSizeCompact")
+                : targetActionSizePreset === "standard"
+                  ? t("settings.targetActionSizeStandard")
+                  : t("settings.targetActionSizeAccessible")
+            }
+            onPress={() => openPicker("targetActionSizePreset")}
+          />
+          <Separator />
+          <SettingsRow
+            icon="text-outline"
+            label={t("settings.targetActionAutoScaleFromFont")}
+            rightElement={
+              <Switch
+                isSelected={targetActionAutoScaleFromFont}
+                onSelectedChange={(v: boolean) => {
+                  haptics.selection();
+                  setTargetActionAutoScaleFromFont(v);
+                }}
+              />
+            }
           />
         </SettingsSection>
 
@@ -381,6 +451,22 @@ export default function ObservationSettingsScreen() {
           options={targetSortOrderOptions}
           selectedValue={targetSortOrder}
           onSelect={setTargetSortOrder}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "targetActionControlMode"}
+          title={t("settings.targetActionControlMode")}
+          options={targetActionControlModeOptions}
+          selectedValue={targetActionControlMode}
+          onSelect={setTargetActionControlMode}
+          onClose={closePicker}
+        />
+        <OptionPickerModal
+          visible={activePicker === "targetActionSizePreset"}
+          title={t("settings.targetActionSizePreset")}
+          options={targetActionSizePresetOptions}
+          selectedValue={targetActionSizePreset}
+          onSelect={setTargetActionSizePreset}
           onClose={closePicker}
         />
       </ScrollView>

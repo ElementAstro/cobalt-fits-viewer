@@ -1,11 +1,21 @@
 import { View, Text, ScrollView, Alert, FlatList } from "react-native";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui-native";
+import {
+  Button,
+  Chip,
+  Input,
+  ScrollShadow,
+  Separator,
+  Tabs,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useGallery } from "../../hooks/useGallery";
@@ -28,12 +38,14 @@ import { AlbumStatisticsSheet } from "../../components/gallery/AlbumStatisticsSh
 import { AlbumMergeSheet } from "../../components/gallery/AlbumMergeSheet";
 import { AlbumExportSheet } from "../../components/gallery/AlbumExportSheet";
 import { DuplicateImagesSheet } from "../../components/gallery/DuplicateImagesSheet";
+import { ThumbnailLoadingBanner } from "../../components/gallery/ThumbnailLoadingBanner";
 import { EmptyState } from "../../components/common/EmptyState";
 import { PromptDialog } from "../../components/common/PromptDialog";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { routeForMedia } from "../../lib/media/routing";
 import type { GalleryViewMode, FitsMetadata, Album } from "../../lib/fits/types";
 import type { AlbumSortBy } from "../../stores/useAlbumStore";
+import type { ThumbnailLoadingSummary } from "../../components/gallery/thumbnailLoading";
 
 const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "grid", icon: "grid-outline" },
@@ -166,7 +178,11 @@ export default function GalleryScreen() {
     enterSelectionMode,
     exitSelectionMode,
     selectAll,
+    reconcileSelection,
   } = useSelectionMode();
+  const [activeMainTab, setActiveMainTab] = useState<"images" | "albums">("images");
+  const [thumbnailLoadingSummary, setThumbnailLoadingSummary] =
+    useState<ThumbnailLoadingSummary | null>(null);
   const [showAlbumPicker, setShowAlbumPicker] = useState(false);
   const [showSmartAlbum, setShowSmartAlbum] = useState(false);
   const [showRenamePrompt, setShowRenamePrompt] = useState(false);
@@ -196,6 +212,10 @@ export default function GalleryScreen() {
       .sort(([a], [b]) => b.localeCompare(a))
       .map(([date, dateFiles]) => ({ date, files: dateFiles }));
   }, [viewMode, groupedByDate]);
+
+  useEffect(() => {
+    reconcileSelection(displayFiles.map((file) => file.id));
+  }, [displayFiles, reconcileSelection]);
 
   const handleCreateAlbum = (name: string, description?: string) => {
     createNewAlbum(name, description);
@@ -307,6 +327,105 @@ export default function GalleryScreen() {
     selectAll(displayFiles.map((file) => file.id));
   }, [allDisplaySelected, displayFiles, selectAll]);
 
+  const AlbumsContent = useMemo(
+    () => (
+      <View className="gap-3">
+        <View className="flex-row items-center justify-between mb-1">
+          <Text
+            className={
+              isLandscape
+                ? "text-sm font-semibold text-foreground"
+                : "text-base font-semibold text-foreground"
+            }
+          >
+            {t("gallery.albums")} ({filteredAlbums.length})
+          </Text>
+          <View className="flex-row gap-1">
+            <Button size="sm" variant="ghost" isIconOnly onPress={() => setShowDuplicates(true)}>
+              <Ionicons name="copy-outline" size={14} color={mutedColor} />
+            </Button>
+            <Button size="sm" variant="outline" onPress={() => setShowSmartAlbum(true)}>
+              <Ionicons name="sparkles-outline" size={14} color={successColor} />
+            </Button>
+            <Button
+              testID="e2e-action-tabs__gallery-open-create-album"
+              size="sm"
+              variant="outline"
+              onPress={() => setShowCreateAlbum(true)}
+            >
+              <Ionicons name="add-outline" size={14} color={mutedColor} />
+              {!isLandscape && (
+                <Button.Label className="text-xs">{t("gallery.createAlbum")}</Button.Label>
+              )}
+            </Button>
+          </View>
+        </View>
+
+        <View className="flex-row items-center gap-2">
+          <View className="flex-1">
+            <AlbumSearchBar
+              value={albumSearchQuery}
+              onChangeText={setAlbumSearchQuery}
+              compact={isLandscape}
+            />
+          </View>
+          <AlbumSortControl
+            sortBy={albumSortBy}
+            sortOrder={albumSortOrder}
+            onSortByChange={(v) => setAlbumSortBy(v as AlbumSortBy)}
+            onSortOrderChange={setAlbumSortOrder}
+            compact={isLandscape}
+          />
+        </View>
+
+        {filteredAlbums.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View className={isLandscape ? "flex-row gap-1.5" : "flex-row gap-2"}>
+              {filteredAlbums.map((album) => (
+                <AlbumCard
+                  key={album.id}
+                  album={album}
+                  compact={isLandscape}
+                  onPress={() => router.push(`/album/${album.id}`)}
+                  onLongPress={() => {
+                    setActionAlbum(album);
+                    setSelectedAlbum(album);
+                  }}
+                  onActionPress={() => {
+                    setActionAlbum(album);
+                    setSelectedAlbum(album);
+                  }}
+                />
+              ))}
+            </View>
+          </ScrollView>
+        ) : (
+          <View
+            className={`rounded-xl border border-separator bg-surface-secondary items-center ${isLandscape ? "p-3" : "p-6"}`}
+          >
+            <Ionicons name="albums-outline" size={isLandscape ? 24 : 32} color={mutedColor} />
+            <Text className="mt-1 text-xs text-muted">{t("album.noAlbums")}</Text>
+            <Text className="mt-1 text-xs text-muted">{t("album.createFirst")}</Text>
+          </View>
+        )}
+      </View>
+    ),
+    [
+      isLandscape,
+      t,
+      filteredAlbums,
+      mutedColor,
+      successColor,
+      albumSearchQuery,
+      setAlbumSearchQuery,
+      albumSortBy,
+      albumSortOrder,
+      setAlbumSortBy,
+      setAlbumSortOrder,
+      router,
+    ],
+  );
+
   const GalleryHeader = useMemo(
     () => (
       <View className={isLandscape ? "gap-1.5" : "gap-3"}>
@@ -386,66 +505,68 @@ export default function GalleryScreen() {
                 )}
               </View>
             </TextField>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
-              <View className="flex-row gap-1">
-                {metadataIndex.objects.length > 0 && (
-                  <>
-                    <Chip
-                      size="sm"
-                      variant={!filterObject ? "primary" : "secondary"}
-                      onPress={() => setFilterObject("")}
-                    >
-                      <Chip.Label className="text-[9px]">{t("gallery.allImages")}</Chip.Label>
-                    </Chip>
-                    {metadataIndex.objects.map((obj) => (
+            <ScrollShadow LinearGradientComponent={LinearGradient} className="flex-1">
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
+                <View className="flex-row gap-1">
+                  {metadataIndex.objects.length > 0 && (
+                    <>
                       <Chip
-                        key={obj}
                         size="sm"
-                        variant={filterObject === obj ? "primary" : "secondary"}
-                        onPress={() => setFilterObject(obj)}
+                        variant={!filterObject ? "primary" : "secondary"}
+                        onPress={() => setFilterObject("")}
                       >
-                        <Chip.Label className="text-[9px]">{obj}</Chip.Label>
+                        <Chip.Label className="text-[9px]">{t("gallery.allImages")}</Chip.Label>
                       </Chip>
-                    ))}
-                    <View className="w-px bg-separator mx-1" />
-                  </>
-                )}
-                <Chip
-                  size="sm"
-                  variant={!filterFrameType ? "primary" : "secondary"}
-                  onPress={() => setFilterFrameType("")}
-                >
-                  <Chip.Label className="text-[9px]">{t("gallery.allTypes")}</Chip.Label>
-                </Chip>
-                {FRAME_TYPES.map((ft) => (
+                      {metadataIndex.objects.map((obj) => (
+                        <Chip
+                          key={obj}
+                          size="sm"
+                          variant={filterObject === obj ? "primary" : "secondary"}
+                          onPress={() => setFilterObject(obj)}
+                        >
+                          <Chip.Label className="text-[9px]">{obj}</Chip.Label>
+                        </Chip>
+                      ))}
+                      <View className="w-px bg-separator mx-1" />
+                    </>
+                  )}
                   <Chip
-                    key={ft.key}
                     size="sm"
-                    variant={filterFrameType === ft.key ? "primary" : "secondary"}
-                    onPress={() => setFilterFrameType(ft.key)}
+                    variant={!filterFrameType ? "primary" : "secondary"}
+                    onPress={() => setFilterFrameType("")}
+                  >
+                    <Chip.Label className="text-[9px]">{t("gallery.allTypes")}</Chip.Label>
+                  </Chip>
+                  {FRAME_TYPES.map((ft) => (
+                    <Chip
+                      key={ft.key}
+                      size="sm"
+                      variant={filterFrameType === ft.key ? "primary" : "secondary"}
+                      onPress={() => setFilterFrameType(ft.key)}
+                    >
+                      <Ionicons
+                        name={ft.icon}
+                        size={10}
+                        color={filterFrameType === ft.key ? successColor : mutedColor}
+                      />
+                      <Chip.Label className="text-[9px]">{ft.label}</Chip.Label>
+                    </Chip>
+                  ))}
+                  <Chip
+                    size="sm"
+                    variant={filterFavoriteOnly ? "primary" : "secondary"}
+                    onPress={() => setFilterFavoriteOnly(!filterFavoriteOnly)}
                   >
                     <Ionicons
-                      name={ft.icon}
+                      name={filterFavoriteOnly ? "star" : "star-outline"}
                       size={10}
-                      color={filterFrameType === ft.key ? successColor : mutedColor}
+                      color={filterFavoriteOnly ? successColor : mutedColor}
                     />
-                    <Chip.Label className="text-[9px]">{ft.label}</Chip.Label>
+                    <Chip.Label className="text-[9px]">{t("gallery.favoritesOnly")}</Chip.Label>
                   </Chip>
-                ))}
-                <Chip
-                  size="sm"
-                  variant={filterFavoriteOnly ? "primary" : "secondary"}
-                  onPress={() => setFilterFavoriteOnly(!filterFavoriteOnly)}
-                >
-                  <Ionicons
-                    name={filterFavoriteOnly ? "star" : "star-outline"}
-                    size={10}
-                    color={filterFavoriteOnly ? successColor : mutedColor}
-                  />
-                  <Chip.Label className="text-[9px]">{t("gallery.favoritesOnly")}</Chip.Label>
-                </Chip>
-              </View>
-            </ScrollView>
+                </View>
+              </ScrollView>
+            </ScrollShadow>
           </View>
         ) : (
           <>
@@ -483,164 +604,91 @@ export default function GalleryScreen() {
 
             {/* Object Filters */}
             {metadataIndex.objects.length > 0 && (
+              <ScrollShadow LinearGradientComponent={LinearGradient}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View className="flex-row gap-1.5">
+                    <Chip
+                      size="sm"
+                      variant={!filterObject ? "primary" : "secondary"}
+                      onPress={() => setFilterObject("")}
+                    >
+                      <Chip.Label className="text-[10px]">{t("gallery.allImages")}</Chip.Label>
+                    </Chip>
+                    {metadataIndex.objects.map((obj) => (
+                      <Chip
+                        key={obj}
+                        size="sm"
+                        variant={filterObject === obj ? "primary" : "secondary"}
+                        onPress={() => setFilterObject(obj)}
+                      >
+                        <Chip.Label className="text-[10px]">{obj}</Chip.Label>
+                      </Chip>
+                    ))}
+                  </View>
+                </ScrollView>
+              </ScrollShadow>
+            )}
+
+            {/* Frame Type Filters */}
+            <ScrollShadow LinearGradientComponent={LinearGradient}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <View className="flex-row gap-1.5">
                   <Chip
                     size="sm"
-                    variant={!filterObject ? "primary" : "secondary"}
-                    onPress={() => setFilterObject("")}
+                    variant={!filterFrameType ? "primary" : "secondary"}
+                    onPress={() => setFilterFrameType("")}
                   >
-                    <Chip.Label className="text-[10px]">{t("gallery.allImages")}</Chip.Label>
+                    <Chip.Label className="text-[10px]">{t("gallery.allTypes")}</Chip.Label>
                   </Chip>
-                  {metadataIndex.objects.map((obj) => (
+                  {FRAME_TYPES.map((ft) => (
                     <Chip
-                      key={obj}
+                      key={ft.key}
                       size="sm"
-                      variant={filterObject === obj ? "primary" : "secondary"}
-                      onPress={() => setFilterObject(obj)}
+                      variant={filterFrameType === ft.key ? "primary" : "secondary"}
+                      onPress={() => setFilterFrameType(ft.key)}
                     >
-                      <Chip.Label className="text-[10px]">{obj}</Chip.Label>
+                      <Ionicons
+                        name={ft.icon}
+                        size={10}
+                        color={filterFrameType === ft.key ? successColor : mutedColor}
+                      />
+                      <Chip.Label className="text-[10px]">{ft.label}</Chip.Label>
                     </Chip>
                   ))}
-                </View>
-              </ScrollView>
-            )}
-
-            {/* Frame Type Filters */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row gap-1.5">
-                <Chip
-                  size="sm"
-                  variant={!filterFrameType ? "primary" : "secondary"}
-                  onPress={() => setFilterFrameType("")}
-                >
-                  <Chip.Label className="text-[10px]">{t("gallery.allTypes")}</Chip.Label>
-                </Chip>
-                {FRAME_TYPES.map((ft) => (
                   <Chip
-                    key={ft.key}
                     size="sm"
-                    variant={filterFrameType === ft.key ? "primary" : "secondary"}
-                    onPress={() => setFilterFrameType(ft.key)}
+                    variant={filterFavoriteOnly ? "primary" : "secondary"}
+                    onPress={() => setFilterFavoriteOnly(!filterFavoriteOnly)}
                   >
                     <Ionicons
-                      name={ft.icon}
+                      name={filterFavoriteOnly ? "star" : "star-outline"}
                       size={10}
-                      color={filterFrameType === ft.key ? successColor : mutedColor}
+                      color={filterFavoriteOnly ? "#fff" : mutedColor}
                     />
-                    <Chip.Label className="text-[10px]">{ft.label}</Chip.Label>
+                    <Chip.Label className="text-[10px]">{t("gallery.favoritesOnly")}</Chip.Label>
                   </Chip>
-                ))}
-                <Chip
-                  size="sm"
-                  variant={filterFavoriteOnly ? "primary" : "secondary"}
-                  onPress={() => setFilterFavoriteOnly(!filterFavoriteOnly)}
-                >
-                  <Ionicons
-                    name={filterFavoriteOnly ? "star" : "star-outline"}
-                    size={10}
-                    color={filterFavoriteOnly ? "#fff" : mutedColor}
-                  />
-                  <Chip.Label className="text-[10px]">{t("gallery.favoritesOnly")}</Chip.Label>
-                </Chip>
-              </View>
-            </ScrollView>
+                </View>
+              </ScrollView>
+            </ScrollShadow>
 
             {/* Target Filter */}
             {filterTargetId && (
               <View className="mt-2">
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="flex-row gap-1.5">
-                    <Chip size="sm" variant="primary" onPress={() => setFilterTargetId("")}>
-                      <Ionicons name="telescope-outline" size={10} color="#fff" />
-                      <Chip.Label className="text-[10px]">{t("targets.title")}</Chip.Label>
-                      <Ionicons name="close" size={8} color="#fff" />
-                    </Chip>
-                  </View>
-                </ScrollView>
+                <ScrollShadow LinearGradientComponent={LinearGradient}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View className="flex-row gap-1.5">
+                      <Chip size="sm" variant="primary" onPress={() => setFilterTargetId("")}>
+                        <Ionicons name="telescope-outline" size={10} color="#fff" />
+                        <Chip.Label className="text-[10px]">{t("targets.title")}</Chip.Label>
+                        <Ionicons name="close" size={8} color="#fff" />
+                      </Chip>
+                    </View>
+                  </ScrollView>
+                </ScrollShadow>
               </View>
             )}
           </>
         )}
-
-        {/* Albums Section */}
-        <View className="flex-row items-center justify-between mb-2">
-          <Text
-            className={
-              isLandscape
-                ? "text-sm font-semibold text-foreground"
-                : "text-base font-semibold text-foreground"
-            }
-          >
-            {t("gallery.albums")} ({filteredAlbums.length})
-          </Text>
-          <View className="flex-row gap-1">
-            <Button size="sm" variant="ghost" isIconOnly onPress={() => setShowDuplicates(true)}>
-              <Ionicons name="copy-outline" size={14} color={mutedColor} />
-            </Button>
-            <Button size="sm" variant="outline" onPress={() => setShowSmartAlbum(true)}>
-              <Ionicons name="sparkles-outline" size={14} color={successColor} />
-            </Button>
-            <Button
-              testID="e2e-action-tabs__gallery-open-create-album"
-              size="sm"
-              variant="outline"
-              onPress={() => setShowCreateAlbum(true)}
-            >
-              <Ionicons name="add-outline" size={14} color={mutedColor} />
-              {!isLandscape && (
-                <Button.Label className="text-xs">{t("gallery.createAlbum")}</Button.Label>
-              )}
-            </Button>
-          </View>
-        </View>
-
-        {/* Album Search & Sort */}
-        <View className="mb-2 flex-row items-center gap-2">
-          <View className="flex-1">
-            <AlbumSearchBar
-              value={albumSearchQuery}
-              onChangeText={setAlbumSearchQuery}
-              compact={isLandscape}
-            />
-          </View>
-          <AlbumSortControl
-            sortBy={albumSortBy}
-            sortOrder={albumSortOrder}
-            onSortByChange={(v) => setAlbumSortBy(v as AlbumSortBy)}
-            onSortOrderChange={setAlbumSortOrder}
-            compact={isLandscape}
-          />
-        </View>
-
-        {filteredAlbums.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className={isLandscape ? "flex-row gap-1.5" : "flex-row gap-2"}>
-              {filteredAlbums.map((album) => (
-                <AlbumCard
-                  key={album.id}
-                  album={album}
-                  compact={isLandscape}
-                  onPress={() => router.push(`/album/${album.id}`)}
-                  onLongPress={() => {
-                    setActionAlbum(album);
-                    setSelectedAlbum(album);
-                  }}
-                />
-              ))}
-            </View>
-          </ScrollView>
-        ) : (
-          <View
-            className={`rounded-xl border border-separator bg-surface-secondary items-center ${isLandscape ? "p-3" : "p-6"}`}
-          >
-            <Ionicons name="albums-outline" size={isLandscape ? 24 : 32} color={mutedColor} />
-            <Text className="mt-1 text-xs text-muted">{t("album.noAlbums")}</Text>
-            <Text className="mt-1 text-xs text-muted">{t("album.createFirst")}</Text>
-          </View>
-        )}
-
-        {!isLandscape && <Separator />}
 
         {/* Selection Toolbar */}
         {isSelectionMode && (
@@ -753,10 +801,6 @@ export default function GalleryScreen() {
       filterFrameType,
       filterTargetId,
       filterFavoriteOnly,
-      filteredAlbums,
-      albumSearchQuery,
-      albumSortBy,
-      albumSortOrder,
       isSelectionMode,
       selectedIds,
       allDisplaySelected,
@@ -771,9 +815,6 @@ export default function GalleryScreen() {
       setFilterFrameType,
       setFilterTargetId,
       setFilterFavoriteOnly,
-      setAlbumSearchQuery,
-      setAlbumSortBy,
-      setAlbumSortOrder,
       clearFilters,
       exitSelectionMode,
       handleSelectAllToggle,
@@ -819,54 +860,107 @@ export default function GalleryScreen() {
 
   const timelineKeyExtractor = useCallback((item: TimelineSection) => item.date, []);
 
+  useEffect(() => {
+    if (activeMainTab !== "images" || viewMode === "timeline" || displayFiles.length === 0) {
+      setThumbnailLoadingSummary(null);
+    }
+  }, [activeMainTab, viewMode, displayFiles.length]);
+
   return (
     <View testID="e2e-screen-tabs__gallery" className="flex-1 bg-background">
-      {displayFiles.length === 0 ? (
-        <FlatList
-          data={[]}
-          renderItem={null}
-          ListHeaderComponent={GalleryHeader}
-          ListEmptyComponent={<EmptyState icon="images-outline" title={t("gallery.noImages")} />}
-          contentContainerStyle={{
-            paddingHorizontal: horizontalPadding,
-            paddingTop: isLandscape ? 8 : contentPaddingTop,
-            paddingBottom: 24,
-          }}
-          showsVerticalScrollIndicator={false}
-        />
-      ) : viewMode === "timeline" ? (
-        <FlatList
-          data={timelineSections}
-          renderItem={renderTimelineSection}
-          keyExtractor={timelineKeyExtractor}
-          ListHeaderComponent={GalleryHeader}
-          contentContainerStyle={{
-            paddingHorizontal: horizontalPadding,
-            paddingTop: isLandscape ? 8 : contentPaddingTop,
-            paddingBottom: 24,
-          }}
-          showsVerticalScrollIndicator={false}
-        />
-      ) : (
-        <View
-          className="flex-1"
-          style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
+      <View
+        style={{
+          paddingHorizontal: horizontalPadding,
+          paddingTop: isLandscape ? 8 : contentPaddingTop,
+        }}
+      >
+        <Tabs
+          value={activeMainTab}
+          onValueChange={(value) => setActiveMainTab(value as "images" | "albums")}
+          variant="secondary"
         >
-          <ThumbnailGrid
-            files={displayFiles}
-            columns={viewMode === "list" ? 1 : effectiveColumns}
-            selectionMode={isSelectionMode}
-            selectedIds={selectedIds}
-            onPress={handleFilePress}
-            onLongPress={handleFileLongPress}
-            onSelect={toggleSelection}
+          <Tabs.List>
+            <Tabs.Indicator />
+            <Tabs.Trigger value="images" testID="gallery-tab-images">
+              <Ionicons name="images-outline" size={14} color={mutedColor} />
+              <Tabs.Label>{t("gallery.imagesTab")}</Tabs.Label>
+            </Tabs.Trigger>
+            <Tabs.Trigger value="albums" testID="gallery-tab-albums">
+              <Ionicons name="albums-outline" size={14} color={mutedColor} />
+              <Tabs.Label>{t("gallery.albumsTab")}</Tabs.Label>
+            </Tabs.Trigger>
+          </Tabs.List>
+        </Tabs>
+      </View>
+
+      {activeMainTab === "images" ? (
+        displayFiles.length === 0 ? (
+          <FlatList
+            data={[]}
+            renderItem={null}
             ListHeaderComponent={GalleryHeader}
-            showFilename={thumbShowFilename}
-            showObject={thumbShowObject}
-            showFilter={thumbShowFilter}
-            showExposure={thumbShowExposure}
+            ListEmptyComponent={<EmptyState icon="images-outline" title={t("gallery.noImages")} />}
+            contentContainerStyle={{
+              paddingHorizontal: horizontalPadding,
+              paddingTop: 8,
+              paddingBottom: 24,
+            }}
+            showsVerticalScrollIndicator={false}
           />
-        </View>
+        ) : viewMode === "timeline" ? (
+          <FlatList
+            data={timelineSections}
+            renderItem={renderTimelineSection}
+            keyExtractor={timelineKeyExtractor}
+            ListHeaderComponent={
+              <View>
+                {GalleryHeader}
+                <ThumbnailLoadingBanner summary={thumbnailLoadingSummary} />
+              </View>
+            }
+            contentContainerStyle={{
+              paddingHorizontal: horizontalPadding,
+              paddingTop: 8,
+              paddingBottom: 24,
+            }}
+            showsVerticalScrollIndicator={false}
+          />
+        ) : (
+          <View className="flex-1" style={{ paddingHorizontal: horizontalPadding, paddingTop: 8 }}>
+            <ThumbnailGrid
+              files={displayFiles}
+              columns={viewMode === "list" ? 1 : effectiveColumns}
+              selectionMode={isSelectionMode}
+              selectedIds={selectedIds}
+              onPress={handleFilePress}
+              onLongPress={handleFileLongPress}
+              onSelect={toggleSelection}
+              onLoadingSummaryChange={setThumbnailLoadingSummary}
+              ListHeaderComponent={
+                <View>
+                  {GalleryHeader}
+                  <ThumbnailLoadingBanner summary={thumbnailLoadingSummary} />
+                </View>
+              }
+              showFilename={thumbShowFilename}
+              showObject={thumbShowObject}
+              showFilter={thumbShowFilter}
+              showExposure={thumbShowExposure}
+              showLoadProgress
+            />
+          </View>
+        )
+      ) : (
+        <ScrollView
+          contentContainerStyle={{
+            paddingHorizontal: horizontalPadding,
+            paddingTop: 8,
+            paddingBottom: 24,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          {AlbumsContent}
+        </ScrollView>
       )}
 
       <CreateAlbumModal

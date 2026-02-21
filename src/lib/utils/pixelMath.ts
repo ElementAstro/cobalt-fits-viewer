@@ -19,32 +19,42 @@ export function calculateStats(pixels: Float32Array): {
   let sum = 0;
   let min = Infinity;
   let max = -Infinity;
+  let validCount = 0;
 
   for (let i = 0; i < n; i++) {
     const v = pixels[i];
-    if (isNaN(v)) continue;
+    if (!Number.isFinite(v)) continue;
     sum += v;
+    validCount++;
     if (v < min) min = v;
     if (v > max) max = v;
   }
 
-  const mean = sum / n;
+  if (validCount === 0) {
+    return { mean: 0, median: 0, stddev: 0, min: 0, max: 0, snr: 0 };
+  }
+
+  const mean = sum / validCount;
 
   let sumSqDiff = 0;
   for (let i = 0; i < n; i++) {
     const v = pixels[i];
-    if (isNaN(v)) continue;
+    if (!Number.isFinite(v)) continue;
     sumSqDiff += (v - mean) * (v - mean);
   }
-  const stddev = Math.sqrt(sumSqDiff / n);
+  const stddev = Math.sqrt(sumSqDiff / validCount);
 
   // 近似中值（采样排序）
-  const sampleSize = Math.min(n, 10000);
-  const step = Math.max(1, Math.floor(n / sampleSize));
+  const sampleSize = Math.min(validCount, 10000);
+  const step = Math.max(1, Math.floor(validCount / sampleSize));
   const samples: number[] = [];
-  for (let i = 0; i < n; i += step) {
-    if (!isNaN(pixels[i])) samples.push(pixels[i]);
+  for (let i = 0, seen = 0; i < n; i++) {
+    const v = pixels[i];
+    if (!Number.isFinite(v)) continue;
+    if (seen % step === 0) samples.push(v);
+    seen++;
   }
+  if (samples.length === 0) return { mean, median: mean, stddev, min, max, snr: 0 };
   samples.sort((a, b) => a - b);
   const median = samples[Math.floor(samples.length / 2)];
 
@@ -76,16 +86,27 @@ export function calculateHistogram(
     max = -Infinity;
     for (let i = 0; i < n; i++) {
       const v = pixels[i];
-      if (!isNaN(v)) {
+      if (Number.isFinite(v)) {
         if (v < min) min = v;
         if (v > max) max = v;
       }
     }
   }
 
+  if (!Number.isFinite(min) || !Number.isFinite(max)) {
+    return {
+      counts: new Array(bins).fill(0),
+      edges: Array.from({ length: bins + 1 }, (_, i) => i),
+    };
+  }
+
   if (min === max) {
     const counts = new Array(bins).fill(0);
-    counts[0] = n;
+    let finiteCount = 0;
+    for (let i = 0; i < n; i++) {
+      if (Number.isFinite(pixels[i])) finiteCount++;
+    }
+    counts[0] = finiteCount;
     const edges = Array.from({ length: bins + 1 }, (_, i) => min + i);
     return { counts, edges };
   }
@@ -103,15 +124,15 @@ export function calculateHistogram(
     const stride = Math.max(1, Math.floor(n / sampleThreshold));
     for (let i = 0; i < n; i += stride) {
       const v = pixels[i];
-      if (isNaN(v)) continue;
-      const bin = Math.min(bins - 1, Math.floor((v - min) / binWidth));
+      if (!Number.isFinite(v)) continue;
+      const bin = Math.max(0, Math.min(bins - 1, Math.floor((v - min) / binWidth)));
       rawCounts[bin]++;
     }
   } else {
     for (let i = 0; i < n; i++) {
       const v = pixels[i];
-      if (isNaN(v)) continue;
-      const bin = Math.min(bins - 1, Math.floor((v - min) / binWidth));
+      if (!Number.isFinite(v)) continue;
+      const bin = Math.max(0, Math.min(bins - 1, Math.floor((v - min) / binWidth)));
       rawCounts[bin]++;
     }
   }

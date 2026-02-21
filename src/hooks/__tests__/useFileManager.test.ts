@@ -1,4 +1,4 @@
-import { act, renderHook } from "@testing-library/react-native";
+import { act, renderHook, waitFor } from "@testing-library/react-native";
 import type { FitsMetadata, TrashedFitsRecord } from "../../lib/fits/types";
 import { useFileManager } from "../useFileManager";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -148,6 +148,9 @@ jest.mock("expo-file-system", () => {
 });
 
 jest.mock("../../lib/logger", () => ({
+  LOG_TAGS: {
+    FileManager: "FileManager",
+  },
   Logger: {
     info: jest.fn(),
     warn: jest.fn(),
@@ -280,6 +283,10 @@ describe("useFileManager", () => {
     extractRasterMetadata: jest.Mock;
     parseRasterFromBufferAsync: jest.Mock;
   };
+  const duplicateDetectorMock = require("../../lib/gallery/duplicateDetector") as {
+    computeQuickHash: jest.Mock;
+    findDuplicateOnImport: jest.Mock;
+  };
   const documentPickerMock = require("expo-document-picker") as {
     getDocumentAsync: jest.Mock;
   };
@@ -327,6 +334,8 @@ describe("useFileManager", () => {
       filename: "",
     });
     parserMock.loadScientificFitsFromBuffer.mockResolvedValue({ fits: true });
+    duplicateDetectorMock.computeQuickHash.mockReturnValue("hash");
+    duplicateDetectorMock.findDuplicateOnImport.mockReturnValue(undefined);
     fitsJsMock.convertHiPSToFITS.mockResolvedValue(new Uint8Array([1, 2, 3, 4]).buffer);
     parserMock.extractMetadata.mockReturnValue({
       frameType: "darkflat",
@@ -679,6 +688,47 @@ describe("useFileManager", () => {
     });
 
     expect(result.current.importError).toBe("cameraPermissionDenied");
+  });
+
+  it("tracks detailed import progress statistics for mixed outcomes", async () => {
+    const originalImportFile = fileManagerMock.importFile.getMockImplementation();
+    fileManagerMock.importFile.mockImplementation((uri: string, name: string) => {
+      if (name === "fail.fits") {
+        throw new Error("boom");
+      }
+      return originalImportFile ? originalImportFile(uri, name) : null;
+    });
+    duplicateDetectorMock.findDuplicateOnImport
+      .mockReturnValueOnce(undefined)
+      .mockReturnValueOnce({ id: "dup-existing", filename: "existing.fits" });
+    documentPickerMock.getDocumentAsync.mockResolvedValue({
+      canceled: false,
+      assets: [
+        { uri: "file:///source/ok.fits", name: "ok.fits", size: 8 },
+        { uri: "file:///source/dup.fits", name: "dup.fits", size: 8 },
+        { uri: "file:///source/bad.unsupported", name: "bad.unsupported", size: 8 },
+        { uri: "file:///source/fail.fits", name: "fail.fits", size: 8 },
+      ],
+    });
+
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.pickAndImportFile();
+    });
+
+    await waitFor(() => {
+      expect(result.current.importProgress).toEqual(
+        expect.objectContaining({
+          percent: 100,
+          current: 4,
+          total: 4,
+          success: 1,
+          failed: 1,
+          skippedDuplicate: 1,
+          skippedUnsupported: 1,
+        }),
+      );
+    });
   });
 
   it("reclassifies existing files with current rules", async () => {

@@ -1,6 +1,5 @@
-import { View, Text, Pressable } from "react-native";
+import { ScrollView, View, Text, Pressable } from "react-native";
 import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { Album } from "../../lib/fits/types";
@@ -35,7 +34,7 @@ export function AlbumPickerSheet({ visible, albums, onClose, onSelect }: AlbumPi
               <Text className="mt-2 text-xs text-muted">{t("gallery.emptyAlbum")}</Text>
             </View>
           ) : (
-            <BottomSheetScrollView style={{ maxHeight: 320 }}>
+            <ScrollView style={{ maxHeight: 320 }}>
               {albums
                 .filter((a) => !a.isSmart)
                 .map((album) => (
@@ -65,7 +64,7 @@ export function AlbumPickerSheet({ visible, albums, onClose, onSelect }: AlbumPi
                     <Ionicons name="chevron-forward" size={14} color={mutedColor} />
                   </Pressable>
                 ))}
-            </BottomSheetScrollView>
+            </ScrollView>
           )}
 
           <Separator className="my-1" />
