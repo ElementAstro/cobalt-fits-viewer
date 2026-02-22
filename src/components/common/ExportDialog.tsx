@@ -6,6 +6,8 @@ import { useI18n } from "../../i18n/useI18n";
 import {
   DEFAULT_FITS_TARGET_OPTIONS,
   DEFAULT_TIFF_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
   type ExportFormat,
   type FitsColorLayout,
   type FitsCompression,
@@ -156,6 +158,8 @@ export function ExportDialog({
             ...DEFAULT_FITS_TARGET_OPTIONS,
             ...(fitsOptions ?? {}),
           },
+          xisf: DEFAULT_XISF_TARGET_OPTIONS,
+          ser: DEFAULT_SER_TARGET_OPTIONS,
           stretch: "linear",
           colormap: "grayscale",
           blackPoint: 0,

@@ -78,7 +78,7 @@ export function ImportOptionsSheet({
   onRecordVideo,
 }: ImportOptionsSheetProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, surfaceColor] = useThemeColor(["muted", "surface"]);
   const compact = isLandscape;
 
   return (
@@ -88,7 +88,7 @@ export function ImportOptionsSheet({
         <BottomSheet.Content
           snapPoints={[Math.min(520, screenHeight * 0.7)]}
           enablePanDownToClose
-          backgroundStyle={{ backgroundColor: "rgba(30, 30, 30, 0.95)" }}
+          backgroundStyle={{ backgroundColor: surfaceColor + "F2" }}
           handleIndicatorStyle={{ backgroundColor: mutedColor }}
         >
           <View className={compact ? "px-4 pb-4" : "px-6 pb-8"}>

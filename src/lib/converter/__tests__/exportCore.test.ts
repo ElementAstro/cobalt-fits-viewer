@@ -2,6 +2,8 @@ const mockWriteFitsImage = jest.fn();
 const mockCreateTiffFrameProvider = jest.fn();
 const mockEncodeTiff = jest.fn();
 const mockEncodeTiffDocument = jest.fn();
+const mockConvertFitsToXisf = jest.fn();
+const mockConvertFitsToSer = jest.fn();
 
 jest.mock("../../fits/writer", () => ({
   writeFitsImage: (...args: any[]) => (mockWriteFitsImage as any)(...args),
@@ -14,6 +16,11 @@ jest.mock("../../image/tiff/decoder", () => ({
 jest.mock("../../image/encoders/tiff", () => ({
   encodeTiff: (...args: any[]) => (mockEncodeTiff as any)(...args),
   encodeTiffDocument: (...args: any[]) => (mockEncodeTiffDocument as any)(...args),
+}));
+
+jest.mock("fitsjs-ng", () => ({
+  convertFitsToXisf: (...args: any[]) => (mockConvertFitsToXisf as any)(...args),
+  convertFitsToSer: (...args: any[]) => (mockConvertFitsToSer as any)(...args),
 }));
 
 jest.mock("../../logger", () => ({
@@ -36,6 +43,8 @@ describe("exportCore.encodeExportRequest", () => {
     mockWriteFitsImage.mockReturnValue(new Uint8Array([1, 2, 3]));
     mockEncodeTiff.mockReturnValue(new Uint8Array([8, 8, 8]));
     mockEncodeTiffDocument.mockReturnValue(new Uint8Array([9, 9]));
+    mockConvertFitsToXisf.mockResolvedValue(new ArrayBuffer(4));
+    mockConvertFitsToSer.mockResolvedValue(new ArrayBuffer(6));
   });
 
   it("falls back to rendered FITS when scientific data is unavailable", async () => {
@@ -125,5 +134,83 @@ describe("exportCore.encodeExportRequest", () => {
     expect(mockEncodeTiff).not.toHaveBeenCalled();
     expect(result.bytes).toEqual(new Uint8Array([9, 9]));
     expect(result.extension).toBe("tiff");
+  });
+
+  it("encodes XISF by converting intermediate FITS via fitsjs-ng", async () => {
+    const result = await encodeExportRequest({
+      rgbaData: new Uint8ClampedArray([0, 0, 0, 255]),
+      width: 1,
+      height: 1,
+      filename: "x.xisf",
+      format: "xisf",
+      xisf: { compression: "zlib" },
+      source: { sourceType: "raster", sourceFormat: "png" },
+    });
+
+    expect(mockWriteFitsImage).toHaveBeenCalled();
+    expect(mockConvertFitsToXisf).toHaveBeenCalledWith(
+      expect.any(ArrayBuffer),
+      expect.objectContaining({
+        writeOptions: { compression: "zlib" },
+      }),
+    );
+    expect(result.bytes).toEqual(new Uint8Array(4));
+    expect(result.extension).toBe("xisf");
+  });
+
+  it("encodes XISF with null compression when set to none", async () => {
+    await encodeExportRequest({
+      rgbaData: new Uint8ClampedArray([0, 0, 0, 255]),
+      width: 1,
+      height: 1,
+      filename: "x.xisf",
+      format: "xisf",
+      xisf: { compression: "none" },
+      source: { sourceType: "raster", sourceFormat: "png" },
+    });
+
+    expect(mockConvertFitsToXisf).toHaveBeenCalledWith(
+      expect.any(ArrayBuffer),
+      expect.objectContaining({
+        writeOptions: { compression: null },
+      }),
+    );
+  });
+
+  it("encodes SER by converting intermediate FITS via fitsjs-ng", async () => {
+    const result = await encodeExportRequest({
+      rgbaData: new Uint8ClampedArray([0, 0, 0, 255]),
+      width: 1,
+      height: 1,
+      filename: "x.ser",
+      format: "ser",
+      ser: { layout: "multi-hdu" },
+      source: { sourceType: "raster", sourceFormat: "png" },
+    });
+
+    expect(mockWriteFitsImage).toHaveBeenCalled();
+    expect(mockConvertFitsToSer).toHaveBeenCalledWith(
+      expect.any(ArrayBuffer),
+      expect.objectContaining({ sourceLayout: "multi-hdu" }),
+    );
+    expect(result.bytes).toEqual(new Uint8Array(6));
+    expect(result.extension).toBe("ser");
+  });
+
+  it("encodes SER with auto layout for cube mode", async () => {
+    await encodeExportRequest({
+      rgbaData: new Uint8ClampedArray([0, 0, 0, 255]),
+      width: 1,
+      height: 1,
+      filename: "x.ser",
+      format: "ser",
+      ser: { layout: "cube" },
+      source: { sourceType: "raster", sourceFormat: "png" },
+    });
+
+    expect(mockConvertFitsToSer).toHaveBeenCalledWith(
+      expect.any(ArrayBuffer),
+      expect.objectContaining({ sourceLayout: "auto" }),
+    );
   });
 });

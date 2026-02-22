@@ -6,15 +6,20 @@
  * - 可选口令加密封装（AES-GCM + PBKDF2）
  */
 
-import * as Crypto from "expo-crypto";
 import { Directory, File, Paths } from "expo-file-system";
 import { shareFile } from "../utils/imageExport";
 import * as DocumentPicker from "expo-document-picker";
 import { createManifest, serializeManifest, parseManifest, getManifestSummary } from "./manifest";
 import { LOG_TAGS, Logger } from "../logger";
-import type { BackupManifest, BackupOptions, BackupProgress, BackupFileRecord } from "./types";
+import type { BackupManifest, BackupOptions, BackupProgress } from "./types";
 import { DEFAULT_BACKUP_OPTIONS } from "./types";
 import type { BackupDataSource, RestoreTarget } from "./backupService";
+import {
+  toSafeRemoteFilename,
+  toSafeThumbnailFilename,
+  computeSha256Hex,
+  restoreMetadataDomains,
+} from "./backupUtils";
 import type { FitsMetadata } from "../fits/types";
 import {
   decryptBackupPayload,
@@ -44,26 +49,6 @@ interface PickLocalBackupResult {
   cancelled?: boolean;
   error?: string;
   preview?: LocalBackupPreview;
-}
-
-function toSafeRemoteFilename(meta: BackupFileRecord): string {
-  const safeName = meta.filename.replace(/[^\w.-]/g, "_");
-  return `${meta.id}_${safeName}`;
-}
-
-function toSafeThumbnailFilename(fileId: string): string {
-  return `${fileId}.jpg`;
-}
-
-function bytesToHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-async function computeSha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await Crypto.digest(Crypto.CryptoDigestAlgorithm.SHA256, new Uint8Array(bytes));
-  return bytesToHex(digest);
 }
 
 function createTempDirectory(prefix: string): Directory {
@@ -219,42 +204,6 @@ async function pickLocalBackup(): Promise<PickLocalBackupResult> {
       error: error instanceof Error ? error.message : "Invalid backup file format",
     };
   }
-}
-
-function restoreMetadataDomains(
-  restoreTarget: RestoreTarget,
-  manifest: BackupManifest,
-  options: BackupOptions,
-): void {
-  if (options.includeAlbums && manifest.albums.length > 0) {
-    restoreTarget.setAlbums(manifest.albums, options.restoreConflictStrategy);
-  }
-  if (options.includeTargets && manifest.targets.length > 0) {
-    restoreTarget.setTargets(manifest.targets, options.restoreConflictStrategy);
-  }
-  if (options.includeTargets && manifest.targetGroups.length > 0) {
-    restoreTarget.setTargetGroups(manifest.targetGroups, options.restoreConflictStrategy);
-  }
-  if (options.includeSessions && manifest.sessions.length > 0) {
-    restoreTarget.setSessions(manifest.sessions, options.restoreConflictStrategy);
-  }
-  if (options.includeSessions && manifest.plans.length > 0) {
-    restoreTarget.setPlans(manifest.plans, options.restoreConflictStrategy);
-  }
-  if (options.includeSessions && manifest.logEntries.length > 0) {
-    restoreTarget.setLogEntries(manifest.logEntries, options.restoreConflictStrategy);
-  }
-  if (options.includeSettings && Object.keys(manifest.settings).length > 0) {
-    restoreTarget.setSettings(manifest.settings);
-  }
-  restoreTarget.setFileGroups(manifest.fileGroups, options.restoreConflictStrategy);
-  restoreTarget.setAstrometry(manifest.astrometry, options.restoreConflictStrategy);
-  restoreTarget.setTrash(manifest.trash, options.restoreConflictStrategy);
-  restoreTarget.setActiveSession(
-    manifest.sessionRuntime.activeSession,
-    options.restoreConflictStrategy,
-  );
-  restoreTarget.setBackupPrefs(manifest.backupPrefs);
 }
 
 async function restoreBinariesFromPackage(

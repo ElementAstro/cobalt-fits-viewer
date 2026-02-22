@@ -5,9 +5,9 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Chip, useThemeColor } from "heroui-native";
+import { transformHistogramCounts } from "../../lib/utils/pixelMath";
+import type { HistogramMode } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
-
-type HistogramMode = "linear" | "log" | "cdf";
 
 interface FitsHistogramProps {
   counts: number[];
@@ -60,27 +60,7 @@ export function FitsHistogram({
   }, []);
 
   // Process counts based on mode (log / cdf / linear)
-  const processedCounts = useMemo(() => {
-    if (counts.length === 0) return [];
-    if (mode === "log") {
-      return counts.map((c) => (c > 0 ? Math.log10(c + 1) : 0));
-    }
-    if (mode === "cdf") {
-      const cdf: number[] = new Array(counts.length);
-      cdf[0] = counts[0];
-      for (let i = 1; i < counts.length; i++) {
-        cdf[i] = cdf[i - 1] + counts[i];
-      }
-      const total = cdf[counts.length - 1];
-      if (total > 0) {
-        for (let i = 0; i < counts.length; i++) {
-          cdf[i] = cdf[i] / total;
-        }
-      }
-      return cdf;
-    }
-    return counts;
-  }, [counts, mode]);
+  const processedCounts = useMemo(() => transformHistogramCounts(counts, mode), [counts, mode]);
 
   // Safe max computation (no spread operator)
   const maxCount = useMemo(() => {

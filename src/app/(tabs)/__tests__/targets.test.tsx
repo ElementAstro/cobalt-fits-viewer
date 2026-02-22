@@ -65,6 +65,7 @@ jest.mock("../../../hooks/useTargets", () => ({
     addGroup: jest.fn(),
     updateGroup: jest.fn(),
     removeGroup: jest.fn(),
+    removeTarget: jest.fn(),
     scanAndAutoDetect: mockScanAndAutoDetect,
     getTargetStats: jest.fn(() => ({
       imageCount: 0,
@@ -149,6 +150,37 @@ jest.mock("../../../components/targets/DuplicateMergeSheet", () => ({
 
 jest.mock("../../../components/targets/GroupManagerSheet", () => ({
   GroupManagerSheet: () => null,
+}));
+
+jest.mock("../../../components/targets/TargetListHeader", () => {
+  const R = require("react");
+  const RN = require("react-native");
+  const { View, Pressable, Text } = RN;
+  return {
+    TargetListHeader: (props: Record<string, unknown>) =>
+      R.createElement(
+        View,
+        { testID: "mock-target-list-header" },
+        R.createElement(
+          Pressable,
+          { testID: "e2e-action-tabs__targets-scan", onPress: props.onScanTargets as () => void },
+          R.createElement(Text, null, "scan"),
+        ),
+        R.createElement(
+          Pressable,
+          {
+            testID: "e2e-action-tabs__targets-open-add",
+            onPress: props.onShowAddSheet as () => void,
+          },
+          R.createElement(Text, null, "add"),
+        ),
+      ),
+    TargetSearchBar: () => R.createElement(View, { testID: "mock-search-bar" }),
+  };
+});
+
+jest.mock("../../../components/targets/TargetBatchActionBar", () => ({
+  TargetBatchActionBar: () => null,
 }));
 
 jest.mock("../../../components/common/EmptyState", () => ({

@@ -218,15 +218,24 @@ describe("imageExport", () => {
     expect(mod.getMimeType("webp")).toBe("image/webp");
     expect(mod.getMimeType("tiff")).toBe("image/tiff");
     expect(mod.getMimeType("bmp")).toBe("image/bmp");
+    expect(mod.getMimeType("fits")).toBe("application/fits");
+    expect(mod.getMimeType("xisf")).toBe("application/xisf");
+    expect(mod.getMimeType("ser")).toBe("application/ser");
 
     expect(mod.getExtension("jpeg")).toBe("jpg");
     expect(mod.getExtension("png")).toBe("png");
+    expect(mod.getExtension("fits")).toBe("fits");
+    expect(mod.getExtension("xisf")).toBe("xisf");
+    expect(mod.getExtension("ser")).toBe("ser");
 
     expect(mod.getUTI("png")).toBe("public.png");
     expect(mod.getUTI("jpeg")).toBe("public.jpeg");
     expect(mod.getUTI("webp")).toBe("org.webmproject.webp");
     expect(mod.getUTI("tiff")).toBe("public.tiff");
     expect(mod.getUTI("bmp")).toBe("com.microsoft.bmp");
+    expect(mod.getUTI("fits")).toBe("public.data");
+    expect(mod.getUTI("xisf")).toBe("public.data");
+    expect(mod.getUTI("ser")).toBe("public.data");
   });
 
   it("cleans export directory when present", () => {

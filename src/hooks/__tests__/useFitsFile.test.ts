@@ -12,6 +12,7 @@ jest.mock("../../lib/fits/parser", () => ({
   isRgbCube: jest.fn(() => ({ isRgb: false, width: 0, height: 0 })),
   getImageDimensions: jest.fn(),
   getHDUList: jest.fn(),
+  getSerMetadata: jest.fn(() => undefined),
 }));
 jest.mock("../../lib/utils/fileManager", () => ({
   readFileAsArrayBuffer: jest.fn(),
@@ -51,6 +52,7 @@ const parserLib = jest.requireMock("../../lib/fits/parser") as {
   isRgbCube: jest.Mock;
   getImageDimensions: jest.Mock;
   getHDUList: jest.Mock;
+  getSerMetadata: jest.Mock;
 };
 const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
   readFileAsArrayBuffer: jest.Mock;

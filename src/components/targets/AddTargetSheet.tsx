@@ -27,18 +27,8 @@ import {
 } from "../../lib/targets/coordinates";
 import { CategorySelector } from "./CategorySelector";
 import { TagInput } from "./TagInput";
+import { TARGET_TYPES } from "../../lib/targets/targetConstants";
 import type { TargetType } from "../../lib/fits/types";
-
-const TARGET_TYPES: TargetType[] = [
-  "galaxy",
-  "nebula",
-  "cluster",
-  "planet",
-  "moon",
-  "sun",
-  "comet",
-  "other",
-];
 
 interface AddTargetSheetProps {
   visible: boolean;

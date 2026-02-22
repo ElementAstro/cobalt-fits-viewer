@@ -5,16 +5,19 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Chip, useThemeColor } from "heroui-native";
+import { transformHistogramCounts } from "../../lib/utils/pixelMath";
+import type { HistogramMode, ChannelHistogramData } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
 
-type HistogramMode = "linear" | "log" | "cdf";
-
 type DragTarget = "black" | "white" | "midtone" | "outBlack" | "outWhite" | null;
+
+type ChannelDisplay = "luminance" | "rgb" | "r" | "g" | "b";
 
 interface HistogramLevelsProps {
   counts: number[];
   edges: number[];
   regionCounts?: number[];
+  rgbHistogram?: ChannelHistogramData | null;
   blackPoint?: number;
   whitePoint?: number;
   midtone?: number;
@@ -62,6 +65,7 @@ export function HistogramLevels({
   counts,
   edges,
   regionCounts,
+  rgbHistogram,
   blackPoint = 0,
   whitePoint = 1,
   midtone = 0.5,
@@ -86,6 +90,9 @@ export function HistogramLevels({
 
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [mode, setMode] = useState<HistogramMode>(initialMode);
+  const [channelDisplay, setChannelDisplay] = useState<ChannelDisplay>("luminance");
+
+  const hasRgb = !!rgbHistogram;
 
   const draggingTarget = useSharedValue<DragTarget>(null);
 
@@ -97,52 +104,25 @@ export function HistogramLevels({
   }, []);
 
   // Process counts based on mode
-  const processedCounts = useMemo(() => {
-    if (counts.length === 0) return [];
-    if (mode === "log") {
-      return counts.map((c) => (c > 0 ? Math.log10(c + 1) : 0));
-    }
-    if (mode === "cdf") {
-      const cdf: number[] = new Array(counts.length);
-      cdf[0] = counts[0];
-      for (let i = 1; i < counts.length; i++) {
-        cdf[i] = cdf[i - 1] + counts[i];
-      }
-      const total = cdf[counts.length - 1];
-      if (total > 0) {
-        for (let i = 0; i < counts.length; i++) {
-          cdf[i] = cdf[i] / total;
-        }
-      }
-      return cdf;
-    }
-    return counts;
-  }, [counts, mode]);
+  const processedCounts = useMemo(() => transformHistogramCounts(counts, mode), [counts, mode]);
+
+  // Process RGB channel counts based on mode
+  const processedChannels = useMemo(() => {
+    if (!rgbHistogram) return null;
+    return {
+      r: transformHistogramCounts(rgbHistogram.r.counts, mode),
+      g: transformHistogramCounts(rgbHistogram.g.counts, mode),
+      b: transformHistogramCounts(rgbHistogram.b.counts, mode),
+    };
+  }, [rgbHistogram, mode]);
 
   // Process region counts with same mode
   const processedRegionCounts = useMemo(() => {
     if (!regionCounts || regionCounts.length === 0) return null;
-    if (mode === "log") {
-      return regionCounts.map((c) => (c > 0 ? Math.log10(c + 1) : 0));
-    }
-    if (mode === "cdf") {
-      const cdf: number[] = new Array(regionCounts.length);
-      cdf[0] = regionCounts[0];
-      for (let i = 1; i < regionCounts.length; i++) {
-        cdf[i] = cdf[i - 1] + regionCounts[i];
-      }
-      const total = cdf[regionCounts.length - 1];
-      if (total > 0) {
-        for (let i = 0; i < regionCounts.length; i++) {
-          cdf[i] = cdf[i] / total;
-        }
-      }
-      return cdf;
-    }
-    return regionCounts;
+    return transformHistogramCounts(regionCounts, mode);
   }, [regionCounts, mode]);
 
-  // Max count for normalization (use global max for both)
+  // Max count for normalization (use global max for both, including RGB channels)
   const maxCount = useMemo(() => {
     let m = 1;
     for (let i = 0; i < processedCounts.length; i++) {
@@ -153,8 +133,15 @@ export function HistogramLevels({
         if (processedRegionCounts[i] > m) m = processedRegionCounts[i];
       }
     }
+    if (processedChannels) {
+      for (const ch of [processedChannels.r, processedChannels.g, processedChannels.b]) {
+        for (let i = 0; i < ch.length; i++) {
+          if (ch[i] > m) m = ch[i];
+        }
+      }
+    }
     return m;
-  }, [processedCounts, processedRegionCounts]);
+  }, [processedCounts, processedRegionCounts, processedChannels]);
 
   // Build Skia path for full histogram (muted background)
   const histogramPath = useMemo(() => {
@@ -174,6 +161,34 @@ export function HistogramLevels({
     path.close();
     return path;
   }, [processedCounts, maxCount, canvasWidth, height]);
+
+  // Build per-channel Skia paths
+  const channelPaths = useMemo(() => {
+    if (!processedChannels || canvasWidth <= 0) return null;
+
+    const buildPath = (data: number[]) => {
+      if (data.length === 0) return null;
+      const path = Skia.Path.Make();
+      const binCount = data.length;
+      const barW = canvasWidth / binCount;
+      path.moveTo(0, height);
+      for (let i = 0; i < binCount; i++) {
+        const barH = Math.max(0.5, (data[i] / maxCount) * height);
+        const x = i * barW;
+        path.lineTo(x, height - barH);
+        path.lineTo(x + barW, height - barH);
+      }
+      path.lineTo(canvasWidth, height);
+      path.close();
+      return path;
+    };
+
+    return {
+      r: buildPath(processedChannels.r),
+      g: buildPath(processedChannels.g),
+      b: buildPath(processedChannels.b),
+    };
+  }, [processedChannels, maxCount, canvasWidth, height]);
 
   // Build Skia path for region histogram (bright overlay)
   const regionPath = useMemo(() => {
@@ -239,6 +254,27 @@ export function HistogramLevels({
     const p = Skia.Paint();
     p.setColor(Skia.Color("#fbbf24"));
     p.setAlphaf(0.6);
+    return p;
+  }, []);
+
+  const redPaint = useMemo(() => {
+    const p = Skia.Paint();
+    p.setColor(Skia.Color("#ef4444"));
+    p.setAlphaf(0.55);
+    return p;
+  }, []);
+
+  const greenPaint = useMemo(() => {
+    const p = Skia.Paint();
+    p.setColor(Skia.Color("#22c55e"));
+    p.setAlphaf(0.55);
+    return p;
+  }, []);
+
+  const bluePaint = useMemo(() => {
+    const p = Skia.Paint();
+    p.setColor(Skia.Color("#3b82f6"));
+    p.setAlphaf(0.55);
     return p;
   }, []);
 
@@ -437,6 +473,39 @@ export function HistogramLevels({
 
   const modeLabel = mode === "log" ? "LOG" : mode === "cdf" ? "CDF" : "LIN";
 
+  const cycleChannel = useCallback(() => {
+    setChannelDisplay((prev) => {
+      if (prev === "luminance") return "rgb";
+      if (prev === "rgb") return "r";
+      if (prev === "r") return "g";
+      if (prev === "g") return "b";
+      return "luminance";
+    });
+  }, []);
+
+  const channelLabel =
+    channelDisplay === "luminance"
+      ? "L"
+      : channelDisplay === "rgb"
+        ? "RGB"
+        : channelDisplay.toUpperCase();
+
+  const channelColor =
+    channelDisplay === "r"
+      ? "#ef4444"
+      : channelDisplay === "g"
+        ? "#22c55e"
+        : channelDisplay === "b"
+          ? "#3b82f6"
+          : undefined;
+
+  // Determine which paths to show based on channel mode
+  const showLuminance = channelDisplay === "luminance";
+  const showAllRgb = channelDisplay === "rgb";
+  const showR = channelDisplay === "r" || showAllRgb;
+  const showG = channelDisplay === "g" || showAllRgb;
+  const showB = channelDisplay === "b" || showAllRgb;
+
   // Midtone → gamma display value
   const gammaFromMidtone = useMemo(() => {
     if (midtone <= 0.001 || midtone >= 0.999) return 1;
@@ -492,6 +561,21 @@ export function HistogramLevels({
               <Ionicons name="refresh-outline" size={11} color={mutedColor} />
             </Button>
           )}
+          {hasRgb && (
+            <Chip
+              size="sm"
+              variant="secondary"
+              onPress={cycleChannel}
+              style={channelColor ? { borderColor: channelColor, borderWidth: 1 } : undefined}
+            >
+              <Chip.Label
+                className="text-[9px] font-bold"
+                style={channelColor ? { color: channelColor } : undefined}
+              >
+                {channelLabel}
+              </Chip.Label>
+            </Chip>
+          )}
           <Chip size="sm" variant="secondary" onPress={cycleMode}>
             <Chip.Label className="text-[9px] font-bold">{modeLabel}</Chip.Label>
           </Chip>
@@ -505,10 +589,26 @@ export function HistogramLevels({
             <View style={{ width: canvasWidth, height: height + HANDLE_SIZE + 2 }}>
               <Canvas style={{ width: canvasWidth, height: height + HANDLE_SIZE + 2 }}>
                 {/* Background histogram (full range, muted) */}
-                {histogramPath && <Path path={histogramPath} paint={bgPaint} />}
+                {showLuminance && histogramPath && <Path path={histogramPath} paint={bgPaint} />}
 
                 {/* Highlighted range (black–white points) */}
-                {rangePath && <Path path={rangePath} paint={rangePaint} />}
+                {showLuminance && rangePath && <Path path={rangePath} paint={rangePaint} />}
+
+                {/* Per-channel histogram overlays */}
+                {channelPaths && showR && channelPaths.r && (
+                  <Path path={channelPaths.r} paint={redPaint} />
+                )}
+                {channelPaths && showG && channelPaths.g && (
+                  <Path path={channelPaths.g} paint={greenPaint} />
+                )}
+                {channelPaths && showB && channelPaths.b && (
+                  <Path path={channelPaths.b} paint={bluePaint} />
+                )}
+
+                {/* Luminance bg when in single-channel mode (dimmed) */}
+                {!showLuminance && !showAllRgb && histogramPath && (
+                  <Path path={histogramPath} paint={bgPaint} />
+                )}
 
                 {/* Region histogram overlay */}
                 {regionPath && <Path path={regionPath} paint={regionPaint} />}

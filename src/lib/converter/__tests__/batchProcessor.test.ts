@@ -1,5 +1,10 @@
 import type { ConvertOptions, BatchTask } from "../../fits/types";
-import { DEFAULT_FITS_TARGET_OPTIONS, DEFAULT_TIFF_TARGET_OPTIONS } from "../../fits/types";
+import {
+  DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
+} from "../../fits/types";
 
 const mockReadFileAsArrayBuffer = jest.fn();
 const mockDetectPreferredSupportedImageFormat = jest.fn();
@@ -99,6 +104,8 @@ const defaultOptions: ConvertOptions = {
   dpi: 72,
   tiff: DEFAULT_TIFF_TARGET_OPTIONS,
   fits: DEFAULT_FITS_TARGET_OPTIONS,
+  xisf: DEFAULT_XISF_TARGET_OPTIONS,
+  ser: DEFAULT_SER_TARGET_OPTIONS,
   stretch: "asinh",
   colormap: "grayscale",
   blackPoint: 0,

@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import { QuickLookModal } from "../QuickLookModal";
 import type { FitsMetadata } from "../../../lib/fits/types";
 
@@ -102,5 +102,82 @@ describe("QuickLookModal", () => {
     expect(screen.queryByTestId("quicklook-video-view")).toBeNull();
     expect(screen.getByText("Audio codec")).toBeTruthy();
     expect(screen.queryByText("common.edit")).toBeNull();
+  });
+
+  it("renders quick action buttons when callbacks are provided", () => {
+    const onToggleFavorite = jest.fn();
+    const onDelete = jest.fn();
+    const onRename = jest.fn();
+    const onAddTag = jest.fn();
+
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+        onToggleFavorite={onToggleFavorite}
+        onDelete={onDelete}
+        onRename={onRename}
+        onAddTag={onAddTag}
+      />,
+    );
+
+    expect(screen.getByText("files.toggleFavorite")).toBeTruthy();
+    expect(screen.getByText("common.rename")).toBeTruthy();
+    expect(screen.getByText("files.batchTag")).toBeTruthy();
+    expect(screen.getByText("common.delete")).toBeTruthy();
+  });
+
+  it("does not render quick actions when no callbacks are provided", () => {
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+      />,
+    );
+
+    expect(screen.queryByText("files.toggleFavorite")).toBeNull();
+    expect(screen.queryByText("common.delete")).toBeNull();
+  });
+
+  it("calls onToggleFavorite with file id when favorite button is pressed", () => {
+    const onToggleFavorite = jest.fn();
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+        onToggleFavorite={onToggleFavorite}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("files.toggleFavorite"));
+    expect(onToggleFavorite).toHaveBeenCalledWith("f1");
+  });
+
+  it("calls onDelete and onClose when delete quick action is pressed", () => {
+    const onDelete = jest.fn();
+    const onClose = jest.fn();
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={onClose}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+        onDelete={onDelete}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("common.delete"));
+    expect(onClose).toHaveBeenCalled();
+    expect(onDelete).toHaveBeenCalledWith("f1");
   });
 });

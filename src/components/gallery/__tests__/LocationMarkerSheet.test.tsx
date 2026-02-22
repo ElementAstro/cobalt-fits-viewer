@@ -19,6 +19,21 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
+jest.mock("../../../lib/gallery/albumStatistics", () => ({
+  formatExposureTime: (s: number) => `${s}s`,
+}));
+
+const mockAddSite = jest.fn();
+const mockRemoveSite = jest.fn();
+let mockSites: Array<{ id: string; latitude: number; longitude: number; label: string }> = [];
+jest.mock("../../../stores/useFavoriteSitesStore", () => ({
+  useFavoriteSitesStore: () => ({
+    addSite: mockAddSite,
+    removeSite: mockRemoveSite,
+    sites: mockSites,
+  }),
+}));
+
 jest.mock("@gorhom/bottom-sheet", () => {
   const React = require("react");
   const { View } = require("react-native");
@@ -53,7 +68,7 @@ jest.mock("heroui-native", () => {
     Separator: () => null,
     Button,
     Chip,
-    useThemeColor: () => ["#00ff00", "#999999"],
+    useThemeColor: () => ["#00ff00", "#999999", "#ffaa00"],
   };
 });
 
@@ -92,6 +107,12 @@ function makeCluster(files: FitsMetadata[]): MapClusterNode {
     files,
   };
 }
+
+beforeEach(() => {
+  mockAddSite.mockClear();
+  mockRemoveSite.mockClear();
+  mockSites = [];
+});
 
 describe("LocationMarkerSheet", () => {
   it("opens single target/session with quick actions", () => {
@@ -141,5 +162,56 @@ describe("LocationMarkerSheet", () => {
 
     expect(onTargetPress).toHaveBeenCalledWith("target-a");
     expect(onSessionPress).toHaveBeenCalledWith("session-b");
+  });
+
+  it("renders observation summary with exposure and filter counts", () => {
+    render(
+      <LocationMarkerSheet
+        cluster={makeCluster([
+          makeFile("f1", { exptime: 120, filter: "Ha", targetId: "t1", sessionId: "s1" }),
+          makeFile("f2", { exptime: 60, filter: "OIII", targetId: "t1", sessionId: "s1" }),
+        ])}
+        onClose={jest.fn()}
+        onFilePress={jest.fn()}
+        onSessionPress={jest.fn()}
+        onTargetPress={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("180s")).toBeTruthy();
+    expect(screen.getByText("Ha: 1")).toBeTruthy();
+    expect(screen.getByText("OIII: 1")).toBeTruthy();
+  });
+
+  it("renders favorite star button (outline when not favorited)", () => {
+    mockSites = [];
+
+    render(
+      <LocationMarkerSheet
+        cluster={makeCluster([makeFile("f1", { targetId: "t1", sessionId: "s1" })])}
+        onClose={jest.fn()}
+        onFilePress={jest.fn()}
+        onSessionPress={jest.fn()}
+        onTargetPress={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("star-outline")).toBeTruthy();
+  });
+
+  it("renders filled star when site is already favorited", () => {
+    mockSites = [{ id: "fav-1", latitude: 10, longitude: 20, label: "Tokyo" }];
+
+    render(
+      <LocationMarkerSheet
+        cluster={makeCluster([makeFile("f1", { targetId: "t1", sessionId: "s1" })])}
+        onClose={jest.fn()}
+        onFilePress={jest.fn()}
+        onSessionPress={jest.fn()}
+        onTargetPress={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("star")).toBeTruthy();
   });
 });

@@ -5,10 +5,12 @@
 import {
   calculateHistogram,
   calculateRegionHistogram,
+  calculateChannelHistograms,
   calculateStats,
   computeAutoStretch,
   computePercentile,
   computeZScale,
+  transformHistogramCounts,
   stackAverage,
   stackMax,
   stackMedian,
@@ -271,6 +273,96 @@ describe("zscale and percentile intervals", () => {
     expect(r.z1).toBeLessThanOrEqual(r.z2);
     expect(Number.isFinite(r.z1)).toBe(true);
     expect(Number.isFinite(r.z2)).toBe(true);
+  });
+});
+
+// ===== transformHistogramCounts =====
+
+describe("transformHistogramCounts", () => {
+  it("returns counts unchanged in linear mode", () => {
+    const counts = [1, 2, 3, 4];
+    expect(transformHistogramCounts(counts, "linear")).toEqual([1, 2, 3, 4]);
+  });
+
+  it("applies log10(c+1) in log mode", () => {
+    const counts = [0, 9, 99];
+    const result = transformHistogramCounts(counts, "log");
+    expect(result[0]).toBe(0);
+    expect(result[1]).toBeCloseTo(1, 5); // log10(10)
+    expect(result[2]).toBeCloseTo(2, 5); // log10(100)
+  });
+
+  it("returns cumulative distribution in cdf mode", () => {
+    const counts = [2, 3, 5];
+    const result = transformHistogramCounts(counts, "cdf");
+    expect(result[0]).toBeCloseTo(0.2, 5);
+    expect(result[1]).toBeCloseTo(0.5, 5);
+    expect(result[2]).toBeCloseTo(1.0, 5);
+  });
+
+  it("handles empty array", () => {
+    expect(transformHistogramCounts([], "linear")).toEqual([]);
+    expect(transformHistogramCounts([], "log")).toEqual([]);
+    expect(transformHistogramCounts([], "cdf")).toEqual([]);
+  });
+
+  it("handles all-zero counts in cdf mode", () => {
+    const result = transformHistogramCounts([0, 0, 0], "cdf");
+    expect(result).toEqual([0, 0, 0]);
+  });
+});
+
+// ===== calculateChannelHistograms =====
+
+describe("calculateChannelHistograms", () => {
+  it("returns histograms for each channel with shared bin edges", () => {
+    const channels = {
+      r: new Float32Array([0, 0.5, 1.0]),
+      g: new Float32Array([0.2, 0.4, 0.6]),
+      b: new Float32Array([0.1, 0.9, 0.5]),
+    };
+    const result = calculateChannelHistograms(channels, 4);
+    expect(result.r.counts.length).toBe(4);
+    expect(result.g.counts.length).toBe(4);
+    expect(result.b.counts.length).toBe(4);
+    // Edges should be identical across channels (shared range)
+    expect(result.r.edges).toEqual(result.g.edges);
+    expect(result.g.edges).toEqual(result.b.edges);
+  });
+
+  it("uses precomputedRange for consistent edges", () => {
+    const channels = {
+      r: new Float32Array([0.3, 0.5]),
+      g: new Float32Array([0.4, 0.6]),
+      b: new Float32Array([0.2, 0.8]),
+    };
+    const result = calculateChannelHistograms(channels, 4, { min: 0, max: 1 });
+    expect(result.r.edges[0]).toBeCloseTo(0, 5);
+    expect(result.r.edges[result.r.edges.length - 1]).toBeCloseTo(1, 5);
+  });
+
+  it("total counts per channel equals pixel count", () => {
+    const n = 10;
+    const channels = {
+      r: new Float32Array(n).fill(0.5),
+      g: new Float32Array(n).fill(0.3),
+      b: new Float32Array(n).fill(0.7),
+    };
+    const result = calculateChannelHistograms(channels, 8);
+    expect(result.r.counts.reduce((a, b) => a + b, 0)).toBe(n);
+    expect(result.g.counts.reduce((a, b) => a + b, 0)).toBe(n);
+    expect(result.b.counts.reduce((a, b) => a + b, 0)).toBe(n);
+  });
+
+  it("handles single-pixel channels", () => {
+    const channels = {
+      r: new Float32Array([42]),
+      g: new Float32Array([42]),
+      b: new Float32Array([42]),
+    };
+    const result = calculateChannelHistograms(channels, 4);
+    expect(result.r.counts.length).toBe(4);
+    expect(result.r.counts[0]).toBe(1);
   });
 });
 

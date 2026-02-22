@@ -86,6 +86,54 @@ describe("buildClusterPolylines", () => {
   });
 });
 
+describe("buildSegmentDistances", () => {
+  it("returns empty array when cluster count is less than 2", () => {
+    const { buildSegmentDistances } = loadOverlaysForPlatform("android");
+    const clusters = [makeCluster("only", 120, [makeFile("f1", 1000)])];
+    expect(buildSegmentDistances(clusters)).toEqual([]);
+  });
+
+  it("computes midpoints and distance labels for adjacent clusters", () => {
+    const { buildSegmentDistances } = loadOverlaysForPlatform("android");
+    const clusters = [
+      {
+        ...makeCluster("a", 0, [makeFile("f1", 1000)]),
+        location: { latitude: 0, longitude: 0 },
+      },
+      {
+        ...makeCluster("b", 1, [makeFile("f2", 2000)]),
+        location: { latitude: 0, longitude: 1 },
+      },
+    ];
+    const segments = buildSegmentDistances(clusters);
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0].midpoint.latitude).toBeCloseTo(0, 4);
+    expect(segments[0].midpoint.longitude).toBeCloseTo(0.5, 4);
+    expect(segments[0].distanceKm).toBeGreaterThan(100);
+    expect(segments[0].label).toMatch(/km$/);
+  });
+
+  it("formats short distances in meters", () => {
+    const { buildSegmentDistances } = loadOverlaysForPlatform("android");
+    const clusters = [
+      {
+        ...makeCluster("a", 0, [makeFile("f1", 1000)]),
+        location: { latitude: 0, longitude: 0 },
+      },
+      {
+        ...makeCluster("b", 0.001, [makeFile("f2", 2000)]),
+        location: { latitude: 0, longitude: 0.001 },
+      },
+    ];
+    const segments = buildSegmentDistances(clusters);
+
+    expect(segments).toHaveLength(1);
+    expect(segments[0].distanceKm).toBeLessThan(1);
+    expect(segments[0].label).toMatch(/m$/);
+  });
+});
+
 describe("buildClusterCircles", () => {
   it("applies radius rule: 1 file=5km, +2km each additional file, max 50km", () => {
     const { buildClusterCircles } = loadOverlaysForPlatform("android");

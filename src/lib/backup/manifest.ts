@@ -32,7 +32,7 @@ import {
   type AstrometryJob,
 } from "../astrometry/types";
 
-function inferMediaKind(
+export function inferMediaKind(
   file: Pick<FitsMetadata, "sourceType">,
 ): NonNullable<FitsMetadata["mediaKind"]> {
   if (file.sourceType === "video") return "video";

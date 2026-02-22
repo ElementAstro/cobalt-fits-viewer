@@ -1,4 +1,9 @@
-import { DEFAULT_CONVERT_PRESETS, DEFAULT_FITS_TARGET_OPTIONS } from "../../fits/types";
+import {
+  DEFAULT_CONVERT_PRESETS,
+  DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
+} from "../../fits/types";
 import {
   createPreset,
   getAllPresets,
@@ -60,12 +65,30 @@ describe("convertPresets", () => {
         fits: DEFAULT_FITS_TARGET_OPTIONS,
       }),
     );
+    expect(getDefaultOptionsForFormat("xisf")).toEqual(
+      expect.objectContaining({
+        quality: 100,
+        bitDepth: 32,
+        dpi: 72,
+        xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      }),
+    );
+    expect(getDefaultOptionsForFormat("ser")).toEqual(
+      expect.objectContaining({
+        quality: 100,
+        bitDepth: 16,
+        dpi: 72,
+        ser: DEFAULT_SER_TARGET_OPTIONS,
+      }),
+    );
   });
 
   it("returns supported bit depths by format", () => {
     expect(getSupportedBitDepths("tiff")).toEqual([8, 16, 32]);
     expect(getSupportedBitDepths("png")).toEqual([8, 16]);
     expect(getSupportedBitDepths("fits")).toEqual([8, 16, 32]);
+    expect(getSupportedBitDepths("xisf")).toEqual([8, 16, 32]);
+    expect(getSupportedBitDepths("ser")).toEqual([8, 16]);
     expect(getSupportedBitDepths("jpeg")).toEqual([8]);
   });
 
@@ -74,5 +97,7 @@ describe("convertPresets", () => {
     expect(supportsQuality("webp")).toBe(true);
     expect(supportsQuality("png")).toBe(false);
     expect(supportsQuality("tiff")).toBe(false);
+    expect(supportsQuality("xisf")).toBe(false);
+    expect(supportsQuality("ser")).toBe(false);
   });
 });

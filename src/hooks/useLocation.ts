@@ -160,6 +160,24 @@ export const LocationService = {
     }
   },
 
+  /**
+   * 正向地理编码：地名 → 坐标
+   */
+  async geocode(address: string): Promise<{ latitude: number; longitude: number } | null> {
+    try {
+      const results = await Location.geocodeAsync(address);
+      if (results.length > 0) {
+        return {
+          latitude: results[0].latitude,
+          longitude: results[0].longitude,
+        };
+      }
+    } catch (e) {
+      Logger.warn(LOG_TAGS.Location, "Geocode failed", e);
+    }
+    return null;
+  },
+
   clearCache() {
     globalCache = null;
   },

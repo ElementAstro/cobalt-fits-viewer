@@ -387,6 +387,7 @@ export async function getJobAnnotations(
       pixelx: a.pixelx!,
       pixely: a.pixely!,
       radius: a.radius,
+      vmag: a.vmag,
     }));
 }
 

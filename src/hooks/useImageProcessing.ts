@@ -15,6 +15,7 @@ import {
   calculateStats,
   calculateHistogram,
   calculateRegionHistogram,
+  calculateChannelHistograms,
 } from "../lib/utils/pixelMath";
 import type {
   ColormapType,
@@ -22,6 +23,7 @@ import type {
   ProcessingPipelineSnapshot,
   StretchType,
   ViewerCurvePreset,
+  ChannelHistogramData,
 } from "../lib/fits/types";
 import { executeProcessingPipeline } from "../lib/processing/executor";
 import { normalizeProcessingPipelineSnapshot } from "../lib/processing/recipe";
@@ -40,6 +42,7 @@ interface UseImageProcessingReturn {
   displayHeight: number;
   stats: ReturnType<typeof calculateStats> | null;
   histogram: ReturnType<typeof calculateHistogram> | null;
+  rgbHistogram: ChannelHistogramData | null;
   regionHistogram: ReturnType<typeof calculateHistogram> | null;
   isProcessing: boolean;
   processingError: string | null;
@@ -79,7 +82,11 @@ interface UseImageProcessingReturn {
   ) => void;
   getHistogram: (pixels: Float32Array, bins?: number) => void;
   getStats: (pixels: Float32Array) => void;
-  getStatsAndHistogram: (pixels: Float32Array, bins?: number) => void;
+  getStatsAndHistogram: (
+    pixels: Float32Array,
+    bins?: number,
+    rgbChannels?: { r: Float32Array; g: Float32Array; b: Float32Array } | null,
+  ) => void;
   getRegionHistogram: (
     pixels: Float32Array,
     width: number,
@@ -102,6 +109,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
   const [regionHistogram, setRegionHistogram] = useState<ReturnType<
     typeof calculateHistogram
   > | null>(null);
+  const [rgbHistogram, setRgbHistogram] = useState<ChannelHistogramData | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingError, setProcessingError] = useState<string | null>(null);
   const pendingTask = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(
@@ -383,17 +391,30 @@ export function useImageProcessing(): UseImageProcessingReturn {
     setStats(calculateStats(pixels));
   }, []);
 
-  const getStatsAndHistogram = useCallback((pixels: Float32Array, bins: number = 256) => {
-    if (pendingTask.current) {
-      pendingTask.current.cancel();
-    }
-    pendingTask.current = InteractionManager.runAfterInteractions(() => {
-      const s = calculateStats(pixels);
-      setStats(s);
-      setHistogram(calculateHistogram(pixels, bins, { min: s.min, max: s.max }));
-      pendingTask.current = null;
-    });
-  }, []);
+  const getStatsAndHistogram = useCallback(
+    (
+      pixels: Float32Array,
+      bins: number = 256,
+      rgbChannels?: { r: Float32Array; g: Float32Array; b: Float32Array } | null,
+    ) => {
+      if (pendingTask.current) {
+        pendingTask.current.cancel();
+      }
+      pendingTask.current = InteractionManager.runAfterInteractions(() => {
+        const s = calculateStats(pixels);
+        setStats(s);
+        const range = { min: s.min, max: s.max };
+        setHistogram(calculateHistogram(pixels, bins, range));
+        if (rgbChannels) {
+          setRgbHistogram(calculateChannelHistograms(rgbChannels, bins, range));
+        } else {
+          setRgbHistogram(null);
+        }
+        pendingTask.current = null;
+      });
+    },
+    [],
+  );
 
   const getRegionHistogram = useCallback(
     (
@@ -429,6 +450,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
     displayHeight,
     stats,
     histogram,
+    rgbHistogram,
     regionHistogram,
     isProcessing,
     processingError,

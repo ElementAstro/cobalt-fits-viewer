@@ -1,11 +1,10 @@
-import { View, Text, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
-import { Separator, Switch } from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, ScrollView } from "react-native";
+import { Separator } from "heroui-native";
+import { SettingsHeader } from "../../components/settings";
+import { SettingsToggleRow } from "../../components/common/SettingsToggleRow";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
@@ -43,9 +42,7 @@ const COLOR_OPTIONS = [
 
 export default function ViewerSettingsScreen() {
   const { t } = useI18n();
-  const haptics = useHapticFeedback();
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
@@ -162,12 +159,7 @@ export default function ViewerSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="flex-row items-center gap-3 mb-4">
-          <Ionicons name="arrow-back" size={24} color="#888" onPress={() => router.back()} />
-          <Text className="text-xl font-bold text-foreground">
-            {t("settings.categories.viewer")}
-          </Text>
-        </View>
+        <SettingsHeader title={t("settings.categories.viewer")} />
 
         {/* Basic Defaults */}
         <SettingsSection title={t("settings.viewer")}>
@@ -190,60 +182,32 @@ export default function ViewerSettingsScreen() {
 
         {/* Overlay Defaults */}
         <SettingsSection title={t("settings.viewerOverlays")}>
-          <SettingsRow
+          <SettingsToggleRow
             icon="grid-outline"
             label={t("settings.defaultShowGrid")}
-            rightElement={
-              <Switch
-                isSelected={defaultShowGrid}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setDefaultShowGrid(v);
-                }}
-              />
-            }
+            isSelected={defaultShowGrid}
+            onSelectedChange={setDefaultShowGrid}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="add-outline"
             label={t("settings.defaultShowCrosshair")}
-            rightElement={
-              <Switch
-                isSelected={defaultShowCrosshair}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setDefaultShowCrosshair(v);
-                }}
-              />
-            }
+            isSelected={defaultShowCrosshair}
+            onSelectedChange={setDefaultShowCrosshair}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="information-circle-outline"
             label={t("settings.defaultShowPixelInfo")}
-            rightElement={
-              <Switch
-                isSelected={defaultShowPixelInfo}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setDefaultShowPixelInfo(v);
-                }}
-              />
-            }
+            isSelected={defaultShowPixelInfo}
+            onSelectedChange={setDefaultShowPixelInfo}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="map-outline"
             label={t("settings.defaultShowMinimap")}
-            rightElement={
-              <Switch
-                isSelected={defaultShowMinimap}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setDefaultShowMinimap(v);
-                }}
-              />
-            }
+            isSelected={defaultShowMinimap}
+            onSelectedChange={setDefaultShowMinimap}
           />
         </SettingsSection>
 

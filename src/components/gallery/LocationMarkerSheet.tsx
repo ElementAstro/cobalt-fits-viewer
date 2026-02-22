@@ -9,6 +9,14 @@ import { BottomSheet, Separator, Button, Chip, useThemeColor } from "heroui-nati
 import { useI18n } from "../../i18n/useI18n";
 import type { FitsMetadata } from "../../lib/fits/types";
 import type { MapClusterNode } from "../../lib/map/types";
+import {
+  uniqueSorted,
+  toTestIdValue,
+  siteKey,
+  computeObservationSummary,
+} from "../../lib/map/utils";
+import { formatExposureTime } from "../../lib/gallery/albumStatistics";
+import { useFavoriteSitesStore } from "../../stores/useFavoriteSitesStore";
 import { ThumbnailGrid } from "./ThumbnailGrid";
 
 interface LocationMarkerSheetProps {
@@ -19,14 +27,6 @@ interface LocationMarkerSheetProps {
   onTargetPress: (targetId: string) => void;
 }
 
-function uniqueSorted(values: Array<string | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value)))].sort();
-}
-
-function toTestIdValue(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-}
-
 export function LocationMarkerSheet({
   cluster,
   onClose,
@@ -35,7 +35,8 @@ export function LocationMarkerSheet({
   onTargetPress,
 }: LocationMarkerSheetProps) {
   const { t } = useI18n();
-  const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
+  const [successColor, mutedColor, warningColor] = useThemeColor(["success", "muted", "warning"]);
+  const { addSite, removeSite, sites } = useFavoriteSitesStore();
 
   const location = cluster?.location;
   const subtitle = location
@@ -48,6 +49,11 @@ export function LocationMarkerSheet({
   );
   const sessionIds = useMemo(
     () => uniqueSorted(cluster?.files.map((file) => file.sessionId) ?? []),
+    [cluster],
+  );
+
+  const summary = useMemo(
+    () => (cluster?.files.length ? computeObservationSummary(cluster.files) : null),
     [cluster],
   );
 
@@ -79,6 +85,34 @@ export function LocationMarkerSheet({
                     {location.altitude ? ` · ${Math.round(location.altitude)}m` : ""}
                   </Text>
                 </View>
+                {(() => {
+                  const key = siteKey(location.latitude, location.longitude);
+                  const favSite = sites.find((s) => siteKey(s.latitude, s.longitude) === key);
+                  return (
+                    <Button
+                      size="sm"
+                      isIconOnly
+                      variant="ghost"
+                      onPress={() => {
+                        if (favSite) {
+                          removeSite(favSite.id);
+                        } else {
+                          addSite({
+                            label: location.placeName ?? location.city ?? location.region ?? key,
+                            latitude: location.latitude,
+                            longitude: location.longitude,
+                          });
+                        }
+                      }}
+                    >
+                      <Ionicons
+                        name={favSite ? "star" : "star-outline"}
+                        size={18}
+                        color={favSite ? warningColor : mutedColor}
+                      />
+                    </Button>
+                  );
+                })()}
               </View>
 
               <Separator className="mx-4 my-1" />
@@ -87,6 +121,50 @@ export function LocationMarkerSheet({
                 <Text className="text-xs text-muted">
                   {cluster.files.length} {t("sessions.imageCount")}
                 </Text>
+
+                {summary ? (
+                  <View className="gap-1.5">
+                    <View className="flex-row flex-wrap gap-3">
+                      {summary.totalExposure > 0 ? (
+                        <View className="flex-row items-center gap-1">
+                          <Ionicons name="time-outline" size={10} color={mutedColor} />
+                          <Text className="text-[10px] text-muted">
+                            {formatExposureTime(summary.totalExposure)}
+                          </Text>
+                        </View>
+                      ) : null}
+                      {summary.dateRange ? (
+                        <View className="flex-row items-center gap-1">
+                          <Ionicons name="calendar-outline" size={10} color={mutedColor} />
+                          <Text className="text-[10px] text-muted">
+                            {summary.dateRange.from === summary.dateRange.to
+                              ? summary.dateRange.from
+                              : `${summary.dateRange.from} ~ ${summary.dateRange.to}`}
+                          </Text>
+                        </View>
+                      ) : null}
+                    </View>
+                    {Object.keys(summary.filterCounts).length > 0 ? (
+                      <View className="flex-row flex-wrap gap-1">
+                        {Object.entries(summary.filterCounts).map(([filter, count]) => (
+                          <Chip key={filter} size="sm" variant="secondary">
+                            <Chip.Label className="text-[9px]">
+                              {filter}: {count}
+                            </Chip.Label>
+                          </Chip>
+                        ))}
+                      </View>
+                    ) : null}
+                    {summary.objects.length > 1 ? (
+                      <View className="flex-row items-center gap-1">
+                        <Ionicons name="telescope-outline" size={10} color={mutedColor} />
+                        <Text className="text-[10px] text-muted" numberOfLines={1}>
+                          {summary.objects.join(", ")}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
 
                 <View className="flex-row flex-wrap gap-2">
                   {sessionIds.length === 1 ? (

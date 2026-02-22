@@ -2,13 +2,16 @@
  * 地图筛选栏 - 按日期/目标/滤镜/Target/Session 筛选地图点位
  */
 
-import { useMemo } from "react";
-import { View, ScrollView } from "react-native";
+import { useMemo, useState } from "react";
+import { View, ScrollView, Text, Pressable } from "react-native";
 import { Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { FitsMetadata } from "../../lib/fits/types";
 import type { MapDateFilterPreset } from "../../lib/map/types";
+import { toTestIdValue } from "../../lib/map/utils";
+
+const COLLAPSED_LIMIT = 6;
 
 interface MapFilterBarProps {
   files: FitsMetadata[];
@@ -27,14 +30,6 @@ interface MapFilterBarProps {
   onFilterSessionChange: (value: string) => void;
   onDateFilterChange: (value: MapDateFilterPreset) => void;
   onClearAll: () => void;
-}
-
-function uniqueSorted(values: Array<string | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort();
-}
-
-function toTestIdValue(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-");
 }
 
 export function MapFilterBar({
@@ -57,6 +52,9 @@ export function MapFilterBar({
 }: MapFilterBarProps) {
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({});
+
+  const toggleRow = (key: string) => setExpandedRows((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const dateOptions: Array<{ key: MapDateFilterPreset; label: string }> = useMemo(
     () => [
@@ -69,12 +67,36 @@ export function MapFilterBar({
     [t],
   );
 
+  const objectCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const file of files) {
+      if (file.object) counts[file.object] = (counts[file.object] ?? 0) + 1;
+    }
+    return counts;
+  }, [files]);
+
+  const filterCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const file of files) {
+      if (file.filter) counts[file.filter] = (counts[file.filter] ?? 0) + 1;
+    }
+    return counts;
+  }, [files]);
+
   const hasFilters =
     dateFilterPreset !== "all" ||
     Boolean(filterObject) ||
     Boolean(filterFilter) ||
     Boolean(filterTargetId) ||
     Boolean(filterSessionId);
+
+  const activeCount = [
+    dateFilterPreset !== "all",
+    Boolean(filterObject),
+    Boolean(filterFilter),
+    Boolean(filterTargetId),
+    Boolean(filterSessionId),
+  ].filter(Boolean).length;
 
   if (files.length === 0 && !hasFilters) return null;
 
@@ -107,6 +129,14 @@ export function MapFilterBar({
         </View>
       </ScrollView>
 
+      {hasFilters ? (
+        <View className="px-4">
+          <Text className="text-[9px] text-muted">
+            {t("location.activeFilters", { count: activeCount })}
+          </Text>
+        </View>
+      ) : null}
+
       {objectOptions.length > 0 ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-4">
           <View className="flex-row gap-1">
@@ -118,22 +148,36 @@ export function MapFilterBar({
             >
               <Chip.Label className="text-[9px]">{t("location.allObjects")}</Chip.Label>
             </Chip>
-            {objectOptions.map((object) => (
-              <Chip
-                key={object}
-                testID={`e2e-action-map__index-filter-object-${toTestIdValue(object)}`}
-                size="sm"
-                variant={filterObject === object ? "primary" : "secondary"}
-                onPress={() => onFilterObjectChange(object)}
-              >
+            {(expandedRows.object ? objectOptions : objectOptions.slice(0, COLLAPSED_LIMIT)).map(
+              (object) => (
+                <Chip
+                  key={object}
+                  testID={`e2e-action-map__index-filter-object-${toTestIdValue(object)}`}
+                  size="sm"
+                  variant={filterObject === object ? "primary" : "secondary"}
+                  onPress={() => onFilterObjectChange(object)}
+                >
+                  <Ionicons
+                    name="star-outline"
+                    size={8}
+                    color={filterObject === object ? successColor : mutedColor}
+                  />
+                  <Chip.Label className="text-[9px]">
+                    {object}
+                    {objectCounts[object] ? ` (${objectCounts[object]})` : ""}
+                  </Chip.Label>
+                </Chip>
+              ),
+            )}
+            {objectOptions.length > COLLAPSED_LIMIT ? (
+              <Pressable onPress={() => toggleRow("object")} className="justify-center px-1">
                 <Ionicons
-                  name="star-outline"
-                  size={8}
-                  color={filterObject === object ? successColor : mutedColor}
+                  name={expandedRows.object ? "chevron-back" : "chevron-forward"}
+                  size={10}
+                  color={mutedColor}
                 />
-                <Chip.Label className="text-[9px]">{object}</Chip.Label>
-              </Chip>
-            ))}
+              </Pressable>
+            ) : null}
           </View>
         </ScrollView>
       ) : null}
@@ -162,7 +206,10 @@ export function MapFilterBar({
                   size={8}
                   color={filterFilter === filter ? successColor : mutedColor}
                 />
-                <Chip.Label className="text-[9px]">{filter}</Chip.Label>
+                <Chip.Label className="text-[9px]">
+                  {filter}
+                  {filterCounts[filter] ? ` (${filterCounts[filter]})` : ""}
+                </Chip.Label>
               </Chip>
             ))}
           </View>
@@ -180,22 +227,33 @@ export function MapFilterBar({
             >
               <Chip.Label className="text-[9px]">{t("location.allTargets")}</Chip.Label>
             </Chip>
-            {targetOptions.map((targetId) => (
-              <Chip
-                key={targetId}
-                testID={`e2e-action-map__index-filter-target-${toTestIdValue(targetId)}`}
-                size="sm"
-                variant={filterTargetId === targetId ? "primary" : "secondary"}
-                onPress={() => onFilterTargetChange(targetId)}
-              >
+            {(expandedRows.target ? targetOptions : targetOptions.slice(0, COLLAPSED_LIMIT)).map(
+              (targetId) => (
+                <Chip
+                  key={targetId}
+                  testID={`e2e-action-map__index-filter-target-${toTestIdValue(targetId)}`}
+                  size="sm"
+                  variant={filterTargetId === targetId ? "primary" : "secondary"}
+                  onPress={() => onFilterTargetChange(targetId)}
+                >
+                  <Ionicons
+                    name="locate-outline"
+                    size={8}
+                    color={filterTargetId === targetId ? successColor : mutedColor}
+                  />
+                  <Chip.Label className="text-[9px]">{targetId}</Chip.Label>
+                </Chip>
+              ),
+            )}
+            {targetOptions.length > COLLAPSED_LIMIT ? (
+              <Pressable onPress={() => toggleRow("target")} className="justify-center px-1">
                 <Ionicons
-                  name="locate-outline"
-                  size={8}
-                  color={filterTargetId === targetId ? successColor : mutedColor}
+                  name={expandedRows.target ? "chevron-back" : "chevron-forward"}
+                  size={10}
+                  color={mutedColor}
                 />
-                <Chip.Label className="text-[9px]">{targetId}</Chip.Label>
-              </Chip>
-            ))}
+              </Pressable>
+            ) : null}
           </View>
         </ScrollView>
       ) : null}
@@ -211,22 +269,33 @@ export function MapFilterBar({
             >
               <Chip.Label className="text-[9px]">{t("location.allSessions")}</Chip.Label>
             </Chip>
-            {sessionOptions.map((sessionId) => (
-              <Chip
-                key={sessionId}
-                testID={`e2e-action-map__index-filter-session-${toTestIdValue(sessionId)}`}
-                size="sm"
-                variant={filterSessionId === sessionId ? "primary" : "secondary"}
-                onPress={() => onFilterSessionChange(sessionId)}
-              >
+            {(expandedRows.session ? sessionOptions : sessionOptions.slice(0, COLLAPSED_LIMIT)).map(
+              (sessionId) => (
+                <Chip
+                  key={sessionId}
+                  testID={`e2e-action-map__index-filter-session-${toTestIdValue(sessionId)}`}
+                  size="sm"
+                  variant={filterSessionId === sessionId ? "primary" : "secondary"}
+                  onPress={() => onFilterSessionChange(sessionId)}
+                >
+                  <Ionicons
+                    name="moon-outline"
+                    size={8}
+                    color={filterSessionId === sessionId ? successColor : mutedColor}
+                  />
+                  <Chip.Label className="text-[9px]">{sessionId}</Chip.Label>
+                </Chip>
+              ),
+            )}
+            {sessionOptions.length > COLLAPSED_LIMIT ? (
+              <Pressable onPress={() => toggleRow("session")} className="justify-center px-1">
                 <Ionicons
-                  name="moon-outline"
-                  size={8}
-                  color={filterSessionId === sessionId ? successColor : mutedColor}
+                  name={expandedRows.session ? "chevron-back" : "chevron-forward"}
+                  size={10}
+                  color={mutedColor}
                 />
-                <Chip.Label className="text-[9px]">{sessionId}</Chip.Label>
-              </Chip>
-            ))}
+              </Pressable>
+            ) : null}
           </View>
         </ScrollView>
       ) : null}
@@ -235,4 +304,3 @@ export function MapFilterBar({
 }
 
 export type { MapDateFilterPreset };
-export { uniqueSorted };

@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useAlbumStore } from "../../stores/useAlbumStore";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
@@ -26,6 +27,7 @@ export default function AlbumDetailScreen() {
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
     useResponsiveLayout();
+  const haptics = useHapticFeedback();
 
   const album = useAlbumStore((s) => s.getAlbumById(id ?? ""));
   const updateAlbum = useAlbumStore((s) => s.updateAlbum);
@@ -91,10 +93,11 @@ export default function AlbumDetailScreen() {
   const handleFileLongPress = useCallback(
     (file: FitsMetadata) => {
       if (!isSelectionMode) {
+        haptics.impact();
         enterSelectionMode(file.id);
       }
     },
-    [isSelectionMode, enterSelectionMode],
+    [isSelectionMode, enterSelectionMode, haptics],
   );
 
   const handleRemoveSelected = useCallback(() => {

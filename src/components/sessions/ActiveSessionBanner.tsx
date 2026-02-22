@@ -3,6 +3,7 @@ import { View, Text, Alert } from "react-native";
 import { Button, Card, Input, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSessionStore } from "../../stores/useSessionStore";
+import { useFitsStore } from "../../stores/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
 import { useSessions } from "../../hooks/useSessions";
 
@@ -19,6 +20,11 @@ export function ActiveSessionBanner() {
 
   const [elapsed, setElapsed] = useState(0);
   const [noteText, setNoteText] = useState("");
+  const [showAllNotes, setShowAllNotes] = useState(false);
+
+  const linkedFileCount = useFitsStore(
+    (s) => s.files.filter((f) => f.sessionId === activeSession?.id).length,
+  );
 
   useEffect(() => {
     if (!activeSession || activeSession.status !== "running") return;
@@ -138,9 +144,18 @@ export function ActiveSessionBanner() {
           </Button>
         </View>
 
+        {linkedFileCount > 0 && (
+          <View className="flex-row items-center gap-1 mt-1">
+            <Ionicons name="images-outline" size={11} color={mutedColor} />
+            <Text className="text-[10px] text-muted">
+              {linkedFileCount} {t("sessions.filesLinked")}
+            </Text>
+          </View>
+        )}
+
         {activeSession.notes.length > 0 && (
           <View className="mt-1 gap-0.5">
-            {activeSession.notes.slice(-3).map((n, i) => (
+            {(showAllNotes ? activeSession.notes : activeSession.notes.slice(-3)).map((n, i) => (
               <Text key={i} className="text-[9px] text-muted" numberOfLines={1}>
                 [
                 {new Date(n.timestamp).toLocaleTimeString([], {
@@ -150,6 +165,20 @@ export function ActiveSessionBanner() {
                 ] {n.text}
               </Text>
             ))}
+            {activeSession.notes.length > 3 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onPress={() => setShowAllNotes((v) => !v)}
+                className="self-start mt-0.5"
+              >
+                <Button.Label className="text-[9px]">
+                  {showAllNotes
+                    ? t("common.collapse")
+                    : `${t("common.showAll")} (${activeSession.notes.length})`}
+                </Button.Label>
+              </Button>
+            )}
           </View>
         )}
       </Card.Body>

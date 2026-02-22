@@ -1,11 +1,10 @@
-import { View, Text, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
-import { Separator, Switch } from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, ScrollView } from "react-native";
+import { Separator } from "heroui-native";
+import { SettingsHeader } from "../../components/settings";
+import { SettingsToggleRow } from "../../components/common/SettingsToggleRow";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
@@ -38,9 +37,7 @@ const FILE_LIST_GRID_OPTIONS: Array<{ label: string; value: 2 | 3 | 4 }> = [
 
 export default function GallerySettingsScreen() {
   const { t } = useI18n();
-  const haptics = useHapticFeedback();
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
@@ -118,12 +115,7 @@ export default function GallerySettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="flex-row items-center gap-3 mb-4">
-          <Ionicons name="arrow-back" size={24} color="#888" onPress={() => router.back()} />
-          <Text className="text-xl font-bold text-foreground">
-            {t("settings.categories.gallery")}
-          </Text>
-        </View>
+        <SettingsHeader title={t("settings.categories.gallery")} />
 
         {/* Grid & Thumbnails */}
         <SettingsSection title={t("settings.gallery")}>
@@ -195,60 +187,32 @@ export default function GallerySettingsScreen() {
 
         {/* Thumbnail Info */}
         <SettingsSection title={t("settings.thumbnailInfo")}>
-          <SettingsRow
+          <SettingsToggleRow
             icon="document-text-outline"
             label={t("settings.thumbnailShowFilename")}
-            rightElement={
-              <Switch
-                isSelected={thumbnailShowFilename}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setThumbnailShowFilename(v);
-                }}
-              />
-            }
+            isSelected={thumbnailShowFilename}
+            onSelectedChange={setThumbnailShowFilename}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="telescope-outline"
             label={t("settings.thumbnailShowObject")}
-            rightElement={
-              <Switch
-                isSelected={thumbnailShowObject}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setThumbnailShowObject(v);
-                }}
-              />
-            }
+            isSelected={thumbnailShowObject}
+            onSelectedChange={setThumbnailShowObject}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="funnel-outline"
             label={t("settings.thumbnailShowFilter")}
-            rightElement={
-              <Switch
-                isSelected={thumbnailShowFilter}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setThumbnailShowFilter(v);
-                }}
-              />
-            }
+            isSelected={thumbnailShowFilter}
+            onSelectedChange={setThumbnailShowFilter}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="timer-outline"
             label={t("settings.thumbnailShowExposure")}
-            rightElement={
-              <Switch
-                isSelected={thumbnailShowExposure}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setThumbnailShowExposure(v);
-                }}
-              />
-            }
+            isSelected={thumbnailShowExposure}
+            onSelectedChange={setThumbnailShowExposure}
           />
         </SettingsSection>
 

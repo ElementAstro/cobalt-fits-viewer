@@ -195,6 +195,7 @@ export interface UseEditorToolStateReturn {
   setShowCrop: (v: boolean) => void;
   params: EditorToolParams;
   buildOperation: () => ImageEditOperation | null;
+  resetToolParams: () => void;
 }
 
 export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditorToolStateReturn {
@@ -540,6 +541,59 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setCurvesPreset,
   };
 
+  const resetToolParams = useCallback(() => {
+    setRotateAngle(0);
+    setBgGridSize(8);
+    setBlurSigma(defaults.blurSigma ?? 2);
+    setSharpenAmount(defaults.sharpenAmount ?? 1.5);
+    setSharpenSigma(1.0);
+    setDenoiseRadius(defaults.denoiseRadius ?? 1);
+    setBrightnessAmount(0);
+    setContrastFactor(1.0);
+    setGammaValue(1.0);
+    setLevelsInputBlack(0);
+    setLevelsInputWhite(1);
+    setLevelsGamma(1.0);
+    setMtfMidtone(0.25);
+    setMtfShadows(0);
+    setMtfHighlights(1);
+    setCurvesPreset("sCurve");
+    setClaheTileSize(8);
+    setClaheClipLimit(3.0);
+    setHdrLayers(5);
+    setHdrAmount(0.7);
+    setMorphOp("dilate");
+    setMorphRadius(1);
+    setDeconvPsfSigma(2.0);
+    setDeconvIterations(20);
+    setDeconvRegularization(0.1);
+    setDbeSamplesX(12);
+    setDbeSamplesY(8);
+    setDbeSigma(2.5);
+    setMultiscaleLayers(4);
+    setMultiscaleThreshold(2.5);
+    setLocalContrastSigma(8);
+    setLocalContrastAmount(0.35);
+    setStarReductionScale(1.2);
+    setStarReductionStrength(0.6);
+    setDeconvAutoIterations(20);
+    setDeconvAutoRegularization(0.1);
+    setStarMaskScale(1.5);
+    setStarMaskInvert(false);
+    setRangeMaskLow(0);
+    setRangeMaskHigh(1);
+    setRangeMaskFuzz(0.1);
+    setBinarizeThreshold(0.5);
+    setPixelMathExpr("$T");
+    setScnrMethod("averageNeutral");
+    setScnrAmount(0.5);
+    setColorCalibrationPercentile(0.92);
+    setSaturationAmount(0);
+    setColorBalanceRedGain(1);
+    setColorBalanceGreenGain(1);
+    setColorBalanceBlueGain(1);
+  }, [defaults.blurSigma, defaults.sharpenAmount, defaults.denoiseRadius]);
+
   return {
     activeTool,
     setActiveTool,
@@ -549,5 +603,6 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setShowCrop,
     params,
     buildOperation,
+    resetToolParams,
   };
 }

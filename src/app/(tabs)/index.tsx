@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
-import { View, FlatList, Alert, useWindowDimensions } from "react-native";
+import { useState, useCallback, useEffect, useMemo, useReducer } from "react";
+import { View, Alert, useWindowDimensions } from "react-native";
 import { Button, Dialog, Input, TextField } from "heroui-native";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -11,14 +11,12 @@ import { useFileGroupStore } from "../../stores/useFileGroupStore";
 import { useFileManager } from "../../hooks/useFileManager";
 import { useAlbums } from "../../hooks/useAlbums";
 import type { ImportResult } from "../../hooks/useFileManager";
-import { FileListItem } from "../../components/gallery/FileListItem";
-import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
+import { FilesContent } from "../../components/files/FilesContent";
 import { AlbumPickerSheet } from "../../components/gallery/AlbumPickerSheet";
 import { BatchTagSheet } from "../../components/gallery/BatchTagSheet";
 import { BatchRenameSheet } from "../../components/gallery/BatchRenameSheet";
 import { TrashSheet } from "../../components/gallery/TrashSheet";
 import { FileGroupSheet } from "../../components/gallery/FileGroupSheet";
-import { EmptyState } from "../../components/common/EmptyState";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { QuickLookModal } from "../../components/common/QuickLookModal";
 import {
@@ -30,12 +28,47 @@ import {
   ImportOptionsSheet,
   UndoSnackbar,
 } from "../../components/files";
+import { SelectionActionsSheet } from "../../components/files/SelectionActionsSheet";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { routeForMedia } from "../../lib/media/routing";
 import type { FitsMetadata } from "../../lib/fits/types";
 
-const ListItemSeparator = () => <View className="h-2" />;
+interface FilesFilterState {
+  object: string;
+  filter: string;
+  sourceFormat: string;
+  frameType: string;
+  tag: string;
+  groupId: string;
+  favoriteOnly: boolean;
+}
+
+type FilesFilterAction =
+  | { type: "toggle"; key: keyof Omit<FilesFilterState, "favoriteOnly">; value: string }
+  | { type: "toggleFavorite" }
+  | { type: "reset" };
+
+const initialFilesFilter: FilesFilterState = {
+  object: "",
+  filter: "",
+  sourceFormat: "",
+  frameType: "",
+  tag: "",
+  groupId: "",
+  favoriteOnly: false,
+};
+
+function filesFilterReducer(state: FilesFilterState, action: FilesFilterAction): FilesFilterState {
+  switch (action.type) {
+    case "toggle":
+      return { ...state, [action.key]: state[action.key] === action.value ? "" : action.value };
+    case "toggleFavorite":
+      return { ...state, favoriteOnly: !state.favoriteOnly };
+    case "reset":
+      return initialFilesFilter;
+  }
+}
 
 export default function FilesScreen() {
   const router = useRouter();
@@ -111,16 +144,11 @@ export default function FilesScreen() {
   const [showBatchRename, setShowBatchRename] = useState(false);
   const [showTrashSheet, setShowTrashSheet] = useState(false);
   const [showGroupSheet, setShowGroupSheet] = useState(false);
+  const [showSelectionActions, setShowSelectionActions] = useState(false);
   const [pendingDeleteToken, setPendingDeleteToken] = useState<string | null>(null);
   const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
 
-  const [filterObject, setFilterObject] = useState("");
-  const [filterFilter, setFilterFilter] = useState("");
-  const [filterSourceFormat, setFilterSourceFormat] = useState("");
-  const [filterFrameType, setFilterFrameType] = useState<string | "">("");
-  const [filterTag, setFilterTag] = useState("");
-  const [filterGroupId, setFilterGroupId] = useState("");
-  const [favoriteOnly, setFavoriteOnly] = useState(false);
+  const [filters, dispatchFilter] = useReducer(filesFilterReducer, initialFilesFilter);
 
   const files = useMemo(
     () => filterAndSortFiles(allFiles, searchQuery, filterTags, sortBy, sortOrder),
@@ -171,26 +199,16 @@ export default function FilesScreen() {
 
   const displayFiles = useMemo(() => {
     return files.filter((file) => {
-      if (filterObject && file.object !== filterObject) return false;
-      if (filterFilter && file.filter !== filterFilter) return false;
-      if (filterSourceFormat && file.sourceFormat !== filterSourceFormat) return false;
-      if (filterFrameType && file.frameType !== filterFrameType) return false;
-      if (filterTag && !file.tags.includes(filterTag)) return false;
-      if (filterGroupId && !(fileGroupMap[file.id] ?? []).includes(filterGroupId)) return false;
-      if (favoriteOnly && !file.isFavorite) return false;
+      if (filters.object && file.object !== filters.object) return false;
+      if (filters.filter && file.filter !== filters.filter) return false;
+      if (filters.sourceFormat && file.sourceFormat !== filters.sourceFormat) return false;
+      if (filters.frameType && file.frameType !== filters.frameType) return false;
+      if (filters.tag && !file.tags.includes(filters.tag)) return false;
+      if (filters.groupId && !(fileGroupMap[file.id] ?? []).includes(filters.groupId)) return false;
+      if (filters.favoriteOnly && !file.isFavorite) return false;
       return true;
     });
-  }, [
-    files,
-    filterObject,
-    filterFilter,
-    filterSourceFormat,
-    filterFrameType,
-    filterTag,
-    filterGroupId,
-    fileGroupMap,
-    favoriteOnly,
-  ]);
+  }, [files, filters, fileGroupMap]);
 
   const storageStats = useMemo(() => {
     let totalSize = 0;
@@ -202,20 +220,13 @@ export default function FilesScreen() {
 
   const activeFilterCount = useMemo(() => {
     return (
-      [filterObject, filterFilter, filterSourceFormat, filterFrameType, filterTag].filter(Boolean)
-        .length +
-      (filterGroupId ? 1 : 0) +
-      (favoriteOnly ? 1 : 0)
+      [filters.object, filters.filter, filters.sourceFormat, filters.frameType, filters.tag].filter(
+        Boolean,
+      ).length +
+      (filters.groupId ? 1 : 0) +
+      (filters.favoriteOnly ? 1 : 0)
     );
-  }, [
-    filterObject,
-    filterFilter,
-    filterSourceFormat,
-    filterFrameType,
-    filterTag,
-    filterGroupId,
-    favoriteOnly,
-  ]);
+  }, [filters]);
 
   const isGridStyle = fileListStyle === "grid";
   const listColumns = isGridStyle
@@ -587,13 +598,7 @@ export default function FilesScreen() {
   }, [selectedIds, router]);
 
   const clearLocalFilters = useCallback(() => {
-    setFilterObject("");
-    setFilterFilter("");
-    setFilterSourceFormat("");
-    setFilterFrameType("");
-    setFilterTag("");
-    setFilterGroupId("");
-    setFavoriteOnly(false);
+    dispatchFilter({ type: "reset" });
   }, []);
 
   const getPhaseLabel = (): string => {
@@ -641,40 +646,6 @@ export default function FilesScreen() {
     [isSelectionMode, toggleSelection],
   );
 
-  const renderFileItem = useCallback(
-    ({ item }: { item: FitsMetadata }) => {
-      return (
-        <FileListItem
-          file={item}
-          layout={fileListStyle}
-          selected={selectedIdSet.has(item.id)}
-          showFilename={thumbShowFilename}
-          showObject={thumbShowObject}
-          showFilter={thumbShowFilter}
-          showExposure={thumbShowExposure}
-          onPress={() => handleFilePress(item)}
-          onLongPress={() => handleFileLongPress(item)}
-          onToggleFavorite={() => toggleFavorite(item.id)}
-          onDelete={() => handleSingleDelete(item.id)}
-        />
-      );
-    },
-    [
-      fileListStyle,
-      selectedIdSet,
-      thumbShowFilename,
-      thumbShowObject,
-      thumbShowFilter,
-      thumbShowExposure,
-      handleFilePress,
-      handleFileLongPress,
-      toggleFavorite,
-      handleSingleDelete,
-    ],
-  );
-
-  const keyExtractor = useCallback((item: FitsMetadata) => item.id, []);
-
   const ListHeader = useMemo(
     () => (
       <View className={isLandscape ? "gap-1.5" : "gap-3"}>
@@ -690,7 +661,6 @@ export default function FilesScreen() {
         <FilesToolbar
           isSelectionMode={isSelectionMode}
           selectedCount={selectedIds.length}
-          displayCount={displayFiles.length}
           trashCount={trashItems.length}
           shouldStack={shouldStackTopActions}
           onImport={openImportSheet}
@@ -698,13 +668,7 @@ export default function FilesScreen() {
           onConvert={() => router.push("/convert")}
           onTrash={() => setShowTrashSheet(true)}
           onSelectAllVisible={handleSelectAllVisible}
-          onInvertSelection={handleInvertSelection}
-          onBatchFavorite={handleBatchFavorite}
-          onAlbumPicker={() => setShowAlbumPicker(true)}
-          onBatchTag={() => setShowBatchTag(true)}
-          onBatchRename={() => setShowBatchRename(true)}
-          onGroupSheet={() => setShowGroupSheet(true)}
-          onBatchExport={handleBatchExport}
+          onMoreActions={() => setShowSelectionActions(true)}
           onBatchDelete={handleBatchDelete}
           onClearSelection={clearSelection}
         />
@@ -713,48 +677,55 @@ export default function FilesScreen() {
           <FilesSelectionBar
             selectedCount={selectedIds.length}
             isLandscape={isLandscape}
-            onExport={handleBatchExport}
             onBatchConvert={goToBatchConvert}
             onStacking={goToStacking}
           />
         )}
 
-        <FilesSortBar
-          sortBy={sortBy}
-          sortOrder={sortOrder}
-          fileListStyle={fileListStyle}
-          fileListGridColumns={fileListGridColumns}
-          onSortToggle={handleSortToggle}
-          onStyleChange={setFileListStyle}
-          onGridColumnsChange={setFileListGridColumns}
-        />
+        {allFiles.length > 0 && (
+          <>
+            <FilesSortBar
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              fileListStyle={fileListStyle}
+              fileListGridColumns={fileListGridColumns}
+              onSortToggle={handleSortToggle}
+              onStyleChange={setFileListStyle}
+              onGridColumnsChange={setFileListGridColumns}
+            />
 
-        <FilesFilterBar
-          favoriteOnly={favoriteOnly}
-          filterObject={filterObject}
-          filterFilter={filterFilter}
-          filterSourceFormat={filterSourceFormat}
-          filterFrameType={filterFrameType}
-          filterTag={filterTag}
-          filterGroupId={filterGroupId}
-          activeFilterCount={activeFilterCount}
-          objects={metadataIndex.objects}
-          filters={metadataIndex.filters}
-          sourceFormats={metadataIndex.sourceFormats}
-          frameFilters={frameFilters}
-          frameTypeLabels={frameTypeLabels}
-          tags={metadataIndex.tags}
-          fileGroups={fileGroups}
-          isLandscape={isLandscape}
-          onFavoriteToggle={() => setFavoriteOnly((prev) => !prev)}
-          onObjectChange={(v) => setFilterObject((prev) => (prev === v ? "" : v))}
-          onFilterChange={(v) => setFilterFilter((prev) => (prev === v ? "" : v))}
-          onSourceFormatChange={(v) => setFilterSourceFormat((prev) => (prev === v ? "" : v))}
-          onFrameTypeChange={(v) => setFilterFrameType((prev) => (prev === v ? "" : v))}
-          onTagChange={(v) => setFilterTag((prev) => (prev === v ? "" : v))}
-          onGroupChange={(v) => setFilterGroupId((prev) => (prev === v ? "" : v))}
-          onClearFilters={clearLocalFilters}
-        />
+            <FilesFilterBar
+              favoriteOnly={filters.favoriteOnly}
+              filterObject={filters.object}
+              filterFilter={filters.filter}
+              filterSourceFormat={filters.sourceFormat}
+              filterFrameType={filters.frameType}
+              filterTag={filters.tag}
+              filterGroupId={filters.groupId}
+              activeFilterCount={activeFilterCount}
+              objects={metadataIndex.objects}
+              filters={metadataIndex.filters}
+              sourceFormats={metadataIndex.sourceFormats}
+              frameFilters={frameFilters}
+              frameTypeLabels={frameTypeLabels}
+              tags={metadataIndex.tags}
+              fileGroups={fileGroups}
+              isLandscape={isLandscape}
+              onFavoriteToggle={() => dispatchFilter({ type: "toggleFavorite" })}
+              onObjectChange={(v) => dispatchFilter({ type: "toggle", key: "object", value: v })}
+              onFilterChange={(v) => dispatchFilter({ type: "toggle", key: "filter", value: v })}
+              onSourceFormatChange={(v) =>
+                dispatchFilter({ type: "toggle", key: "sourceFormat", value: v })
+              }
+              onFrameTypeChange={(v) =>
+                dispatchFilter({ type: "toggle", key: "frameType", value: v })
+              }
+              onTagChange={(v) => dispatchFilter({ type: "toggle", key: "tag", value: v })}
+              onGroupChange={(v) => dispatchFilter({ type: "toggle", key: "groupId", value: v })}
+              onClearFilters={clearLocalFilters}
+            />
+          </>
+        )}
       </View>
     ),
     [
@@ -772,9 +743,6 @@ export default function FilesScreen() {
       setSelectionMode,
       router,
       handleSelectAllVisible,
-      handleInvertSelection,
-      handleBatchFavorite,
-      handleBatchExport,
       goToBatchConvert,
       goToStacking,
       handleBatchDelete,
@@ -786,13 +754,7 @@ export default function FilesScreen() {
       setFileListStyle,
       fileListGridColumns,
       setFileListGridColumns,
-      favoriteOnly,
-      filterObject,
-      filterFilter,
-      filterSourceFormat,
-      filterFrameType,
-      filterTag,
-      filterGroupId,
+      filters,
       activeFilterCount,
       metadataIndex,
       frameFilters,
@@ -818,80 +780,32 @@ export default function FilesScreen() {
         onCancel={cancelImport}
       />
 
-      {displayFiles.length === 0 && !searchQuery && activeFilterCount === 0 ? (
-        <View
-          className="flex-1"
-          style={{ paddingHorizontal: horizontalPadding, paddingTop: contentPaddingTop }}
-        >
-          {ListHeader}
-          <EmptyState
-            icon="telescope-outline"
-            title={t("files.emptyState")}
-            description={t("files.emptyHint")}
-            actionLabel={t("files.importFile")}
-            onAction={openImportSheet}
-          />
-        </View>
-      ) : isGridStyle ? (
-        <View
-          className="flex-1"
-          style={{
-            paddingHorizontal: horizontalPadding,
-            paddingTop: isLandscape ? 8 : contentPaddingTop,
-          }}
-        >
-          {displayFiles.length === 0 ? (
-            <View className="flex-1">
-              {ListHeader}
-              <EmptyState
-                icon="search-outline"
-                title={t("files.noSupportedFound")}
-                secondaryLabel={activeFilterCount > 0 ? t("targets.clearFilters") : undefined}
-                onSecondaryAction={activeFilterCount > 0 ? clearLocalFilters : undefined}
-              />
-            </View>
-          ) : (
-            <ThumbnailGrid
-              files={displayFiles}
-              columns={listColumns}
-              selectionMode={isSelectionMode}
-              selectedIds={selectedIds}
-              onPress={handleFilePress}
-              onLongPress={handleFileLongPress}
-              onSelect={toggleSelection}
-              ListHeaderComponent={ListHeader}
-              showFilename={thumbShowFilename}
-              showObject={thumbShowObject}
-              showFilter={thumbShowFilter}
-              showExposure={thumbShowExposure}
-            />
-          )}
-        </View>
-      ) : (
-        <FlatList
-          data={displayFiles}
-          renderItem={renderFileItem}
-          key={fileListStyle}
-          keyExtractor={keyExtractor}
-          numColumns={1}
-          ListHeaderComponent={ListHeader}
-          ListEmptyComponent={
-            <EmptyState
-              icon="search-outline"
-              title={t("files.noSupportedFound")}
-              secondaryLabel={activeFilterCount > 0 ? t("targets.clearFilters") : undefined}
-              onSecondaryAction={activeFilterCount > 0 ? clearLocalFilters : undefined}
-            />
-          }
-          contentContainerStyle={{
-            paddingHorizontal: horizontalPadding,
-            paddingTop: isLandscape ? 8 : contentPaddingTop,
-            paddingBottom: 24,
-          }}
-          ItemSeparatorComponent={ListItemSeparator}
-          showsVerticalScrollIndicator={false}
-        />
-      )}
+      <FilesContent
+        displayFiles={displayFiles}
+        searchQuery={searchQuery}
+        activeFilterCount={activeFilterCount}
+        fileListStyle={fileListStyle}
+        isGridStyle={isGridStyle}
+        listColumns={listColumns}
+        isSelectionMode={isSelectionMode}
+        selectedIds={selectedIds}
+        selectedIdSet={selectedIdSet}
+        horizontalPadding={horizontalPadding}
+        contentPaddingTop={contentPaddingTop}
+        isLandscape={isLandscape}
+        thumbShowFilename={thumbShowFilename}
+        thumbShowObject={thumbShowObject}
+        thumbShowFilter={thumbShowFilter}
+        thumbShowExposure={thumbShowExposure}
+        ListHeader={ListHeader}
+        onFilePress={handleFilePress}
+        onFileLongPress={handleFileLongPress}
+        onToggleSelection={toggleSelection}
+        onToggleFavorite={toggleFavorite}
+        onSingleDelete={handleSingleDelete}
+        onImport={openImportSheet}
+        onClearFilters={clearLocalFilters}
+      />
 
       <UndoSnackbar
         visible={!!pendingDeleteToken}
@@ -975,6 +889,24 @@ export default function FilesScreen() {
         onApplyGroup={handleGroupApply}
       />
 
+      <SelectionActionsSheet
+        visible={showSelectionActions}
+        onOpenChange={setShowSelectionActions}
+        selectedCount={selectedIds.length}
+        displayCount={displayFiles.length}
+        isLandscape={isLandscape}
+        onSelectAllVisible={handleSelectAllVisible}
+        onInvertSelection={handleInvertSelection}
+        onBatchFavorite={handleBatchFavorite}
+        onAlbumPicker={() => setShowAlbumPicker(true)}
+        onBatchTag={() => setShowBatchTag(true)}
+        onBatchRename={() => setShowBatchRename(true)}
+        onGroupSheet={() => setShowGroupSheet(true)}
+        onBatchExport={handleBatchExport}
+        onBatchConvert={goToBatchConvert}
+        onStacking={goToStacking}
+      />
+
       <QuickLookModal
         visible={!!quickLookFile}
         file={quickLookFile}
@@ -985,6 +917,18 @@ export default function FilesScreen() {
           router.push(routeForFile(file));
         }}
         onOpenEditor={(id) => router.push(`/editor/${id}`)}
+        onToggleFavorite={(id) => toggleFavorite(id)}
+        onDelete={(id) => applyDeleteFiles([id], false)}
+        onRename={(id) => {
+          setSelectionMode(true);
+          toggleSelectionBatch([id]);
+          setShowBatchRename(true);
+        }}
+        onAddTag={(id) => {
+          setSelectionMode(true);
+          toggleSelectionBatch([id]);
+          setShowBatchTag(true);
+        }}
       />
     </View>
   );

@@ -188,6 +188,67 @@ jest.mock("../../../components/sessions/SessionStatsCard", () => ({
   },
 }));
 
+jest.mock("../../../components/sessions/SessionActionSheet", () => ({
+  SessionActionSheet: () => null,
+}));
+
+jest.mock("../../../components/sessions/PlanActionSheet", () => ({
+  PlanActionSheet: () => null,
+}));
+
+jest.mock("../../../components/sessions/SessionSelectionBar", () => ({
+  SessionSelectionBar: ({
+    onClose,
+    onToggleSelectAll,
+    onBatchSync,
+    onBatchRefresh,
+    onBatchUnsync,
+    onBatchDelete,
+  }: {
+    onClose: () => void;
+    onToggleSelectAll: () => void;
+    onBatchSync: () => void;
+    onBatchRefresh: () => void;
+    onBatchUnsync: () => void;
+    onBatchDelete: () => void;
+  }) => {
+    const ReactLocal = require("react");
+    const { Pressable } = require("react-native");
+    return ReactLocal.createElement(
+      ReactLocal.Fragment,
+      null,
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__sessions-selection-close",
+        onPress: onClose,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__sessions-selection-select-all",
+        onPress: onToggleSelectAll,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__sessions-selection-batch-sync",
+        onPress: onBatchSync,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__sessions-selection-batch-refresh",
+        onPress: onBatchRefresh,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__sessions-selection-batch-unsync",
+        onPress: onBatchUnsync,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__sessions-selection-delete",
+        onPress: onBatchDelete,
+      }),
+    );
+  },
+}));
+
+jest.mock("../../../components/sessions/SessionDateSummary", () => ({
+  SessionDateSummary: () => null,
+}));
+
 describe("(tabs)/sessions.tsx", () => {
   let consoleErrorSpy: jest.SpyInstance;
 

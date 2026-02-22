@@ -1,6 +1,7 @@
 import { ScrollView, Text, View } from "react-native";
 import { Button, Card, Chip, Dialog, Spinner } from "heroui-native";
 import type { VideoTaskRecord } from "../../stores/useVideoTaskStore";
+import { useI18n } from "../../i18n/useI18n";
 
 interface TaskQueueSheetProps {
   visible: boolean;
@@ -40,21 +41,20 @@ export function TaskQueueSheet({
   onClearFinished,
   onOpenOutputFile,
 }: TaskQueueSheetProps) {
+  const { t } = useI18n();
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay />
         <Dialog.Content className="max-w-[460px]">
-          <Dialog.Title>Video Task Queue</Dialog.Title>
-          <Dialog.Description>
-            Background tasks are non-destructive and produce derived media files.
-          </Dialog.Description>
+          <Dialog.Title>{t("settings.videoTaskQueueTitle")}</Dialog.Title>
+          <Dialog.Description>{t("settings.videoTaskQueueDesc")}</Dialog.Description>
 
           <ScrollView className="mt-3 max-h-[420px]">
             <View className="gap-2">
               {tasks.length === 0 && (
                 <View className="rounded-lg border border-separator bg-surface-secondary p-3">
-                  <Text className="text-sm text-muted">No queued tasks.</Text>
+                  <Text className="text-sm text-muted">{t("settings.videoNoQueuedTasks")}</Text>
                 </View>
               )}
               {tasks.map((task) => (
@@ -83,22 +83,24 @@ export function TaskQueueSheet({
                             variant="outline"
                             onPress={() => onOpenOutputFile?.(fileId)}
                           >
-                            <Button.Label>{`Open #${index + 1}`}</Button.Label>
+                            <Button.Label>
+                              {t("settings.videoOpenOutput", { index: index + 1 })}
+                            </Button.Label>
                           </Button>
                         ))}
                       {task.status === "running" && (
                         <Button size="sm" variant="outline" onPress={() => onCancelTask(task.id)}>
-                          <Button.Label>Cancel</Button.Label>
+                          <Button.Label>{t("settings.videoCancel")}</Button.Label>
                         </Button>
                       )}
                       {task.status === "failed" && (
                         <Button size="sm" variant="outline" onPress={() => onRetryTask(task.id)}>
-                          <Button.Label>Retry</Button.Label>
+                          <Button.Label>{t("settings.videoRetry")}</Button.Label>
                         </Button>
                       )}
                       {task.status !== "running" && (
                         <Button size="sm" variant="ghost" onPress={() => onRemoveTask(task.id)}>
-                          <Button.Label>Remove</Button.Label>
+                          <Button.Label>{t("settings.videoRemoveTask")}</Button.Label>
                         </Button>
                       )}
                     </View>
@@ -110,10 +112,10 @@ export function TaskQueueSheet({
 
           <View className="mt-4 flex-row justify-end gap-2">
             <Button variant="outline" onPress={onClearFinished}>
-              <Button.Label>Clear Finished</Button.Label>
+              <Button.Label>{t("settings.videoClearFinished")}</Button.Label>
             </Button>
             <Button variant="primary" onPress={onClose}>
-              <Button.Label>Done</Button.Label>
+              <Button.Label>{t("settings.videoDone")}</Button.Label>
             </Button>
           </View>
         </Dialog.Content>

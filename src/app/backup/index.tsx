@@ -2,12 +2,14 @@
  * 备份管理页面
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { View, Text, ScrollView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import { Alert, Button, Card, Chip, Dialog, Separator, Switch, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
+import { useBackupSummary } from "../../hooks/useBackupSummary";
+import { formatFileSize } from "../../lib/utils/fileManager";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useBackup } from "../../hooks/useBackup";
 import { useBackupStore } from "../../stores/useBackupStore";
@@ -19,7 +21,7 @@ import {
   BackupOptionsSheet,
   type BackupOptionsSheetMode,
 } from "../../components/backup/BackupOptionsSheet";
-import type { CloudProvider, BackupOptions } from "../../lib/backup/types";
+import type { CloudProvider, BackupOptions, BackupInfo } from "../../lib/backup/types";
 import type { LocalBackupPreview } from "../../lib/backup/localBackup";
 
 export default function BackupScreen() {
@@ -53,6 +55,27 @@ export default function BackupScreen() {
   const setAutoBackupEnabled = useBackupStore((s) => s.setAutoBackupEnabled);
   const setAutoBackupIntervalHours = useBackupStore((s) => s.setAutoBackupIntervalHours);
   const setAutoBackupNetwork = useBackupStore((s) => s.setAutoBackupNetwork);
+  const lastAutoBackupAttempt = useBackupStore((s) => s.lastAutoBackupAttempt);
+  const lastAutoBackupResult = useBackupStore((s) => s.lastAutoBackupResult);
+  const lastAutoBackupError = useBackupStore((s) => s.lastAutoBackupError);
+  const history = useBackupStore((s) => s.history);
+  const clearHistory = useBackupStore((s) => s.clearHistory);
+  const summary = useBackupSummary();
+  const [backupInfoMap, setBackupInfoMap] = useState<Record<string, BackupInfo | null>>({});
+  const fetchedProviders = useRef(new Set<string>());
+
+  useEffect(() => {
+    for (const conn of connections) {
+      if (conn.connected && !fetchedProviders.current.has(conn.provider)) {
+        fetchedProviders.current.add(conn.provider);
+        void getBackupInfo(conn.provider).then((info) => {
+          if (info) {
+            setBackupInfoMap((prev) => ({ ...prev, [conn.provider]: info }));
+          }
+        });
+      }
+    }
+  }, [connections, getBackupInfo]);
 
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [showWebDAVConfig, setShowWebDAVConfig] = useState(false);
@@ -321,6 +344,7 @@ export default function BackupScreen() {
                 key={conn.provider}
                 connection={conn}
                 isActive={activeProvider === conn.provider}
+                backupInfo={backupInfoMap[conn.provider]}
                 onBackup={() => handleBackup(conn.provider)}
                 onRestore={() => handleRestore(conn.provider)}
                 onDisconnect={() => handleDisconnect(conn.provider)}
@@ -380,6 +404,46 @@ export default function BackupScreen() {
           <Button.Label>{t("backup.addProvider")}</Button.Label>
         </Button>
         {isWeb && <Text className="mt-2 text-xs text-muted">{t("backup.webProviderLimited")}</Text>}
+
+        {/* Data overview */}
+        <View className="mt-6">
+          <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+            {t("backup.summaryTitle")}
+          </Text>
+          <Card>
+            <Card.Body>
+              <View className="flex-row flex-wrap gap-x-6 gap-y-2">
+                <View>
+                  <Text className="text-lg font-bold text-foreground">{summary.fileCount}</Text>
+                  <Text className="text-xs text-muted">{t("backup.summaryFiles")}</Text>
+                </View>
+                <View>
+                  <Text className="text-lg font-bold text-foreground">{summary.albumCount}</Text>
+                  <Text className="text-xs text-muted">{t("backup.summaryAlbums")}</Text>
+                </View>
+                <View>
+                  <Text className="text-lg font-bold text-foreground">{summary.targetCount}</Text>
+                  <Text className="text-xs text-muted">{t("backup.summaryTargets")}</Text>
+                </View>
+                <View>
+                  <Text className="text-lg font-bold text-foreground">{summary.sessionCount}</Text>
+                  <Text className="text-xs text-muted">{t("backup.summarySessions")}</Text>
+                </View>
+                <View>
+                  <Text className="text-lg font-bold text-foreground">{summary.planCount}</Text>
+                  <Text className="text-xs text-muted">{t("backup.summaryPlans")}</Text>
+                </View>
+              </View>
+              {summary.estimatedBytes > 0 && (
+                <View className="mt-3 border-t border-separator pt-3">
+                  <Text className="text-xs text-muted">
+                    {t("backup.summaryEstimatedSize")}: {formatFileSize(summary.estimatedBytes)}
+                  </Text>
+                </View>
+              )}
+            </Card.Body>
+          </Card>
+        </View>
 
         {/* Auto backup setting */}
         <View className="mt-6">
@@ -448,11 +512,89 @@ export default function BackupScreen() {
                       </Chip>
                     </View>
                   </View>
+
+                  {/* Auto-backup status */}
+                  {lastAutoBackupAttempt > 0 && (
+                    <View className="mt-2 rounded-lg bg-secondary/50 px-3 py-2">
+                      <View className="flex-row items-center gap-2">
+                        <Ionicons
+                          name={
+                            lastAutoBackupResult === "success"
+                              ? "checkmark-circle"
+                              : lastAutoBackupResult === "failed"
+                                ? "alert-circle"
+                                : "time-outline"
+                          }
+                          size={14}
+                          color={
+                            lastAutoBackupResult === "success"
+                              ? "#22c55e"
+                              : lastAutoBackupResult === "failed"
+                                ? "#ef4444"
+                                : mutedColor
+                          }
+                        />
+                        <Text className="text-xs text-muted">
+                          {t("backup.lastAutoBackup")}:{" "}
+                          {new Date(lastAutoBackupAttempt).toLocaleString()}
+                        </Text>
+                      </View>
+                      {lastAutoBackupResult === "failed" && lastAutoBackupError && (
+                        <Text className="mt-1 text-xs text-danger" numberOfLines={2}>
+                          {lastAutoBackupError}
+                        </Text>
+                      )}
+                    </View>
+                  )}
                 </View>
               )}
             </Card.Body>
           </Card>
         </View>
+
+        {/* Backup history */}
+        {history.length > 0 && (
+          <View className="mt-6">
+            <View className="mb-2 flex-row items-center justify-between">
+              <Text className="text-xs font-semibold uppercase text-muted">
+                {t("backup.historyTitle")}
+              </Text>
+              <Button variant="ghost" size="sm" onPress={clearHistory}>
+                <Button.Label className="text-xs text-muted">
+                  {t("backup.historyClearAll")}
+                </Button.Label>
+              </Button>
+            </View>
+            <Card>
+              <Card.Body className="gap-2">
+                {history.slice(0, 10).map((entry) => (
+                  <View key={entry.id} className="flex-row items-center gap-3 py-1">
+                    <Ionicons
+                      name={entry.result === "success" ? "checkmark-circle" : "alert-circle"}
+                      size={16}
+                      color={entry.result === "success" ? "#22c55e" : "#ef4444"}
+                    />
+                    <View className="flex-1">
+                      <Text className="text-sm text-foreground">
+                        {entry.type === "backup"
+                          ? t("backup.historyTypeBackup")
+                          : entry.type === "restore"
+                            ? t("backup.historyTypeRestore")
+                            : entry.type === "local-export"
+                              ? t("backup.historyTypeLocalExport")
+                              : t("backup.historyTypeLocalImport")}
+                      </Text>
+                      <Text className="text-xs text-muted">
+                        {new Date(entry.timestamp).toLocaleString()}
+                        {entry.error ? ` · ${entry.error}` : ""}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </Card.Body>
+            </Card>
+          </View>
+        )}
 
         {/* Error display */}
         {lastError && (

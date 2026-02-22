@@ -40,6 +40,17 @@ import type {
   TargetActionSizePreset,
 } from "../lib/targets/targetInteractionUi";
 
+export type SettingsSection =
+  | "viewer"
+  | "gallery"
+  | "stacking"
+  | "editor"
+  | "export"
+  | "compose"
+  | "video"
+  | "performance"
+  | "observation";
+
 export interface SettingsStoreState {
   // 查看器默认设置
   defaultStretch: StretchType;
@@ -380,6 +391,7 @@ export interface SettingsStoreState {
   setAdvancedComposePixelMathG: (v: string) => void;
   setAdvancedComposePixelMathB: (v: string) => void;
   applySettingsPatch: (patch: Record<string, unknown>) => void;
+  resetSection: (section: SettingsSection) => void;
   resetToDefaults: () => void;
 }
 
@@ -413,6 +425,139 @@ type SettingsActionKeys = {
 }[keyof SettingsStoreState];
 
 export type SettingsDataState = Omit<SettingsStoreState, SettingsActionKeys>;
+
+const SECTION_KEYS: Record<SettingsSection, Array<keyof SettingsDataState>> = {
+  viewer: [
+    "defaultStretch",
+    "defaultColormap",
+    "defaultShowGrid",
+    "defaultShowCrosshair",
+    "defaultShowPixelInfo",
+    "defaultShowMinimap",
+    "defaultBlackPoint",
+    "defaultWhitePoint",
+    "defaultGamma",
+    "gridColor",
+    "gridOpacity",
+    "crosshairColor",
+    "crosshairOpacity",
+    "canvasMinScale",
+    "canvasMaxScale",
+    "canvasDoubleTapScale",
+    "canvasPinchSensitivity",
+    "canvasPinchOverzoomFactor",
+    "canvasPanRubberBandFactor",
+    "canvasWheelZoomSensitivity",
+    "compareDefaultMode",
+    "compareBlinkSpeed",
+    "compareSplitPosition",
+    "defaultHistogramMode",
+    "histogramHeight",
+    "pixelInfoDecimalPlaces",
+  ],
+  gallery: [
+    "defaultGridColumns",
+    "thumbnailQuality",
+    "thumbnailSize",
+    "thumbnailCacheMaxSizeMB",
+    "defaultGallerySortBy",
+    "defaultGallerySortOrder",
+    "thumbnailShowFilename",
+    "thumbnailShowObject",
+    "thumbnailShowFilter",
+    "thumbnailShowExposure",
+    "fileListStyle",
+    "fileListGridColumns",
+  ],
+  stacking: [
+    "defaultStackMethod",
+    "defaultSigmaValue",
+    "defaultAlignmentMode",
+    "defaultEnableQuality",
+    "stackingDetectionProfile",
+    "stackingDetectSigmaThreshold",
+    "stackingDetectMaxStars",
+    "stackingDetectMinArea",
+    "stackingDetectMaxArea",
+    "stackingDetectBorderMargin",
+    "stackingDetectSigmaClipIters",
+    "stackingDetectApplyMatchedFilter",
+    "stackingDetectConnectivity",
+    "stackingBackgroundMeshSize",
+    "stackingDeblendNLevels",
+    "stackingDeblendMinContrast",
+    "stackingFilterFwhm",
+    "stackingDetectMinFwhm",
+    "stackingMaxFwhm",
+    "stackingMaxEllipticity",
+    "stackingDetectMinSharpness",
+    "stackingDetectMaxSharpness",
+    "stackingDetectPeakMax",
+    "stackingDetectSnrMin",
+    "stackingUseAnnotatedForAlignment",
+    "stackingRansacMaxIterations",
+    "stackingAlignmentInlierThreshold",
+  ],
+  editor: ["defaultBlurSigma", "defaultSharpenAmount", "defaultDenoiseRadius", "editorMaxUndo"],
+  export: [
+    "defaultExportFormat",
+    "defaultExportQuality",
+    "includeAnnotationsByDefault",
+    "defaultConverterFormat",
+    "defaultConverterQuality",
+    "batchNamingRule",
+  ],
+  compose: [
+    "defaultComposePreset",
+    "composeRedWeight",
+    "composeGreenWeight",
+    "composeBlueWeight",
+    "advancedComposeRegistrationMode",
+    "advancedComposeFramingMode",
+    "advancedComposeAutoLinearMatch",
+    "advancedComposeAutoBrightnessBalance",
+    "advancedComposePreviewScale",
+    "advancedComposePixelMathR",
+    "advancedComposePixelMathG",
+    "advancedComposePixelMathB",
+  ],
+  video: [
+    "videoCoreEnabled",
+    "videoProcessingEnabled",
+    "videoAutoplay",
+    "videoLoopByDefault",
+    "videoMutedByDefault",
+    "videoThumbnailTimeMs",
+    "videoProcessingConcurrency",
+    "defaultVideoProfile",
+    "defaultVideoTargetPreset",
+  ],
+  performance: [
+    "imageProcessingProfile",
+    "viewerApplyEditorRecipe",
+    "imageProcessingDebounce",
+    "useHighQualityPreview",
+  ],
+  observation: [
+    "autoGroupByObject",
+    "autoDetectDuplicates",
+    "autoTagLocation",
+    "mapPreset",
+    "mapShowOverlays",
+    "sessionGapMinutes",
+    "calendarSyncEnabled",
+    "defaultReminderMinutes",
+    "timelineGrouping",
+    "sessionShowExposureCount",
+    "sessionShowTotalExposure",
+    "sessionShowFilters",
+    "targetSortBy",
+    "targetSortOrder",
+    "targetActionControlMode",
+    "targetActionSizePreset",
+    "targetActionAutoScaleFromFont",
+  ],
+};
 
 const DEFAULT_SETTINGS: SettingsDataState = {
   defaultStretch: "asinh",
@@ -752,7 +897,7 @@ function sanitizeSettingsPatch(
     fileListStyle: ["grid", "list", "compact"],
     fileListGridColumns: [2, 3, 4],
     defaultExportFormat: ["png", "jpeg", "webp", "tiff", "bmp", "fits"],
-    defaultConverterFormat: ["png", "jpeg", "tiff", "webp", "bmp", "fits"],
+    defaultConverterFormat: ["png", "jpeg", "tiff", "webp", "bmp", "fits", "xisf", "ser"],
     batchNamingRule: ["original", "prefix", "suffix", "sequence"],
     timelineGrouping: ["day", "week", "month"],
     targetSortBy: ["name", "date", "frames", "exposure", "favorite"],
@@ -1284,6 +1429,21 @@ export const useSettingsStore = create<SettingsStoreState>()(
         }
         set(sanitized);
         if (THEME_SYNC_KEYS.some((key) => sanitized[key] !== undefined)) {
+          const { theme, themeColorMode, accentColor, activePreset, customThemeColors } = get();
+          syncThemeToRuntime(theme, themeColorMode, accentColor, activePreset, customThemeColors);
+        }
+      },
+
+      resetSection: (section) => {
+        const keys = SECTION_KEYS[section];
+        if (!keys) return;
+        const patch: Partial<SettingsDataState> = {};
+        for (const key of keys) {
+          (patch as Record<string, unknown>)[key] = DEFAULT_SETTINGS[key];
+        }
+        set(patch);
+        const THEME_RELATED: SettingsSection[] = ["viewer"];
+        if (THEME_RELATED.includes(section)) {
           const { theme, themeColorMode, accentColor, activePreset, customThemeColors } = get();
           syncThemeToRuntime(theme, themeColorMode, accentColor, activePreset, customThemeColors);
         }

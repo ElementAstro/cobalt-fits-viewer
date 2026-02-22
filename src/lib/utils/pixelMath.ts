@@ -191,6 +191,78 @@ export function calculateRegionHistogram(
   return calculateHistogram(regionPixels, bins, globalRange);
 }
 
+/**
+ * 将直方图 counts 按指定模式变换（linear / log / cdf）
+ * 抽取为公共函数，供各直方图组件共享
+ */
+export function transformHistogramCounts(
+  counts: number[],
+  mode: "linear" | "log" | "cdf",
+): number[] {
+  if (counts.length === 0) return [];
+  if (mode === "log") {
+    return counts.map((c) => (c > 0 ? Math.log10(c + 1) : 0));
+  }
+  if (mode === "cdf") {
+    const cdf: number[] = new Array(counts.length);
+    cdf[0] = counts[0];
+    for (let i = 1; i < counts.length; i++) {
+      cdf[i] = cdf[i - 1] + counts[i];
+    }
+    const total = cdf[counts.length - 1];
+    if (total > 0) {
+      for (let i = 0; i < counts.length; i++) {
+        cdf[i] = cdf[i] / total;
+      }
+    }
+    return cdf;
+  }
+  return counts;
+}
+
+/**
+ * 计算 RGB 分通道直方图
+ * 对彩色图像的 R/G/B 通道分别计算直方图，共享同一 bin 范围
+ */
+export function calculateChannelHistograms(
+  channels: { r: Float32Array; g: Float32Array; b: Float32Array },
+  bins: number = 256,
+  precomputedRange?: { min: number; max: number },
+): {
+  r: { counts: number[]; edges: number[] };
+  g: { counts: number[]; edges: number[] };
+  b: { counts: number[]; edges: number[] };
+} {
+  // Find global min/max across all channels for shared binning
+  let min: number;
+  let max: number;
+
+  if (precomputedRange) {
+    min = precomputedRange.min;
+    max = precomputedRange.max;
+  } else {
+    min = Infinity;
+    max = -Infinity;
+    const allChannels = [channels.r, channels.g, channels.b];
+    for (const ch of allChannels) {
+      for (let i = 0; i < ch.length; i++) {
+        const v = ch[i];
+        if (Number.isFinite(v)) {
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+      }
+    }
+  }
+
+  const sharedRange = { min, max };
+  return {
+    r: calculateHistogram(channels.r, bins, sharedRange),
+    g: calculateHistogram(channels.g, bins, sharedRange),
+    b: calculateHistogram(channels.b, bins, sharedRange),
+  };
+}
+
 // ===== 自动拉伸算法 =====
 
 /**

@@ -8,6 +8,8 @@ import {
   DEFAULT_CONVERT_PRESETS,
   DEFAULT_FITS_TARGET_OPTIONS,
   DEFAULT_TIFF_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
 } from "../lib/fits/types";
 
 interface ConverterStoreState {
@@ -42,6 +44,8 @@ const DEFAULT_OPTIONS: ConvertOptions = {
   dpi: 72,
   tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
   fits: DEFAULT_FITS_TARGET_OPTIONS,
+  xisf: DEFAULT_XISF_TARGET_OPTIONS,
+  ser: DEFAULT_SER_TARGET_OPTIONS,
   stretch: "asinh",
   colormap: "grayscale",
   blackPoint: 0,
@@ -87,6 +91,8 @@ export const useConverterStore = create<ConverterStoreState>((set, get) => ({
           // Keep nested option defaults and avoid blowing away fields added in newer versions.
           tiff: { ...previous.tiff, ...(preset.options.tiff ?? {}) },
           fits: { ...previous.fits, ...(preset.options.fits ?? {}) },
+          xisf: { ...previous.xisf, ...(preset.options.xisf ?? {}) },
+          ser: { ...previous.ser, ...(preset.options.ser ?? {}) },
           // Preserve the effective processing profile unless the preset explicitly overrides it.
           profile: preset.options.profile ?? previous.profile,
           // Preserve watermark text unless the preset explicitly overrides it.

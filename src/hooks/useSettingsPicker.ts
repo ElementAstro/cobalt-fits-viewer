@@ -43,6 +43,8 @@ export type SettingsPickerType =
   | "mapPreset"
   | "gridColor"
   | "crosshairColor"
+  | "logLevel"
+  | "logMaxEntries"
   | null;
 
 export function useSettingsPicker() {

@@ -2,7 +2,7 @@
  * 高级搜索 Sheet
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ScrollView, View } from "react-native";
 import {
   BottomSheet,
@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
+import { TARGET_TYPES, TARGET_STATUSES } from "../../lib/targets/targetConstants";
 
 interface AdvancedSearchSheetProps {
   visible: boolean;
@@ -28,19 +29,6 @@ interface AdvancedSearchSheetProps {
   allCategories?: string[];
   allTags?: string[];
 }
-
-const TARGET_TYPES: TargetType[] = [
-  "galaxy",
-  "nebula",
-  "cluster",
-  "planet",
-  "moon",
-  "sun",
-  "comet",
-  "other",
-];
-
-const TARGET_STATUSES: TargetStatus[] = ["planned", "acquiring", "completed", "processed"];
 
 export function AdvancedSearchSheet({
   visible,
@@ -76,6 +64,23 @@ export function AdvancedSearchSheet({
   );
   const [hasImages, setHasImages] = useState<boolean | undefined>(initialConditions?.hasImages);
   const [notesQuery, setNotesQuery] = useState(initialConditions?.notes ?? "");
+
+  useEffect(() => {
+    if (!visible) return;
+    setQuery(initialConditions?.query ?? "");
+    setRaMin(initialConditions?.raMin?.toString() ?? "");
+    setRaMax(initialConditions?.raMax?.toString() ?? "");
+    setDecMin(initialConditions?.decMin?.toString() ?? "");
+    setDecMax(initialConditions?.decMax?.toString() ?? "");
+    setSelectedTypes((initialConditions?.types as TargetType[]) ?? []);
+    setSelectedStatuses((initialConditions?.statuses as TargetStatus[]) ?? []);
+    setSelectedCategories(initialConditions?.categories ?? []);
+    setSelectedTags(initialConditions?.tags ?? []);
+    setIsFavorite(initialConditions?.isFavorite);
+    setHasCoordinates(initialConditions?.hasCoordinates);
+    setHasImages(initialConditions?.hasImages);
+    setNotesQuery(initialConditions?.notes ?? "");
+  }, [visible, initialConditions]);
 
   const toggleType = (type: TargetType) => {
     setSelectedTypes((prev) =>

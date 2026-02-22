@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { View, Text, ScrollView, TouchableOpacity } from "react-native";
-import { useRouter } from "expo-router";
-import { Button, Card, Input, Separator, Switch, useThemeColor } from "heroui-native";
+import { Button, Card, Input, Separator, useThemeColor } from "heroui-native";
+import { SettingsHeader } from "../../components/settings";
+import { SettingsToggleRow } from "../../components/common/SettingsToggleRow";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -69,7 +70,6 @@ export default function AppearanceSettingsScreen() {
   const { t } = useI18n();
   const haptics = useHapticFeedback();
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
@@ -283,12 +283,7 @@ export default function AppearanceSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="mb-4 flex-row items-center gap-3">
-          <Ionicons name="arrow-back" size={24} color="#888" onPress={() => router.back()} />
-          <Text className="text-xl font-bold text-foreground">
-            {t("settings.categories.appearance")}
-          </Text>
-        </View>
+        <SettingsHeader title={t("settings.categories.appearance")} />
 
         {/* Display Settings */}
         <SettingsSection title={t("settings.display")}>
@@ -474,18 +469,11 @@ export default function AppearanceSettingsScreen() {
           <SettingsSection title={t("settings.customTheme")}>
             <Card variant="secondary" className="mb-3">
               <Card.Body className="px-4 py-3">
-                <SettingsRow
+                <SettingsToggleRow
                   icon="link-outline"
                   label={t("settings.customThemeLinked")}
-                  rightElement={
-                    <Switch
-                      isSelected={customThemeColors.linked}
-                      onSelectedChange={(value: boolean) => {
-                        haptics.selection();
-                        setCustomThemeLinked(value);
-                      }}
-                    />
-                  }
+                  isSelected={customThemeColors.linked}
+                  onSelectedChange={setCustomThemeLinked}
                 />
               </Card.Body>
             </Card>

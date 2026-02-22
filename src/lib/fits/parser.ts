@@ -9,10 +9,17 @@ import {
   BinaryTable,
   Table,
   CompressedImage,
+  SER,
   convertXisfToFits,
   convertSerToFits,
 } from "fitsjs-ng";
-import type { FitsMetadata, FrameClassificationConfig, HeaderKeyword, HDUDataType } from "./types";
+import type {
+  FitsMetadata,
+  FrameClassificationConfig,
+  HeaderKeyword,
+  HDUDataType,
+  SerMetadataInfo,
+} from "./types";
 import { classifyWithDetail } from "../gallery/frameClassifier";
 import { gunzipFitsBytes, isGzipFitsBytes } from "./compression";
 import {
@@ -124,7 +131,10 @@ export async function loadScientificFitsFromBuffer(
         includeTimestampExtension: true,
         strictValidation: true,
       });
-      return loadFitsFromBuffer(fitsBuffer);
+      const fits = loadFitsFromBuffer(fitsBuffer);
+      (fits as FITS & { _serMetadata?: SerMetadataInfo })._serMetadata =
+        parseSerMetadata(buffer) ?? undefined;
+      return fits;
     } catch (error) {
       throw normalizeSerReadError(error);
     }
@@ -470,4 +480,36 @@ export function getCommentsAndHistory(
     comments: header.getComments?.() ?? [],
     history: header.getHistory?.() ?? [],
   };
+}
+
+/**
+ * Parse SER metadata from raw buffer without converting to FITS.
+ * Returns frame count, FPS, duration, observer, etc.
+ */
+export function parseSerMetadata(buffer: ArrayBuffer): SerMetadataInfo | null {
+  try {
+    const ser = SER.fromArrayBuffer(buffer, { strictValidation: false });
+    const header = ser.getHeader();
+    return {
+      frameCount: header.frameCount,
+      colorId: header.colorId,
+      pixelDepth: header.pixelDepth,
+      width: header.width,
+      height: header.height,
+      durationSeconds: ser.getDurationSeconds() ?? undefined,
+      estimatedFps: ser.getEstimatedFPS() ?? undefined,
+      observer: header.observer || undefined,
+      instrument: header.instrument || undefined,
+      telescope: header.telescope || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Retrieve SER metadata attached during loadScientificFitsFromBuffer.
+ */
+export function getSerMetadata(fits: FITS): SerMetadataInfo | undefined {
+  return (fits as FITS & { _serMetadata?: SerMetadataInfo })._serMetadata;
 }

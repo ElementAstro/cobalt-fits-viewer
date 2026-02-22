@@ -8,8 +8,16 @@ import type {
   HeaderKeyword,
   StarAnnotationPoint,
   TiffTargetOptions,
+  XisfTargetOptions,
+  SerTargetOptions,
 } from "../fits/types";
-import { DEFAULT_FITS_TARGET_OPTIONS, DEFAULT_TIFF_TARGET_OPTIONS } from "../fits/types";
+import {
+  DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
+} from "../fits/types";
+import { convertFitsToXisf, convertFitsToSer } from "fitsjs-ng";
 import { writeFitsImage } from "../fits/writer";
 import {
   getImageChannels,
@@ -71,6 +79,8 @@ export interface ExportRequest {
   bitDepth?: 8 | 16 | 32;
   fits?: Partial<FitsTargetOptions>;
   tiff?: Partial<TiffTargetOptions>;
+  xisf?: Partial<XisfTargetOptions>;
+  ser?: Partial<SerTargetOptions>;
   source?: ExportSourceContext;
   renderOptions?: ExportRenderOptions;
 }
@@ -497,16 +507,51 @@ async function encodeFits(
   return fitsBytes;
 }
 
+function buildUncompressedFitsRequest(request: ExportRequest): ExportRequest {
+  return {
+    ...request,
+    format: "fits",
+    fits: { ...request.fits, compression: "none" },
+  };
+}
+
+async function encodeXisf(
+  request: ExportRequest,
+  diagnostics: ExportDiagnostics,
+): Promise<Uint8Array> {
+  const fitsBytes = await encodeFits(buildUncompressedFitsRequest(request), diagnostics);
+  const xisfOptions = { ...DEFAULT_XISF_TARGET_OPTIONS, ...(request.xisf ?? {}) };
+  const xisfBuffer = await convertFitsToXisf(toArrayBuffer(fitsBytes), {
+    writeOptions: {
+      compression: xisfOptions.compression === "none" ? null : xisfOptions.compression,
+    },
+  });
+  return new Uint8Array(xisfBuffer as ArrayBuffer);
+}
+
+async function encodeSer(
+  request: ExportRequest,
+  diagnostics: ExportDiagnostics,
+): Promise<Uint8Array> {
+  const fitsBytes = await encodeFits(buildUncompressedFitsRequest(request), diagnostics);
+  const serOptions = { ...DEFAULT_SER_TARGET_OPTIONS, ...(request.ser ?? {}) };
+  const serBuffer = await convertFitsToSer(toArrayBuffer(fitsBytes), {
+    sourceLayout: serOptions.layout === "multi-hdu" ? "multi-hdu" : "auto",
+  });
+  return new Uint8Array(serBuffer as ArrayBuffer);
+}
+
 function getOutputExtension(request: ExportRequest): string {
-  if (request.format !== "fits") {
-    return getExtUtil(request.format);
+  if (request.format === "fits") {
+    const fitsCompression = request.fits?.compression ?? DEFAULT_FITS_TARGET_OPTIONS.compression;
+    return fitsCompression === "gzip" ? "fits.gz" : "fits";
   }
-  const fitsCompression = request.fits?.compression ?? DEFAULT_FITS_TARGET_OPTIONS.compression;
-  return fitsCompression === "gzip" ? "fits.gz" : "fits";
+  return getExtUtil(request.format);
 }
 
 function withFitsFallback(request: ExportRequest, diagnostics: ExportDiagnostics): ExportRequest {
-  if (request.format !== "fits") return request;
+  if (request.format !== "fits" && request.format !== "xisf" && request.format !== "ser")
+    return request;
   const fitsOptions: FitsTargetOptions = {
     ...DEFAULT_FITS_TARGET_OPTIONS,
     ...(request.fits ?? {}),
@@ -651,6 +696,18 @@ export async function encodeExportRequest(request: ExportRequest): Promise<Encod
     case "fits":
       return {
         bytes: await encodeFits(effectiveRequest, diagnostics),
+        extension: getOutputExtension(effectiveRequest),
+        diagnostics,
+      };
+    case "xisf":
+      return {
+        bytes: await encodeXisf(effectiveRequest, diagnostics),
+        extension: getOutputExtension(effectiveRequest),
+        diagnostics,
+      };
+    case "ser":
+      return {
+        bytes: await encodeSer(effectiveRequest, diagnostics),
         extension: getOutputExtension(effectiveRequest),
         diagnostics,
       };

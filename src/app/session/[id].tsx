@@ -1,6 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { View, Text, ScrollView, Share } from "react-native";
-import { Button, Card, Chip, PressableFeedback, Separator, useThemeColor } from "heroui-native";
+import {
+  Accordion,
+  Button,
+  Card,
+  Chip,
+  PressableFeedback,
+  Separator,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -37,12 +46,25 @@ export default function SessionDetailScreen() {
   const updateLogEntry = useSessionStore((s) => s.updateLogEntry);
   const targets = useTargetStore((s) => s.targets);
 
+  const allSessionIds = useSessionStore(
+    useShallow((s) => [...s.sessions].sort((a, b) => b.startTime - a.startTime).map((s2) => s2.id)),
+  );
+  const currentIndex = allSessionIds.indexOf(id ?? "");
+  const prevId = currentIndex < allSessionIds.length - 1 ? allSessionIds[currentIndex + 1] : null;
+  const nextId = currentIndex > 0 ? allSessionIds[currentIndex - 1] : null;
+
   const [showEditSheet, setShowEditSheet] = useState(false);
+  const [logFilter, setLogFilter] = useState<string | null>(null);
   const [editingLogEntry, setEditingLogEntry] = useState<{
     id: string;
     label: string;
     notes: string;
   } | null>(null);
+
+  const filteredLogEntries = useMemo(
+    () => (logFilter ? logEntries.filter((e) => e.filter === logFilter) : logEntries),
+    [logEntries, logFilter],
+  );
 
   const handleExportLog = useCallback(async () => {
     const csv = exportToCSV(logEntries);
@@ -167,6 +189,26 @@ export default function SessionDetailScreen() {
           >
             <Ionicons name="arrow-back" size={16} color={mutedColor} />
           </Button>
+          {prevId && (
+            <Button
+              size="sm"
+              variant="ghost"
+              isIconOnly
+              onPress={() => router.replace(`/session/${prevId}`)}
+            >
+              <Ionicons name="chevron-back" size={14} color={mutedColor} />
+            </Button>
+          )}
+          {nextId && (
+            <Button
+              size="sm"
+              variant="ghost"
+              isIconOnly
+              onPress={() => router.replace(`/session/${nextId}`)}
+            >
+              <Ionicons name="chevron-forward" size={14} color={mutedColor} />
+            </Button>
+          )}
           <View className="flex-1">
             <Text className="text-lg font-bold text-foreground">
               {t("sessions.session")} - {session.date}
@@ -319,46 +361,6 @@ export default function SessionDetailScreen() {
           </View>
         )}
 
-        {/* Equipment */}
-        {(session.equipment.telescope || session.equipment.camera || session.equipment.mount) && (
-          <>
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("sessions.equipment")}
-            </Text>
-            <Card variant="secondary" className="mb-4">
-              <Card.Body className="gap-1 p-3">
-                {session.equipment.telescope && (
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons name="telescope-outline" size={12} color={mutedColor} />
-                    <Text className="text-xs text-foreground">{session.equipment.telescope}</Text>
-                  </View>
-                )}
-                {session.equipment.camera && (
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons name="camera-outline" size={12} color={mutedColor} />
-                    <Text className="text-xs text-foreground">{session.equipment.camera}</Text>
-                  </View>
-                )}
-                {session.equipment.mount && (
-                  <View className="flex-row items-center gap-2">
-                    <Ionicons name="hardware-chip-outline" size={12} color={mutedColor} />
-                    <Text className="text-xs text-foreground">{session.equipment.mount}</Text>
-                  </View>
-                )}
-                {session.equipment.filters && session.equipment.filters.length > 0 && (
-                  <View className="flex-row flex-wrap gap-1 mt-1">
-                    {session.equipment.filters.map((f) => (
-                      <Chip key={f} size="sm" variant="secondary">
-                        <Chip.Label className="text-[9px]">{f}</Chip.Label>
-                      </Chip>
-                    ))}
-                  </View>
-                )}
-              </Card.Body>
-            </Card>
-          </>
-        )}
-
         {/* Notes */}
         {session.notes && (
           <>
@@ -375,107 +377,189 @@ export default function SessionDetailScreen() {
 
         <Separator className="mb-4" />
 
-        {/* Filter Breakdown */}
-        {filterStats.length > 0 && (
-          <>
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("sessions.filterBreakdown")}
-            </Text>
-            <View className="gap-1 mb-4">
-              {filterStats.map(([filter, stats]) => (
-                <View
-                  key={filter}
-                  className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2"
-                >
-                  <Text className="text-xs font-medium text-foreground">{filter}</Text>
-                  <Text className="text-[10px] text-muted">
-                    {stats.count} {t("sessions.frames")} · {formatDuration(stats.totalExp)}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Target Breakdown */}
-        {targetStats.length > 1 && (
-          <>
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("sessions.targetBreakdown")}
-            </Text>
-            <View className="gap-1 mb-4">
-              {targetStats.map(([target, count]) => (
-                <View
-                  key={target}
-                  className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2"
-                >
-                  <Text className="text-xs font-medium text-foreground">{target}</Text>
-                  <Text className="text-[10px] text-muted">
-                    {count} {t("sessions.frames")}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        <Separator className="mb-4" />
-
-        {/* Observation Log */}
-        <View className="flex-row items-center justify-between mb-2">
-          <Text className="text-xs font-semibold uppercase text-muted">
-            {t("sessions.log")} ({logEntries.length})
-          </Text>
-          <View className="flex-row gap-1">
-            <Button size="sm" variant="outline" onPress={handleExportJSON}>
-              <Ionicons name="code-slash-outline" size={12} color={mutedColor} />
-              <Button.Label className="text-[10px]">JSON</Button.Label>
-            </Button>
-            <Button size="sm" variant="outline" onPress={handleExportLog}>
-              <Ionicons name="download-outline" size={12} color={mutedColor} />
-              <Button.Label className="text-[10px]">CSV</Button.Label>
-            </Button>
-          </View>
-        </View>
-
-        {logEntries.length > 0 ? (
-          <View className="gap-1">
-            {logEntries.map((entry) => (
-              <PressableFeedback
-                key={entry.id}
-                onLongPress={() => {
-                  setEditingLogEntry({
-                    id: entry.id,
-                    label: `${entry.object} · ${entry.filter}`,
-                    notes: entry.notes ?? "",
-                  });
-                }}
-              >
-                <PressableFeedback.Highlight />
-                <Card variant="secondary">
-                  <Card.Body className="flex-row items-center justify-between p-2">
-                    <View className="flex-1">
-                      <Text className="text-[10px] font-semibold text-foreground">
-                        {entry.object} · {entry.filter}
-                      </Text>
-                      <Text className="text-[9px] text-muted">
-                        {entry.dateTime} · {entry.exptime}s
-                        {entry.gain != null && ` · G${entry.gain}`}
-                      </Text>
-                      {entry.notes && (
-                        <Text className="text-[9px] text-accent mt-0.5">📝 {entry.notes}</Text>
-                      )}
+        <Accordion selectionMode="multiple" variant="surface" defaultValue={["log"]}>
+          {/* Equipment */}
+          {(session.equipment.telescope || session.equipment.camera || session.equipment.mount) && (
+            <Accordion.Item value="equipment">
+              <Accordion.Trigger>
+                <Accordion.Indicator />
+                <Text className="text-xs font-semibold uppercase text-muted">
+                  {t("sessions.equipment")}
+                </Text>
+              </Accordion.Trigger>
+              <Accordion.Content>
+                <View className="gap-1">
+                  {session.equipment.telescope && (
+                    <View className="flex-row items-center gap-2">
+                      <Ionicons name="telescope-outline" size={12} color={mutedColor} />
+                      <Text className="text-xs text-foreground">{session.equipment.telescope}</Text>
                     </View>
-                  </Card.Body>
-                </Card>
-              </PressableFeedback>
-            ))}
-          </View>
-        ) : (
-          <View className="items-center py-8">
-            <Text className="text-xs text-muted">{t("common.noData")}</Text>
-          </View>
-        )}
+                  )}
+                  {session.equipment.camera && (
+                    <View className="flex-row items-center gap-2">
+                      <Ionicons name="camera-outline" size={12} color={mutedColor} />
+                      <Text className="text-xs text-foreground">{session.equipment.camera}</Text>
+                    </View>
+                  )}
+                  {session.equipment.mount && (
+                    <View className="flex-row items-center gap-2">
+                      <Ionicons name="hardware-chip-outline" size={12} color={mutedColor} />
+                      <Text className="text-xs text-foreground">{session.equipment.mount}</Text>
+                    </View>
+                  )}
+                  {session.equipment.filters && session.equipment.filters.length > 0 && (
+                    <View className="flex-row flex-wrap gap-1 mt-1">
+                      {session.equipment.filters.map((f) => (
+                        <Chip key={f} size="sm" variant="secondary">
+                          <Chip.Label className="text-[9px]">{f}</Chip.Label>
+                        </Chip>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </Accordion.Content>
+            </Accordion.Item>
+          )}
+
+          {/* Filter Breakdown */}
+          {filterStats.length > 0 && (
+            <Accordion.Item value="filters">
+              <Accordion.Trigger>
+                <Accordion.Indicator />
+                <Text className="text-xs font-semibold uppercase text-muted">
+                  {t("sessions.filterBreakdown")}
+                </Text>
+              </Accordion.Trigger>
+              <Accordion.Content>
+                <View className="gap-1">
+                  {filterStats.map(([filter, stats]) => (
+                    <View
+                      key={filter}
+                      className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2"
+                    >
+                      <Text className="text-xs font-medium text-foreground">{filter}</Text>
+                      <Text className="text-[10px] text-muted">
+                        {stats.count} {t("sessions.frames")} · {formatDuration(stats.totalExp)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Accordion.Content>
+            </Accordion.Item>
+          )}
+
+          {/* Target Breakdown */}
+          {targetStats.length > 1 && (
+            <Accordion.Item value="targets">
+              <Accordion.Trigger>
+                <Accordion.Indicator />
+                <Text className="text-xs font-semibold uppercase text-muted">
+                  {t("sessions.targetBreakdown")}
+                </Text>
+              </Accordion.Trigger>
+              <Accordion.Content>
+                <View className="gap-1">
+                  {targetStats.map(([target, count]) => (
+                    <View
+                      key={target}
+                      className="flex-row items-center justify-between rounded-lg bg-surface-secondary px-3 py-2"
+                    >
+                      <Text className="text-xs font-medium text-foreground">{target}</Text>
+                      <Text className="text-[10px] text-muted">
+                        {count} {t("sessions.frames")}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Accordion.Content>
+            </Accordion.Item>
+          )}
+
+          {/* Observation Log */}
+          <Accordion.Item value="log">
+            <Accordion.Trigger>
+              <Accordion.Indicator />
+              <View className="flex-1 flex-row items-center justify-between">
+                <Text className="text-xs font-semibold uppercase text-muted">
+                  {t("sessions.log")} ({filteredLogEntries.length})
+                </Text>
+                <View className="flex-row gap-1">
+                  <Button size="sm" variant="outline" onPress={handleExportJSON}>
+                    <Ionicons name="code-slash-outline" size={12} color={mutedColor} />
+                    <Button.Label className="text-[10px]">JSON</Button.Label>
+                  </Button>
+                  <Button size="sm" variant="outline" onPress={handleExportLog}>
+                    <Ionicons name="download-outline" size={12} color={mutedColor} />
+                    <Button.Label className="text-[10px]">CSV</Button.Label>
+                  </Button>
+                </View>
+              </View>
+            </Accordion.Trigger>
+            <Accordion.Content>
+              {filterStats.length > 1 && (
+                <View className="flex-row flex-wrap gap-1 mb-2">
+                  <Chip
+                    size="sm"
+                    variant={logFilter === null ? "primary" : "secondary"}
+                    onPress={() => setLogFilter(null)}
+                  >
+                    <Chip.Label className="text-[9px]">{t("common.all")}</Chip.Label>
+                  </Chip>
+                  {filterStats.map(([filter]) => (
+                    <Chip
+                      key={filter}
+                      size="sm"
+                      variant={logFilter === filter ? "primary" : "secondary"}
+                      onPress={() => setLogFilter(filter)}
+                    >
+                      <Chip.Label className="text-[9px]">{filter}</Chip.Label>
+                    </Chip>
+                  ))}
+                </View>
+              )}
+              {filteredLogEntries.length > 0 ? (
+                <View className="gap-1">
+                  {filteredLogEntries.map((entry) => (
+                    <PressableFeedback
+                      key={entry.id}
+                      onLongPress={() => {
+                        setEditingLogEntry({
+                          id: entry.id,
+                          label: `${entry.object} · ${entry.filter}`,
+                          notes: entry.notes ?? "",
+                        });
+                      }}
+                    >
+                      <PressableFeedback.Highlight />
+                      <Card variant="secondary">
+                        <Card.Body className="flex-row items-center justify-between p-2">
+                          <View className="flex-1">
+                            <Text className="text-[10px] font-semibold text-foreground">
+                              {entry.object} · {entry.filter}
+                            </Text>
+                            <Text className="text-[9px] text-muted">
+                              {entry.dateTime} · {entry.exptime}s
+                              {entry.gain != null && ` · G${entry.gain}`}
+                            </Text>
+                            {entry.notes && (
+                              <Text className="text-[9px] text-accent mt-0.5">
+                                📝 {entry.notes}
+                              </Text>
+                            )}
+                          </View>
+                        </Card.Body>
+                      </Card>
+                    </PressableFeedback>
+                  ))}
+                </View>
+              ) : (
+                <View className="items-center py-8">
+                  <Text className="text-xs text-muted">{t("common.noData")}</Text>
+                </View>
+              )}
+            </Accordion.Content>
+          </Accordion.Item>
+        </Accordion>
 
         <Separator className="my-4" />
 

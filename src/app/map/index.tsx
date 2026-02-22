@@ -2,7 +2,7 @@
  * 地图视图页面 - 展示所有带位置信息的 FITS 文件在地图上的分布
  */
 
-import { useState, useMemo, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { View, Text, ScrollView, Platform } from "react-native";
 import { useRouter } from "expo-router";
 import Constants from "expo-constants";
@@ -15,12 +15,16 @@ import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { LocationMapView } from "../../components/gallery/LocationMapView";
 import { LocationMarkerSheet } from "../../components/gallery/LocationMarkerSheet";
 import { MapFilterBar } from "../../components/map/MapFilterBar";
+import { MapStatsPanel } from "../../components/map/MapStatsPanel";
 import type { MapDateFilterPreset, MapClusterAction, MapClusterNode } from "../../lib/map/types";
 import type { MapPreset } from "../../lib/map/styles";
-import type { FitsMetadata } from "../../lib/fits/types";
+import type { FitsMetadata, GeoLocation } from "../../lib/fits/types";
 import { MAP_PRESETS, MAP_PRESET_ORDER } from "../../lib/map/styles";
 import { LocationService } from "../../hooks/useLocation";
 import { normalizeGeoLocation } from "../../lib/map/geo";
+import { uniqueSorted, siteKey } from "../../lib/map/utils";
+import { SearchBar } from "../../components/common/SearchBar";
+import type { LocationMapViewRef } from "../../components/gallery/LocationMapView";
 
 const DATE_FILTER_DAYS: Record<Exclude<MapDateFilterPreset, "all">, number> = {
   "7d": 7,
@@ -50,14 +54,10 @@ function hasGeoLocation(file: FitsMetadata): boolean {
   return Boolean(normalizeGeoLocation(file.location));
 }
 
-function uniqueSorted(values: Array<string | undefined>): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort();
-}
-
 function locationSiteKey(file: FitsMetadata): string {
   const location = normalizeGeoLocation(file.location);
   if (!location) return "invalid";
-  return `${location.latitude.toFixed(4)}_${location.longitude.toFixed(4)}`;
+  return siteKey(location.latitude, location.longitude);
 }
 
 function getAndroidGoogleMapsApiKey(): string | undefined {
@@ -102,6 +102,10 @@ export default function MapScreen() {
   const [dateFilterPreset, setDateFilterPreset] = useState<MapDateFilterPreset>("all");
   const [showFilters, setShowFilters] = useState(false);
   const [showPresets, setShowPresets] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const mapViewRef = useRef<LocationMapViewRef>(null);
 
   useEffect(() => {
     if (Platform.OS !== "web") {
@@ -240,6 +244,39 @@ export default function MapScreen() {
     [setMapPreset],
   );
 
+  const knownLocations = useMemo(() => {
+    const seen = new Map<string, { label: string; location: GeoLocation }>();
+    for (const file of filteredFiles) {
+      const loc = normalizeGeoLocation(file.location);
+      if (!loc) continue;
+      const key = siteKey(loc.latitude, loc.longitude);
+      if (seen.has(key)) continue;
+      const label = loc.placeName ?? loc.city ?? loc.region ?? key;
+      seen.set(key, { label, location: loc });
+    }
+    return [...seen.values()];
+  }, [filteredFiles]);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return knownLocations.filter((entry) => entry.label.toLowerCase().includes(q)).slice(0, 8);
+  }, [searchQuery, knownLocations]);
+
+  const handleSearchSelect = useCallback((latitude: number, longitude: number) => {
+    mapViewRef.current?.flyTo(latitude, longitude, 12);
+    setSearchQuery("");
+    setShowSearch(false);
+  }, []);
+
+  const handleSearchGeocode = useCallback(async () => {
+    if (!searchQuery.trim()) return;
+    const result = await LocationService.geocode(searchQuery);
+    if (result) {
+      handleSearchSelect(result.latitude, result.longitude);
+    }
+  }, [searchQuery, handleSearchSelect]);
+
   return (
     <View testID="e2e-screen-map__index" className="flex-1 bg-background">
       <View
@@ -264,6 +301,22 @@ export default function MapScreen() {
           </View>
           <View className="flex-row items-center gap-1">
             <Button
+              size="sm"
+              isIconOnly
+              variant="ghost"
+              onPress={() => {
+                setShowSearch((v) => !v);
+                setShowPresets(false);
+                setShowFilters(false);
+              }}
+            >
+              <Ionicons
+                name="search-outline"
+                size={16}
+                color={showSearch ? successColor : mutedColor}
+              />
+            </Button>
+            <Button
               testID="e2e-action-map__index-toggle-presets"
               size="sm"
               isIconOnly
@@ -287,6 +340,9 @@ export default function MapScreen() {
                 size={16}
                 color={mapShowOverlays ? successColor : mutedColor}
               />
+            </Button>
+            <Button size="sm" isIconOnly variant="ghost" onPress={() => setShowStats(true)}>
+              <Ionicons name="stats-chart-outline" size={16} color={mutedColor} />
             </Button>
             <Button
               testID="e2e-action-map__index-toggle-filters"
@@ -320,6 +376,60 @@ export default function MapScreen() {
             <Text className="text-[11px]" style={{ color: warningColor }}>
               {t("location.androidMapsKeyMissing")}
             </Text>
+          </View>
+        ) : null}
+
+        {showSearch ? (
+          <View className="mt-1 px-1">
+            <SearchBar
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              placeholder={t("location.searchPlaceholder")}
+              compact
+            />
+            {searchResults.length > 0 ? (
+              <View className="mt-1 rounded-lg bg-surface-secondary">
+                {searchResults.map((entry) => (
+                  <Button
+                    key={`${entry.location.latitude}_${entry.location.longitude}`}
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start px-3 py-2"
+                    onPress={() =>
+                      handleSearchSelect(entry.location.latitude, entry.location.longitude)
+                    }
+                  >
+                    <Ionicons name="location-outline" size={12} color={mutedColor} />
+                    <Button.Label className="text-xs text-foreground">{entry.label}</Button.Label>
+                  </Button>
+                ))}
+                {searchQuery.trim().length > 2 ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="justify-start px-3 py-2"
+                    onPress={handleSearchGeocode}
+                  >
+                    <Ionicons name="globe-outline" size={12} color={successColor} />
+                    <Button.Label className="text-xs text-muted">
+                      {t("location.searchOnline")}
+                    </Button.Label>
+                  </Button>
+                ) : null}
+              </View>
+            ) : searchQuery.trim().length > 2 ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="mt-1 justify-start px-3"
+                onPress={handleSearchGeocode}
+              >
+                <Ionicons name="globe-outline" size={12} color={successColor} />
+                <Button.Label className="text-xs text-muted">
+                  {t("location.searchOnline")}
+                </Button.Label>
+              </Button>
+            ) : null}
           </View>
         ) : null}
 
@@ -390,6 +500,7 @@ export default function MapScreen() {
         </View>
       ) : (
         <LocationMapView
+          ref={mapViewRef}
           files={filteredFiles}
           onClusterAction={handleMapClusterAction}
           style={{ flex: 1 }}
@@ -405,6 +516,17 @@ export default function MapScreen() {
         onFilePress={handleFilePress}
         onSessionPress={handleOpenSession}
         onTargetPress={handleOpenTarget}
+      />
+
+      <MapStatsPanel
+        isOpen={showStats}
+        onClose={() => setShowStats(false)}
+        files={filteredFiles}
+        siteCount={siteCount}
+        onSitePress={(lat, lng) => {
+          mapViewRef.current?.flyTo(lat, lng, 12);
+          setShowStats(false);
+        }}
       />
     </View>
   );

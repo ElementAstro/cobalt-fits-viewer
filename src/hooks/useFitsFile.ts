@@ -14,6 +14,7 @@ import {
   getCommentsAndHistory,
   getImageChannels,
   isRgbCube,
+  getSerMetadata,
 } from "../lib/fits/parser";
 import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
@@ -181,6 +182,7 @@ export function useFitsFile(): UseFitsFileReturn {
         { filename, filepath, fileSize },
         frameClassificationConfig,
       );
+      const serInfo = getSerMetadata(fitsObj);
       const fullMeta: FitsMetadata = {
         ...meta,
         id: generateFileId(),
@@ -192,6 +194,7 @@ export function useFitsFile(): UseFitsFileReturn {
         sourceFormat: sourceFormat ?? "unknown",
         mediaKind: "image",
         decodeStatus: "ready",
+        ...(serInfo ? { serInfo } : {}),
       };
       const ch = getCommentsAndHistory(fitsObj);
       dispatch({

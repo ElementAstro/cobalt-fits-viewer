@@ -20,20 +20,8 @@ import { useI18n } from "../../i18n/useI18n";
 import { FilterExposurePlan } from "./FilterExposurePlan";
 import { CategorySelector } from "./CategorySelector";
 import { TagInput } from "./TagInput";
+import { TARGET_TYPES, TARGET_STATUSES } from "../../lib/targets/targetConstants";
 import type { Target, TargetType, TargetStatus } from "../../lib/fits/types";
-
-const TARGET_TYPES: TargetType[] = [
-  "galaxy",
-  "nebula",
-  "cluster",
-  "planet",
-  "moon",
-  "sun",
-  "comet",
-  "other",
-];
-
-const TARGET_STATUSES: TargetStatus[] = ["planned", "acquiring", "completed", "processed"];
 
 interface EditTargetSheetProps {
   visible: boolean;

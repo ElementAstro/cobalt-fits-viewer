@@ -7,6 +7,8 @@ import {
   DEFAULT_CONVERT_PRESETS,
   DEFAULT_FITS_TARGET_OPTIONS,
   DEFAULT_TIFF_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
 } from "../fits/types";
 
 /**
@@ -38,7 +40,7 @@ export function createPreset(
 export function getDefaultOptionsForFormat(
   format: ConvertOptions["format"],
 ): Partial<ConvertOptions> {
-  const processingDefaults: Partial<ConvertOptions> = {
+  const baseDefaults: Partial<ConvertOptions> = {
     stretch: "asinh",
     colormap: "grayscale",
     blackPoint: 0,
@@ -52,71 +54,30 @@ export function getDefaultOptionsForFormat(
     outputWhite: 1,
     includeAnnotations: false,
     includeWatermark: false,
+    dpi: 72,
+    tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
+    fits: DEFAULT_FITS_TARGET_OPTIONS,
+    xisf: DEFAULT_XISF_TARGET_OPTIONS,
+    ser: DEFAULT_SER_TARGET_OPTIONS,
   };
   switch (format) {
     case "png":
-      return {
-        ...processingDefaults,
-        quality: 100,
-        bitDepth: 8,
-        dpi: 72,
-        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
-        fits: DEFAULT_FITS_TARGET_OPTIONS,
-      };
+      return { ...baseDefaults, quality: 100, bitDepth: 8 };
     case "jpeg":
-      return {
-        ...processingDefaults,
-        quality: 85,
-        bitDepth: 8,
-        dpi: 72,
-        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
-        fits: DEFAULT_FITS_TARGET_OPTIONS,
-      };
+      return { ...baseDefaults, quality: 85, bitDepth: 8 };
     case "webp":
-      return {
-        ...processingDefaults,
-        quality: 80,
-        bitDepth: 8,
-        dpi: 72,
-        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
-        fits: DEFAULT_FITS_TARGET_OPTIONS,
-      };
+      return { ...baseDefaults, quality: 80, bitDepth: 8 };
     case "tiff":
-      return {
-        ...processingDefaults,
-        quality: 100,
-        bitDepth: 16,
-        dpi: 72,
-        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
-        fits: DEFAULT_FITS_TARGET_OPTIONS,
-      };
+      return { ...baseDefaults, quality: 100, bitDepth: 16 };
     case "bmp":
-      return {
-        ...processingDefaults,
-        quality: 100,
-        bitDepth: 8,
-        dpi: 72,
-        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
-        fits: DEFAULT_FITS_TARGET_OPTIONS,
-      };
+      return { ...baseDefaults, quality: 100, bitDepth: 8 };
     case "fits":
-      return {
-        ...processingDefaults,
-        quality: 100,
-        bitDepth: 32,
-        dpi: 72,
-        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
-        fits: DEFAULT_FITS_TARGET_OPTIONS,
-      };
+    case "xisf":
+      return { ...baseDefaults, quality: 100, bitDepth: 32 };
+    case "ser":
+      return { ...baseDefaults, quality: 100, bitDepth: 16 };
     default:
-      return {
-        ...processingDefaults,
-        quality: 90,
-        bitDepth: 8,
-        dpi: 72,
-        tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS },
-        fits: DEFAULT_FITS_TARGET_OPTIONS,
-      };
+      return { ...baseDefaults, quality: 90, bitDepth: 8 };
   }
 }
 
@@ -130,7 +91,10 @@ export function getSupportedBitDepths(format: ConvertOptions["format"]): number[
     case "png":
       return [8, 16];
     case "fits":
+    case "xisf":
       return [8, 16, 32];
+    case "ser":
+      return [8, 16];
     default:
       return [8];
   }

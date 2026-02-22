@@ -275,6 +275,7 @@ export function ThumbnailGrid({
   const isLandscapeGrid = screenWidth > screenHeight;
   const gridPadding = isLandscapeGrid ? 16 : 32;
   const itemSize = Math.floor((screenWidth - gridPadding) / columns);
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const [snapshots, setSnapshots] = useState<Record<string, ThumbnailLoadSnapshot>>({});
 
   const fileIdsKey = useMemo(() => files.map((file) => file.id).join(","), [files]);
@@ -323,7 +324,7 @@ export function ThumbnailGrid({
       <ThumbnailItem
         file={item}
         size={itemSize}
-        isSelected={selectedIds.includes(item.id)}
+        isSelected={selectedIdSet.has(item.id)}
         selectionMode={selectionMode}
         onPress={onPress}
         onLongPress={onLongPress}
@@ -341,7 +342,7 @@ export function ThumbnailGrid({
     ),
     [
       itemSize,
-      selectedIds,
+      selectedIdSet,
       selectionMode,
       onPress,
       onLongPress,
@@ -370,7 +371,7 @@ export function ThumbnailGrid({
       scrollEnabled={scrollEnabled}
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={ListHeaderComponent}
-      extraData={selectedIds}
+      extraData={selectedIdSet}
     />
   );
 }

@@ -16,7 +16,11 @@ beforeEach(() => {
     autoBackupEnabled: false,
     autoBackupIntervalHours: 24,
     autoBackupNetwork: "wifi",
+    lastAutoBackupAttempt: 0,
     lastAutoBackupCheck: 0,
+    lastAutoBackupResult: null,
+    lastAutoBackupError: null,
+    history: [],
     lastError: null,
   });
 });
@@ -133,6 +137,94 @@ describe("useBackupStore", () => {
 
       useBackupStore.getState().setLastAutoBackupCheck(99999);
       expect(useBackupStore.getState().lastAutoBackupCheck).toBe(99999);
+    });
+  });
+
+  describe("auto backup result", () => {
+    it("should set auto backup result to success", () => {
+      useBackupStore.getState().setLastAutoBackupResult("success");
+      expect(useBackupStore.getState().lastAutoBackupResult).toBe("success");
+      expect(useBackupStore.getState().lastAutoBackupError).toBeNull();
+    });
+
+    it("should set auto backup result to failed with error", () => {
+      useBackupStore.getState().setLastAutoBackupResult("failed", "network error");
+      expect(useBackupStore.getState().lastAutoBackupResult).toBe("failed");
+      expect(useBackupStore.getState().lastAutoBackupError).toBe("network error");
+    });
+
+    it("should clear auto backup result", () => {
+      useBackupStore.getState().setLastAutoBackupResult("failed", "err");
+      useBackupStore.getState().setLastAutoBackupResult(null);
+      expect(useBackupStore.getState().lastAutoBackupResult).toBeNull();
+      expect(useBackupStore.getState().lastAutoBackupError).toBeNull();
+    });
+
+    it("should set lastAutoBackupAttempt", () => {
+      useBackupStore.getState().setLastAutoBackupAttempt(123456);
+      expect(useBackupStore.getState().lastAutoBackupAttempt).toBe(123456);
+    });
+  });
+
+  describe("history", () => {
+    it("should add a history entry", () => {
+      useBackupStore.getState().addHistoryEntry({
+        type: "backup",
+        provider: "webdav",
+        result: "success",
+        fileCount: 5,
+      });
+
+      const { history } = useBackupStore.getState();
+      expect(history).toHaveLength(1);
+      expect(history[0].type).toBe("backup");
+      expect(history[0].provider).toBe("webdav");
+      expect(history[0].result).toBe("success");
+      expect(history[0].fileCount).toBe(5);
+      expect(history[0].id).toBeDefined();
+      expect(history[0].timestamp).toBeGreaterThan(0);
+    });
+
+    it("should prepend new entries (newest first)", () => {
+      useBackupStore.getState().addHistoryEntry({
+        type: "backup",
+        provider: "webdav",
+        result: "success",
+      });
+      useBackupStore.getState().addHistoryEntry({
+        type: "restore",
+        provider: "dropbox",
+        result: "failed",
+        error: "timeout",
+      });
+
+      const { history } = useBackupStore.getState();
+      expect(history).toHaveLength(2);
+      expect(history[0].type).toBe("restore");
+      expect(history[1].type).toBe("backup");
+    });
+
+    it("should cap history at 50 entries", () => {
+      for (let i = 0; i < 55; i++) {
+        useBackupStore.getState().addHistoryEntry({
+          type: "backup",
+          provider: "webdav",
+          result: "success",
+        });
+      }
+      expect(useBackupStore.getState().history).toHaveLength(50);
+    });
+
+    it("should clear history", () => {
+      useBackupStore.getState().addHistoryEntry({
+        type: "backup",
+        provider: "webdav",
+        result: "success",
+      });
+      expect(useBackupStore.getState().history).toHaveLength(1);
+
+      useBackupStore.getState().clearHistory();
+      expect(useBackupStore.getState().history).toHaveLength(0);
     });
   });
 

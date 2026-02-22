@@ -2,12 +2,15 @@
  * 目标卡片组件
  */
 
+import React from "react";
 import { View, Text } from "react-native";
 import { Card, Chip, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Target } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
 import { getTargetIcon } from "../../lib/targets/targetIcons";
+import { STATUS_COLORS } from "../../lib/targets/targetConstants";
+import { formatCoordinates } from "../../lib/targets/coordinates";
 import { FavoriteButton, PinButton } from "./FavoriteButton";
 import type {
   ResolvedTargetInteractionUi,
@@ -22,6 +25,7 @@ interface TargetCardProps {
   totalExposureMinutes: number;
   completionPercent?: number;
   onPress?: () => void;
+  onLongPress?: () => void;
   onToggleFavorite?: () => void;
   onTogglePinned?: () => void;
   showFavorite?: boolean;
@@ -33,12 +37,13 @@ interface TargetCardProps {
   interactionUi?: ResolvedTargetInteractionUi;
 }
 
-export function TargetCard({
+export const TargetCard = React.memo(function TargetCard({
   target,
   frameCount,
   totalExposureMinutes,
   completionPercent,
   onPress,
+  onLongPress,
   onToggleFavorite,
   onTogglePinned,
   showFavorite = true,
@@ -60,12 +65,7 @@ export function TargetCard({
       fontScale,
     });
 
-  const statusColor = {
-    planned: "#6b7280",
-    acquiring: "#f59e0b",
-    completed: "#22c55e",
-    processed: "#3b82f6",
-  }[target.status];
+  const statusColor = STATUS_COLORS[target.status];
 
   const statusTextClassName =
     resolvedInteractionUi.effectivePreset === "accessible"
@@ -95,7 +95,7 @@ export function TargetCard({
   const showStatusInline = actionControlMode === "icon";
 
   return (
-    <PressableFeedback onPress={onPress}>
+    <PressableFeedback onPress={onPress} onLongPress={onLongPress}>
       <PressableFeedback.Highlight />
       <Card variant="secondary">
         <Card.Body className="gap-2 p-4">
@@ -198,6 +198,18 @@ export function TargetCard({
               />
               <Text className={metricTextClassName}>{totalExposureMinutes}min</Text>
             </View>
+            {(target.ra !== undefined || target.dec !== undefined) && (
+              <View className="flex-row items-center gap-1">
+                <Ionicons
+                  name="navigate-outline"
+                  size={resolvedInteractionUi.compactIconSize}
+                  color={mutedColor}
+                />
+                <Text className={metricTextClassName} numberOfLines={1}>
+                  {formatCoordinates(target.ra, target.dec)}
+                </Text>
+              </View>
+            )}
           </View>
 
           {completionPercent !== undefined && (
@@ -254,4 +266,4 @@ export function TargetCard({
       </Card>
     </PressableFeedback>
   );
-}
+});

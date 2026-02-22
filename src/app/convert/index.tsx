@@ -34,6 +34,8 @@ import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";
 import {
   DEFAULT_FITS_TARGET_OPTIONS,
   DEFAULT_TIFF_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
   type ExportFormat,
   type StretchType,
   type ColormapType,
@@ -42,6 +44,8 @@ import {
 import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
 import { FitsExportOptions } from "../../components/common/FitsExportOptions";
 import { TiffExportOptions } from "../../components/common/TiffExportOptions";
+import { XisfExportOptions } from "../../components/common/XisfExportOptions";
+import { SerExportOptions } from "../../components/common/SerExportOptions";
 
 const STRETCH_OPTIONS: { key: StretchType; label: string }[] = [
   { key: "linear", label: "Linear" },
@@ -306,6 +310,8 @@ export default function ConvertScreen() {
       bitDepth: currentOptions.bitDepth,
       fits: currentOptions.fits,
       tiff: currentOptions.tiff,
+      xisf: currentOptions.xisf,
+      ser: currentOptions.ser,
       renderOptions: {
         includeAnnotations: currentOptions.includeAnnotations,
         includeWatermark: currentOptions.includeWatermark,
@@ -680,6 +686,41 @@ export default function ConvertScreen() {
                                 ...DEFAULT_TIFF_TARGET_OPTIONS,
                                 ...(currentOptions.tiff ?? {}),
                                 multipage,
+                              },
+                            })
+                          }
+                        />
+                      )}
+
+                      {currentOptions.format === "xisf" && (
+                        <XisfExportOptions
+                          xisfCompression={
+                            currentOptions.xisf?.compression ??
+                            DEFAULT_XISF_TARGET_OPTIONS.compression
+                          }
+                          onXisfCompressionChange={(compression) =>
+                            setOptions({
+                              xisf: {
+                                ...DEFAULT_XISF_TARGET_OPTIONS,
+                                ...(currentOptions.xisf ?? {}),
+                                compression,
+                              },
+                            })
+                          }
+                        />
+                      )}
+
+                      {currentOptions.format === "ser" && (
+                        <SerExportOptions
+                          serLayout={
+                            currentOptions.ser?.layout ?? DEFAULT_SER_TARGET_OPTIONS.layout
+                          }
+                          onSerLayoutChange={(layout) =>
+                            setOptions({
+                              ser: {
+                                ...DEFAULT_SER_TARGET_OPTIONS,
+                                ...(currentOptions.ser ?? {}),
+                                layout,
                               },
                             })
                           }

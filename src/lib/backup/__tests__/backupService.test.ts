@@ -2,7 +2,12 @@
  * BackupService 核心备份/恢复逻辑测试
  */
 
-import { performBackup, performRestore, getBackupInfo } from "../backupService";
+import {
+  performBackup,
+  performRestore,
+  getBackupInfo,
+  verifyBackupIntegrity,
+} from "../backupService";
 import type { BackupDataSource } from "../backupService";
 import type { ICloudProvider } from "../cloudProvider";
 import type { BackupManifest, BackupProgress } from "../types";
@@ -263,10 +268,12 @@ describe("performBackup", () => {
     expect(provider.uploadFile).toHaveBeenCalledWith(
       "/mock/a.fits",
       "cobalt-backup/fits_files/f1_keep.fits",
+      expect.any(Function),
     );
     expect(provider.uploadFile).toHaveBeenCalledWith(
       "/mock/thumbs/f1.jpg",
       "cobalt-backup/thumbnails/f1.jpg",
+      expect.any(Function),
     );
 
     expect(provider.deleteFile).toHaveBeenCalledWith("cobalt-backup/fits_files/stale.fits");
@@ -370,10 +377,12 @@ describe("performRestore", () => {
     expect(provider.downloadFile).toHaveBeenCalledWith(
       "cobalt-backup/fits_files/f1_keep.fits",
       "/mock/fits/keep.fits",
+      expect.any(Function),
     );
     expect(provider.downloadFile).toHaveBeenCalledWith(
       "cobalt-backup/thumbnails/f1.jpg",
       "/mock/thumbs/f1.jpg",
+      expect.any(Function),
     );
     expect(target.setFiles).toHaveBeenCalled();
   });
@@ -419,5 +428,117 @@ describe("getBackupInfo", () => {
     expect(info?.deviceName).toBe("OtherDevice");
     expect(info?.appVersion).toBe("2.0.0");
     expect(info?.manifestDate).toBe("2025-01-15T00:00:00.000Z");
+  });
+});
+
+describe("verifyBackupIntegrity", () => {
+  it("returns invalid when no manifest", async () => {
+    const provider = createMockProvider();
+    const result = await verifyBackupIntegrity(provider);
+    expect(result.valid).toBe(false);
+    expect(result.totalFiles).toBe(0);
+  });
+
+  it("reports missing files when remote dir is empty", async () => {
+    const manifest: BackupManifest = {
+      ...testManifest,
+      files: [
+        {
+          id: "f1",
+          filename: "a.fits",
+          filepath: "/p",
+          fileSize: 100,
+          sourceType: "fits",
+          binary: {
+            remotePath: "cobalt_backup/fits_files/f1_a.fits",
+            size: 100,
+            contentHash: "abc",
+            hashAlgorithm: "SHA-256",
+          },
+        } as never,
+      ],
+      thumbnails: [],
+    };
+
+    const provider = createMockProvider(manifest);
+    // Override listFiles to return empty dirs
+    (provider.listFiles as jest.Mock).mockResolvedValue([]);
+
+    const result = await verifyBackupIntegrity(provider);
+    expect(result.valid).toBe(false);
+    expect(result.missingFiles).toContain("a.fits");
+  });
+
+  it("reports valid when all files exist remotely", async () => {
+    const manifest: BackupManifest = {
+      ...testManifest,
+      files: [
+        {
+          id: "f1",
+          filename: "a.fits",
+          filepath: "/p",
+          fileSize: 100,
+          sourceType: "fits",
+          binary: {
+            remotePath: "cobalt_backup/fits_files/f1_a.fits",
+            size: 100,
+            contentHash: "abc",
+            hashAlgorithm: "SHA-256",
+          },
+        } as never,
+      ],
+      thumbnails: [
+        {
+          fileId: "f1",
+          filename: "f1.jpg",
+          remotePath: "cobalt_backup/thumbnails/f1.jpg",
+          size: 50,
+          contentHash: "def",
+          hashAlgorithm: "SHA-256",
+        },
+      ],
+    };
+
+    const provider = createMockProvider(manifest);
+    (provider.listFiles as jest.Mock).mockImplementation(async (path: string) => {
+      if (path.includes("fits_files")) {
+        return [{ name: "f1_a.fits", path: `${path}/f1_a.fits`, size: 100, isDirectory: false }];
+      }
+      if (path.includes("thumbnails")) {
+        return [{ name: "f1.jpg", path: `${path}/f1.jpg`, size: 50, isDirectory: false }];
+      }
+      return [];
+    });
+
+    const result = await verifyBackupIntegrity(provider);
+    expect(result.valid).toBe(true);
+    expect(result.totalFiles).toBe(1);
+    expect(result.totalThumbnails).toBe(1);
+    expect(result.missingFiles).toHaveLength(0);
+    expect(result.missingThumbnails).toHaveLength(0);
+  });
+
+  it("calls onProgress callback", async () => {
+    const manifest: BackupManifest = {
+      ...testManifest,
+      files: [
+        {
+          id: "f1",
+          filename: "a.fits",
+          filepath: "/p",
+          fileSize: 100,
+          sourceType: "fits",
+        } as never,
+      ],
+      thumbnails: [],
+    };
+
+    const provider = createMockProvider(manifest);
+    (provider.listFiles as jest.Mock).mockResolvedValue([]);
+
+    const onProgress = jest.fn();
+    await verifyBackupIntegrity(provider, onProgress);
+
+    expect(onProgress).toHaveBeenCalledWith(1, 1);
   });
 });

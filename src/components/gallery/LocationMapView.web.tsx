@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useCallback, useEffect } from "react";
+import { useMemo, useRef, useState, useCallback, useEffect, useImperativeHandle } from "react";
 import { Text, View } from "react-native";
 import {
   MapContainer,
@@ -12,12 +12,18 @@ import {
 import type { Map as LeafletMap } from "leaflet";
 import L from "leaflet";
 import { useI18n } from "../../i18n/useI18n";
-import { MAP_PRESETS } from "../../lib/map/styles";
+import { MAP_PRESETS, getMarkerColor } from "../../lib/map/styles";
 import { buildSuperclusterIndex } from "../../lib/map/clusteringSuper";
-import { buildClusterPolylines, buildClusterCircles } from "../../lib/map/overlays";
+import {
+  buildClusterPolylines,
+  buildClusterCircles,
+  buildSegmentDistances,
+} from "../../lib/map/overlays";
 import type { MapClusterNode, MapViewport } from "../../lib/map/types";
+import { resolveNodeForOpen } from "../../lib/map/utils";
 import type { LocationMapViewProps } from "./LocationMapView.types";
 
+export type { LocationMapViewRef } from "./LocationMapView.types";
 export type { MapClusterNode } from "../../lib/map/types";
 export type { MapPreset } from "../../lib/map/styles";
 
@@ -48,11 +54,12 @@ function readViewport(map: LeafletMap): MapViewport {
 }
 
 function buildMarkerIcon(node: MapClusterNode) {
+  const color = getMarkerColor(node.count, node.isCluster);
   if (node.isCluster) {
     const size = Math.max(30, Math.min(44, 24 + Math.log2(node.count + 1) * 6));
     return L.divIcon({
       className: "map-cluster-icon",
-      html: `<div style="width:${size}px;height:${size}px;border-radius:${size / 2}px;background:#1e88e5;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 8px rgba(0,0,0,0.25);">${node.count}</div>`,
+      html: `<div style="width:${size}px;height:${size}px;border-radius:${size / 2}px;background:${color};color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;border:2px solid rgba(255,255,255,0.9);box-shadow:0 2px 8px rgba(0,0,0,0.25);">${node.count}</div>`,
       iconSize: [size, size],
       iconAnchor: [size / 2, size / 2],
     });
@@ -60,23 +67,10 @@ function buildMarkerIcon(node: MapClusterNode) {
 
   return L.divIcon({
     className: "map-point-icon",
-    html: `<div style="width:14px;height:14px;border-radius:7px;background:#43a047;border:2px solid rgba(255,255,255,0.95);box-shadow:0 2px 6px rgba(0,0,0,0.25);"></div>`,
+    html: `<div style="width:14px;height:14px;border-radius:7px;background:${color};border:2px solid rgba(255,255,255,0.95);box-shadow:0 2px 6px rgba(0,0,0,0.25);"></div>`,
     iconSize: [14, 14],
     iconAnchor: [7, 7],
   });
-}
-
-function resolveNodeForOpen(
-  node: MapClusterNode,
-  getLeaves: (clusterId: number) => MapClusterNode["files"],
-) {
-  if (!node.isCluster || node.clusterId === undefined) return node;
-  const files = getLeaves(node.clusterId);
-  return {
-    ...node,
-    files,
-    count: files.length,
-  };
 }
 
 function ViewportBridge({ onChange }: { onChange: (viewport: MapViewport) => void }) {
@@ -99,6 +93,7 @@ function ViewportBridge({ onChange }: { onChange: (viewport: MapViewport) => voi
 }
 
 export function LocationMapView({
+  ref,
   files,
   style,
   preset = "standard",
@@ -109,6 +104,16 @@ export function LocationMapView({
 }: LocationMapViewProps) {
   const { t } = useI18n();
   const mapRef = useRef<LeafletMap | null>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flyTo(latitude: number, longitude: number, zoom?: number) {
+        mapRef.current?.setView([latitude, longitude], zoom ?? 12, { animate: true });
+      },
+    }),
+    [],
+  );
 
   useEffect(() => {
     ensureLeafletStylesheet();
@@ -141,6 +146,10 @@ export function LocationMapView({
   );
   const circles = useMemo(
     () => (showOverlays ? buildClusterCircles(nodes) : []),
+    [nodes, showOverlays],
+  );
+  const segmentDistances = useMemo(
+    () => (showOverlays ? buildSegmentDistances(nodes) : []),
     [nodes, showOverlays],
   );
   const presetConfig = MAP_PRESETS[preset];
@@ -216,8 +225,9 @@ export function LocationMapView({
       >
         <ViewportBridge onChange={handleViewportChange} />
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          key={preset}
+          attribution={presetConfig.webTileAttribution}
+          url={presetConfig.webTileUrl}
         />
 
         {nodes.map((node) => (
@@ -244,6 +254,21 @@ export function LocationMapView({
           ))}
 
         {showOverlays &&
+          segmentDistances.map((seg) => (
+            <Marker
+              key={seg.id}
+              position={[seg.midpoint.latitude, seg.midpoint.longitude]}
+              icon={L.divIcon({
+                className: "map-distance-label",
+                html: `<div style="background:rgba(0,0,0,0.6);color:#fff;font-size:10px;padding:1px 4px;border-radius:3px;white-space:nowrap;">${seg.label}</div>`,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0],
+              })}
+              interactive={false}
+            />
+          ))}
+
+        {showOverlays &&
           circles.map((circle) => (
             <Circle
               key={circle.id}
@@ -258,12 +283,6 @@ export function LocationMapView({
             />
           ))}
       </MapContainer>
-      {presetConfig.label === "location.presetDark" ? (
-        <View
-          pointerEvents="none"
-          style={{ position: "absolute", inset: 0, backgroundColor: "rgba(8,14,24,0.22)" }}
-        />
-      ) : null}
     </View>
   );
 }

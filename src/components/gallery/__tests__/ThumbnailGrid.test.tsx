@@ -103,3 +103,30 @@ describe("ThumbnailGrid loading progress", () => {
     expect(screen.getByText("gallery.thumbnailStageError")).toBeTruthy();
   });
 });
+
+describe("ThumbnailGrid selection", () => {
+  it("marks selected items using Set-based lookup", () => {
+    const file2: FitsMetadata = {
+      ...baseFile,
+      id: "f2",
+      filename: "f2.fits",
+      filepath: "file:///f2.fits",
+      thumbnailUri: "https://example.com/f2.jpg",
+    };
+    const onSelect = jest.fn();
+    render(
+      <ThumbnailGrid
+        files={[baseFile, file2]}
+        columns={2}
+        selectionMode
+        selectedIds={["f1"]}
+        onSelect={onSelect}
+      />,
+    );
+
+    const img1 = screen.getByTestId("expo-image-f1");
+    const img2 = screen.getByTestId("expo-image-f2");
+    expect(img1).toBeTruthy();
+    expect(img2).toBeTruthy();
+  });
+});

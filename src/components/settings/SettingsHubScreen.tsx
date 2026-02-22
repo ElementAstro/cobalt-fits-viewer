@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import { View, Text, ScrollView, TextInput } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import { Separator, useThemeColor } from "heroui-native";
+import { Input, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
@@ -198,7 +198,6 @@ export default function SettingsHubScreen() {
   }, [searchQuery, t]);
 
   const mutedColor = useThemeColor("muted");
-  const backgroundColor = useThemeColor("surface");
 
   return (
     <View testID="e2e-screen-settings__index" className="flex-1 bg-background">
@@ -212,18 +211,21 @@ export default function SettingsHubScreen() {
       >
         <Text className="text-2xl font-bold text-foreground">{t("settings.title")}</Text>
 
-        <View
-          className="mt-3 flex-row items-center rounded-xl px-3 py-2"
-          style={{ backgroundColor }}
-        >
-          <Ionicons name="search-outline" size={18} color={mutedColor} />
-          <TextInput
+        <View className="mt-3 flex-row items-center">
+          <Input
             testID="e2e-action-settings__index-search"
             placeholder={t("common.search")}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            className="ml-2 flex-1 text-sm text-foreground"
-            placeholderTextColor={mutedColor}
+            className="flex-1 pl-10"
+            variant="secondary"
+          />
+          <Ionicons
+            name="search-outline"
+            size={18}
+            color={mutedColor}
+            style={{ position: "absolute", left: 12, zIndex: 1 }}
+            pointerEvents="none"
           />
         </View>
 

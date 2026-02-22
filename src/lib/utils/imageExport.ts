@@ -156,6 +156,10 @@ export function getMimeType(format: MediaExportFormat): string {
       return "image/bmp";
     case "fits":
       return "application/fits";
+    case "xisf":
+      return "application/xisf";
+    case "ser":
+      return "application/ser";
     case "mp4":
       return "video/mp4";
     case "mov":
@@ -192,6 +196,10 @@ export function getExtension(format: MediaExportFormat): string {
       return "jpg";
     case "fits":
       return "fits";
+    case "xisf":
+      return "xisf";
+    case "ser":
+      return "ser";
     default:
       return format;
   }
@@ -213,6 +221,8 @@ export function getUTI(format: MediaExportFormat): string {
     case "bmp":
       return "com.microsoft.bmp";
     case "fits":
+    case "xisf":
+    case "ser":
       return "public.data";
     case "mp4":
     case "m4v":

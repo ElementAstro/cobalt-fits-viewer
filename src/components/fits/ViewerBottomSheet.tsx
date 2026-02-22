@@ -17,9 +17,13 @@ export function ViewerBottomSheet({
   onVisibleChange,
   ...controlPanelProps
 }: ViewerBottomSheetProps) {
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, surfaceColor] = useThemeColor(["muted", "surface"]);
   const { height: screenHeight } = useWindowDimensions();
   const [sheetIndex, setSheetIndex] = useState(1);
+  // Deferred open state: ensures the BottomSheet always mounts with isOpen=false
+  // first, then transitions to true — required by heroui-native's internal
+  // BottomSheetContentContainer to detect the false→true change and call snapToIndex.
+  const [internalOpen, setInternalOpen] = useState(false);
 
   const snapPoints = useMemo(
     () => [56, Math.round(screenHeight * 0.45), Math.round(screenHeight * 0.85)],
@@ -36,16 +40,16 @@ export function ViewerBottomSheet({
     } else {
       setSheetIndex(0);
     }
+    setInternalOpen(visible);
   }, [visible]);
-
-  if (!visible) return null;
 
   return (
     <BottomSheet
-      isOpen={visible}
+      isOpen={internalOpen}
       onOpenChange={(open) => {
         if (!open) {
           setSheetIndex(0);
+          setInternalOpen(false);
         }
         onVisibleChange?.(open);
       }}
@@ -56,7 +60,7 @@ export function ViewerBottomSheet({
           index={sheetIndex}
           snapPoints={snapPoints}
           onChange={(index) => setSheetIndex(index)}
-          backgroundStyle={{ backgroundColor: "rgba(20, 20, 20, 0.97)" }}
+          backgroundStyle={{ backgroundColor: surfaceColor + "F8" }}
           handleIndicatorStyle={{ backgroundColor: mutedColor, width: 36 }}
           enableDynamicSizing={false}
         >

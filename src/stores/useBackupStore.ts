@@ -7,6 +7,19 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandMMKVStorage } from "../lib/storage";
 import type { CloudProvider, BackupProgress, ProviderConnectionState } from "../lib/backup/types";
 
+const MAX_HISTORY_ENTRIES = 50;
+
+export interface BackupHistoryEntry {
+  id: string;
+  timestamp: number;
+  type: "backup" | "restore" | "local-export" | "local-import";
+  provider: CloudProvider | "local";
+  result: "success" | "failed";
+  fileCount?: number;
+  totalSize?: number;
+  error?: string;
+}
+
 interface BackupStoreState {
   // 已配置的 providers
   connections: ProviderConnectionState[];
@@ -22,6 +35,10 @@ interface BackupStoreState {
   autoBackupNetwork: "wifi" | "any";
   lastAutoBackupAttempt: number;
   lastAutoBackupCheck: number;
+  lastAutoBackupResult: "success" | "failed" | null;
+  lastAutoBackupError: string | null;
+  // 历史记录
+  history: BackupHistoryEntry[];
   // 错误
   lastError: string | null;
 
@@ -38,9 +55,12 @@ interface BackupStoreState {
   setAutoBackupNetwork: (network: "wifi" | "any") => void;
   setLastAutoBackupAttempt: (timestamp: number) => void;
   setLastAutoBackupCheck: (timestamp: number) => void;
+  setLastAutoBackupResult: (result: "success" | "failed" | null, error?: string | null) => void;
   setLastError: (error: string | null) => void;
   getConnection: (provider: CloudProvider) => ProviderConnectionState | undefined;
   resetProgress: () => void;
+  addHistoryEntry: (entry: Omit<BackupHistoryEntry, "id" | "timestamp">) => void;
+  clearHistory: () => void;
 }
 
 const IDLE_PROGRESS: BackupProgress = {
@@ -62,6 +82,9 @@ export const useBackupStore = create<BackupStoreState>()(
       autoBackupNetwork: "wifi",
       lastAutoBackupAttempt: 0,
       lastAutoBackupCheck: 0,
+      lastAutoBackupResult: null,
+      lastAutoBackupError: null,
+      history: [],
       lastError: null,
 
       setActiveProvider: (provider) => set({ activeProvider: provider }),
@@ -106,11 +129,28 @@ export const useBackupStore = create<BackupStoreState>()(
 
       setLastAutoBackupCheck: (timestamp) => set({ lastAutoBackupCheck: timestamp }),
 
+      setLastAutoBackupResult: (result, error) =>
+        set({ lastAutoBackupResult: result, lastAutoBackupError: error ?? null }),
+
       setLastError: (error) => set({ lastError: error }),
 
       getConnection: (provider) => get().connections.find((c) => c.provider === provider),
 
       resetProgress: () => set({ progress: IDLE_PROGRESS }),
+
+      addHistoryEntry: (entry) =>
+        set((state) => ({
+          history: [
+            {
+              ...entry,
+              id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              timestamp: Date.now(),
+            },
+            ...state.history,
+          ].slice(0, MAX_HISTORY_ENTRIES),
+        })),
+
+      clearHistory: () => set({ history: [] }),
     }),
     {
       name: "backup-store",
@@ -123,6 +163,9 @@ export const useBackupStore = create<BackupStoreState>()(
         autoBackupNetwork: state.autoBackupNetwork,
         lastAutoBackupAttempt: state.lastAutoBackupAttempt,
         lastAutoBackupCheck: state.lastAutoBackupCheck,
+        lastAutoBackupResult: state.lastAutoBackupResult,
+        lastAutoBackupError: state.lastAutoBackupError,
+        history: state.history,
       }),
     },
   ),

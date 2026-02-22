@@ -6,13 +6,14 @@ import { View, Text } from "react-native";
 import { Button, Card, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { ProviderConnectionState } from "../../lib/backup/types";
+import type { ProviderConnectionState, BackupInfo } from "../../lib/backup/types";
 import { PROVIDER_DISPLAY } from "../../lib/backup/types";
 import { formatFileSize } from "../../lib/utils/fileManager";
 
 interface ProviderCardProps {
   connection: ProviderConnectionState;
   isActive?: boolean;
+  backupInfo?: BackupInfo | null;
   onBackup: () => void;
   onRestore: () => void;
   onDisconnect: () => void;
@@ -22,6 +23,7 @@ interface ProviderCardProps {
 export function ProviderCard({
   connection,
   isActive = false,
+  backupInfo,
   onBackup,
   onRestore,
   onDisconnect,
@@ -84,6 +86,20 @@ export function ProviderCard({
             </View>
           )}
         </View>
+        {backupInfo && (
+          <View className="mt-2 flex-row justify-between">
+            <View>
+              <Text className="text-xs text-muted">{t("backup.remoteFiles")}</Text>
+              <Text className="text-xs text-foreground">{backupInfo.fileCount}</Text>
+            </View>
+            <View className="items-end">
+              <Text className="text-xs text-muted">{t("backup.remoteSize")}</Text>
+              <Text className="text-xs text-foreground">
+                {formatFileSize(backupInfo.totalSize)}
+              </Text>
+            </View>
+          </View>
+        )}
         {isActive && (
           <View className="mt-2">
             <Chip size="sm" variant="primary">

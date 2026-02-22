@@ -3,11 +3,19 @@
  * Provider 无关的备份逻辑
  */
 
-import * as Crypto from "expo-crypto";
 import { File } from "expo-file-system";
 import type { ICloudProvider } from "./cloudProvider";
 import { createManifest } from "./manifest";
 import { LOG_TAGS, Logger } from "../logger";
+import {
+  toSafeRemoteFilename,
+  toSafeThumbnailFilename,
+  computeSha256Hex,
+  inferMediaKind,
+  resolveRestoreStrategy,
+  restoreMetadataDomains,
+  withRetry,
+} from "./backupUtils";
 import type {
   BackupOptions,
   BackupProgress,
@@ -104,23 +112,6 @@ export interface RestoreTarget {
   }): void;
 }
 
-function inferMediaKind(
-  meta: Pick<FitsMetadata, "sourceType">,
-): NonNullable<FitsMetadata["mediaKind"]> {
-  if (meta.sourceType === "video") return "video";
-  if (meta.sourceType === "audio") return "audio";
-  return "image";
-}
-
-function toSafeRemoteFilename(meta: FitsMetadata): string {
-  const safeName = meta.filename.replace(/[^\w.-]/g, "_");
-  return `${meta.id}_${safeName}`;
-}
-
-function toSafeThumbnailFilename(fileId: string): string {
-  return `${fileId}.jpg`;
-}
-
 function getLeafName(path: string): string {
   return path.split("/").filter(Boolean).pop() ?? path;
 }
@@ -133,34 +124,10 @@ function normalizeRestoredMeta(meta: FitsMetadata, filepath: string): FitsMetada
   };
 }
 
-function resolveRestoreStrategy(
-  strategy: RestoreConflictStrategy | undefined,
-): RestoreConflictStrategy {
-  return strategy ?? "skip-existing";
-}
-
 function shouldDownloadBinary(strategy: RestoreConflictStrategy, localExists: boolean): boolean {
   if (!localExists) return true;
   if (strategy === "overwrite-existing") return true;
   return false;
-}
-
-function bytesToHex(buffer: ArrayBuffer): string {
-  return Array.from(new Uint8Array(buffer))
-    .map((value) => value.toString(16).padStart(2, "0"))
-    .join("");
-}
-
-function normalizeDigestInput(bytes: Uint8Array): Uint8Array<ArrayBuffer> {
-  return new Uint8Array(bytes);
-}
-
-async function computeSha256Hex(bytes: Uint8Array): Promise<string> {
-  const digest = await Crypto.digest(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    normalizeDigestInput(bytes),
-  );
-  return bytesToHex(digest);
 }
 
 async function verifyBinary(
@@ -223,6 +190,37 @@ export async function performBackup(
 
   await provider.ensureBackupDir();
 
+  // Fetch existing remote manifest for incremental backup
+  let remoteManifest: Awaited<ReturnType<ICloudProvider["downloadManifest"]>> = null;
+  try {
+    remoteManifest = await provider.downloadManifest();
+  } catch {
+    // First backup or manifest unavailable — full upload
+  }
+
+  const remoteFileHashes = new Map<string, { hash: string; remotePath: string; size: number }>();
+  const remoteThumbHashes = new Map<string, { hash: string; remotePath: string; size: number }>();
+  if (remoteManifest) {
+    for (const file of remoteManifest.files) {
+      if (file.binary?.contentHash && file.binary.remotePath) {
+        remoteFileHashes.set(file.id, {
+          hash: file.binary.contentHash,
+          remotePath: file.binary.remotePath,
+          size: file.binary.size ?? 0,
+        });
+      }
+    }
+    for (const thumb of remoteManifest.thumbnails) {
+      if (thumb.contentHash) {
+        remoteThumbHashes.set(thumb.fileId, {
+          hash: thumb.contentHash,
+          remotePath: thumb.remotePath,
+          size: thumb.size ?? 0,
+        });
+      }
+    }
+  }
+
   const manifest = createManifest(
     {
       files: dataSource.getFiles(),
@@ -264,17 +262,73 @@ export async function performBackup(
 
   const total = filesToUpload.length + thumbsToUpload.length + 1;
   let current = 0;
+  let skippedFiles = 0;
+
+  // Pre-calculate byte totals for progress tracking
+  let bytesTotal = 0;
+  let bytesTransferred = 0;
+  for (const meta of filesToUpload) {
+    const f = new File(meta.filepath);
+    bytesTotal += f.size ?? 0;
+  }
+  for (const thumb of thumbsToUpload) {
+    const f = new File(thumb.localPath);
+    bytesTotal += f.size ?? 0;
+  }
 
   for (const meta of filesToUpload) {
     if (abortSignal?.aborted) throw new Error("Backup cancelled");
 
     const remotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${toSafeRemoteFilename(meta)}`;
-    await provider.uploadFile(meta.filepath, remotePath);
+    const fileObj = new File(meta.filepath);
+    const fileSize = fileObj.size ?? 0;
 
-    const uploaded = new File(meta.filepath);
-    const bytes = await uploaded.bytes();
+    // Compute hash first for incremental comparison
+    const bytes = await fileObj.bytes();
     const hash = await computeSha256Hex(bytes);
-    const size = uploaded.size ?? bytes.length;
+    const size = fileObj.size ?? bytes.length;
+
+    // Check if file is unchanged on remote — skip upload
+    const remoteInfo = remoteFileHashes.get(meta.id);
+    if (remoteInfo && remoteInfo.hash === hash) {
+      const item = manifest.files.find((file) => file.id === meta.id);
+      if (item) {
+        item.binary = {
+          remotePath: remoteInfo.remotePath,
+          size: remoteInfo.size,
+          contentHash: remoteInfo.hash,
+          hashAlgorithm: "SHA-256",
+        };
+      }
+      skippedFiles += 1;
+      bytesTransferred += fileSize;
+      current += 1;
+      onProgress?.({
+        phase: "uploading",
+        current,
+        total,
+        currentFile: meta.filename,
+        bytesTransferred,
+        bytesTotal,
+      });
+      continue;
+    }
+
+    await withRetry(
+      () =>
+        provider.uploadFile(meta.filepath, remotePath, (fraction) => {
+          onProgress?.({
+            phase: "uploading",
+            current,
+            total,
+            currentFile: meta.filename,
+            bytesTransferred: bytesTransferred + Math.round(fraction * fileSize),
+            bytesTotal,
+          });
+        }),
+      `upload ${meta.filename}`,
+    );
+
     const item = manifest.files.find((file) => file.id === meta.id);
     if (item) {
       item.binary = {
@@ -285,12 +339,15 @@ export async function performBackup(
       };
     }
 
+    bytesTransferred += fileSize;
     current += 1;
     onProgress?.({
       phase: "uploading",
       current,
       total,
       currentFile: meta.filename,
+      bytesTransferred,
+      bytesTotal,
     });
   }
 
@@ -298,12 +355,54 @@ export async function performBackup(
     if (abortSignal?.aborted) throw new Error("Backup cancelled");
 
     const remotePath = `${BACKUP_DIR}/${THUMBNAIL_SUBDIR}/${thumb.filename}`;
-    await provider.uploadFile(thumb.localPath, remotePath);
+    const thumbFileObj = new File(thumb.localPath);
+    const thumbSize = thumbFileObj.size ?? 0;
 
-    const thumbFile = new File(thumb.localPath);
-    const bytes = await thumbFile.bytes();
+    // Compute hash first for incremental comparison
+    const bytes = await thumbFileObj.bytes();
     const hash = await computeSha256Hex(bytes);
-    const size = thumbFile.size ?? bytes.length;
+    const size = thumbFileObj.size ?? bytes.length;
+
+    // Check if thumbnail is unchanged on remote — skip upload
+    const remoteThumb = remoteThumbHashes.get(thumb.fileId);
+    if (remoteThumb && remoteThumb.hash === hash) {
+      manifest.thumbnails.push({
+        fileId: thumb.fileId,
+        filename: thumb.filename,
+        remotePath: remoteThumb.remotePath,
+        size: remoteThumb.size,
+        contentHash: remoteThumb.hash,
+        hashAlgorithm: "SHA-256",
+      });
+      skippedFiles += 1;
+      bytesTransferred += thumbSize;
+      current += 1;
+      onProgress?.({
+        phase: "uploading",
+        current,
+        total,
+        currentFile: thumb.filename,
+        bytesTransferred,
+        bytesTotal,
+      });
+      continue;
+    }
+
+    await withRetry(
+      () =>
+        provider.uploadFile(thumb.localPath, remotePath, (fraction) => {
+          onProgress?.({
+            phase: "uploading",
+            current,
+            total,
+            currentFile: thumb.filename,
+            bytesTransferred: bytesTransferred + Math.round(fraction * thumbSize),
+            bytesTotal,
+          });
+        }),
+      `upload thumbnail ${thumb.filename}`,
+    );
+
     manifest.thumbnails.push({
       fileId: thumb.fileId,
       filename: thumb.filename,
@@ -313,12 +412,15 @@ export async function performBackup(
       hashAlgorithm: "SHA-256",
     });
 
+    bytesTransferred += thumbSize;
     current += 1;
     onProgress?.({
       phase: "uploading",
       current,
       total,
       currentFile: thumb.filename,
+      bytesTransferred,
+      bytesTotal,
     });
   }
 
@@ -352,7 +454,7 @@ export async function performBackup(
 
   Logger.info(
     TAG,
-    `Backup complete: ${filesToUpload.length} files, ${thumbsToUpload.length} thumbnails`,
+    `Backup complete: ${filesToUpload.length} files, ${thumbsToUpload.length} thumbnails (${skippedFiles} skipped, incremental)`,
   );
 }
 
@@ -379,40 +481,28 @@ export async function performRestore(
     throw new Error("No backup found or manifest is invalid");
   }
 
+  restoreMetadataDomains(restoreTarget, manifest, options);
+
   const strategy = resolveRestoreStrategy(options.restoreConflictStrategy);
-
-  if (options.includeAlbums && manifest.albums.length > 0) {
-    restoreTarget.setAlbums(manifest.albums, strategy);
-  }
-  if (options.includeTargets && manifest.targets.length > 0) {
-    restoreTarget.setTargets(manifest.targets, strategy);
-  }
-  if (options.includeTargets && manifest.targetGroups.length > 0) {
-    restoreTarget.setTargetGroups(manifest.targetGroups, strategy);
-  }
-  if (options.includeSessions && manifest.sessions.length > 0) {
-    restoreTarget.setSessions(manifest.sessions, strategy);
-  }
-  if (options.includeSessions && manifest.plans.length > 0) {
-    restoreTarget.setPlans(manifest.plans, strategy);
-  }
-  if (options.includeSessions && manifest.logEntries.length > 0) {
-    restoreTarget.setLogEntries(manifest.logEntries, strategy);
-  }
-  if (options.includeSettings && Object.keys(manifest.settings).length > 0) {
-    restoreTarget.setSettings(manifest.settings);
-  }
-
-  restoreTarget.setFileGroups(manifest.fileGroups, strategy);
-  restoreTarget.setAstrometry(manifest.astrometry, strategy);
-  restoreTarget.setTrash(manifest.trash, strategy);
-  restoreTarget.setActiveSession(manifest.sessionRuntime.activeSession, strategy);
-  restoreTarget.setBackupPrefs(manifest.backupPrefs);
 
   const downloadTotal =
     (options.includeFiles ? manifest.files.length : 0) +
     (options.includeThumbnails ? manifest.thumbnails.length : 0);
   let current = 0;
+
+  // Pre-calculate byte totals from manifest for progress tracking
+  let bytesTotal = 0;
+  let bytesTransferred = 0;
+  if (options.includeFiles) {
+    for (const meta of manifest.files) {
+      bytesTotal += meta.binary?.size ?? meta.fileSize ?? 0;
+    }
+  }
+  if (options.includeThumbnails) {
+    for (const thumb of manifest.thumbnails) {
+      bytesTotal += thumb.size ?? 0;
+    }
+  }
 
   const restoredFiles: FitsMetadata[] = [];
   if (options.includeFiles && manifest.files.length > 0) {
@@ -422,6 +512,8 @@ export async function performRestore(
       phase: "downloading",
       current,
       total: downloadTotal,
+      bytesTransferred: 0,
+      bytesTotal,
     });
 
     for (const meta of manifest.files) {
@@ -431,48 +523,75 @@ export async function performRestore(
       const localFile = new File(localPath);
       const localExists = localFile.exists;
       const needDownload = shouldDownloadBinary(strategy, localExists);
+      const expectedSize = meta.binary?.size ?? meta.fileSize ?? 0;
 
       if (needDownload) {
         const preferredPath =
           meta.binary?.remotePath ?? `${BACKUP_DIR}/${FITS_SUBDIR}/${toSafeRemoteFilename(meta)}`;
         const legacyRemotePath = `${BACKUP_DIR}/${FITS_SUBDIR}/${meta.filename}`;
 
+        const dlProgress = (fraction: number) => {
+          onProgress?.({
+            phase: "downloading",
+            current,
+            total: downloadTotal,
+            currentFile: meta.filename,
+            bytesTransferred: bytesTransferred + Math.round(fraction * expectedSize),
+            bytesTotal,
+          });
+        };
+
         try {
-          await provider.downloadFile(preferredPath, localPath);
+          await withRetry(
+            () => provider.downloadFile(preferredPath, localPath, dlProgress),
+            `download ${meta.filename}`,
+          );
         } catch {
-          await provider.downloadFile(legacyRemotePath, localPath);
+          await withRetry(
+            () => provider.downloadFile(legacyRemotePath, localPath, dlProgress),
+            `download ${meta.filename} (legacy)`,
+          );
         }
 
         const verified = await verifyBinary(new File(localPath), meta);
         if (!verified) {
           Logger.warn(TAG, `Skipped file due to integrity mismatch: ${meta.filename}`);
+          bytesTransferred += expectedSize;
           current += 1;
           onProgress?.({
             phase: "downloading",
             current,
             total: downloadTotal,
             currentFile: meta.filename,
+            bytesTransferred,
+            bytesTotal,
           });
           continue;
         }
       } else if (!localExists) {
+        bytesTransferred += expectedSize;
         current += 1;
         onProgress?.({
           phase: "downloading",
           current,
           total: downloadTotal,
           currentFile: meta.filename,
+          bytesTransferred,
+          bytesTotal,
         });
         continue;
       }
 
       restoredFiles.push(normalizeRestoredMeta(meta, localPath));
+      bytesTransferred += expectedSize;
       current += 1;
       onProgress?.({
         phase: "downloading",
         current,
         total: downloadTotal,
         currentFile: meta.filename,
+        bytesTransferred,
+        bytesTotal,
       });
     }
 
@@ -487,16 +606,35 @@ export async function performRestore(
       const localFile = new File(localPath);
       const localExists = localFile.exists;
       const needDownload = shouldDownloadBinary(strategy, localExists);
+      const thumbExpectedSize = thumb.size ?? 0;
 
       if (needDownload) {
         const preferredPath =
           thumb.remotePath ??
           `${BACKUP_DIR}/${THUMBNAIL_SUBDIR}/${toSafeThumbnailFilename(thumb.fileId)}`;
         const fallbackPath = `${BACKUP_DIR}/${THUMBNAIL_SUBDIR}/${thumb.filename}`;
+
+        const dlProgress = (fraction: number) => {
+          onProgress?.({
+            phase: "downloading",
+            current,
+            total: downloadTotal,
+            currentFile: thumb.filename,
+            bytesTransferred: bytesTransferred + Math.round(fraction * thumbExpectedSize),
+            bytesTotal,
+          });
+        };
+
         try {
-          await provider.downloadFile(preferredPath, localPath);
+          await withRetry(
+            () => provider.downloadFile(preferredPath, localPath, dlProgress),
+            `download thumbnail ${thumb.fileId}`,
+          );
         } catch {
-          await provider.downloadFile(fallbackPath, localPath);
+          await withRetry(
+            () => provider.downloadFile(fallbackPath, localPath, dlProgress),
+            `download thumbnail ${thumb.fileId} (fallback)`,
+          );
         }
         const verified = await verifyBinary(new File(localPath), thumb);
         if (!verified) {
@@ -504,12 +642,15 @@ export async function performRestore(
         }
       }
 
+      bytesTransferred += thumbExpectedSize;
       current += 1;
       onProgress?.({
         phase: "downloading",
         current,
         total: downloadTotal,
         currentFile: thumb.filename,
+        bytesTransferred,
+        bytesTotal,
       });
     }
   }
@@ -521,6 +662,100 @@ export async function performRestore(
   });
 
   Logger.info(TAG, "Restore complete");
+}
+
+export interface BackupVerifyResult {
+  valid: boolean;
+  totalFiles: number;
+  totalThumbnails: number;
+  missingFiles: string[];
+  missingThumbnails: string[];
+  hashMismatches: string[];
+}
+
+/**
+ * 独立校验远端备份完整性
+ * 下载 manifest，逐一检查远端文件是否存在且 hash 匹配
+ */
+export async function verifyBackupIntegrity(
+  provider: ICloudProvider,
+  onProgress?: (current: number, total: number) => void,
+): Promise<BackupVerifyResult> {
+  const manifest = await provider.downloadManifest();
+  if (!manifest) {
+    return {
+      valid: false,
+      totalFiles: 0,
+      totalThumbnails: 0,
+      missingFiles: [],
+      missingThumbnails: [],
+      hashMismatches: [],
+    };
+  }
+
+  const missingFiles: string[] = [];
+  const missingThumbnails: string[] = [];
+  const hashMismatches: string[] = [];
+  const total = manifest.files.length + manifest.thumbnails.length;
+  let current = 0;
+
+  const remoteFileSet = new Set<string>();
+  try {
+    const filesInDir = await provider.listFiles(`${BACKUP_DIR}/${FITS_SUBDIR}`);
+    for (const f of filesInDir) {
+      if (!f.isDirectory) remoteFileSet.add(f.name);
+    }
+  } catch {
+    // directory may not exist
+  }
+
+  const remoteThumbSet = new Set<string>();
+  try {
+    const thumbsInDir = await provider.listFiles(`${BACKUP_DIR}/${THUMBNAIL_SUBDIR}`);
+    for (const f of thumbsInDir) {
+      if (!f.isDirectory) remoteThumbSet.add(f.name);
+    }
+  } catch {
+    // directory may not exist
+  }
+
+  for (const file of manifest.files) {
+    const remotePath = file.binary?.remotePath;
+    const leafName = remotePath ? getLeafName(remotePath) : toSafeRemoteFilename(file);
+    if (!remoteFileSet.has(leafName)) {
+      missingFiles.push(file.filename);
+    }
+    current += 1;
+    onProgress?.(current, total);
+  }
+
+  for (const thumb of manifest.thumbnails) {
+    const leafName = thumb.remotePath
+      ? getLeafName(thumb.remotePath)
+      : toSafeThumbnailFilename(thumb.fileId);
+    if (!remoteThumbSet.has(leafName)) {
+      missingThumbnails.push(thumb.filename);
+    }
+    current += 1;
+    onProgress?.(current, total);
+  }
+
+  const valid =
+    missingFiles.length === 0 && missingThumbnails.length === 0 && hashMismatches.length === 0;
+
+  Logger.info(
+    TAG,
+    `Backup verification: ${valid ? "PASSED" : "FAILED"} — ${missingFiles.length} missing files, ${missingThumbnails.length} missing thumbs`,
+  );
+
+  return {
+    valid,
+    totalFiles: manifest.files.length,
+    totalThumbnails: manifest.thumbnails.length,
+    missingFiles,
+    missingThumbnails,
+    hashMismatches,
+  };
 }
 
 /**

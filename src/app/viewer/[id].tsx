@@ -2,11 +2,19 @@ import { View, Text, ScrollView, StatusBar } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Alert as HAlert, Button, Skeleton, useThemeColor, useToast } from "heroui-native";
+import {
+  Alert as HAlert,
+  Button,
+  Skeleton,
+  Spinner,
+  Surface,
+  useThemeColor,
+  useToast,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
-import Animated, { FadeIn } from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -33,6 +41,10 @@ import { computeAutoStretch } from "../../lib/utils/pixelMath";
 import { useAstrometry } from "../../hooks/useAstrometry";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { AstrometryAnnotationOverlay } from "../../components/astrometry/AstrometryAnnotationOverlay";
+import { CoordinateGridOverlay } from "../../components/astrometry/CoordinateGridOverlay";
+import { ConstellationOverlay } from "../../components/astrometry/ConstellationOverlay";
+import { AnnotationDetailSheet } from "../../components/astrometry/AnnotationDetailSheet";
+import { CompassIndicator } from "../../components/astrometry/CompassIndicator";
 import { ViewerControlPanel } from "../../components/fits/ViewerControlPanel";
 import { ViewerBottomSheet } from "../../components/fits/ViewerBottomSheet";
 import { ViewerToolbar } from "../../components/fits/ViewerToolbar";
@@ -40,6 +52,16 @@ import { StatsOverlay } from "../../components/fits/StatsOverlay";
 import { ZoomControls } from "../../components/fits/ZoomControls";
 import { AstrometryBadge } from "../../components/fits/AstrometryBadge";
 import { shareWCS } from "../../lib/astrometry/wcsExport";
+import {
+  pixelToRaDec,
+  formatRaFromDeg,
+  formatDecFromDeg,
+} from "../../lib/astrometry/wcsProjection";
+import {
+  createDefaultLayerVisibility,
+  getVisibleTypes,
+} from "../../components/astrometry/AnnotationLayerControls";
+import type { AstrometryAnnotationType, AstrometryAnnotation } from "../../lib/astrometry/types";
 import { toViewerPreset } from "../../lib/viewer/model";
 import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
 import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
@@ -50,6 +72,7 @@ export default function ViewerDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const successColor = useThemeColor("success");
   const { isLandscape, sidePanelWidth } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
 
@@ -197,6 +220,7 @@ export default function ViewerDetailScreen() {
     displayWidth,
     displayHeight,
     histogram,
+    rgbHistogram,
     regionHistogram,
     processImage,
     processImagePreview,
@@ -210,12 +234,32 @@ export default function ViewerDetailScreen() {
 
   const { generateThumbnailAsync } = useThumbnail();
 
+  // Progressive loading phase: 0=reading, 1=parsing, 2=rendering
+  const loadingPhase = useMemo(() => {
+    if (isFitsLoading && !metadata) return 0;
+    if (isFitsLoading && !pixels) return 1;
+    if (!rgbaData || isProcessing) return 2;
+    return 2;
+  }, [isFitsLoading, metadata, pixels, rgbaData, isProcessing]);
+
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isRegionSelectActive, setIsRegionSelectActive] = useState(false);
   const [showExport, setShowExport] = useState(false);
   const [showAstrometryResult, setShowAstrometryResult] = useState(false);
   const [showAnnotations, setShowAnnotations] = useState(true);
+  const [annotationLayerVisibility, setAnnotationLayerVisibility] = useState(
+    createDefaultLayerVisibility,
+  );
+  const [showCoordinateGrid, setShowCoordinateGrid] = useState(false);
+  const [showConstellations, setShowConstellations] = useState(false);
+  const [selectedAnnotation, setSelectedAnnotation] = useState<AstrometryAnnotation | null>(null);
+
+  const visibleAnnotationTypes = useMemo(
+    () => getVisibleTypes(annotationLayerVisibility),
+    [annotationLayerVisibility],
+  );
+
   const [exportFormat, setExportFormat] = useState<ExportFormat>(defaultExportFormat);
   const canvasGestureConfig = useMemo(
     () => ({
@@ -534,8 +578,33 @@ export default function ViewerDetailScreen() {
       if (!pixels || !dimensions) return;
       const val = pixels[y * dimensions.width + x] ?? null;
       setCursorPosition(x, y, val);
+
+      // Hit-test annotations: find nearest annotation within 30px radius
+      if (showAnnotations && latestSolvedJob?.result?.annotations) {
+        const HIT_RADIUS = 30; // pixels in source space
+        let nearest: AstrometryAnnotation | null = null;
+        let nearestDist = HIT_RADIUS;
+        for (const ann of latestSolvedJob.result.annotations) {
+          if (visibleAnnotationTypes && !visibleAnnotationTypes.includes(ann.type)) continue;
+          const dx = ann.pixelx - x;
+          const dy = ann.pixely - y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearest = ann;
+          }
+        }
+        setSelectedAnnotation(nearest);
+      }
     },
-    [pixels, dimensions, setCursorPosition],
+    [
+      pixels,
+      dimensions,
+      setCursorPosition,
+      showAnnotations,
+      latestSolvedJob,
+      visibleAnnotationTypes,
+    ],
   );
 
   // --- Auto stretch handler ---
@@ -801,9 +870,9 @@ export default function ViewerDetailScreen() {
   // Histogram and stats only on pixel/dimension change (deferred after interactions)
   useEffect(() => {
     if (pixels) {
-      getStatsAndHistogram(pixels, 256);
+      getStatsAndHistogram(pixels, 256, rgbChannels);
     }
-  }, [pixels, getStatsAndHistogram]);
+  }, [pixels, rgbChannels, getStatsAndHistogram]);
 
   // Auto-generate thumbnail on first view if missing
   useEffect(() => {
@@ -830,30 +899,25 @@ export default function ViewerDetailScreen() {
   const pixelWcs = useMemo(() => {
     const cal = latestSolvedJob?.result?.calibration;
     if (!cal || !dimensions || cursorX < 0 || cursorY < 0) return null;
-    const cx = dimensions.width / 2;
-    const cy = dimensions.height / 2;
-    const dx = cursorX - cx;
-    const dy = cursorY - cy;
-    const rad = (Math.PI / 180) * cal.orientation;
-    const cosR = Math.cos(rad);
-    const sinR = Math.sin(rad);
-    const rotX = dx * cosR - dy * sinR;
-    const rotY = dx * sinR + dy * cosR;
-    const degPerPx = cal.pixscale / 3600;
-    const decOffset = -rotY * degPerPx;
-    const raOffset = (rotX * degPerPx) / Math.cos((cal.dec * Math.PI) / 180);
+    const radec = pixelToRaDec(cursorX, cursorY, cal);
+    if (!radec) return null;
     return {
-      ra: ((cal.ra + raOffset) / 15).toFixed(4) + "h",
-      dec: (cal.dec + decOffset >= 0 ? "+" : "") + (cal.dec + decOffset).toFixed(4) + "°",
+      ra: formatRaFromDeg(radec.ra),
+      dec: formatDecFromDeg(radec.dec),
     };
   }, [latestSolvedJob, dimensions, cursorX, cursorY]);
 
   const handleToggleAnnotations = useCallback(() => setShowAnnotations((prev) => !prev), []);
 
+  const handleToggleAnnotationType = useCallback((type: AstrometryAnnotationType) => {
+    setAnnotationLayerVisibility((prev) => ({ ...prev, [type]: !prev[type] }));
+  }, []);
+
   const controlPanelProps = useMemo(
     () => ({
       file: file!,
       histogram,
+      rgbHistogram,
       regionHistogram,
       blackPoint,
       whitePoint,
@@ -906,6 +970,12 @@ export default function ViewerDetailScreen() {
       latestSolvedJob,
       showAnnotations,
       onToggleAnnotations: handleToggleAnnotations,
+      annotationLayerVisibility,
+      onToggleAnnotationType: handleToggleAnnotationType,
+      showCoordinateGrid,
+      onToggleCoordinateGrid: () => setShowCoordinateGrid((prev) => !prev),
+      showConstellations,
+      onToggleConstellations: () => setShowConstellations((prev) => !prev),
       onExportWCS: handleViewerExportWCS,
       onNavigateToAstrometryResult: navigateToAstrometryResult,
       showControls,
@@ -913,6 +983,7 @@ export default function ViewerDetailScreen() {
     [
       file,
       histogram,
+      rgbHistogram,
       regionHistogram,
       blackPoint,
       whitePoint,
@@ -965,6 +1036,10 @@ export default function ViewerDetailScreen() {
       latestSolvedJob,
       showAnnotations,
       handleToggleAnnotations,
+      annotationLayerVisibility,
+      handleToggleAnnotationType,
+      showCoordinateGrid,
+      showConstellations,
       handleViewerExportWCS,
       navigateToAstrometryResult,
       showControls,
@@ -1073,6 +1148,37 @@ export default function ViewerDetailScreen() {
                 sourceHeight={dimensions.height}
                 transform={canvasTransform}
                 visible={showAnnotations}
+                visibleTypes={visibleAnnotationTypes}
+              />
+            </View>
+          )}
+
+          {/* Coordinate Grid Overlay */}
+          {latestSolvedJob?.result && showCoordinateGrid && dimensions && (
+            <View className="absolute inset-0" pointerEvents="none">
+              <CoordinateGridOverlay
+                calibration={latestSolvedJob.result.calibration}
+                renderWidth={displayWidth || dimensions.width}
+                renderHeight={displayHeight || dimensions.height}
+                sourceWidth={dimensions.width}
+                sourceHeight={dimensions.height}
+                transform={canvasTransform}
+                visible={showCoordinateGrid}
+              />
+            </View>
+          )}
+
+          {/* Constellation Lines Overlay */}
+          {latestSolvedJob?.result && showConstellations && dimensions && (
+            <View className="absolute inset-0" pointerEvents="none">
+              <ConstellationOverlay
+                calibration={latestSolvedJob.result.calibration}
+                renderWidth={displayWidth || dimensions.width}
+                renderHeight={displayHeight || dimensions.height}
+                sourceWidth={dimensions.width}
+                sourceHeight={dimensions.height}
+                transform={canvasTransform}
+                visible={showConstellations}
               />
             </View>
           )}
@@ -1127,6 +1233,22 @@ export default function ViewerDetailScreen() {
             onSetTransform={(tx, ty, s) => canvasRef.current?.setTransform(tx, ty, s)}
           />
 
+          {/* Compass Indicator */}
+          {latestSolvedJob?.result?.calibration && showAnnotations && (
+            <View className="absolute" style={{ top: 8, right: 8 }}>
+              <CompassIndicator calibration={latestSolvedJob.result.calibration} />
+            </View>
+          )}
+
+          {/* Annotation Detail Sheet */}
+          {selectedAnnotation && latestSolvedJob?.result?.calibration && (
+            <AnnotationDetailSheet
+              annotation={selectedAnnotation}
+              calibration={latestSolvedJob.result.calibration}
+              onClose={() => setSelectedAnnotation(null)}
+            />
+          )}
+
           {/* Exit fullscreen button */}
           {isFullscreen && (
             <View
@@ -1149,13 +1271,88 @@ export default function ViewerDetailScreen() {
           )}
         </Animated.View>
       ) : (
-        <View className="flex-1 items-center justify-center">
-          <Skeleton className="w-3/4 h-3/4 rounded-lg">
-            <View className="flex-1 items-center justify-center">
-              <Ionicons name="image-outline" size={64} color="#333" />
-              <Text className="mt-3 text-xs text-neutral-500">{t("common.loading")}</Text>
-            </View>
-          </Skeleton>
+        <View className="flex-1 items-center justify-center px-6">
+          <Animated.View entering={FadeIn.duration(300)} className="w-full max-w-sm items-center">
+            {/* Image skeleton — animation accelerates as phase progresses */}
+            <Animated.View
+              entering={FadeInDown.delay(100).duration(400)}
+              className="relative w-full"
+            >
+              <Skeleton
+                className="aspect-[4/3] w-full rounded-2xl"
+                variant={loadingPhase >= 2 ? "pulse" : "shimmer"}
+                animation={
+                  loadingPhase >= 2
+                    ? { pulse: { duration: 800, minOpacity: 0.4, maxOpacity: 0.9 } }
+                    : {
+                        shimmer: {
+                          duration: loadingPhase === 0 ? 2200 : 1400,
+                          speed: loadingPhase === 0 ? 0.7 : 1.2,
+                          highlightColor: "rgba(34, 211, 238, 0.08)",
+                        },
+                      }
+                }
+              />
+              {/* Centered icon on skeleton */}
+              <View className="absolute inset-0 items-center justify-center">
+                <Ionicons
+                  name={
+                    loadingPhase === 0
+                      ? "cloud-download-outline"
+                      : loadingPhase === 1
+                        ? "code-slash-outline"
+                        : "color-palette-outline"
+                  }
+                  size={32}
+                  color="rgba(255,255,255,0.15)"
+                />
+              </View>
+            </Animated.View>
+
+            {/* Spinner + phase status card */}
+            <Animated.View
+              entering={FadeInUp.delay(300).duration(400)}
+              className="mt-5 items-center"
+            >
+              <Surface variant="secondary" className="items-center rounded-2xl px-6 py-4">
+                <Spinner size="md" color="success">
+                  <Spinner.Indicator
+                    animation={{ rotation: { speed: 0.6 + loadingPhase * 0.3 } }}
+                  />
+                </Spinner>
+                <Animated.Text
+                  key={loadingPhase}
+                  entering={FadeIn.duration(200)}
+                  className="mt-2 text-xs font-medium text-muted"
+                >
+                  {loadingPhase === 0
+                    ? t("viewer.loadingPhaseRead")
+                    : loadingPhase === 1
+                      ? t("viewer.loadingPhaseParse")
+                      : t("viewer.loadingPhaseRender")}
+                </Animated.Text>
+              </Surface>
+            </Animated.View>
+
+            {/* Step indicator dots */}
+            <Animated.View
+              entering={FadeInUp.delay(500).duration(400)}
+              className="mt-4 flex-row items-center gap-2"
+            >
+              {[0, 1, 2].map((step) => (
+                <View
+                  key={step}
+                  style={{
+                    width: loadingPhase === step ? 16 : 6,
+                    height: 6,
+                    borderRadius: 3,
+                    backgroundColor: loadingPhase >= step ? successColor : "rgba(128,128,128,0.25)",
+                    opacity: loadingPhase === step ? 1 : loadingPhase > step ? 0.5 : 0.3,
+                  }}
+                />
+              ))}
+            </Animated.View>
+          </Animated.View>
         </View>
       )}
     </View>
@@ -1183,7 +1380,7 @@ export default function ViewerDetailScreen() {
       style={isLandscape ? { paddingLeft: insets.left, paddingRight: insets.right } : undefined}
     >
       <LoadingOverlay
-        visible={isFitsLoading || isProcessing || isExporting}
+        visible={isExporting}
         message={
           isExporting && exportPhase !== "idle"
             ? t(

@@ -15,12 +15,6 @@ jest.mock("expo-router", () => ({
   }),
 }));
 
-const mockResolveThumbnailUri = jest.fn(
-  (fileId: string, thumbnailUri?: string) =>
-    thumbnailUri ?? `file:///cache/thumbnails/${fileId}.jpg`,
-);
-const mockThumbnailGrid = jest.fn((props: Record<string, unknown>) => props);
-
 const mockFileManager = {
   isImporting: false,
   importProgress: { phase: "picking", percent: 0, current: 0, total: 0 },
@@ -163,37 +157,86 @@ jest.mock("../../../components/gallery/FileGroupSheet", () => ({
   FileGroupSheet: () => null,
 }));
 
-jest.mock("../../../components/gallery/ThumbnailGrid", () => ({
-  ThumbnailGrid: (props: Record<string, unknown>) => {
-    mockThumbnailGrid(props);
+jest.mock("../../../components/files/SelectionActionsSheet", () => ({
+  SelectionActionsSheet: (props: {
+    visible: boolean;
+    onInvertSelection: () => void;
+    onBatchRename: () => void;
+    onBatchTag: () => void;
+  }) => {
     const React = require("react");
-    const { View } = require("react-native");
+    const { View, Pressable, Text } = require("react-native");
+    if (!props.visible) return null;
     return React.createElement(
       View,
-      { testID: "thumbnail-grid" },
-      props.ListHeaderComponent as React.ReactNode,
+      { testID: "selection-actions-sheet" },
+      React.createElement(
+        Pressable,
+        { testID: "files-invert-selection-button", onPress: props.onInvertSelection },
+        React.createElement(Text, null, "Invert"),
+      ),
+      React.createElement(
+        Pressable,
+        { testID: "files-open-batch-rename-button", onPress: props.onBatchRename },
+        React.createElement(Text, null, "Rename"),
+      ),
+      React.createElement(
+        Pressable,
+        { testID: "files-open-batch-tag-button", onPress: props.onBatchTag },
+        React.createElement(Text, null, "Tag"),
+      ),
     );
   },
 }));
 
-jest.mock("../../../lib/gallery/thumbnailCache", () => {
-  const actual = jest.requireActual("../../../lib/gallery/thumbnailCache");
-  return {
-    ...actual,
-    resolveThumbnailUri: (fileId: string, thumbnailUri?: string) =>
-      mockResolveThumbnailUri(fileId, thumbnailUri),
-  };
-});
-
-// Mock expo-image
-jest.mock("expo-image", () => {
-  const { View } = require("react-native");
-  const React = require("react");
-  return {
-    Image: (props: Record<string, unknown>) =>
-      React.createElement(View, { testID: "expo-image", ...props }),
-  };
-});
+jest.mock("../../../components/files/FilesContent", () => ({
+  FilesContent: (props: {
+    displayFiles: Array<{ id: string }>;
+    searchQuery: string;
+    activeFilterCount: number;
+    ListHeader: React.ReactNode;
+    onFilePress: (file: Record<string, unknown>) => void;
+    isGridStyle: boolean;
+  }) => {
+    const React = require("react");
+    const { View, Pressable, Text } = require("react-native");
+    if (props.displayFiles.length === 0 && !props.searchQuery && props.activeFilterCount === 0) {
+      return React.createElement(
+        View,
+        { testID: "files-content-empty" },
+        props.ListHeader,
+        React.createElement(Text, null, "No files yet"),
+        React.createElement(Text, null, "Import files to get started"),
+      );
+    }
+    if (props.isGridStyle && props.displayFiles.length > 0) {
+      return React.createElement(
+        View,
+        { testID: "thumbnail-grid" },
+        props.ListHeader,
+        props.displayFiles.map((file: Record<string, unknown>) =>
+          React.createElement(
+            Pressable,
+            { key: file.id as string, onPress: () => props.onFilePress(file) },
+            React.createElement(Text, null, (file as Record<string, string>).filename),
+          ),
+        ),
+      );
+    }
+    return React.createElement(
+      View,
+      { testID: "files-content" },
+      props.ListHeader,
+      props.displayFiles.map((file: Record<string, unknown>) =>
+        React.createElement(
+          Pressable,
+          { key: file.id as string, onPress: () => props.onFilePress(file) },
+          React.createElement(Text, null, (file as Record<string, string>).filename),
+        ),
+      ),
+    );
+  },
+}));
 
 // Mock react-native-gesture-handler Swipeable (already in jest.setup but FileListItem uses Swipeable directly)
 jest.mock("react-native-gesture-handler", () => {
@@ -228,11 +271,6 @@ describe("FilesScreen", () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
-    mockResolveThumbnailUri.mockImplementation(
-      (fileId: string, thumbnailUri?: string) =>
-        thumbnailUri ?? `file:///cache/thumbnails/${fileId}.jpg`,
-    );
-
     mockSettingsStore.confirmDestructiveActions = true;
     mockSettingsStore.fileListStyle = "list";
     mockSettingsStore.fileListGridColumns = 3;
@@ -247,7 +285,6 @@ describe("FilesScreen", () => {
       searchQuery: "",
       filterTags: [],
     });
-    mockThumbnailGrid.mockClear();
   });
 
   afterEach(() => {
@@ -274,25 +311,25 @@ describe("FilesScreen", () => {
     expect(screen.getAllByText("Import Options").length).toBeGreaterThanOrEqual(1);
   });
 
-  it("should render thumbnail from shared resolver when file thumbnailUri is missing", () => {
+  it("should pass files to FilesContent when files are present", () => {
     useFitsStore.setState({
-      files: [makeFile({ id: "file-thumb", thumbnailUri: undefined })],
+      files: [makeFile({ id: "file-thumb", filename: "thumb-test.fits" })],
       selectedIds: [],
       isSelectionMode: false,
     });
-    mockResolveThumbnailUri.mockImplementation(
-      (fileId: string, thumbnailUri?: string) =>
-        thumbnailUri ?? (fileId === "file-thumb" ? "file:///cache/thumbnails/file-thumb.jpg" : ""),
-    );
 
     render(<FilesScreen />);
 
-    expect(mockResolveThumbnailUri).toHaveBeenCalledWith("file-thumb", undefined);
-    const thumbnail = screen.getByTestId("expo-image");
-    expect(thumbnail.props.source).toEqual({ uri: "file:///cache/thumbnails/file-thumb.jpg" });
+    expect(screen.getByText("thumb-test.fits")).toBeTruthy();
   });
 
-  it("should render quality sort and list style controls", () => {
+  it("should render quality sort and list style controls when files exist", () => {
+    useFitsStore.setState({
+      files: [makeFile()],
+      selectedIds: [],
+      isSelectionMode: false,
+    });
+
     render(<FilesScreen />);
     expect(screen.getByText("Quality")).toBeTruthy();
     expect(screen.getByText("Grid")).toBeTruthy();
@@ -301,7 +338,7 @@ describe("FilesScreen", () => {
     expect(screen.getByText("Favorites Only")).toBeTruthy();
   });
 
-  it("passes configured columns to ThumbnailGrid in grid mode", () => {
+  it("renders grid view in grid mode", () => {
     mockSettingsStore.fileListStyle = "grid";
     mockSettingsStore.fileListGridColumns = 4;
     useFitsStore.setState({
@@ -313,9 +350,6 @@ describe("FilesScreen", () => {
     render(<FilesScreen />);
 
     expect(screen.getByTestId("thumbnail-grid")).toBeTruthy();
-    expect(mockThumbnailGrid).toHaveBeenCalled();
-    const latestCall = mockThumbnailGrid.mock.calls.at(-1);
-    expect(latestCall?.[0]).toMatchObject({ columns: 4 });
   });
 
   it("updates file grid columns from quick chips", () => {
@@ -344,8 +378,8 @@ describe("FilesScreen", () => {
     render(<FilesScreen />);
 
     expect(screen.getByText("M42_Light.fits")).toBeTruthy();
+    expect(screen.getByTestId("files-content")).toBeTruthy();
     expect(screen.queryByTestId("thumbnail-grid")).toBeNull();
-    expect(mockThumbnailGrid).not.toHaveBeenCalled();
   });
 
   it("should show selection toolbar with selected count", () => {
@@ -398,7 +432,7 @@ describe("FilesScreen", () => {
     expect(mockPush).toHaveBeenCalledWith("/stacking");
   });
 
-  it("should select all visible files then invert selection", () => {
+  it("should select all visible files", () => {
     useFitsStore.setState({
       files: [makeFile({ id: "file-1" }), makeFile({ id: "file-2" })],
       selectedIds: [],
@@ -409,12 +443,24 @@ describe("FilesScreen", () => {
 
     fireEvent.press(screen.getByTestId("e2e-action-tabs__index-select-all"));
     expect(useFitsStore.getState().selectedIds).toEqual(["file-1", "file-2"]);
+  });
 
+  it("should invert selection via SelectionActionsSheet", () => {
+    useFitsStore.setState({
+      files: [makeFile({ id: "file-1" }), makeFile({ id: "file-2" })],
+      selectedIds: ["file-1", "file-2"],
+      isSelectionMode: true,
+    });
+
+    render(<FilesScreen />);
+
+    // Open the SelectionActionsSheet via "More Actions" button
+    fireEvent.press(screen.getByText("Batch Actions"));
     fireEvent.press(screen.getByTestId("files-invert-selection-button"));
     expect(useFitsStore.getState().selectedIds).toEqual([]);
   });
 
-  it("should call rename handler when batch rename is applied", () => {
+  it("should call rename handler when batch rename is applied via SelectionActionsSheet", () => {
     useFitsStore.setState({
       files: [makeFile({ id: "file-1" })],
       selectedIds: ["file-1"],
@@ -423,6 +469,8 @@ describe("FilesScreen", () => {
 
     render(<FilesScreen />);
 
+    // Open SelectionActionsSheet then batch rename
+    fireEvent.press(screen.getByText("Batch Actions"));
     fireEvent.press(screen.getByTestId("files-open-batch-rename-button"));
     fireEvent.press(screen.getByTestId("batch-rename-sheet-submit"));
 

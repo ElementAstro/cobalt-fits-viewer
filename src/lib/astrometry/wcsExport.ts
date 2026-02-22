@@ -9,6 +9,7 @@ import { shareFile } from "../utils/imageExport";
 import { LOG_TAGS, Logger } from "../logger";
 import { writeHeaderKeywords } from "../fits/headerWriter";
 import type { AstrometryCalibration, AstrometryResult } from "./types";
+import { computeCDMatrix } from "./wcsProjection";
 
 const TAG = LOG_TAGS.WCSExport;
 
@@ -23,16 +24,9 @@ export interface WCSKeyword {
  */
 export function generateWCSKeywords(calibration: AstrometryCalibration): WCSKeyword[] {
   const pixscaleDeg = calibration.pixscale / 3600;
-  const orientationRad = (calibration.orientation * Math.PI) / 180;
-  const cosTheta = Math.cos(orientationRad);
-  const sinTheta = Math.sin(orientationRad);
-
-  // CD matrix (考虑 parity)
   const paritySign = calibration.parity === 1 ? -1 : 1;
-  const cd1_1 = -pixscaleDeg * cosTheta * paritySign;
-  const cd1_2 = pixscaleDeg * sinTheta * paritySign;
-  const cd2_1 = -pixscaleDeg * sinTheta;
-  const cd2_2 = -pixscaleDeg * cosTheta;
+
+  const cd = computeCDMatrix(calibration);
 
   const keywords: WCSKeyword[] = [
     { key: "WCSAXES", value: 2, comment: "Number of WCS axes" },
@@ -50,19 +44,18 @@ export function generateWCSKeywords(calibration: AstrometryCalibration): WCSKeyw
     },
     {
       key: "CRPIX1",
-      value: calibration.fieldWidth > 0 ? Math.round(calibration.fieldWidth / pixscaleDeg / 2) : 0,
+      value: cd.crpix1,
       comment: "Reference pixel X",
     },
     {
       key: "CRPIX2",
-      value:
-        calibration.fieldHeight > 0 ? Math.round(calibration.fieldHeight / pixscaleDeg / 2) : 0,
+      value: cd.crpix2,
       comment: "Reference pixel Y",
     },
-    { key: "CD1_1", value: Number(cd1_1.toFixed(12)), comment: "WCS transformation matrix" },
-    { key: "CD1_2", value: Number(cd1_2.toFixed(12)), comment: "WCS transformation matrix" },
-    { key: "CD2_1", value: Number(cd2_1.toFixed(12)), comment: "WCS transformation matrix" },
-    { key: "CD2_2", value: Number(cd2_2.toFixed(12)), comment: "WCS transformation matrix" },
+    { key: "CD1_1", value: Number(cd.cd1_1.toFixed(12)), comment: "WCS transformation matrix" },
+    { key: "CD1_2", value: Number(cd.cd1_2.toFixed(12)), comment: "WCS transformation matrix" },
+    { key: "CD2_1", value: Number(cd.cd2_1.toFixed(12)), comment: "WCS transformation matrix" },
+    { key: "CD2_2", value: Number(cd.cd2_2.toFixed(12)), comment: "WCS transformation matrix" },
     {
       key: "CDELT1",
       value: Number((-pixscaleDeg * paritySign).toFixed(12)),

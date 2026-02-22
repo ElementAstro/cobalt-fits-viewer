@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert, FlatList, ScrollView, Text, View } from "react-native";
-import { Button, Card, Chip, Input, Separator, TextField, useThemeColor } from "heroui-native";
+import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { EmptyState } from "../../components/common/EmptyState";
+import { SearchBar } from "../../components/common/SearchBar";
 import { ActiveSessionBanner } from "../../components/sessions/ActiveSessionBanner";
 import { CreateSessionSheet } from "../../components/sessions/CreateSessionSheet";
 import { MonthlyActivityChart } from "../../components/sessions/MonthlyActivityChart";
@@ -12,6 +13,10 @@ import { PlanCard } from "../../components/sessions/PlanCard";
 import { PlanObservationSheet } from "../../components/sessions/PlanObservationSheet";
 import { SessionCard } from "../../components/sessions/SessionCard";
 import { SessionStatsCard } from "../../components/sessions/SessionStatsCard";
+import { SessionActionSheet } from "../../components/sessions/SessionActionSheet";
+import { PlanActionSheet } from "../../components/sessions/PlanActionSheet";
+import { SessionSelectionBar } from "../../components/sessions/SessionSelectionBar";
+import { SessionDateSummary } from "../../components/sessions/SessionDateSummary";
 import { useCalendar } from "../../hooks/useCalendar";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useSessions } from "../../hooks/useSessions";
@@ -21,7 +26,6 @@ import { formatDuration } from "../../lib/sessions/format";
 import {
   buildSessionFromPlan,
   filterObservationPlans,
-  normalizePlanStatus,
   sortObservationPlans,
   type PlanSortBy,
   type PlanStatusFilter,
@@ -96,6 +100,8 @@ export default function SessionsScreen() {
   const [editingPlan, setEditingPlan] = useState<ObservationPlan | undefined>(undefined);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<"date" | "duration" | "images">("date");
+  const [actionSession, setActionSession] = useState<ObservationSession | null>(null);
+  const [actionPlan, setActionPlan] = useState<ObservationPlan | null>(null);
 
   const getSessionTargetNames = useCallback(
     (session: ObservationSession) => resolveSessionTargetNames(session, targetCatalog),
@@ -461,6 +467,7 @@ export default function SessionsScreen() {
         )}
         <SessionCard
           session={session}
+          isSelected={isSelectionMode && selectedIds.has(session.id)}
           onPress={() => {
             if (isSelectionMode) {
               toggleSelect(session.id);
@@ -468,164 +475,37 @@ export default function SessionsScreen() {
               router.push(`/session/${session.id}`);
             }
           }}
-          onSyncToCalendar={isSelectionMode || !calendarSyncEnabled ? undefined : syncSession}
-          onUnsyncFromCalendar={isSelectionMode || !calendarSyncEnabled ? undefined : unsyncSession}
-          onOpenInCalendar={
-            isSelectionMode || !calendarSyncEnabled ? undefined : openSessionInCalendar
-          }
-          onRefreshFromCalendar={
-            isSelectionMode || !calendarSyncEnabled ? undefined : refreshSessionFromCalendar
-          }
-          onEditInCalendar={
-            isSelectionMode || !calendarSyncEnabled ? undefined : editSessionInCalendar
-          }
-          onCreateViaSystemCalendar={
-            isSelectionMode || !calendarSyncEnabled ? undefined : createSessionViaSystemCalendar
-          }
-          onDelete={isSelectionMode ? undefined : handleDeleteSession}
+          onLongPress={isSelectionMode ? undefined : () => setActionSession(session)}
         />
       </View>
     ),
-    [
-      isSelectionMode,
-      calendarSyncEnabled,
-      selectedIds,
-      mutedColor,
-      toggleSelect,
-      router,
-      syncSession,
-      unsyncSession,
-      openSessionInCalendar,
-      refreshSessionFromCalendar,
-      editSessionInCalendar,
-      createSessionViaSystemCalendar,
-      handleDeleteSession,
-    ],
+    [isSelectionMode, selectedIds, mutedColor, toggleSelect, router],
   );
 
   const dateSummarySection = selectedDate ? (
-    <>
-      <Separator className="my-4" />
-      <View className="rounded-xl bg-surface-secondary p-3">
-        <View className="mb-2 flex-row items-center justify-between">
-          <Text className="text-sm font-semibold text-foreground">
-            {t("sessions.dateSummary")} · {selectedDate}
-          </Text>
-          <Button size="sm" variant="ghost" onPress={() => setSelectedDate(null)}>
-            <Ionicons name="close-circle-outline" size={13} color={mutedColor} />
-            <Button.Label className="text-[10px]">{t("sessions.clearDateFilter")}</Button.Label>
-          </Button>
-        </View>
-        <View className="mb-2 flex-row gap-2">
-          <Card variant="secondary" className="flex-1">
-            <Card.Body className="items-center p-2">
-              <Text className="text-sm font-bold text-foreground">
-                {sessionsOnSelectedDate.length}
-              </Text>
-              <Text className="text-[9px] text-muted">{t("sessions.sessionsOnDate")}</Text>
-            </Card.Body>
-          </Card>
-          <Card variant="secondary" className="flex-1">
-            <Card.Body className="items-center p-2">
-              <Text className="text-sm font-bold text-foreground">
-                {plansOnSelectedDate.length}
-              </Text>
-              <Text className="text-[9px] text-muted">{t("sessions.plansOnDate")}</Text>
-            </Card.Body>
-          </Card>
-        </View>
-        {sessionsOnSelectedDate.length === 0 && plansOnSelectedDate.length === 0 ? (
-          <Text className="text-xs text-muted">{t("sessions.noDateItems")}</Text>
-        ) : (
-          <View className="gap-1">
-            {sessionsOnSelectedDate.slice(0, 3).map((session) => (
-              <Button
-                key={session.id}
-                size="sm"
-                variant="ghost"
-                onPress={() => router.push(`/session/${session.id}`)}
-                className="justify-start"
-              >
-                <Ionicons name="moon-outline" size={12} color={mutedColor} />
-                <Button.Label className="text-[10px]">
-                  {new Date(session.startTime).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                  {" · "}
-                  {getSessionTargetNames(session).join(", ") || t("sessions.session")}
-                </Button.Label>
-              </Button>
-            ))}
-            {plansOnSelectedDate.slice(0, 3).map((plan) => (
-              <Button
-                key={plan.id}
-                size="sm"
-                variant="ghost"
-                onPress={() => {
-                  setEditingPlan(plan);
-                  setShowPlanSheet(true);
-                }}
-                className="justify-start"
-              >
-                <Ionicons
-                  name={
-                    normalizePlanStatus(plan.status) === "completed"
-                      ? "checkmark-circle-outline"
-                      : normalizePlanStatus(plan.status) === "cancelled"
-                        ? "close-circle-outline"
-                        : "calendar-outline"
-                  }
-                  size={12}
-                  color={mutedColor}
-                />
-                <Button.Label className="text-[10px]">
-                  {new Date(plan.startDate).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                  {" · "}
-                  {getPlanTargetName(plan)}
-                </Button.Label>
-              </Button>
-            ))}
-          </View>
-        )}
-      </View>
-    </>
+    <SessionDateSummary
+      selectedDate={selectedDate}
+      sessionsOnDate={sessionsOnSelectedDate}
+      plansOnDate={plansOnSelectedDate}
+      onClearDate={() => setSelectedDate(null)}
+      onSessionPress={(sessionId) => router.push(`/session/${sessionId}`)}
+      onPlanPress={(plan) => {
+        setEditingPlan(plan);
+        setShowPlanSheet(true);
+      }}
+      getSessionTargetNames={getSessionTargetNames}
+      getPlanTargetName={getPlanTargetName}
+    />
   ) : null;
 
   const planControlsSection = (
     <>
       <View className="mb-2">
-        <TextField>
-          <View className="w-full flex-row items-center">
-            <Input
-              className="flex-1 pl-9 pr-9"
-              placeholder={t("sessions.searchSessions")}
-              value={planSearchQuery}
-              onChangeText={setPlanSearchQuery}
-              autoCorrect={false}
-            />
-            <Ionicons
-              name="search-outline"
-              size={14}
-              color={mutedColor}
-              style={{ position: "absolute", left: 12 }}
-            />
-            {planSearchQuery.length > 0 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                isIconOnly
-                onPress={() => setPlanSearchQuery("")}
-                style={{ position: "absolute", right: 12 }}
-              >
-                <Ionicons name="close-circle" size={14} color={mutedColor} />
-              </Button>
-            )}
-          </View>
-        </TextField>
+        <SearchBar
+          value={planSearchQuery}
+          onChangeText={setPlanSearchQuery}
+          placeholder={t("sessions.searchSessions")}
+        />
       </View>
       <View className="mb-2 flex-row flex-wrap gap-2">
         {PLAN_STATUS_FILTERS.map((status) => (
@@ -725,23 +605,11 @@ export default function SessionsScreen() {
             <PlanCard
               key={plan.id}
               plan={plan}
-              onSyncToCalendar={calendarSyncEnabled ? (p) => syncObservationPlan(p.id) : undefined}
-              onUnsyncFromCalendar={
-                calendarSyncEnabled ? (p) => void unsyncObservationPlan(p.id) : undefined
-              }
-              onOpenInCalendar={calendarSyncEnabled ? openPlanInCalendar : undefined}
-              onRefreshFromCalendar={calendarSyncEnabled ? refreshPlanFromCalendar : undefined}
-              onEditInCalendar={calendarSyncEnabled ? editPlanInCalendar : undefined}
-              onCreateViaSystemCalendar={
-                calendarSyncEnabled ? createPlanViaSystemCalendar : undefined
-              }
-              onCreateSession={handleCreateSessionFromPlan}
-              onStatusChange={(p, status) => updateObservationPlan(p.id, { status })}
-              onEdit={(p) => {
-                setEditingPlan(p);
+              onPress={() => {
+                setEditingPlan(plan);
                 setShowPlanSheet(true);
               }}
-              onDelete={handleDeletePlan}
+              onLongPress={() => setActionPlan(plan)}
             />
           ))}
         </View>
@@ -783,34 +651,11 @@ export default function SessionsScreen() {
       )}
       {sessions.length > 0 && (
         <View className="mb-3">
-          <TextField>
-            <View className="w-full flex-row items-center">
-              <Input
-                className="flex-1 pl-9 pr-9"
-                placeholder={t("sessions.searchSessions")}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCorrect={false}
-              />
-              <Ionicons
-                name="search-outline"
-                size={14}
-                color={mutedColor}
-                style={{ position: "absolute", left: 12 }}
-              />
-              {searchQuery.length > 0 && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  isIconOnly
-                  onPress={() => setSearchQuery("")}
-                  style={{ position: "absolute", right: 12 }}
-                >
-                  <Ionicons name="close-circle" size={14} color={mutedColor} />
-                </Button>
-              )}
-            </View>
-          </TextField>
+          <SearchBar
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder={t("sessions.searchSessions")}
+          />
         </View>
       )}
       {sessions.length > 0 && filteredSessions.length === 0 && (
@@ -959,75 +804,23 @@ export default function SessionsScreen() {
   );
 
   const selectionBar = isSelectionMode ? (
-    <View className="flex-row items-center justify-between bg-surface-secondary px-4 py-2">
-      <View className="flex-row items-center gap-2">
-        <Button size="sm" variant="ghost" onPress={exitSelectionMode}>
-          <Ionicons name="close" size={16} color={mutedColor} />
-        </Button>
-        <Text className="text-sm font-medium text-foreground">
-          {selectedIds.size} {t("common.selected")}
-        </Text>
-      </View>
-      <View className="flex-row items-center gap-2">
-        <Button
-          testID="e2e-action-tabs__sessions-selection-select-all"
-          size="sm"
-          variant="ghost"
-          onPress={() => {
-            if (selectedIds.size === sortedSessions.length) {
-              setSelectedIds(new Set());
-            } else {
-              setSelectedIds(new Set(sortedSessions.map((s) => s.id)));
-            }
-          }}
-        >
-          <Ionicons name="checkmark-done" size={16} color={mutedColor} />
-        </Button>
-        {calendarSyncEnabled && (
-          <>
-            <Button
-              testID="e2e-action-tabs__sessions-selection-batch-sync"
-              size="sm"
-              variant="ghost"
-              isDisabled={selectedIds.size === 0 || syncing}
-              onPress={() => void handleBatchSyncSelected()}
-            >
-              <Ionicons name="sync-outline" size={16} color={mutedColor} />
-              <Button.Label className="text-[10px]">{t("sessions.batchSync")}</Button.Label>
-            </Button>
-            <Button
-              testID="e2e-action-tabs__sessions-selection-batch-refresh"
-              size="sm"
-              variant="ghost"
-              isDisabled={selectedIds.size === 0 || syncing}
-              onPress={() => void handleBatchRefreshSelected()}
-            >
-              <Ionicons name="refresh-outline" size={16} color={mutedColor} />
-              <Button.Label className="text-[10px]">{t("sessions.batchRefresh")}</Button.Label>
-            </Button>
-            <Button
-              testID="e2e-action-tabs__sessions-selection-batch-unsync"
-              size="sm"
-              variant="ghost"
-              isDisabled={selectedIds.size === 0 || syncing}
-              onPress={() => void handleBatchUnsyncSelected()}
-            >
-              <Ionicons name="link-outline" size={16} color={mutedColor} />
-              <Button.Label className="text-[10px]">{t("sessions.batchUnsync")}</Button.Label>
-            </Button>
-          </>
-        )}
-        <Button
-          testID="e2e-action-tabs__sessions-selection-delete"
-          size="sm"
-          variant="ghost"
-          isDisabled={selectedIds.size === 0}
-          onPress={handleBatchDelete}
-        >
-          <Ionicons name="trash-outline" size={16} color="#ef4444" />
-        </Button>
-      </View>
-    </View>
+    <SessionSelectionBar
+      selectedCount={selectedIds.size}
+      calendarSyncEnabled={calendarSyncEnabled}
+      syncing={syncing}
+      onClose={exitSelectionMode}
+      onToggleSelectAll={() => {
+        if (selectedIds.size === sortedSessions.length) {
+          setSelectedIds(new Set());
+        } else {
+          setSelectedIds(new Set(sortedSessions.map((s) => s.id)));
+        }
+      }}
+      onBatchSync={() => void handleBatchSyncSelected()}
+      onBatchRefresh={() => void handleBatchRefreshSelected()}
+      onBatchUnsync={() => void handleBatchUnsyncSelected()}
+      onBatchDelete={handleBatchDelete}
+    />
   ) : null;
 
   return (
@@ -1155,6 +948,10 @@ export default function SessionsScreen() {
             ListEmptyComponent={
               <EmptyState icon="calendar-outline" title={t("sessions.noSessions")} />
             }
+            removeClippedSubviews
+            maxToRenderPerBatch={10}
+            windowSize={7}
+            initialNumToRender={8}
           />
         </View>
       ) : (
@@ -1164,6 +961,10 @@ export default function SessionsScreen() {
           renderItem={renderSessionItem}
           ListHeaderComponent={portraitListHeader}
           contentContainerClassName="pb-4"
+          removeClippedSubviews
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          initialNumToRender={8}
         />
       )}
       <PlanObservationSheet
@@ -1181,6 +982,40 @@ export default function SessionsScreen() {
         onClose={() => {
           setShowCreateSheet(false);
         }}
+      />
+      <SessionActionSheet
+        visible={!!actionSession}
+        session={actionSession}
+        calendarSyncEnabled={calendarSyncEnabled}
+        onClose={() => setActionSession(null)}
+        onSyncToCalendar={syncSession}
+        onUnsyncFromCalendar={unsyncSession}
+        onOpenInCalendar={openSessionInCalendar}
+        onRefreshFromCalendar={refreshSessionFromCalendar}
+        onEditInCalendar={editSessionInCalendar}
+        onCreateViaSystemCalendar={createSessionViaSystemCalendar}
+        onDelete={handleDeleteSession}
+      />
+      <PlanActionSheet
+        visible={!!actionPlan}
+        plan={actionPlan}
+        onClose={() => setActionPlan(null)}
+        onSyncToCalendar={calendarSyncEnabled ? (p) => syncObservationPlan(p.id) : undefined}
+        onUnsyncFromCalendar={
+          calendarSyncEnabled ? (p) => void unsyncObservationPlan(p.id) : undefined
+        }
+        onOpenInCalendar={calendarSyncEnabled ? openPlanInCalendar : undefined}
+        onRefreshFromCalendar={calendarSyncEnabled ? refreshPlanFromCalendar : undefined}
+        onEditInCalendar={calendarSyncEnabled ? editPlanInCalendar : undefined}
+        onCreateViaSystemCalendar={calendarSyncEnabled ? createPlanViaSystemCalendar : undefined}
+        onCreateSession={handleCreateSessionFromPlan}
+        onStatusChange={(p, status) => updateObservationPlan(p.id, { status })}
+        onEdit={(p) => {
+          setActionPlan(null);
+          setEditingPlan(p);
+          setShowPlanSheet(true);
+        }}
+        onDelete={handleDeletePlan}
       />
     </View>
   );

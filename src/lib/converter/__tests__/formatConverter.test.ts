@@ -2,8 +2,15 @@
  * Unit tests for formatConverter.ts — applyStretch with outputBlack/outputWhite
  */
 
-import { applyStretch, fitsToRGBA, fitsToRGBAChunked } from "../formatConverter";
+import { applyStretch, fitsToRGBA, fitsToRGBAChunked, estimateFileSize } from "../formatConverter";
 import { MATPLOTLIB_LISTED_COLORMAPS } from "../mplListedColormaps";
+import {
+  DEFAULT_FITS_TARGET_OPTIONS,
+  DEFAULT_TIFF_TARGET_OPTIONS,
+  DEFAULT_XISF_TARGET_OPTIONS,
+  DEFAULT_SER_TARGET_OPTIONS,
+  type ConvertOptions,
+} from "../../fits/types";
 
 // ===== Helpers =====
 
@@ -315,5 +322,54 @@ describe("matplotlib listed colormap LUT", () => {
     });
 
     expect(Array.from(standard.slice(0, 16))).not.toEqual(Array.from(legacy.slice(0, 16)));
+  });
+});
+
+// ===== estimateFileSize =====
+
+describe("estimateFileSize", () => {
+  const baseOpts: ConvertOptions = {
+    format: "png",
+    quality: 90,
+    bitDepth: 8,
+    dpi: 72,
+    tiff: DEFAULT_TIFF_TARGET_OPTIONS,
+    fits: DEFAULT_FITS_TARGET_OPTIONS,
+    xisf: DEFAULT_XISF_TARGET_OPTIONS,
+    ser: DEFAULT_SER_TARGET_OPTIONS,
+    stretch: "linear",
+    colormap: "grayscale",
+    blackPoint: 0,
+    whitePoint: 1,
+    gamma: 1,
+    outputBlack: 0,
+    outputWhite: 1,
+    includeAnnotations: false,
+    includeWatermark: false,
+  };
+
+  it("estimates PNG size as ~50% of raw", () => {
+    const size = estimateFileSize(100, 100, { ...baseOpts, format: "png" });
+    expect(size).toBe(Math.round(10000 * 3 * 0.5));
+  });
+
+  it("estimates FITS size with header overhead", () => {
+    const size = estimateFileSize(100, 100, { ...baseOpts, format: "fits", bitDepth: 16 });
+    expect(size).toBe(10000 * 2 + 2880);
+  });
+
+  it("estimates XISF size with overhead factor", () => {
+    const size = estimateFileSize(100, 100, { ...baseOpts, format: "xisf", bitDepth: 32 });
+    expect(size).toBe(Math.round(10000 * 4 * 1.1) + 4096);
+  });
+
+  it("estimates SER size with header", () => {
+    const size = estimateFileSize(100, 100, { ...baseOpts, format: "ser", bitDepth: 16 });
+    expect(size).toBe(10000 * 2 + 178);
+  });
+
+  it("estimates BMP size with 54-byte header", () => {
+    const size = estimateFileSize(100, 100, { ...baseOpts, format: "bmp" });
+    expect(size).toBe(10000 * 3 + 54);
   });
 });

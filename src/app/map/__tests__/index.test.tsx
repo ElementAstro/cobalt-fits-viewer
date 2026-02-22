@@ -275,10 +275,10 @@ describe("MapScreen", () => {
 
     fireEvent.press(screen.getByTestId("e2e-action-map__index-toggle-filters"));
     fireEvent.press(screen.getByText("Last 7 Days").parent);
-    fireEvent.press(screen.getByText("M31").parent);
-    fireEvent.press(screen.getByText("Ha").parent);
-    fireEvent.press(screen.getByText("target-a").parent);
-    fireEvent.press(screen.getByText("session-a").parent);
+    fireEvent.press(screen.getByTestId("e2e-action-map__index-filter-object-m31"));
+    fireEvent.press(screen.getByTestId("e2e-action-map__index-filter-band-ha"));
+    fireEvent.press(screen.getByTestId("e2e-action-map__index-filter-target-target-a"));
+    fireEvent.press(screen.getByTestId("e2e-action-map__index-filter-session-session-a"));
 
     await waitFor(() => {
       expect(screen.getByText("map-files:1")).toBeTruthy();

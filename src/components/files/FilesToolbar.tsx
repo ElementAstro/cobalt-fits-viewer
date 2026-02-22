@@ -1,12 +1,11 @@
 import { View } from "react-native";
-import { Button, Separator, useThemeColor } from "heroui-native";
+import { Button, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 
 interface FilesToolbarProps {
   isSelectionMode: boolean;
   selectedCount: number;
-  displayCount: number;
   trashCount: number;
   shouldStack: boolean;
   onImport: () => void;
@@ -14,13 +13,7 @@ interface FilesToolbarProps {
   onConvert: () => void;
   onTrash: () => void;
   onSelectAllVisible: () => void;
-  onInvertSelection: () => void;
-  onBatchFavorite: () => void;
-  onAlbumPicker: () => void;
-  onBatchTag: () => void;
-  onBatchRename: () => void;
-  onGroupSheet: () => void;
-  onBatchExport: () => void;
+  onMoreActions: () => void;
   onBatchDelete: () => void;
   onClearSelection: () => void;
 }
@@ -28,7 +21,6 @@ interface FilesToolbarProps {
 export function FilesToolbar({
   isSelectionMode,
   selectedCount,
-  displayCount,
   trashCount,
   shouldStack,
   onImport,
@@ -36,13 +28,7 @@ export function FilesToolbar({
   onConvert,
   onTrash,
   onSelectAllVisible,
-  onInvertSelection,
-  onBatchFavorite,
-  onAlbumPicker,
-  onBatchTag,
-  onBatchRename,
-  onGroupSheet,
-  onBatchExport,
+  onMoreActions,
   onBatchDelete,
   onClearSelection,
 }: FilesToolbarProps) {
@@ -85,7 +71,6 @@ export function FilesToolbar({
         </>
       ) : (
         <>
-          {/* Selection actions group */}
           <Button
             testID="e2e-action-tabs__index-select-all"
             size="sm"
@@ -95,81 +80,10 @@ export function FilesToolbar({
           >
             <Ionicons name="checkbox-outline" size={16} color={mutedColor} />
           </Button>
-          <Button
-            testID="files-invert-selection-button"
-            size="sm"
-            isIconOnly
-            variant="outline"
-            onPress={onInvertSelection}
-            isDisabled={displayCount === 0}
-          >
-            <Ionicons name="shuffle-outline" size={16} color={mutedColor} />
+          <Button size="sm" variant="outline" onPress={onMoreActions}>
+            <Ionicons name="ellipsis-horizontal" size={16} color={mutedColor} />
+            <Button.Label>{t("files.batchActions")}</Button.Label>
           </Button>
-
-          <Separator orientation="vertical" className="h-5" />
-
-          {/* File operations group */}
-          <Button
-            size="sm"
-            isIconOnly
-            variant="outline"
-            onPress={onBatchFavorite}
-            isDisabled={selectedCount === 0}
-          >
-            <Ionicons name="heart-outline" size={16} color={mutedColor} />
-          </Button>
-          <Button
-            testID="files-open-album-picker-button"
-            size="sm"
-            isIconOnly
-            variant="outline"
-            onPress={onAlbumPicker}
-            isDisabled={selectedCount === 0}
-          >
-            <Ionicons name="albums-outline" size={16} color={mutedColor} />
-          </Button>
-          <Button
-            testID="files-open-batch-tag-button"
-            size="sm"
-            isIconOnly
-            variant="outline"
-            onPress={onBatchTag}
-            isDisabled={selectedCount === 0}
-          >
-            <Ionicons name="pricetag-outline" size={16} color={mutedColor} />
-          </Button>
-          <Button
-            testID="files-open-batch-rename-button"
-            size="sm"
-            isIconOnly
-            variant="outline"
-            onPress={onBatchRename}
-            isDisabled={selectedCount === 0}
-          >
-            <Ionicons name="text-outline" size={16} color={mutedColor} />
-          </Button>
-          <Button
-            testID="files-open-group-sheet-button"
-            size="sm"
-            isIconOnly
-            variant="outline"
-            onPress={onGroupSheet}
-            isDisabled={selectedCount === 0}
-          >
-            <Ionicons name="folder-open-outline" size={16} color={mutedColor} />
-          </Button>
-          <Button
-            size="sm"
-            isIconOnly
-            variant="outline"
-            onPress={onBatchExport}
-            isDisabled={selectedCount === 0}
-          >
-            <Ionicons name="share-social-outline" size={16} color={mutedColor} />
-          </Button>
-
-          <Separator orientation="vertical" className="h-5" />
-
           <Button
             testID="files-batch-delete-button"
             size="sm"

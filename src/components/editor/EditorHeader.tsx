@@ -1,7 +1,7 @@
 import { View, Text } from "react-native";
 import { Alert as HAlert, Button } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useI18n, type TranslationKey } from "../../i18n/useI18n";
+import { useI18n } from "../../i18n/useI18n";
 
 interface EditorHeaderProps {
   filename: string;
@@ -153,7 +153,7 @@ export function EditorHeader({
         <View className="flex-row items-center gap-1 px-3 py-1 bg-background">
           <Ionicons name="time-outline" size={10} color={mutedColor} />
           <Text className="text-[9px] text-muted">
-            {historyIndex}/{historyLength - 1} {t("editor.edits" as TranslationKey)}
+            {historyIndex}/{historyLength - 1} {t("editor.edits")}
           </Text>
         </View>
       )}

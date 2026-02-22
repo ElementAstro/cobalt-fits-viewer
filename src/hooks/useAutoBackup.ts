@@ -23,6 +23,7 @@ export function useAutoBackup() {
   const setLastAutoBackupAttempt = useBackupStore((s) => s.setLastAutoBackupAttempt);
   const lastAutoBackupCheck = useBackupStore((s) => s.lastAutoBackupCheck);
   const setLastAutoBackupCheck = useBackupStore((s) => s.setLastAutoBackupCheck);
+  const setLastAutoBackupResult = useBackupStore((s) => s.setLastAutoBackupResult);
   const connections = useBackupStore((s) => s.connections);
   const activeProvider = useBackupStore((s) => s.activeProvider);
 
@@ -74,11 +75,14 @@ export function useAutoBackup() {
         const result = await backup(providerType);
         if (result.success) {
           setLastAutoBackupCheck(Date.now());
+          setLastAutoBackupResult("success");
           Logger.info(TAG, "Auto backup completed successfully");
         } else {
+          setLastAutoBackupResult("failed", result.error);
           Logger.warn(TAG, `Auto backup failed: ${result.error}`);
         }
       } catch (error) {
+        setLastAutoBackupResult("failed", error instanceof Error ? error.message : String(error));
         Logger.error(TAG, "Auto backup error", { error });
       } finally {
         runningRef.current = false;
@@ -106,6 +110,7 @@ export function useAutoBackup() {
     setLastAutoBackupAttempt,
     lastAutoBackupCheck,
     setLastAutoBackupCheck,
+    setLastAutoBackupResult,
     connections,
     activeProvider,
     backup,

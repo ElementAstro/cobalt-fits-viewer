@@ -22,6 +22,7 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useTargetStore } from "../../stores/useTargetStore";
 import type { ObservationPlan } from "../../lib/fits/types";
 import { resolveTargetId, resolveTargetName } from "../../lib/targets/targetRefs";
+import { useChipInput } from "../../hooks/useChipInput";
 
 interface PlanObservationSheetProps {
   visible: boolean;
@@ -160,28 +161,7 @@ export function PlanObservationSheet({
     [],
   );
 
-  const addChipItem = useCallback(
-    (
-      value: string,
-      list: string[],
-      setter: (next: string[]) => void,
-      inputSetter: (next: string) => void,
-    ) => {
-      const trimmed = value.trim();
-      if (trimmed && !list.includes(trimmed)) {
-        setter([...list, trimmed]);
-      }
-      inputSetter("");
-    },
-    [],
-  );
-
-  const removeChipItem = useCallback(
-    (value: string, list: string[], setter: (next: string[]) => void) => {
-      setter(list.filter((item) => item !== value));
-    },
-    [],
-  );
+  const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();
 
   const resetForm = () => {
     setTargetName("");

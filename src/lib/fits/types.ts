@@ -286,6 +286,9 @@ export interface FitsMetadata {
   // Star annotation linkage
   starAnnotations?: StarAnnotationBundle;
 
+  // SER-specific metadata (preserved from original SER import)
+  serInfo?: SerMetadataInfo;
+
   // Viewer per-file preset
   viewerPreset?: ViewerPreset;
 
@@ -670,8 +673,22 @@ export interface ObservationLogEntry {
   notes?: string;
 }
 
+// ===== 直方图 =====
+export type HistogramMode = "linear" | "log" | "cdf";
+
+export interface HistogramData {
+  counts: number[];
+  edges: number[];
+}
+
+export interface ChannelHistogramData {
+  r: HistogramData;
+  g: HistogramData;
+  b: HistogramData;
+}
+
 // ===== 格式转换 =====
-export type ExportFormat = "png" | "jpeg" | "webp" | "tiff" | "bmp" | "fits";
+export type ExportFormat = "png" | "jpeg" | "webp" | "tiff" | "bmp" | "fits" | "xisf" | "ser";
 
 export type TiffCompression = "none" | "lzw" | "deflate";
 export type TiffMultipageMode = "preserve" | "firstFrame";
@@ -708,6 +725,40 @@ export const DEFAULT_FITS_TARGET_OPTIONS: FitsTargetOptions = {
   preserveWcs: true,
 };
 
+export type XisfCompression = "none" | "zlib" | "lz4";
+
+export interface XisfTargetOptions {
+  compression: XisfCompression;
+}
+
+export const DEFAULT_XISF_TARGET_OPTIONS: XisfTargetOptions = {
+  compression: "zlib",
+};
+
+export type SerLayout = "cube" | "multi-hdu";
+
+export interface SerTargetOptions {
+  layout: SerLayout;
+}
+
+export const DEFAULT_SER_TARGET_OPTIONS: SerTargetOptions = {
+  layout: "cube",
+};
+
+export interface SerMetadataInfo {
+  frameCount: number;
+  colorId: number;
+  pixelDepth: number;
+  width: number;
+  height: number;
+  durationSeconds?: number;
+  estimatedFps?: number;
+  observer?: string;
+  instrument?: string;
+  telescope?: string;
+  dateTime?: string;
+}
+
 export interface ConvertOptions {
   format: ExportFormat;
   quality: number; // 1-100 for JPEG/WebP
@@ -715,6 +766,8 @@ export interface ConvertOptions {
   dpi: number;
   tiff: TiffTargetOptions;
   fits: FitsTargetOptions;
+  xisf: XisfTargetOptions;
+  ser: SerTargetOptions;
   stretch: StretchType;
   colormap: ColormapType;
   blackPoint: number;
@@ -751,6 +804,8 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       dpi: 72,
       tiff: DEFAULT_TIFF_TARGET_OPTIONS,
       fits: DEFAULT_FITS_TARGET_OPTIONS,
+      xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      ser: DEFAULT_SER_TARGET_OPTIONS,
       stretch: "asinh",
       colormap: "grayscale",
       blackPoint: 0,
@@ -777,6 +832,8 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       dpi: 300,
       tiff: DEFAULT_TIFF_TARGET_OPTIONS,
       fits: DEFAULT_FITS_TARGET_OPTIONS,
+      xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      ser: DEFAULT_SER_TARGET_OPTIONS,
       stretch: "asinh",
       colormap: "grayscale",
       blackPoint: 0,
@@ -803,6 +860,8 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       dpi: 72,
       tiff: DEFAULT_TIFF_TARGET_OPTIONS,
       fits: DEFAULT_FITS_TARGET_OPTIONS,
+      xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      ser: DEFAULT_SER_TARGET_OPTIONS,
       stretch: "linear",
       colormap: "grayscale",
       blackPoint: 0,

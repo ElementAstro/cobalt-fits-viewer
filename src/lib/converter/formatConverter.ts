@@ -580,6 +580,12 @@ export function estimateFileSize(width: number, height: number, options: Convert
     }
     case "bmp":
       return totalPixels * 3 + 54; // 24-bit BMP + header
+    case "fits":
+      return totalPixels * (options.bitDepth / 8) + 2880; // data + header block
+    case "xisf":
+      return Math.round(totalPixels * (options.bitDepth / 8) * 1.1) + 4096; // ~FITS + XISF overhead
+    case "ser":
+      return totalPixels * (options.bitDepth / 8) + 178; // raw pixels + SER header
     default:
       return totalPixels * 3;
   }

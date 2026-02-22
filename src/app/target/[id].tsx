@@ -29,15 +29,8 @@ import { getTargetIcon } from "../../lib/targets/targetIcons";
 import { shareTarget } from "../../lib/targets/targetExport";
 import { calculateTargetExposure } from "../../lib/targets/targetManager";
 import { resolveTargetInteractionUi } from "../../lib/targets/targetInteractionUi";
-import type { FitsMetadata, Target, TargetStatus } from "../../lib/fits/types";
-
-const STATUS_FLOW: TargetStatus[] = ["planned", "acquiring", "completed", "processed"];
-const STATUS_COLORS: Record<TargetStatus, string> = {
-  planned: "#6b7280",
-  acquiring: "#f59e0b",
-  completed: "#22c55e",
-  processed: "#3b82f6",
-};
+import { TARGET_STATUSES, STATUS_COLORS } from "../../lib/targets/targetConstants";
+import type { FitsMetadata, Target } from "../../lib/fits/types";
 
 export default function TargetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -325,7 +318,7 @@ export default function TargetDetailScreen() {
         </View>
 
         <View className="flex-row gap-1.5 mb-4">
-          {STATUS_FLOW.map((status) => (
+          {TARGET_STATUSES.map((status) => (
             <Button
               key={status}
               variant={target.status === status ? "secondary" : "ghost"}
@@ -361,168 +354,178 @@ export default function TargetDetailScreen() {
 
         <Separator className="mb-4" />
 
-        <View className="flex-row gap-2 mb-4">
-          <Card variant="secondary" className="flex-1">
-            <Card.Body className="items-center p-3">
-              <Text className={statsValueClassName}>{targetFiles.length}</Text>
-              <Text className={statsLabelClassName}>{t("targets.frameCount")}</Text>
-            </Card.Body>
-          </Card>
-          <Card variant="secondary" className="flex-1">
-            <Card.Body className="items-center p-3">
-              <Text className={statsValueClassName}>{Math.round(totalExposure / 60)}m</Text>
-              <Text className={statsLabelClassName}>{t("targets.totalExposure")}</Text>
-            </Card.Body>
-          </Card>
-          <Card variant="secondary" className="flex-1">
-            <Card.Body className="items-center p-3">
-              <Text className={statsValueClassName}>
-                {stats ? Object.keys(stats.completion.byFilter).length : 0}
-              </Text>
-              <Text className={statsLabelClassName}>{t("targets.byFilter")}</Text>
-            </Card.Body>
-          </Card>
-        </View>
+        <View className={isLandscapeTablet ? "flex-row gap-6" : undefined}>
+          {/* Left column: info panels */}
+          <View className={isLandscapeTablet ? "flex-1" : undefined}>
+            <View className="flex-row gap-2 mb-4">
+              <Card variant="secondary" className="flex-1">
+                <Card.Body className="items-center p-3">
+                  <Text className={statsValueClassName}>{targetFiles.length}</Text>
+                  <Text className={statsLabelClassName}>{t("targets.frameCount")}</Text>
+                </Card.Body>
+              </Card>
+              <Card variant="secondary" className="flex-1">
+                <Card.Body className="items-center p-3">
+                  <Text className={statsValueClassName}>{Math.round(totalExposure / 60)}m</Text>
+                  <Text className={statsLabelClassName}>{t("targets.totalExposure")}</Text>
+                </Card.Body>
+              </Card>
+              <Card variant="secondary" className="flex-1">
+                <Card.Body className="items-center p-3">
+                  <Text className={statsValueClassName}>
+                    {stats ? Object.keys(stats.completion.byFilter).length : 0}
+                  </Text>
+                  <Text className={statsLabelClassName}>{t("targets.byFilter")}</Text>
+                </Card.Body>
+              </Card>
+            </View>
 
-        {(target.ra !== undefined || target.dec !== undefined) && (
-          <View className="mb-4 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
-            <Ionicons name="navigate-outline" size={compactIconSize} color={mutedColor} />
-            <Text className="text-xs text-foreground font-mono">
-              {formatCoordinates(target.ra, target.dec)}
-            </Text>
-          </View>
-        )}
-
-        {(targetGroups.length > 0 || target.category || target.tags.length > 0) && (
-          <View className="mb-4">
-            {targetGroups.length > 0 && (
-              <View className="mb-2 flex-row items-start gap-2">
-                <Ionicons
-                  name="folder-open-outline"
-                  size={miniIconSize}
-                  color={mutedColor}
-                  style={{ marginTop: 2 }}
-                />
-                <Text className="w-12 text-xs text-muted">{t("targets.groups.title")}</Text>
-                <View className="flex-1 flex-row flex-wrap gap-1">
-                  {targetGroups.map((group) => (
-                    <Chip key={group.id} size={chipSize} variant="secondary">
-                      <Chip.Label className={tinyLabelClassName}>{group.name}</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-            )}
-            {target.category && (
-              <View className="mb-2 flex-row items-start gap-2">
-                <Ionicons
-                  name="folder-outline"
-                  size={miniIconSize}
-                  color={mutedColor}
-                  style={{ marginTop: 2 }}
-                />
-                <Text className="w-12 text-xs text-muted">{t("targets.category")}</Text>
-                <View className="flex-1 flex-row flex-wrap gap-1">
-                  <Chip size={chipSize} variant="secondary">
-                    <Chip.Label className={tinyLabelClassName}>{target.category}</Chip.Label>
-                  </Chip>
-                </View>
-              </View>
-            )}
-            {target.tags.length > 0 && (
-              <View className="flex-row items-start gap-2">
-                <Ionicons
-                  name="pricetag-outline"
-                  size={miniIconSize}
-                  color={mutedColor}
-                  style={{ marginTop: 2 }}
-                />
-                <Text className="w-12 text-xs text-muted">{t("targets.tags")}</Text>
-                <View className="flex-1 flex-row flex-wrap gap-1">
-                  {target.tags.map((tag) => (
-                    <Chip key={tag} size={chipSize} variant="secondary">
-                      <Chip.Label className={tinyLabelClassName}>{tag}</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-            )}
-          </View>
-        )}
-
-        <EquipmentCard
-          equipment={target.recommendedEquipment}
-          onEdit={() => setShowEquipmentSheet(true)}
-        />
-
-        {filterProgressData.length > 0 && (
-          <View className="mb-4">
-            <ExposureProgress
-              filters={filterProgressData}
-              overallPercent={stats?.completion.overall ?? 0}
-            />
-          </View>
-        )}
-
-        <Separator className="my-4" />
-
-        {targetFiles.length > 0 && (
-          <View className="mb-4">
-            <ObservationTimeline files={targetFiles} grouping={timelineGrouping} />
-          </View>
-        )}
-
-        <Separator className="my-4" />
-
-        <View className="mb-3 flex-row items-center justify-between">
-          <Text className="text-xs font-semibold uppercase text-muted">
-            {t("gallery.allImages")} ({targetFiles.length})
-          </Text>
-          {targetFiles.length > 0 && (
-            <Button
-              size={toolbarButtonSize}
-              variant="ghost"
-              onPress={() => {
-                setFilterTargetId(target.id);
-                router.push("/(tabs)/gallery");
-              }}
-            >
-              <Ionicons name="grid-outline" size={miniIconSize} color={mutedColor} />
-              <Button.Label className={smallLabelClassName}>{t("gallery.title")}</Button.Label>
-            </Button>
-          )}
-        </View>
-
-        {targetFiles.length === 0 ? (
-          <EmptyState icon="images-outline" title={t("gallery.noImages")} />
-        ) : (
-          <>
-            {target.bestImageId && (
-              <View className="mb-3 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
-                <Ionicons name="star" size={miniIconSize} color="#f59e0b" />
-                <Text className="text-xs text-foreground">{t("targets.ratings.bestImage")}</Text>
-                <Text className="text-xs text-muted">
-                  ({targetFiles.find((file) => file.id === target.bestImageId)?.filename})
+            {(target.ra !== undefined || target.dec !== undefined) && (
+              <View className="mb-4 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
+                <Ionicons name="navigate-outline" size={compactIconSize} color={mutedColor} />
+                <Text className="text-xs text-foreground font-mono">
+                  {formatCoordinates(target.ra, target.dec)}
                 </Text>
               </View>
             )}
-            <ThumbnailGrid
-              files={targetFiles}
-              columns={isLandscapeTablet ? 4 : 3}
-              onPress={handleFilePress}
-            />
-          </>
-        )}
 
-        {target.notes && (
-          <>
+            {(targetGroups.length > 0 || target.category || target.tags.length > 0) && (
+              <View className="mb-4">
+                {targetGroups.length > 0 && (
+                  <View className="mb-2 flex-row items-start gap-2">
+                    <Ionicons
+                      name="folder-open-outline"
+                      size={miniIconSize}
+                      color={mutedColor}
+                      style={{ marginTop: 2 }}
+                    />
+                    <Text className="w-12 text-xs text-muted">{t("targets.groups.title")}</Text>
+                    <View className="flex-1 flex-row flex-wrap gap-1">
+                      {targetGroups.map((group) => (
+                        <Chip key={group.id} size={chipSize} variant="secondary">
+                          <Chip.Label className={tinyLabelClassName}>{group.name}</Chip.Label>
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                )}
+                {target.category && (
+                  <View className="mb-2 flex-row items-start gap-2">
+                    <Ionicons
+                      name="folder-outline"
+                      size={miniIconSize}
+                      color={mutedColor}
+                      style={{ marginTop: 2 }}
+                    />
+                    <Text className="w-12 text-xs text-muted">{t("targets.category")}</Text>
+                    <View className="flex-1 flex-row flex-wrap gap-1">
+                      <Chip size={chipSize} variant="secondary">
+                        <Chip.Label className={tinyLabelClassName}>{target.category}</Chip.Label>
+                      </Chip>
+                    </View>
+                  </View>
+                )}
+                {target.tags.length > 0 && (
+                  <View className="flex-row items-start gap-2">
+                    <Ionicons
+                      name="pricetag-outline"
+                      size={miniIconSize}
+                      color={mutedColor}
+                      style={{ marginTop: 2 }}
+                    />
+                    <Text className="w-12 text-xs text-muted">{t("targets.tags")}</Text>
+                    <View className="flex-1 flex-row flex-wrap gap-1">
+                      {target.tags.map((tag) => (
+                        <Chip key={tag} size={chipSize} variant="secondary">
+                          <Chip.Label className={tinyLabelClassName}>{tag}</Chip.Label>
+                        </Chip>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            )}
+
+            <EquipmentCard
+              equipment={target.recommendedEquipment}
+              onEdit={() => setShowEquipmentSheet(true)}
+            />
+
+            {filterProgressData.length > 0 && (
+              <View className="mb-4">
+                <ExposureProgress
+                  filters={filterProgressData}
+                  overallPercent={stats?.completion.overall ?? 0}
+                />
+              </View>
+            )}
+
+            {target.notes && (
+              <View className="mb-4">
+                <Separator className="my-4" />
+                <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+                  {t("targets.notes")}
+                </Text>
+                <Text className="text-sm text-foreground">{target.notes}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Right column: timeline + images */}
+          <View className={isLandscapeTablet ? "flex-1" : undefined}>
+            {!isLandscapeTablet && <Separator className="my-4" />}
+
+            {targetFiles.length > 0 && (
+              <View className="mb-4">
+                <ObservationTimeline files={targetFiles} grouping={timelineGrouping} />
+              </View>
+            )}
+
             <Separator className="my-4" />
-            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-              {t("targets.notes")}
-            </Text>
-            <Text className="text-sm text-foreground">{target.notes}</Text>
-          </>
-        )}
+
+            <View className="mb-3 flex-row items-center justify-between">
+              <Text className="text-xs font-semibold uppercase text-muted">
+                {t("gallery.allImages")} ({targetFiles.length})
+              </Text>
+              {targetFiles.length > 0 && (
+                <Button
+                  size={toolbarButtonSize}
+                  variant="ghost"
+                  onPress={() => {
+                    setFilterTargetId(target.id);
+                    router.push("/(tabs)/gallery");
+                  }}
+                >
+                  <Ionicons name="grid-outline" size={miniIconSize} color={mutedColor} />
+                  <Button.Label className={smallLabelClassName}>{t("gallery.title")}</Button.Label>
+                </Button>
+              )}
+            </View>
+
+            {targetFiles.length === 0 ? (
+              <EmptyState icon="images-outline" title={t("gallery.noImages")} />
+            ) : (
+              <>
+                {target.bestImageId && (
+                  <View className="mb-3 flex-row items-center gap-2 rounded-lg bg-surface-secondary px-3 py-2">
+                    <Ionicons name="star" size={miniIconSize} color="#f59e0b" />
+                    <Text className="text-xs text-foreground">
+                      {t("targets.ratings.bestImage")}
+                    </Text>
+                    <Text className="text-xs text-muted">
+                      ({targetFiles.find((file) => file.id === target.bestImageId)?.filename})
+                    </Text>
+                  </View>
+                )}
+                <ThumbnailGrid
+                  files={targetFiles}
+                  columns={isLandscapeTablet ? 4 : 3}
+                  onPress={handleFilePress}
+                />
+              </>
+            )}
+          </View>
+        </View>
       </ScrollView>
 
       <EditTargetSheet

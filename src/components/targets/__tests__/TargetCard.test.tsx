@@ -110,6 +110,55 @@ describe("TargetCard", () => {
     expect(onCardPress).toHaveBeenCalledTimes(1);
   });
 
+  it("displays coordinates when target has ra/dec", () => {
+    const targetWithCoords = { ...baseTarget, ra: 83.822, dec: -5.391 };
+    render(
+      <TargetCard
+        target={targetWithCoords}
+        frameCount={2}
+        totalExposureMinutes={30}
+        onToggleFavorite={jest.fn()}
+        onTogglePinned={jest.fn()}
+        actionControlMode="icon"
+      />,
+    );
+
+    expect(screen.getByText(/05h.*35m.*17s/)).toBeTruthy();
+  });
+
+  it("does not display coordinates when target has no ra/dec", () => {
+    render(
+      <TargetCard
+        target={baseTarget}
+        frameCount={2}
+        totalExposureMinutes={30}
+        onToggleFavorite={jest.fn()}
+        onTogglePinned={jest.fn()}
+        actionControlMode="icon"
+      />,
+    );
+
+    expect(screen.queryByText(/navigate-outline/)).toBeNull();
+  });
+
+  it("calls onLongPress handler", () => {
+    const onLongPress = jest.fn();
+    render(
+      <TargetCard
+        target={baseTarget}
+        frameCount={2}
+        totalExposureMinutes={30}
+        onToggleFavorite={jest.fn()}
+        onTogglePinned={jest.fn()}
+        onLongPress={onLongPress}
+        actionControlMode="icon"
+      />,
+    );
+
+    fireEvent(screen.getByTestId("pressable-feedback"), "longPress");
+    expect(onLongPress).toHaveBeenCalledTimes(1);
+  });
+
   it("uses accessible preset sizing when not passing interactionUi", () => {
     render(
       <TargetCard

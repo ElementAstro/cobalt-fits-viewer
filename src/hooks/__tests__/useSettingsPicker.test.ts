@@ -35,4 +35,38 @@ describe("useSettingsPicker", () => {
     expect(result.current.activePicker).toBe("targetActionSizePreset");
     expect(result.current.isActive("targetActionSizePreset")).toBe(true);
   });
+
+  it("supports processing section pickers", () => {
+    const { result } = renderHook(() => useSettingsPicker());
+
+    const pickerKeys = [
+      "editorMaxUndo",
+      "stackMethod",
+      "alignmentMode",
+      "stackingDetectionProfile",
+      "exportFormat",
+      "converterFormat",
+      "batchNamingRule",
+      "composePreset",
+      "advancedComposeRegistration",
+      "advancedComposeFraming",
+      "videoProfile",
+      "videoTargetPreset",
+      "imageProcessingProfile",
+      "debounce",
+    ] as const;
+
+    for (const key of pickerKeys) {
+      act(() => {
+        result.current.openPicker(key);
+      });
+      expect(result.current.activePicker).toBe(key);
+      expect(result.current.isActive(key)).toBe(true);
+    }
+
+    act(() => {
+      result.current.closePicker();
+    });
+    expect(result.current.activePicker).toBeNull();
+  });
 });

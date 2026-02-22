@@ -129,4 +129,31 @@ describe("useEditorToolState", () => {
     act(() => result.current.setActiveToolGroup("process"));
     expect(result.current.activeToolGroup).toBe("process");
   });
+
+  it("resetToolParams restores all params to defaults", () => {
+    const { result } = renderHook(() => useEditorToolState({ blurSigma: 5 }));
+    // Change several params
+    act(() => {
+      result.current.params.setBlurSigma(8);
+      result.current.params.setBrightnessAmount(0.3);
+      result.current.params.setContrastFactor(2.0);
+      result.current.params.setGammaValue(2.5);
+      result.current.params.setDeconvIterations(50);
+    });
+    expect(result.current.params.blurSigma).toBe(8);
+    expect(result.current.params.brightnessAmount).toBe(0.3);
+    expect(result.current.params.contrastFactor).toBe(2.0);
+    expect(result.current.params.gammaValue).toBe(2.5);
+    expect(result.current.params.deconvIterations).toBe(50);
+
+    // Reset
+    act(() => result.current.resetToolParams());
+
+    // Should restore to defaults (blurSigma uses custom default 5)
+    expect(result.current.params.blurSigma).toBe(5);
+    expect(result.current.params.brightnessAmount).toBe(0);
+    expect(result.current.params.contrastFactor).toBe(1.0);
+    expect(result.current.params.gammaValue).toBe(1.0);
+    expect(result.current.params.deconvIterations).toBe(20);
+  });
 });

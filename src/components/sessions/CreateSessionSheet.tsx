@@ -17,15 +17,14 @@ import { useSessionStore } from "../../stores/useSessionStore";
 import { useTargetStore } from "../../stores/useTargetStore";
 import type { ObservationSession } from "../../lib/fits/types";
 import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
+import { BORTLE_OPTIONS, RATING_OPTIONS } from "../../lib/sessions/constants";
+import { useChipInput } from "../../hooks/useChipInput";
 
 interface CreateSessionSheetProps {
   visible: boolean;
   onClose: () => void;
   initialDate?: Date;
 }
-
-const BORTLE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
-const RATING_OPTIONS = [1, 2, 3, 4, 5] as const;
 
 export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSessionSheetProps) {
   const { t } = useI18n();
@@ -57,28 +56,7 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
 
-  const addChipItem = useCallback(
-    (
-      value: string,
-      list: string[],
-      setter: (v: string[]) => void,
-      inputSetter: (v: string) => void,
-    ) => {
-      const trimmed = value.trim();
-      if (trimmed && !list.includes(trimmed)) {
-        setter([...list, trimmed]);
-      }
-      inputSetter("");
-    },
-    [],
-  );
-
-  const removeChipItem = useCallback(
-    (value: string, list: string[], setter: (v: string[]) => void) => {
-      setter(list.filter((item) => item !== value));
-    },
-    [],
-  );
+  const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();
 
   const adjustTime = useCallback(
     (target: "start" | "end", field: "hour" | "minute", delta: number) => {

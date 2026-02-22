@@ -147,8 +147,20 @@ jest.mock("../../../components/gallery/ThumbnailGrid", () => ({
   },
 }));
 
-jest.mock("../../../components/gallery/AlbumCard", () => ({
-  AlbumCard: () => null,
+jest.mock("../../../components/gallery/GalleryHeader", () => ({
+  GalleryHeader: (props: { displayCount: number }) => {
+    const { Text } = require("react-native");
+    return <Text testID="gallery-header-mock">Header ({props.displayCount})</Text>;
+  },
+}));
+jest.mock("../../../components/gallery/AlbumsTabContent", () => ({
+  AlbumsTabContent: () => {
+    const { View } = require("react-native");
+    return <View testID="albums-tab-content-mock" />;
+  },
+}));
+jest.mock("../../../components/gallery/ThumbnailLoadingBanner", () => ({
+  ThumbnailLoadingBanner: () => null,
 }));
 jest.mock("../../../components/gallery/CreateAlbumModal", () => ({
   CreateAlbumModal: () => null,
@@ -170,12 +182,6 @@ jest.mock("../../../components/gallery/IntegrationReportSheet", () => ({
 }));
 jest.mock("../../../components/gallery/SmartAlbumModal", () => ({
   SmartAlbumModal: () => null,
-}));
-jest.mock("../../../components/common/SearchBar", () => ({
-  SearchBar: () => null,
-}));
-jest.mock("../../../components/gallery/AlbumSortControl", () => ({
-  AlbumSortControl: () => null,
 }));
 jest.mock("../../../components/gallery/AlbumStatisticsSheet", () => ({
   AlbumStatisticsSheet: () => null,

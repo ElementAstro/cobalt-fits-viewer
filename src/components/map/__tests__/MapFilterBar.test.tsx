@@ -5,21 +5,22 @@ import type { FitsMetadata } from "../../../lib/fits/types";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "location.allDates": "All Dates",
-          "location.last7Days": "Last 7 Days",
-          "location.last30Days": "Last 30 Days",
-          "location.last90Days": "Last 90 Days",
-          "location.last1Year": "Last 1 Year",
-          "location.allObjects": "All Objects",
-          "location.allFilters": "All Filters",
-          "location.allTargets": "All Targets",
-          "location.allSessions": "All Sessions",
-          "location.clearAllFilters": "Clear All",
-        }) as Record<string, string>
-      )[key] ?? key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        "location.allDates": "All Dates",
+        "location.last7Days": "Last 7 Days",
+        "location.last30Days": "Last 30 Days",
+        "location.last90Days": "Last 90 Days",
+        "location.last1Year": "Last 1 Year",
+        "location.allObjects": "All Objects",
+        "location.allFilters": "All Filters",
+        "location.allTargets": "All Targets",
+        "location.allSessions": "All Sessions",
+        "location.clearAllFilters": "Clear All",
+        "location.activeFilters": `${params?.count ?? 0} active filter(s)`,
+      };
+      return map[key] ?? key;
+    },
   }),
 }));
 
@@ -91,8 +92,8 @@ describe("MapFilterBar", () => {
     );
 
     pressChip("Last 7 Days");
-    pressChip("M31");
-    pressChip("Ha");
+    pressChip("M31 (1)");
+    pressChip("Ha (1)");
     pressChip("target-1");
     pressChip("session-1");
     pressChip("Clear All");
@@ -128,5 +129,92 @@ describe("MapFilterBar", () => {
     );
 
     expect(queryByText("All Dates")).toBeNull();
+  });
+
+  it("shows file count badges on object and filter chips", () => {
+    render(
+      <MapFilterBar
+        files={[
+          makeFile("f1", { object: "M31", filter: "Ha" }),
+          makeFile("f2", { object: "M31", filter: "OIII" }),
+          makeFile("f3", { object: "M42", filter: "Ha" }),
+        ]}
+        objectOptions={["M31", "M42"]}
+        filterOptions={["Ha", "OIII"]}
+        targetOptions={[]}
+        sessionOptions={[]}
+        filterObject=""
+        filterFilter=""
+        filterTargetId=""
+        filterSessionId=""
+        dateFilterPreset="all"
+        onFilterObjectChange={jest.fn()}
+        onFilterFilterChange={jest.fn()}
+        onFilterTargetChange={jest.fn()}
+        onFilterSessionChange={jest.fn()}
+        onDateFilterChange={jest.fn()}
+        onClearAll={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("M31 (2)")).toBeTruthy();
+    expect(screen.getByText("M42 (1)")).toBeTruthy();
+    expect(screen.getByText("Ha (2)")).toBeTruthy();
+    expect(screen.getByText("OIII (1)")).toBeTruthy();
+  });
+
+  it("shows active filter summary when filters are applied", () => {
+    render(
+      <MapFilterBar
+        files={[makeFile("f1", { object: "M31" })]}
+        objectOptions={["M31"]}
+        filterOptions={[]}
+        targetOptions={[]}
+        sessionOptions={[]}
+        filterObject="M31"
+        filterFilter=""
+        filterTargetId=""
+        filterSessionId=""
+        dateFilterPreset="30d"
+        onFilterObjectChange={jest.fn()}
+        onFilterFilterChange={jest.fn()}
+        onFilterTargetChange={jest.fn()}
+        onFilterSessionChange={jest.fn()}
+        onDateFilterChange={jest.fn()}
+        onClearAll={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("2 active filter(s)")).toBeTruthy();
+  });
+
+  it("collapses long option lists and shows only COLLAPSED_LIMIT items", () => {
+    const manyTargets = Array.from({ length: 10 }, (_, i) => `target-${i}`);
+
+    render(
+      <MapFilterBar
+        files={[makeFile("f1")]}
+        objectOptions={[]}
+        filterOptions={[]}
+        targetOptions={manyTargets}
+        sessionOptions={[]}
+        filterObject=""
+        filterFilter=""
+        filterTargetId=""
+        filterSessionId=""
+        dateFilterPreset="all"
+        onFilterObjectChange={jest.fn()}
+        onFilterFilterChange={jest.fn()}
+        onFilterTargetChange={jest.fn()}
+        onFilterSessionChange={jest.fn()}
+        onDateFilterChange={jest.fn()}
+        onClearAll={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("target-0")).toBeTruthy();
+    expect(screen.getByText("target-5")).toBeTruthy();
+    expect(screen.queryByText("target-6")).toBeNull();
+    expect(screen.queryByText("target-9")).toBeNull();
   });
 });

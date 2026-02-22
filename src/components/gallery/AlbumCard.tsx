@@ -14,6 +14,8 @@ interface AlbumCardProps {
   onLongPress?: () => void;
   /** Compact layout for landscape mode */
   compact?: boolean;
+  /** Card layout: 'horizontal' for fixed-width scrollable, 'grid' for fill-width grid cells */
+  layout?: "horizontal" | "grid";
   onActionPress?: () => void;
 }
 
@@ -22,15 +24,19 @@ export const AlbumCard = memo(function AlbumCard({
   onPress,
   onLongPress,
   compact = false,
+  layout = "horizontal",
   onActionPress,
 }: AlbumCardProps) {
   const { t } = useI18n();
   const [mutedColor] = useThemeColor(["muted"]);
   const { width: screenWidth } = useWindowDimensions();
-  const cardWidth = compact
-    ? Math.max(110, Math.min(140, (screenWidth - 48) / 4))
-    : Math.max(140, Math.min(180, (screenWidth - 48) / 2.5));
-  const coverHeight = compact ? 72 : 112;
+  const isGrid = layout === "grid";
+  const cardWidth = isGrid
+    ? undefined
+    : compact
+      ? Math.max(110, Math.min(140, (screenWidth - 48) / 4))
+      : Math.max(140, Math.min(180, (screenWidth - 48) / 2.5));
+  const coverHeight = isGrid ? 120 : compact ? 72 : 112;
   const getFileById = useFitsStore((s) => s.getFileById);
 
   const coverUri = useMemo(() => {
@@ -45,7 +51,7 @@ export const AlbumCard = memo(function AlbumCard({
     <Pressable onLongPress={onLongPress}>
       <PressableFeedback onPress={onPress}>
         <PressableFeedback.Highlight />
-        <Card variant="secondary" style={{ width: cardWidth }}>
+        <Card variant="secondary" style={cardWidth != null ? { width: cardWidth } : undefined}>
           <Card.Body className="p-0">
             <View
               className="w-full items-center justify-center rounded-t-lg bg-surface-secondary overflow-hidden"

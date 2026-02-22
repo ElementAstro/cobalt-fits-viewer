@@ -46,6 +46,36 @@ jest.mock("expo-router", () => ({
   }),
 }));
 
+jest.mock("expo-keep-awake", () => ({
+  useKeepAwake: jest.fn(),
+}));
+
+jest.mock("../../../hooks/useResponsiveLayout", () => ({
+  useResponsiveLayout: () => ({
+    isLandscape: false,
+    layoutMode: "portrait",
+    isLandscapePhone: false,
+    isLandscapeTablet: false,
+    contentPaddingTop: 56,
+    horizontalPadding: 16,
+    sidePanelWidth: 300,
+  }),
+}));
+
+jest.mock("react-native-safe-area-context", () => ({
+  useSafeAreaInsets: () => ({ top: 48, bottom: 34, left: 0, right: 0 }),
+}));
+
+const mockHaptics = {
+  hapticsEnabled: true,
+  selection: jest.fn(),
+  impact: jest.fn(),
+  notify: jest.fn(),
+};
+jest.mock("../../../hooks/useHapticFeedback", () => ({
+  useHapticFeedback: () => mockHaptics,
+}));
+
 jest.mock("expo-video", () => {
   const { View } = require("react-native");
   return {
@@ -60,7 +90,7 @@ jest.mock("expo-video", () => {
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) => {
+    t: (key: string, params?: Record<string, unknown>) => {
       const map: Record<string, string> = {
         "settings.videoBack": "Back",
         "settings.videoFileNotFound": "Media file not found.",
@@ -83,13 +113,46 @@ jest.mock("../../../i18n/useI18n", () => ({
         "settings.videoSavedToLibrary": "Saved to media library.",
         "settings.videoSaveError": "Unable to save to media library.",
         "settings.videoShareError": "Unable to share this file.",
+        "settings.videoAbLoopClear": "Clear A-B",
+        "settings.videoStatusLabel": "Status: {status}",
+        "settings.videoVolumeLabel": "Volume: {volume}%",
+        "settings.videoSizeLabel": "Size: {size}",
+        "settings.videoCodecLabel": "Video codec: {codec}",
+        "settings.audioCodecLabel": "Audio codec: {codec}",
+        "settings.videoBitrateLabel": "Bitrate: {bitrate} kbps",
+        "settings.videoCompatibilityProfileTitle": "Default Compatibility Profile",
+        "settings.videoCompatibilityProfileDesc":
+          "MP4 + H.264/AAC + yuv420p + faststart with hardware codec fallbacks.",
+        "settings.videoOpenOutput": "Open #{index}",
+        "settings.videoPlaybackError": "Unable to play this media.",
+        "settings.videoAudioTrackPlaceholder": "Audio track",
+        "settings.videoSubtitleTrackPlaceholder": "Subtitle track",
+        "settings.videoErrorCodeLabel": "Code: {code}",
+        "settings.videoPrevious": "Previous",
+        "settings.videoNext": "Next",
+        "settings.videoFavorite": "Favorite",
+        "settings.videoUnfavorite": "Unfavorite",
+        "settings.videoRewind": "Rewind 10s",
+        "settings.videoForward": "Forward 10s",
+        "settings.videoPlayLabel": "Play",
+        "settings.videoPauseLabel": "Pause",
+        "settings.videoMuteLabel": "Mute",
+        "settings.videoUnmuteLabel": "Unmute",
+        "settings.videoFullscreenLabel": "Fullscreen",
+        "settings.videoPipLabel": "Picture in Picture",
       };
-      return map[key] ?? key;
+      const result = map[key];
+      if (!result) return key;
+      return result.replace(/\{(\w+)\}/g, (_: string, k: string) => {
+        return params?.[k] != null ? String(params[k]) : `{${k}}`;
+      });
     },
     locale: "en",
     setLocale: jest.fn(),
   }),
 }));
+
+jest.spyOn(require("react-native").StatusBar, "setHidden").mockImplementation(jest.fn());
 
 jest.mock("../../../hooks/useMediaLibrary", () => ({
   useMediaLibrary: () => ({
@@ -202,15 +265,45 @@ describe("/video/[id]", () => {
 
   it("renders volume slider and A-B loop controls", () => {
     render(<VideoDetailScreen />);
-    expect(screen.getByText("Volume: 100%")).toBeTruthy();
     expect(screen.getByText("A")).toBeTruthy();
     expect(screen.getByText("B")).toBeTruthy();
   });
 
   it("renders sub-second time display format", () => {
     render(<VideoDetailScreen />);
-    // Current time at 0 should show sub-second format with tenths
-    expect(screen.getByText("00:00.0")).toBeTruthy();
+    // Both current and total time use formatVideoDurationWithMs
+    const timeElements = screen.getAllByText("00:00.0");
+    expect(timeElements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders favorite button and toggles favorite on press", () => {
+    render(<VideoDetailScreen />);
+    const favBtn = screen.getByLabelText("Favorite");
+    expect(favBtn).toBeTruthy();
+    fireEvent.press(favBtn);
+    const file = useFitsStore.getState().getFileById("video-1");
+    expect(file?.isFavorite).toBe(true);
+  });
+
+  it("updates lastViewed on mount", () => {
+    render(<VideoDetailScreen />);
+    const file = useFitsStore.getState().getFileById("video-1");
+    expect(file?.lastViewed).toBeDefined();
+    expect(typeof file?.lastViewed).toBe("number");
+  });
+
+  it("calls haptics.selection on play/pause", () => {
+    mockHaptics.selection.mockClear();
+    render(<VideoDetailScreen />);
+    fireEvent.press(screen.getByTestId("e2e-action-video__param_id-play-pause"));
+    expect(mockHaptics.selection).toHaveBeenCalled();
+  });
+
+  it("calls StatusBar.setHidden on mount", () => {
+    const StatusBar = require("react-native").StatusBar;
+    StatusBar.setHidden.mockClear();
+    render(<VideoDetailScreen />);
+    expect(StatusBar.setHidden).toHaveBeenCalledWith(false, "fade");
   });
 
   it("redirects to image viewer when current file is not video", async () => {

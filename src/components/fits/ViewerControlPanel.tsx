@@ -10,21 +10,22 @@ import type {
   ColormapType,
   FitsMetadata,
   ViewerCurvePreset,
+  HistogramMode,
+  HistogramData,
+  ChannelHistogramData,
 } from "../../lib/fits/types";
-import type { AstrometryJob } from "../../lib/astrometry/types";
-
-type HistogramMode = "linear" | "log" | "cdf";
-
-interface HistogramData {
-  counts: number[];
-  edges: number[];
-}
+import type { AstrometryJob, AstrometryAnnotationType } from "../../lib/astrometry/types";
+import {
+  AnnotationLayerControls,
+  type AnnotationLayerVisibility,
+} from "../astrometry/AnnotationLayerControls";
 
 interface ViewerControlPanelProps {
   file: FitsMetadata;
 
   // Histogram
   histogram: HistogramData | null;
+  rgbHistogram: ChannelHistogramData | null;
   regionHistogram: HistogramData | null;
   blackPoint: number;
   whitePoint: number;
@@ -81,6 +82,12 @@ interface ViewerControlPanelProps {
   latestSolvedJob?: AstrometryJob;
   showAnnotations: boolean;
   onToggleAnnotations: () => void;
+  annotationLayerVisibility?: AnnotationLayerVisibility;
+  onToggleAnnotationType?: (type: AstrometryAnnotationType) => void;
+  showCoordinateGrid?: boolean;
+  onToggleCoordinateGrid?: () => void;
+  showConstellations?: boolean;
+  onToggleConstellations?: () => void;
   onExportWCS?: () => void;
   onNavigateToAstrometryResult?: (jobId: string) => void;
 
@@ -91,6 +98,7 @@ interface ViewerControlPanelProps {
 export function ViewerControlPanel({
   file,
   histogram,
+  rgbHistogram,
   regionHistogram,
   blackPoint,
   whitePoint,
@@ -143,6 +151,12 @@ export function ViewerControlPanel({
   latestSolvedJob,
   showAnnotations,
   onToggleAnnotations,
+  annotationLayerVisibility,
+  onToggleAnnotationType,
+  showCoordinateGrid,
+  onToggleCoordinateGrid,
+  showConstellations,
+  onToggleConstellations,
   onExportWCS,
   onNavigateToAstrometryResult,
   showControls,
@@ -193,6 +207,7 @@ export function ViewerControlPanel({
             counts={histogram.counts}
             edges={histogram.edges}
             regionCounts={regionHistogram?.counts}
+            rgbHistogram={rgbHistogram}
             blackPoint={blackPoint}
             whitePoint={whitePoint}
             midtone={midtone}
@@ -284,6 +299,20 @@ export function ViewerControlPanel({
               </TouchableOpacity>
             )}
           </View>
+          {showAnnotations &&
+            annotationLayerVisibility &&
+            onToggleAnnotationType &&
+            latestSolvedJob.result.annotations.length > 0 && (
+              <AnnotationLayerControls
+                annotations={latestSolvedJob.result.annotations}
+                visibility={annotationLayerVisibility}
+                onToggleType={onToggleAnnotationType}
+                showCoordinateGrid={showCoordinateGrid}
+                onToggleCoordinateGrid={onToggleCoordinateGrid}
+                showConstellations={showConstellations}
+                onToggleConstellations={onToggleConstellations}
+              />
+            )}
           <ScrollView className="max-h-52 px-3 py-2" nestedScrollEnabled>
             <AstrometryResultView
               result={latestSolvedJob.result}

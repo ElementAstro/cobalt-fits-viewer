@@ -1,11 +1,10 @@
-import { View, Text, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
-import { Separator, Switch } from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, ScrollView } from "react-native";
+import { Separator } from "heroui-native";
+import { SettingsHeader } from "../../components/settings";
+import { SettingsToggleRow } from "../../components/common/SettingsToggleRow";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
@@ -27,9 +26,7 @@ const MAP_PRESET_VALUES = ["standard", "dark", "satellite", "terrain3d"] as cons
 
 export default function ObservationSettingsScreen() {
   const { t } = useI18n();
-  const haptics = useHapticFeedback();
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
@@ -162,27 +159,15 @@ export default function ObservationSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="flex-row items-center gap-3 mb-4">
-          <Ionicons name="arrow-back" size={24} color="#888" onPress={() => router.back()} />
-          <Text className="text-xl font-bold text-foreground">
-            {t("settings.categories.observation")}
-          </Text>
-        </View>
+        <SettingsHeader title={t("settings.categories.observation")} />
 
         {/* Target Settings */}
         <SettingsSection title={t("settings.targetDefaults")}>
-          <SettingsRow
+          <SettingsToggleRow
             icon="telescope-outline"
             label={t("settings.autoGroupByObject")}
-            rightElement={
-              <Switch
-                isSelected={autoGroupByObject}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setAutoGroupByObject(v);
-                }}
-              />
-            }
+            isSelected={autoGroupByObject}
+            onSelectedChange={setAutoGroupByObject}
           />
           <Separator />
           <SettingsRow
@@ -236,49 +221,28 @@ export default function ObservationSettingsScreen() {
             onPress={() => openPicker("targetActionSizePreset")}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="text-outline"
             label={t("settings.targetActionAutoScaleFromFont")}
-            rightElement={
-              <Switch
-                isSelected={targetActionAutoScaleFromFont}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setTargetActionAutoScaleFromFont(v);
-                }}
-              />
-            }
+            isSelected={targetActionAutoScaleFromFont}
+            onSelectedChange={setTargetActionAutoScaleFromFont}
           />
         </SettingsSection>
 
         {/* Location Settings */}
         <SettingsSection title={t("location.permission")}>
-          <SettingsRow
+          <SettingsToggleRow
             icon="copy-outline"
             label={t("settings.autoDetectDuplicates")}
-            rightElement={
-              <Switch
-                isSelected={autoDetectDuplicates}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setAutoDetectDuplicates(v);
-                }}
-              />
-            }
+            isSelected={autoDetectDuplicates}
+            onSelectedChange={setAutoDetectDuplicates}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="location-outline"
             label={t("location.autoTag")}
-            rightElement={
-              <Switch
-                isSelected={autoTagLocation}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setAutoTagLocation(v);
-                }}
-              />
-            }
+            isSelected={autoTagLocation}
+            onSelectedChange={setAutoTagLocation}
           />
           <Separator />
           <SettingsRow
@@ -288,18 +252,11 @@ export default function ObservationSettingsScreen() {
             onPress={() => openPicker("mapPreset")}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="git-network-outline"
             label={t("settings.mapShowOverlays")}
-            rightElement={
-              <Switch
-                isSelected={mapShowOverlays}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setMapShowOverlays(v);
-                }}
-              />
-            }
+            isSelected={mapShowOverlays}
+            onSelectedChange={setMapShowOverlays}
           />
         </SettingsSection>
 
@@ -313,18 +270,11 @@ export default function ObservationSettingsScreen() {
             onPress={() => openPicker("sessionGap")}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="calendar-outline"
             label={t("settings.calendarSync")}
-            rightElement={
-              <Switch
-                isSelected={calendarSyncEnabled}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setCalendarSyncEnabled(v);
-                }}
-              />
-            }
+            isSelected={calendarSyncEnabled}
+            onSelectedChange={setCalendarSyncEnabled}
           />
           {calendarSyncEnabled && (
             <>
@@ -361,46 +311,25 @@ export default function ObservationSettingsScreen() {
 
         {/* Session Display Fields */}
         <SettingsSection title={t("settings.sessionDisplayFields")}>
-          <SettingsRow
+          <SettingsToggleRow
             icon="camera-outline"
             label={t("settings.sessionShowExposureCount")}
-            rightElement={
-              <Switch
-                isSelected={sessionShowExposureCount}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setSessionShowExposureCount(v);
-                }}
-              />
-            }
+            isSelected={sessionShowExposureCount}
+            onSelectedChange={setSessionShowExposureCount}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="timer-outline"
             label={t("settings.sessionShowTotalExposure")}
-            rightElement={
-              <Switch
-                isSelected={sessionShowTotalExposure}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setSessionShowTotalExposure(v);
-                }}
-              />
-            }
+            isSelected={sessionShowTotalExposure}
+            onSelectedChange={setSessionShowTotalExposure}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="funnel-outline"
             label={t("settings.sessionShowFilters")}
-            rightElement={
-              <Switch
-                isSelected={sessionShowFilters}
-                onSelectedChange={(v: boolean) => {
-                  haptics.selection();
-                  setSessionShowFilters(v);
-                }}
-              />
-            }
+            isSelected={sessionShowFilters}
+            onSelectedChange={setSessionShowFilters}
           />
         </SettingsSection>
 

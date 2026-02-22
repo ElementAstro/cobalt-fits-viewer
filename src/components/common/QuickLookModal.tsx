@@ -23,6 +23,10 @@ interface QuickLookModalProps {
   onClose: () => void;
   onOpenViewer: (id: string) => void;
   onOpenEditor: (id: string) => void;
+  onToggleFavorite?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  onRename?: (id: string) => void;
+  onAddTag?: (id: string) => void;
 }
 
 export function QuickLookModal({
@@ -31,6 +35,10 @@ export function QuickLookModal({
   onClose,
   onOpenViewer,
   onOpenEditor,
+  onToggleFavorite,
+  onDelete,
+  onRename,
+  onAddTag,
 }: QuickLookModalProps) {
   const { t } = useI18n();
   const updateFile = useFitsStore((s) => s.updateFile);
@@ -164,6 +172,53 @@ export function QuickLookModal({
             )}
           </View>
 
+          {/* Quick Actions */}
+          {(onToggleFavorite || onDelete || onRename || onAddTag) && (
+            <View className="mt-3 flex-row justify-around rounded-lg bg-surface-secondary py-2">
+              {onToggleFavorite && (
+                <QuickAction
+                  icon={file.isFavorite ? "heart" : "heart-outline"}
+                  label={t("files.toggleFavorite")}
+                  color={file.isFavorite ? "#ef4444" : "#888"}
+                  onPress={() => {
+                    onToggleFavorite(file.id);
+                  }}
+                />
+              )}
+              {onRename && (
+                <QuickAction
+                  icon="create-outline"
+                  label={t("common.rename")}
+                  onPress={() => {
+                    onClose();
+                    onRename(file.id);
+                  }}
+                />
+              )}
+              {onAddTag && (
+                <QuickAction
+                  icon="pricetag-outline"
+                  label={t("files.batchTag")}
+                  onPress={() => {
+                    onClose();
+                    onAddTag(file.id);
+                  }}
+                />
+              )}
+              {onDelete && (
+                <QuickAction
+                  icon="trash-outline"
+                  label={t("common.delete")}
+                  color="#ef4444"
+                  onPress={() => {
+                    onClose();
+                    onDelete(file.id);
+                  }}
+                />
+              )}
+            </View>
+          )}
+
           <Separator className="my-3" />
 
           {/* Actions */}
@@ -199,6 +254,27 @@ export function QuickLookModal({
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  color = "#888",
+  onPress,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  color?: string;
+  onPress: () => void;
+}) {
+  return (
+    <Button variant="ghost" size="sm" onPress={onPress} className="flex-col items-center gap-0.5">
+      <Ionicons name={icon} size={18} color={color} />
+      <Text className="text-[9px] text-muted" numberOfLines={1}>
+        {label}
+      </Text>
+    </Button>
   );
 }
 

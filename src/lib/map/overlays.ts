@@ -8,6 +8,7 @@
 
 import { Platform } from "react-native";
 import type { MapClusterNode } from "./types";
+import { haversineDistance } from "./clustering";
 
 /**
  * 生成观测点之间的连线（按时间顺序连接）
@@ -57,6 +58,43 @@ export function buildClusterCircles(
       lineWidth,
     };
   });
+}
+
+// ===== 线段距离标注 =====
+
+export interface SegmentDistance {
+  id: string;
+  midpoint: { latitude: number; longitude: number };
+  distanceKm: number;
+  label: string;
+}
+
+/**
+ * 计算观测路线各线段的中点距离标注
+ */
+export function buildSegmentDistances(clusters: MapClusterNode[]): SegmentDistance[] {
+  if (clusters.length < 2) return [];
+
+  const sorted = [...clusters].sort((a, b) => getEarliestDate(a) - getEarliestDate(b));
+  const segments: SegmentDistance[] = [];
+
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i].location;
+    const b = sorted[i + 1].location;
+    const distanceKm = haversineDistance(a.latitude, a.longitude, b.latitude, b.longitude);
+
+    segments.push({
+      id: `dist-${sorted[i].id}-${sorted[i + 1].id}`,
+      midpoint: {
+        latitude: (a.latitude + b.latitude) / 2,
+        longitude: (a.longitude + b.longitude) / 2,
+      },
+      distanceKm,
+      label: distanceKm < 1 ? `${Math.round(distanceKm * 1000)}m` : `${distanceKm.toFixed(1)}km`,
+    });
+  }
+
+  return segments;
 }
 
 function getEarliestDate(cluster: MapClusterNode): number {

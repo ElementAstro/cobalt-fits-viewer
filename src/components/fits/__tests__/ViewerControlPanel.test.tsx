@@ -75,6 +75,7 @@ describe("ViewerControlPanel", () => {
     showAnnotations: false,
     onToggleAnnotations: jest.fn(),
     showControls: true,
+    rgbHistogram: null,
   };
 
   it("renders HDU options and allows selecting image HDU", () => {

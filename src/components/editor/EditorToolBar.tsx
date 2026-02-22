@@ -3,7 +3,7 @@ import { PressableFeedback } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
-import { useI18n, type TranslationKey } from "../../i18n/useI18n";
+import { useI18n } from "../../i18n/useI18n";
 import type { EditorTool, EditorToolGroup } from "../../hooks/useEditorToolState";
 
 const GEOMETRY_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -109,10 +109,10 @@ export function EditorToolBar({
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View className="flex-row gap-1">
             {[
-              { key: "geometry" as const, label: t("editor.geometry" as TranslationKey) },
-              { key: "adjust" as const, label: t("editor.adjust" as TranslationKey) },
-              { key: "process" as const, label: t("editor.process" as TranslationKey) },
-              { key: "mask" as const, label: t("editor.maskTools" as TranslationKey) },
+              { key: "geometry" as const, label: t("editor.geometry") },
+              { key: "adjust" as const, label: t("editor.adjust") },
+              { key: "process" as const, label: t("editor.process") },
+              { key: "mask" as const, label: t("editor.maskTools") },
             ].map((tab) => (
               <PressableFeedback key={tab.key} onPress={() => onToolGroupChange(tab.key)}>
                 <View
@@ -153,7 +153,7 @@ export function EditorToolBar({
                     <Text
                       className={`mt-1 text-[9px] ${isActive ? "text-success font-semibold" : "text-muted"}`}
                     >
-                      {t(`editor.${tool.key}` as TranslationKey)}
+                      {t(`editor.${tool.key}`)}
                     </Text>
                   </View>
                 </PressableFeedback>
@@ -209,7 +209,7 @@ export function EditorToolBar({
                     >
                       {tool.key === "starDetect" && detectedStarsCount > 0
                         ? `${detectedStarsCount} ${t("editor.stars")}`
-                        : t(`editor.${tool.key}` as TranslationKey)}
+                        : t(`editor.${tool.key}`)}
                     </Text>
                   </View>
                 </PressableFeedback>

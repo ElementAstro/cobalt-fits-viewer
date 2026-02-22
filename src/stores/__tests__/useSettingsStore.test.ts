@@ -880,6 +880,70 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.composeBlueWeight).toBe(0.9);
     });
 
+    it("resetSection resets only the specified section keys", () => {
+      const store = useSettingsStore.getState();
+      // Mutate editor section
+      store.setDefaultBlurSigma(9.5);
+      store.setDefaultSharpenAmount(4.0);
+      store.setDefaultDenoiseRadius(5);
+      store.setEditorMaxUndo(50);
+      // Mutate a non-editor key to verify isolation
+      store.setDefaultStackMethod("median");
+
+      store.resetSection("editor");
+
+      const s = useSettingsStore.getState();
+      // Editor keys reset
+      expect(s.defaultBlurSigma).toBe(2.0);
+      expect(s.defaultSharpenAmount).toBe(1.5);
+      expect(s.defaultDenoiseRadius).toBe(1);
+      expect(s.editorMaxUndo).toBe(10);
+      // Non-editor key untouched
+      expect(s.defaultStackMethod).toBe("median");
+    });
+
+    it("resetSection handles stacking section", () => {
+      const store = useSettingsStore.getState();
+      store.setDefaultSigmaValue(4.5);
+      store.setStackingDetectMaxStars(500);
+      store.setStackingDetectConnectivity(4);
+
+      store.resetSection("stacking");
+
+      const s = useSettingsStore.getState();
+      expect(s.defaultSigmaValue).toBe(2.5);
+      expect(s.stackingDetectMaxStars).toBe(220);
+      expect(s.stackingDetectConnectivity).toBe(8);
+    });
+
+    it("resetSection handles performance section", () => {
+      const store = useSettingsStore.getState();
+      store.setImageProcessingDebounce(500);
+      store.setUseHighQualityPreview(true);
+      store.setViewerApplyEditorRecipe(false);
+
+      store.resetSection("performance");
+
+      const s = useSettingsStore.getState();
+      expect(s.imageProcessingDebounce).toBe(150);
+      expect(s.useHighQualityPreview).toBe(true);
+      expect(s.viewerApplyEditorRecipe).toBe(true);
+    });
+
+    it("resetSection handles video section", () => {
+      const store = useSettingsStore.getState();
+      store.setVideoAutoplay(true);
+      store.setVideoLoopByDefault(true);
+      store.setVideoProcessingConcurrency(6);
+
+      store.resetSection("video");
+
+      const s = useSettingsStore.getState();
+      expect(s.videoAutoplay).toBe(false);
+      expect(s.videoLoopByDefault).toBe(false);
+      expect(s.videoProcessingConcurrency).toBe(2);
+    });
+
     it("resets frame classification defaults", () => {
       const store = useSettingsStore.getState();
       store.setFrameClassificationConfig({

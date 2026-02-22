@@ -1,6 +1,7 @@
-import { View, Text, ScrollView, Alert } from "react-native";
-import { useRouter } from "expo-router";
-import { Button, Separator, Switch } from "heroui-native";
+import { View, ScrollView, Alert } from "react-native";
+import { Button, Separator } from "heroui-native";
+import { SettingsHeader } from "../../components/settings";
+import { SettingsToggleRow } from "../../components/common/SettingsToggleRow";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,15 +12,17 @@ import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useOnboardingStore } from "../../stores/useOnboardingStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
+import { OptionPickerModal } from "../../components/common/OptionPickerModal";
 import { UpdateChecker } from "../../components/common/UpdateChecker";
 import { SystemInfoCard } from "../../components/common/SystemInfoCard";
 import { LogViewer } from "../../components/common/LogViewer";
+import { useSettingsPicker } from "../../hooks/useSettingsPicker";
+import type { LogLevel } from "../../lib/logger";
 
 export default function AboutSettingsScreen() {
   const { t } = useI18n();
   const haptics = useHapticFeedback();
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
-  const router = useRouter();
   const insets = useSafeAreaInsets();
 
   const resetToDefaults = useSettingsStore((s) => s.resetToDefaults);
@@ -38,6 +41,20 @@ export default function AboutSettingsScreen() {
   const setLogConsoleOutput = useSettingsStore((s) => s.setLogConsoleOutput);
   const setLogPersistEnabled = useSettingsStore((s) => s.setLogPersistEnabled);
   const resetOnboarding = useOnboardingStore((s) => s.resetOnboarding);
+  const { activePicker, openPicker, closePicker } = useSettingsPicker();
+
+  const LOG_LEVEL_OPTIONS = [
+    { label: "DEBUG", value: "debug" as LogLevel },
+    { label: "INFO", value: "info" as LogLevel },
+    { label: "WARN", value: "warn" as LogLevel },
+    { label: "ERROR", value: "error" as LogLevel },
+  ];
+
+  const LOG_MAX_ENTRIES_OPTIONS = [
+    { label: "1000", value: 1000 },
+    { label: "2000", value: 2000 },
+    { label: "5000", value: 5000 },
+  ];
 
   const doResetAll = () => {
     resetToDefaults();
@@ -76,44 +93,6 @@ export default function AboutSettingsScreen() {
     ]);
   };
 
-  const openLogLevelPicker = () => {
-    const levels = ["debug", "info", "warn", "error"] as const;
-    Alert.alert(
-      t("logs.logMinLevel"),
-      t("logs.logMinLevelDesc"),
-      [
-        ...levels.map((level) => ({
-          text: level.toUpperCase(),
-          onPress: () => {
-            haptics.selection();
-            setLogMinLevel(level);
-          },
-        })),
-        { text: t("common.cancel"), style: "cancel" as const },
-      ],
-      { cancelable: true },
-    );
-  };
-
-  const openLogMaxEntriesPicker = () => {
-    const options = [1000, 2000, 5000];
-    Alert.alert(
-      t("logs.logMaxEntries"),
-      t("logs.logMaxEntriesDesc"),
-      [
-        ...options.map((value) => ({
-          text: `${value}`,
-          onPress: () => {
-            haptics.selection();
-            setLogMaxEntries(value);
-          },
-        })),
-        { text: t("common.cancel"), style: "cancel" as const },
-      ],
-      { cancelable: true },
-    );
-  };
-
   return (
     <View testID="e2e-screen-settings__about" className="flex-1 bg-background">
       <ScrollView
@@ -125,12 +104,7 @@ export default function AboutSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="flex-row items-center gap-3 mb-4">
-          <Ionicons name="arrow-back" size={24} color="#888" onPress={() => router.back()} />
-          <Text className="text-xl font-bold text-foreground">
-            {t("settings.categories.about")}
-          </Text>
-        </View>
+        <SettingsHeader title={t("settings.categories.about")} />
 
         {/* About & Updates */}
         <SettingsSection title={t("settings.about")}>
@@ -141,46 +115,25 @@ export default function AboutSettingsScreen() {
 
         {/* General */}
         <SettingsSection title={t("settings.general")}>
-          <SettingsRow
+          <SettingsToggleRow
             icon="phone-portrait-outline"
             label={t("settings.hapticsEnabled")}
-            rightElement={
-              <Switch
-                isSelected={hapticsEnabled}
-                onSelectedChange={(value: boolean) => {
-                  haptics.selection();
-                  setHapticsEnabled(value);
-                }}
-              />
-            }
+            isSelected={hapticsEnabled}
+            onSelectedChange={setHapticsEnabled}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="shield-checkmark-outline"
             label={t("settings.confirmDestructiveActions")}
-            rightElement={
-              <Switch
-                isSelected={confirmDestructiveActions}
-                onSelectedChange={(value: boolean) => {
-                  haptics.selection();
-                  setConfirmDestructiveActions(value);
-                }}
-              />
-            }
+            isSelected={confirmDestructiveActions}
+            onSelectedChange={setConfirmDestructiveActions}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="cloud-outline"
             label={t("settings.autoCheckUpdates")}
-            rightElement={
-              <Switch
-                isSelected={autoCheckUpdates}
-                onSelectedChange={(value: boolean) => {
-                  haptics.selection();
-                  setAutoCheckUpdates(value);
-                }}
-              />
-            }
+            isSelected={autoCheckUpdates}
+            onSelectedChange={setAutoCheckUpdates}
           />
         </SettingsSection>
 
@@ -199,42 +152,28 @@ export default function AboutSettingsScreen() {
             icon="funnel-outline"
             label={t("logs.logMinLevel")}
             value={logMinLevel.toUpperCase()}
-            onPress={openLogLevelPicker}
+            onPress={() => openPicker("logLevel")}
           />
           <Separator />
           <SettingsRow
             icon="albums-outline"
             label={t("logs.logMaxEntries")}
             value={`${logMaxEntries}`}
-            onPress={openLogMaxEntriesPicker}
+            onPress={() => openPicker("logMaxEntries")}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="terminal-outline"
             label={t("logs.logConsoleOutput")}
-            rightElement={
-              <Switch
-                isSelected={logConsoleOutput}
-                onSelectedChange={(value: boolean) => {
-                  haptics.selection();
-                  setLogConsoleOutput(value);
-                }}
-              />
-            }
+            isSelected={logConsoleOutput}
+            onSelectedChange={setLogConsoleOutput}
           />
           <Separator />
-          <SettingsRow
+          <SettingsToggleRow
             icon="save-outline"
             label={t("logs.logPersistEnabled")}
-            rightElement={
-              <Switch
-                isSelected={logPersistEnabled}
-                onSelectedChange={(value: boolean) => {
-                  haptics.selection();
-                  setLogPersistEnabled(value);
-                }}
-              />
-            }
+            isSelected={logPersistEnabled}
+            onSelectedChange={setLogPersistEnabled}
           />
         </SettingsSection>
 
@@ -269,6 +208,23 @@ export default function AboutSettingsScreen() {
           <Button.Label>{t("settings.resetAll")}</Button.Label>
         </Button>
       </ScrollView>
+
+      <OptionPickerModal
+        visible={activePicker === "logLevel"}
+        title={t("logs.logMinLevel")}
+        options={LOG_LEVEL_OPTIONS}
+        selectedValue={logMinLevel}
+        onSelect={(value) => setLogMinLevel(value as LogLevel)}
+        onClose={closePicker}
+      />
+      <OptionPickerModal
+        visible={activePicker === "logMaxEntries"}
+        title={t("logs.logMaxEntries")}
+        options={LOG_MAX_ENTRIES_OPTIONS}
+        selectedValue={logMaxEntries}
+        onSelect={setLogMaxEntries}
+        onClose={closePicker}
+      />
     </View>
   );
 }

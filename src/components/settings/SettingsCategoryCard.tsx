@@ -1,5 +1,5 @@
-import { View, Text, TouchableOpacity } from "react-native";
-import { Card, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { Card, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 
@@ -30,13 +30,14 @@ export function SettingsCategoryCard({
   };
 
   return (
-    <Card variant="secondary" className="rounded-xl">
-      <TouchableOpacity
-        testID={testID}
-        onPress={handlePress}
-        accessibilityRole="button"
-        accessibilityLabel={title}
-      >
+    <PressableFeedback
+      testID={testID}
+      onPress={handlePress}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+    >
+      <PressableFeedback.Highlight />
+      <Card variant="secondary" className="rounded-xl">
         <Card.Body className="px-4 py-3">
           <View className="flex-row items-center gap-3">
             <View
@@ -66,7 +67,7 @@ export function SettingsCategoryCard({
             <Ionicons name="chevron-forward" size={18} color={mutedColor} />
           </View>
         </Card.Body>
-      </TouchableOpacity>
-    </Card>
+      </Card>
+    </PressableFeedback>
   );
 }

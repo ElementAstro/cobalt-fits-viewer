@@ -6,7 +6,6 @@ import { useI18n } from "../../i18n/useI18n";
 interface FilesSelectionBarProps {
   selectedCount: number;
   isLandscape: boolean;
-  onExport: () => void;
   onBatchConvert: () => void;
   onStacking: () => void;
 }
@@ -14,7 +13,6 @@ interface FilesSelectionBarProps {
 export function FilesSelectionBar({
   selectedCount,
   isLandscape,
-  onExport,
   onBatchConvert,
   onStacking,
 }: FilesSelectionBarProps) {
@@ -27,10 +25,6 @@ export function FilesSelectionBar({
         {selectedCount} {t("common.selected")}
       </Text>
       <View className="flex-row items-center gap-2">
-        <Button size="sm" variant="ghost" onPress={onExport} isDisabled={!selectedCount}>
-          <Ionicons name="share-social-outline" size={14} color={mutedColor} />
-          {!isLandscape && <Button.Label>{t("files.exportSelected")}</Button.Label>}
-        </Button>
         <Button size="sm" variant="ghost" onPress={onBatchConvert} isDisabled={!selectedCount}>
           <Ionicons name="swap-horizontal-outline" size={14} color={mutedColor} />
           {!isLandscape && <Button.Label>{t("converter.batchConvert")}</Button.Label>}

@@ -3,7 +3,7 @@
  */
 
 import { useState } from "react";
-import { ScrollView, View, Text } from "react-native";
+import { Alert, ScrollView, View, Text } from "react-native";
 import { BottomSheet, Button, Card, Input, Label, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -293,7 +293,23 @@ export function GroupManagerSheet({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onPress={() => onDeleteGroup(group.id)}
+                              onPress={() => {
+                                Alert.alert(
+                                  t("targets.groups.deleteTitle"),
+                                  t("targets.groups.deleteConfirm", {
+                                    name: group.name,
+                                    count: group.targetIds.length,
+                                  }),
+                                  [
+                                    { text: t("common.cancel"), style: "cancel" },
+                                    {
+                                      text: t("common.delete"),
+                                      style: "destructive",
+                                      onPress: () => onDeleteGroup(group.id),
+                                    },
+                                  ],
+                                );
+                              }}
                             >
                               <Ionicons name="trash-outline" size={14} color={dangerColor} />
                             </Button>

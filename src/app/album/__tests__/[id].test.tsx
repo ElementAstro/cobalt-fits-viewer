@@ -75,6 +75,13 @@ jest.mock("../../../stores/useFitsStore", () => ({
     }),
 }));
 
+jest.mock("../../../hooks/useHapticFeedback", () => ({
+  useHapticFeedback: () => ({
+    impact: jest.fn(),
+    notify: jest.fn(),
+  }),
+}));
+
 jest.mock("../../../hooks/useSelectionMode", () => ({
   useSelectionMode: () => ({
     isSelectionMode: false,

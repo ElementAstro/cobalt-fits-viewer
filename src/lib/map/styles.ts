@@ -152,6 +152,10 @@ export interface MapPresetConfig {
   googleMapType: string; // NORMAL | HYBRID | SATELLITE | TERRAIN
   googleColorScheme: string; // LIGHT | DARK | FOLLOW_SYSTEM
   googleStyleJson: string | null;
+
+  // Web (Leaflet)
+  webTileUrl: string;
+  webTileAttribution: string;
 }
 
 export const MAP_PRESETS: Record<MapPreset, MapPresetConfig> = {
@@ -164,6 +168,9 @@ export const MAP_PRESETS: Record<MapPreset, MapPresetConfig> = {
     googleMapType: "NORMAL",
     googleColorScheme: "FOLLOW_SYSTEM",
     googleStyleJson: null,
+    webTileUrl: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+    webTileAttribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
   },
   dark: {
     label: "location.presetDark",
@@ -174,6 +181,9 @@ export const MAP_PRESETS: Record<MapPreset, MapPresetConfig> = {
     googleMapType: "NORMAL",
     googleColorScheme: "DARK",
     googleStyleJson: GOOGLE_DARK_ASTRONOMY_STYLE,
+    webTileUrl: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    webTileAttribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
   },
   satellite: {
     label: "location.presetSatellite",
@@ -184,6 +194,10 @@ export const MAP_PRESETS: Record<MapPreset, MapPresetConfig> = {
     googleMapType: "SATELLITE",
     googleColorScheme: "FOLLOW_SYSTEM",
     googleStyleJson: null,
+    webTileUrl:
+      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    webTileAttribution:
+      'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Source: Esri, Maxar, Earthstar Geographics',
   },
   terrain3d: {
     label: "location.preset3D",
@@ -194,10 +208,28 @@ export const MAP_PRESETS: Record<MapPreset, MapPresetConfig> = {
     googleMapType: "TERRAIN",
     googleColorScheme: "FOLLOW_SYSTEM",
     googleStyleJson: null,
+    webTileUrl: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
+    webTileAttribution:
+      'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a>',
   },
 };
 
 export const MAP_PRESET_ORDER: MapPreset[] = ["standard", "dark", "satellite", "terrain3d"];
+
+// ===== Marker 配色常量 =====
+export const MARKER_COLORS = {
+  single: "#43A047",
+  clusterSmall: "#1E88E5",
+  clusterMedium: "#FB8C00",
+  clusterLarge: "#E53935",
+} as const;
+
+export function getMarkerColor(count: number, isCluster: boolean): string {
+  if (count >= 10) return MARKER_COLORS.clusterLarge;
+  if (count >= 5) return MARKER_COLORS.clusterMedium;
+  if (isCluster) return MARKER_COLORS.clusterSmall;
+  return MARKER_COLORS.single;
+}
 
 // ===== Apple Maps POI 过滤 =====
 // 天文相关 POI: PLANETARIUM, NATIONAL_PARK, PARK, CAMPGROUND

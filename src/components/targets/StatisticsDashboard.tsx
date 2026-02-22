@@ -9,6 +9,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { formatExposureHours } from "../../lib/targets/targetStatistics";
 import type { TargetStatistics, MonthlyStats } from "../../lib/targets/targetStatistics";
+import { STATUS_COLORS, TARGET_STATUSES } from "../../lib/targets/targetConstants";
 
 interface StatisticsDashboardProps {
   statistics: TargetStatistics;
@@ -66,26 +67,19 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
         </Card.Header>
         <Card.Body className="p-3 pt-0">
           <View className="flex-row gap-2">
-            {(["planned", "acquiring", "completed", "processed"] as const).map((status) => {
+            {TARGET_STATUSES.map((status) => {
               const count = statistics.byStatus[status] ?? 0;
               const percent =
                 statistics.totalTargets > 0
                   ? Math.round((count / statistics.totalTargets) * 100)
                   : 0;
-              const colors = {
-                planned: "#6b7280",
-                acquiring: "#f59e0b",
-                completed: "#22c55e",
-                processed: "#3b82f6",
-              };
-
               return (
                 <View key={status} className="flex-1 items-center">
                   <View
                     className="w-10 h-10 rounded-full items-center justify-center mb-1"
-                    style={{ backgroundColor: colors[status] + "20" }}
+                    style={{ backgroundColor: STATUS_COLORS[status] + "20" }}
                   >
-                    <Text className="text-sm font-bold" style={{ color: colors[status] }}>
+                    <Text className="text-sm font-bold" style={{ color: STATUS_COLORS[status] }}>
                       {count}
                     </Text>
                   </View>

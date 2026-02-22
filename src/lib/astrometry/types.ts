@@ -91,6 +91,8 @@ export interface AstrometryAnnotation {
   pixely: number;
   /** 标注半径 (像素) */
   radius?: number;
+  /** 视星等 (仅恒星类型) */
+  vmag?: number;
 }
 
 // ===== 客户端配置 =====

@@ -1,19 +1,11 @@
 import { useState, useMemo, useCallback } from "react";
-import { View, Text, ScrollView, FlatList, Alert, useWindowDimensions } from "react-native";
-import {
-  BottomSheet,
-  Button,
-  Chip,
-  Input,
-  Separator,
-  TextField,
-  useThemeColor,
-} from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, FlatList, Alert, useWindowDimensions } from "react-native";
+import { BottomSheet } from "heroui-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useTargets } from "../../hooks/useTargets";
 import { useTargetStatistics } from "../../hooks/useTargetStatistics";
 import { useTargetSearch, useDuplicateDetection } from "../../hooks/useTargetSearch";
@@ -25,17 +17,15 @@ import { StatisticsDashboard } from "../../components/targets/StatisticsDashboar
 import { AdvancedSearchSheet } from "../../components/targets/AdvancedSearchSheet";
 import { DuplicateMergeSheet } from "../../components/targets/DuplicateMergeSheet";
 import { GroupManagerSheet } from "../../components/targets/GroupManagerSheet";
-import { EmptyState } from "../../components/common/EmptyState";
+import { TargetListHeader, TargetSearchBar } from "../../components/targets/TargetListHeader";
+import { TargetBatchActionBar } from "../../components/targets/TargetBatchActionBar";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
 import { resolveTargetInteractionUi } from "../../lib/targets/targetInteractionUi";
 
-type SortKey = "name" | "date" | "frames" | "exposure" | "favorite";
-
 export default function TargetsScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
   const { width: screenWidth, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { isLandscapeTablet, contentPaddingTop, horizontalPadding, sidePanelWidth } =
@@ -45,6 +35,7 @@ export default function TargetsScreen() {
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showDuplicateMerge, setShowDuplicateMerge] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
+  const [isScanning, setIsScanning] = useState(false);
 
   const [filterType, setFilterType] = useState<TargetType | null>(null);
   const [filterStatus, setFilterStatus] = useState<TargetStatus | null>(null);
@@ -68,6 +59,7 @@ export default function TargetsScreen() {
     addGroup,
     updateGroup,
     removeGroup,
+    removeTarget,
     scanAndAutoDetect,
     getTargetStats,
     toggleFavorite,
@@ -75,6 +67,9 @@ export default function TargetsScreen() {
     allTags,
     allCategories,
   } = useTargets();
+
+  const { isSelectionMode, selectedIds, toggleSelection, exitSelectionMode, selectAll } =
+    useSelectionMode();
 
   const search = useTargetSearch();
   const {
@@ -201,6 +196,24 @@ export default function TargetsScreen() {
     [togglePinned],
   );
 
+  const handleBatchDelete = useCallback(() => {
+    for (const id of selectedIds) {
+      removeTarget(id);
+    }
+    exitSelectionMode();
+  }, [selectedIds, removeTarget, exitSelectionMode]);
+
+  const handleBatchFavorite = useCallback(() => {
+    for (const id of selectedIds) {
+      toggleFavorite(id);
+    }
+    exitSelectionMode();
+  }, [selectedIds, toggleFavorite, exitSelectionMode]);
+
+  const handleSelectAll = useCallback(() => {
+    selectAll(filteredTargets.map((t) => t.id));
+  }, [selectAll, filteredTargets]);
+
   const clearFilters = useCallback(() => {
     setFilterType(null);
     setFilterStatus(null);
@@ -232,31 +245,6 @@ export default function TargetsScreen() {
   );
   const useCompactHeaderActions = !isLandscapeTablet && screenWidth < 430;
   const useCompactFilterLayout = !isLandscapeTablet && screenWidth < 430;
-  const headerActionGapClassName =
-    resolvedInteractionUi.effectivePreset === "accessible" ? "gap-2" : "gap-1";
-  const headerActionButtonSize = resolvedInteractionUi.buttonSize;
-  const chipSize = resolvedInteractionUi.chipSize;
-  const actionIconSize = resolvedInteractionUi.iconSize;
-  const compactIconSize = resolvedInteractionUi.compactIconSize;
-  const miniIconSize = resolvedInteractionUi.miniIconSize;
-  const chipLabelClassName =
-    resolvedInteractionUi.effectivePreset === "accessible"
-      ? "text-xs"
-      : resolvedInteractionUi.effectivePreset === "standard"
-        ? "text-[11px]"
-        : useCompactFilterLayout
-          ? "text-[10px]"
-          : "text-[11px]";
-  const summaryTextClassName =
-    resolvedInteractionUi.effectivePreset === "accessible"
-      ? "text-xs text-muted"
-      : resolvedInteractionUi.effectivePreset === "standard"
-        ? "text-[11px] text-muted"
-        : "text-[10px] text-muted";
-  const tinyActionLabelClassName =
-    resolvedInteractionUi.effectivePreset === "accessible"
-      ? "text-xs text-muted"
-      : "text-[10px] text-muted";
 
   const handleAdvancedSearch = useCallback(
     (conditions: SearchConditions) => {
@@ -286,16 +274,21 @@ export default function TargetsScreen() {
   );
 
   const handleScanTargets = useCallback(() => {
-    const result = scanAndAutoDetect();
-    Alert.alert(
-      t("targets.scanSummaryTitle"),
-      buildScanSummaryMessage({
-        scannedCount: result.scannedCount,
-        newCount: result.newCount,
-        updatedCount: result.updatedCount,
-        skippedCount: result.skippedCount,
-      }),
-    );
+    setIsScanning(true);
+    try {
+      const result = scanAndAutoDetect();
+      Alert.alert(
+        t("targets.scanSummaryTitle"),
+        buildScanSummaryMessage({
+          scannedCount: result.scannedCount,
+          newCount: result.newCount,
+          updatedCount: result.updatedCount,
+          skippedCount: result.skippedCount,
+        }),
+      );
+    } finally {
+      setIsScanning(false);
+    }
   }, [buildScanSummaryMessage, scanAndAutoDetect, t]);
 
   const renderTargetItem = useCallback(
@@ -303,15 +296,24 @@ export default function TargetsScreen() {
       const stats = statsMap.get(target.id);
       const totalExposureMin = stats ? Math.round(stats.exposureStats.totalExposure / 60) : 0;
       const completion = stats?.completion.overall;
+      const isSelected = selectedIds.includes(target.id);
 
       return (
-        <View className="px-4 mb-3">
+        <View
+          className={`px-4 mb-3 ${isSelected ? "opacity-80" : ""}`}
+          style={isSelected ? { backgroundColor: "rgba(59,130,246,0.08)" } : undefined}
+        >
           <TargetCard
             target={target}
             frameCount={target.imageIds.length}
             totalExposureMinutes={totalExposureMin}
             completionPercent={completion}
-            onPress={() => router.push(`/target/${target.id}`)}
+            onPress={
+              isSelectionMode
+                ? () => toggleSelection(target.id)
+                : () => router.push(`/target/${target.id}`)
+            }
+            onLongPress={() => toggleSelection(target.id)}
             onToggleFavorite={() => handleToggleFavorite(target.id)}
             onTogglePinned={() => handleTogglePinned(target.id)}
             actionControlMode={targetActionControlMode}
@@ -327,443 +329,92 @@ export default function TargetsScreen() {
       handleTogglePinned,
       targetActionControlMode,
       resolvedInteractionUi,
+      isSelectionMode,
+      selectedIds,
+      toggleSelection,
     ],
   );
 
+  const handleShowDuplicateMerge = useCallback(() => {
+    detect();
+    setShowDuplicateMerge(true);
+  }, [detect]);
+
+  const handleShowStats = useCallback(() => setShowStats(true), []);
+  const handleShowAdvancedSearch = useCallback(() => setShowAdvancedSearch(true), []);
+  const handleShowGroupManager = useCallback(() => setShowGroupManager(true), []);
+  const handleShowAddSheet = useCallback(() => setShowAddSheet(true), []);
+
   const ListHeader = useMemo(
     () => (
-      <View className="px-4">
-        {useCompactHeaderActions ? (
-          <View className="gap-2">
-            <View>
-              <Text className="text-2xl font-bold text-foreground">{t("targets.title")}</Text>
-              <Text className="mt-1 text-sm text-muted">
-                {t("targets.subtitle")} ({targets.length})
-              </Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className={`flex-row items-center pr-1 ${headerActionGapClassName}`}>
-                {targets.length > 0 && (
-                  <Button
-                    testID="e2e-action-tabs__targets-open-stats"
-                    size={headerActionButtonSize}
-                    isIconOnly
-                    variant="outline"
-                    onPress={() => setShowStats(true)}
-                  >
-                    <Ionicons name="stats-chart-outline" size={actionIconSize} color={mutedColor} />
-                  </Button>
-                )}
-                <Button
-                  size={headerActionButtonSize}
-                  isIconOnly
-                  variant="outline"
-                  onPress={() => setShowAdvancedSearch(true)}
-                >
-                  <Ionicons name="options-outline" size={actionIconSize} color={mutedColor} />
-                </Button>
-                <Button
-                  size={headerActionButtonSize}
-                  isIconOnly
-                  variant="outline"
-                  onPress={() => {
-                    detect();
-                    setShowDuplicateMerge(true);
-                  }}
-                >
-                  <Ionicons name="copy-outline" size={actionIconSize} color={mutedColor} />
-                </Button>
-                <Button
-                  size={headerActionButtonSize}
-                  isIconOnly
-                  variant="outline"
-                  onPress={() => setShowGroupManager(true)}
-                >
-                  <Ionicons name="folder-open-outline" size={actionIconSize} color={mutedColor} />
-                </Button>
-                <Button
-                  testID="e2e-action-tabs__targets-scan"
-                  size={headerActionButtonSize}
-                  isIconOnly
-                  variant="outline"
-                  onPress={handleScanTargets}
-                >
-                  <Ionicons name="scan-outline" size={actionIconSize} color={mutedColor} />
-                </Button>
-                <Button
-                  size={headerActionButtonSize}
-                  isIconOnly
-                  variant="primary"
-                  onPress={() => setShowAddSheet(true)}
-                >
-                  <Ionicons name="add" size={actionIconSize} color="#fff" />
-                </Button>
-              </View>
-            </ScrollView>
-          </View>
-        ) : (
-          <View className="flex-row items-center justify-between">
-            <View className="flex-1 pr-2">
-              <Text className="text-2xl font-bold text-foreground">{t("targets.title")}</Text>
-              <Text className="mt-1 text-sm text-muted">
-                {t("targets.subtitle")} ({targets.length})
-              </Text>
-            </View>
-            <View className={`flex-row ${headerActionGapClassName}`}>
-              {targets.length > 0 && (
-                <Button
-                  testID="e2e-action-tabs__targets-open-stats"
-                  size={headerActionButtonSize}
-                  isIconOnly
-                  variant="outline"
-                  onPress={() => setShowStats(true)}
-                >
-                  <Ionicons name="stats-chart-outline" size={actionIconSize} color={mutedColor} />
-                </Button>
-              )}
-              <Button
-                size={headerActionButtonSize}
-                isIconOnly
-                variant="outline"
-                onPress={() => setShowAdvancedSearch(true)}
-              >
-                <Ionicons name="options-outline" size={actionIconSize} color={mutedColor} />
-              </Button>
-              <Button
-                size={headerActionButtonSize}
-                isIconOnly
-                variant="outline"
-                onPress={() => {
-                  detect();
-                  setShowDuplicateMerge(true);
-                }}
-              >
-                <Ionicons name="copy-outline" size={actionIconSize} color={mutedColor} />
-              </Button>
-              <Button
-                size={headerActionButtonSize}
-                isIconOnly
-                variant="outline"
-                onPress={() => setShowGroupManager(true)}
-              >
-                <Ionicons name="folder-open-outline" size={actionIconSize} color={mutedColor} />
-              </Button>
-              <Button
-                testID="e2e-action-tabs__targets-scan"
-                size={headerActionButtonSize}
-                isIconOnly
-                variant="outline"
-                onPress={handleScanTargets}
-              >
-                <Ionicons name="scan-outline" size={actionIconSize} color={mutedColor} />
-              </Button>
-              <Button
-                testID="e2e-action-tabs__targets-open-add"
-                size={headerActionButtonSize}
-                isIconOnly
-                variant="primary"
-                onPress={() => setShowAddSheet(true)}
-              >
-                <Ionicons name="add" size={actionIconSize} color="#fff" />
-              </Button>
-            </View>
-          </View>
-        )}
-
-        {targets.length > 0 && (
-          <View className="mt-3 flex-row gap-2">
-            {(["planned", "acquiring", "completed", "processed"] as const).map((status) => {
-              const count = targets.filter((target) => target.status === status).length;
-              if (count === 0) return null;
-              const colors = {
-                planned: "#6b7280",
-                acquiring: "#f59e0b",
-                completed: "#22c55e",
-                processed: "#3b82f6",
-              };
-              return (
-                <View key={status} className="flex-row items-center gap-1">
-                  <View
-                    className="h-2 w-2 rounded-full"
-                    style={{ backgroundColor: colors[status] }}
-                  />
-                  <Text className="text-[10px] text-muted">
-                    {count}{" "}
-                    {t(
-                      `targets.${status}` as
-                        | "targets.planned"
-                        | "targets.acquiring"
-                        | "targets.completed"
-                        | "targets.processed",
-                    )}
-                  </Text>
-                </View>
-              );
-            })}
-            {targets.filter((target) => target.isFavorite).length > 0 && (
-              <View className="flex-row items-center gap-1">
-                <Ionicons name="star" size={miniIconSize} color="#f59e0b" />
-                <Text className={summaryTextClassName}>
-                  {targets.filter((target) => target.isFavorite).length} {t("targets.favorites")}
-                </Text>
-              </View>
-            )}
-          </View>
-        )}
-
-        <Separator className="my-4" />
-
-        <View className="mb-3">
-          <TextField>
-            <View className="w-full flex-row items-center">
-              <Input
-                className="flex-1 pl-9 pr-9"
-                placeholder={t("targets.searchPlaceholder")}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                autoCorrect={false}
-              />
-              <Ionicons
-                name="search-outline"
-                size={compactIconSize}
-                color={mutedColor}
-                style={{ position: "absolute", left: 12 }}
-              />
-              {searchQuery.length > 0 && (
-                <Button
-                  size={headerActionButtonSize}
-                  variant="ghost"
-                  isIconOnly
-                  onPress={() => setSearchQuery("")}
-                  style={{ position: "absolute", right: 12 }}
-                >
-                  <Ionicons name="close-circle" size={compactIconSize} color={mutedColor} />
-                </Button>
-              )}
-            </View>
-          </TextField>
-        </View>
-
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-3">
-          <View
-            className={`flex-row items-center pr-1 ${useCompactFilterLayout ? "gap-1.5" : "gap-2"}`}
-          >
-            <Chip
-              size={chipSize}
-              variant={filterFavorite ? "primary" : "secondary"}
-              onPress={() => setFilterFavorite(!filterFavorite)}
-            >
-              <Ionicons
-                name="star"
-                size={miniIconSize}
-                color={filterFavorite ? "#fff" : mutedColor}
-              />
-              <Chip.Label className={`${chipLabelClassName} ml-0.5`}>
-                {t("targets.favorites")}
-              </Chip.Label>
-            </Chip>
-
-            <View className="w-px bg-separator mx-1" />
-
-            {(["galaxy", "nebula", "cluster", "planet", "other"] as TargetType[]).map((type) => (
-              <Chip
-                key={type}
-                size={chipSize}
-                variant={filterType === type ? "primary" : "secondary"}
-                onPress={() => setFilterType(filterType === type ? null : type)}
-              >
-                <Chip.Label className={chipLabelClassName}>
-                  {t(
-                    `targets.types.${type}` as
-                      | "targets.types.galaxy"
-                      | "targets.types.nebula"
-                      | "targets.types.cluster"
-                      | "targets.types.planet"
-                      | "targets.types.other",
-                  )}
-                </Chip.Label>
-              </Chip>
-            ))}
-
-            <View className="w-px bg-separator mx-1" />
-
-            {(["planned", "acquiring", "completed", "processed"] as TargetStatus[]).map(
-              (status) => (
-                <Chip
-                  key={status}
-                  size={chipSize}
-                  variant={filterStatus === status ? "primary" : "secondary"}
-                  onPress={() => setFilterStatus(filterStatus === status ? null : status)}
-                >
-                  <Chip.Label className={chipLabelClassName}>
-                    {t(
-                      `targets.${status}` as
-                        | "targets.planned"
-                        | "targets.acquiring"
-                        | "targets.completed"
-                        | "targets.processed",
-                    )}
-                  </Chip.Label>
-                </Chip>
-              ),
-            )}
-
-            {groups.length > 0 && (
-              <>
-                <View className="w-px bg-separator mx-1" />
-                {groups.slice(0, 3).map((group) => (
-                  <Chip
-                    key={group.id}
-                    size={chipSize}
-                    variant={filterGroupId === group.id ? "primary" : "secondary"}
-                    onPress={() => setFilterGroupId(filterGroupId === group.id ? null : group.id)}
-                  >
-                    <Chip.Label className={chipLabelClassName}>{group.name}</Chip.Label>
-                  </Chip>
-                ))}
-              </>
-            )}
-
-            {allCategories.length > 0 && (
-              <>
-                <View className="w-px bg-separator mx-1" />
-                {allCategories.slice(0, 3).map((category) => (
-                  <Chip
-                    key={category}
-                    size={chipSize}
-                    variant={filterCategory === category ? "primary" : "secondary"}
-                    onPress={() => setFilterCategory(filterCategory === category ? null : category)}
-                  >
-                    <Chip.Label className={chipLabelClassName}>{category}</Chip.Label>
-                  </Chip>
-                ))}
-              </>
-            )}
-
-            {allTags.length > 0 && (
-              <>
-                <View className="w-px bg-separator mx-1" />
-                {allTags.slice(0, 3).map((tag) => (
-                  <Chip
-                    key={tag}
-                    size={chipSize}
-                    variant={filterTag === tag ? "primary" : "secondary"}
-                    onPress={() => setFilterTag(filterTag === tag ? null : tag)}
-                  >
-                    <Chip.Label className={chipLabelClassName}>{tag}</Chip.Label>
-                  </Chip>
-                ))}
-              </>
-            )}
-          </View>
-        </ScrollView>
-
-        <View className="mb-3 gap-2">
-          <View className="flex-row flex-wrap items-center gap-1.5">
-            {hasActiveFilters && (
-              <Button size={chipSize} variant="ghost" onPress={clearFilters}>
-                <Ionicons name="close-circle-outline" size={miniIconSize} color={mutedColor} />
-                <Button.Label className={tinyActionLabelClassName}>
-                  {t("targets.clearFilters")}
-                </Button.Label>
-              </Button>
-            )}
-            {isAdvancedMode && Object.keys(advancedConditions).length > 0 && (
-              <Chip size={chipSize} variant="secondary">
-                <Chip.Label className={chipLabelClassName}>{t("targets.search.title")}</Chip.Label>
-              </Chip>
-            )}
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="flex-row items-center gap-1.5 pr-1">
-              <Ionicons name="swap-vertical-outline" size={miniIconSize} color={mutedColor} />
-              {(["date", "name", "frames", "exposure", "favorite"] as SortKey[]).map((sortKey) => (
-                <Chip
-                  key={sortKey}
-                  size={chipSize}
-                  variant={targetSortBy === sortKey ? "primary" : "secondary"}
-                  onPress={() => setTargetSortBy(sortKey)}
-                >
-                  <Chip.Label className={chipLabelClassName}>
-                    {t(
-                      `targets.sort.${sortKey}` as
-                        | "targets.sort.date"
-                        | "targets.sort.name"
-                        | "targets.sort.frames"
-                        | "targets.sort.exposure"
-                        | "targets.sort.favorite",
-                    )}
-                  </Chip.Label>
-                </Chip>
-              ))}
-              <Button
-                isIconOnly
-                size={chipSize}
-                variant="outline"
-                onPress={() => setTargetSortOrder(targetSortOrder === "asc" ? "desc" : "asc")}
-              >
-                <Ionicons
-                  name={targetSortOrder === "asc" ? "arrow-up-outline" : "arrow-down-outline"}
-                  size={miniIconSize}
-                  color={mutedColor}
-                />
-              </Button>
-            </View>
-          </ScrollView>
-        </View>
-
-        {filteredTargets.length === 0 && targets.length === 0 && (
-          <EmptyState
-            icon="telescope-outline"
-            title={t("targets.noTargets")}
-            description={t("targets.autoDetected")}
-            actionLabel={files.length > 0 ? t("targets.scanNow") : undefined}
-            onAction={files.length > 0 ? handleScanTargets : undefined}
-          />
-        )}
-        {targets.length > 0 && filteredTargets.length === 0 && (
-          <EmptyState icon="search-outline" title={t("targets.noResults")} />
-        )}
-      </View>
+      <TargetListHeader
+        targets={targets}
+        filteredTargets={filteredTargets}
+        groups={groups}
+        filesCount={files.length}
+        filterType={filterType}
+        filterStatus={filterStatus}
+        filterFavorite={filterFavorite}
+        filterCategory={filterCategory}
+        filterTag={filterTag}
+        filterGroupId={filterGroupId}
+        onFilterTypeChange={setFilterType}
+        onFilterStatusChange={setFilterStatus}
+        onFilterFavoriteChange={setFilterFavorite}
+        onFilterCategoryChange={setFilterCategory}
+        onFilterTagChange={setFilterTag}
+        onFilterGroupIdChange={setFilterGroupId}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={clearFilters}
+        isAdvancedMode={isAdvancedMode}
+        advancedConditions={advancedConditions}
+        allCategories={allCategories}
+        allTags={allTags}
+        sortBy={targetSortBy}
+        sortOrder={targetSortOrder}
+        onSortByChange={setTargetSortBy}
+        onSortOrderChange={setTargetSortOrder}
+        onShowStats={handleShowStats}
+        onShowAdvancedSearch={handleShowAdvancedSearch}
+        onShowDuplicateMerge={handleShowDuplicateMerge}
+        onShowGroupManager={handleShowGroupManager}
+        onScanTargets={handleScanTargets}
+        onShowAddSheet={handleShowAddSheet}
+        useCompactHeaderActions={useCompactHeaderActions}
+        useCompactFilterLayout={useCompactFilterLayout}
+        interactionUi={resolvedInteractionUi}
+      />
     ),
     [
-      t,
       targets,
-      mutedColor,
-      searchQuery,
-      setSearchQuery,
+      filteredTargets,
+      groups,
+      files.length,
       filterType,
       filterStatus,
       filterFavorite,
       filterCategory,
       filterTag,
       filterGroupId,
-      groups,
-      targetSortBy,
-      targetSortOrder,
-      filteredTargets,
-      files,
-      handleScanTargets,
-      allCategories,
-      allTags,
       hasActiveFilters,
+      clearFilters,
       isAdvancedMode,
       advancedConditions,
-      useCompactHeaderActions,
-      useCompactFilterLayout,
-      headerActionGapClassName,
-      headerActionButtonSize,
-      actionIconSize,
-      compactIconSize,
-      miniIconSize,
-      chipSize,
-      chipLabelClassName,
-      summaryTextClassName,
-      tinyActionLabelClassName,
-      detect,
-      clearFilters,
+      allCategories,
+      allTags,
+      targetSortBy,
+      targetSortOrder,
       setTargetSortBy,
       setTargetSortOrder,
+      handleShowStats,
+      handleShowAdvancedSearch,
+      handleShowDuplicateMerge,
+      handleShowGroupManager,
+      handleScanTargets,
+      handleShowAddSheet,
+      useCompactHeaderActions,
+      useCompactFilterLayout,
+      resolvedInteractionUi,
     ],
   );
 
@@ -773,6 +424,23 @@ export default function TargetsScreen() {
       className="flex-1 bg-background"
       style={{ paddingTop: contentPaddingTop }}
     >
+      {isSelectionMode ? (
+        <TargetBatchActionBar
+          selectedCount={selectedIds.length}
+          totalCount={filteredTargets.length}
+          onSelectAll={handleSelectAll}
+          onDeselectAll={exitSelectionMode}
+          onBatchDelete={handleBatchDelete}
+          onBatchFavorite={handleBatchFavorite}
+          onExitSelectionMode={exitSelectionMode}
+        />
+      ) : (
+        <TargetSearchBar
+          searchQuery={searchQuery}
+          onSearchQueryChange={setSearchQuery}
+          interactionUi={resolvedInteractionUi}
+        />
+      )}
       {isLandscapeTablet ? (
         <View className="flex-1 flex-row">
           <View style={{ width: sidePanelWidth, paddingHorizontal: horizontalPadding }}>
@@ -785,6 +453,12 @@ export default function TargetsScreen() {
               renderItem={renderTargetItem}
               ListHeaderComponent={ListHeader}
               contentContainerStyle={{ paddingBottom: 4 }}
+              removeClippedSubviews
+              windowSize={7}
+              maxToRenderPerBatch={10}
+              initialNumToRender={10}
+              refreshing={isScanning}
+              onRefresh={handleScanTargets}
             />
           </View>
         </View>
@@ -795,6 +469,12 @@ export default function TargetsScreen() {
           renderItem={renderTargetItem}
           ListHeaderComponent={ListHeader}
           contentContainerClassName="pb-4"
+          removeClippedSubviews
+          windowSize={7}
+          maxToRenderPerBatch={10}
+          initialNumToRender={10}
+          refreshing={isScanning}
+          onRefresh={handleScanTargets}
         />
       )}
 

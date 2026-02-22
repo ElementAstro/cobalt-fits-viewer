@@ -1,14 +1,16 @@
-import { useMemo, useRef, useState, useCallback } from "react";
+import { useMemo, useRef, useState, useCallback, useImperativeHandle } from "react";
 import { Platform, Text, View } from "react-native";
 import type { AppleMaps as ExpoAppleMaps, GoogleMaps as ExpoGoogleMaps } from "expo-maps";
 import type { LayoutChangeEvent } from "react-native";
 import { useI18n } from "../../i18n/useI18n";
 import { buildSuperclusterIndex } from "../../lib/map/clusteringSuper";
 import { buildClusterCircles, buildClusterPolylines } from "../../lib/map/overlays";
-import { MAP_PRESETS, ASTRONOMY_POI_CATEGORIES } from "../../lib/map/styles";
+import { MAP_PRESETS, ASTRONOMY_POI_CATEGORIES, getMarkerColor } from "../../lib/map/styles";
 import type { MapClusterNode, MapViewport } from "../../lib/map/types";
+import { resolveNodeForOpen } from "../../lib/map/utils";
 import type { LocationMapViewProps } from "./LocationMapView.types";
 
+export type { LocationMapViewRef } from "./LocationMapView.types";
 export type { MapClusterNode } from "../../lib/map/types";
 export type { MapPreset } from "../../lib/map/styles";
 
@@ -105,42 +107,26 @@ function buildGoogleMarkers(nodes: MapClusterNode[]) {
       longitude: node.location.longitude,
     },
     title: node.label,
+    color: getMarkerColor(node.count, node.isCluster),
   }));
 }
 
 function buildAppleAnnotations(nodes: MapClusterNode[]) {
-  return nodes.map((node) => {
-    const count = node.count;
-    const backgroundColor =
-      count >= 10 ? "#E53935" : count >= 5 ? "#FB8C00" : node.isCluster ? "#1E88E5" : "#43A047";
-    return {
-      id: node.id,
-      coordinates: {
-        latitude: node.location.latitude,
-        longitude: node.location.longitude,
-      },
-      title: node.label,
-      text: String(count),
-      backgroundColor,
-      textColor: "#FFFFFF",
-    };
-  });
-}
-
-function resolveNodeForOpen(
-  node: MapClusterNode,
-  getLeaves: (clusterId: number) => MapClusterNode["files"],
-) {
-  if (!node.isCluster || node.clusterId === undefined) return node;
-  const files = getLeaves(node.clusterId);
-  return {
-    ...node,
-    files,
-    count: files.length,
-  };
+  return nodes.map((node) => ({
+    id: node.id,
+    coordinates: {
+      latitude: node.location.latitude,
+      longitude: node.location.longitude,
+    },
+    title: node.label,
+    text: String(node.count),
+    backgroundColor: getMarkerColor(node.count, node.isCluster),
+    textColor: "#FFFFFF",
+  }));
 }
 
 export function LocationMapView({
+  ref,
   files,
   style,
   preset = "standard",
@@ -151,6 +137,20 @@ export function LocationMapView({
 }: LocationMapViewProps) {
   const { t } = useI18n();
   const mapRef = useRef<MapRefLike | null>(null);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flyTo(latitude: number, longitude: number, zoom?: number) {
+        mapRef.current?.setCameraPosition({
+          coordinates: { latitude, longitude },
+          zoom: zoom ?? 12,
+          duration: 400,
+        });
+      },
+    }),
+    [],
+  );
   const mapIndex = useMemo(() => buildSuperclusterIndex(files), [files]);
   const initialCamera = useMemo(() => mapIndex.getInitialCamera(), [mapIndex]);
 

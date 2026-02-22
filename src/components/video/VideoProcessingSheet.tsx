@@ -336,16 +336,16 @@ export function VideoProcessingSheet({
               onValueChange={(value) => setProfile(value as VideoProfile)}
             >
               {[
-                { value: "compatibility", label: "Compatibility" },
-                { value: "balanced", label: "Balanced" },
-                { value: "quality", label: "Quality" },
+                { value: "compatibility", label: t("settings.videoProfileCompatibility") },
+                { value: "balanced", label: t("settings.videoProfileBalanced") },
+                { value: "quality", label: t("settings.videoProfileQuality") },
               ].map((item) => (
                 <RadioGroup.Item key={item.value} value={item.value}>
                   {({ isSelected }) => (
                     <View className="flex-row items-center justify-between rounded-lg border border-separator px-3 py-2">
                       <Text className="text-sm text-foreground">{item.label}</Text>
                       <Text className={`text-xs ${isSelected ? "text-success" : "text-muted"}`}>
-                        {isSelected ? "Selected" : ""}
+                        {isSelected ? t("settings.videoSelected") : ""}
                       </Text>
                     </View>
                   )}
@@ -499,7 +499,7 @@ export function VideoProcessingSheet({
                                   <Text
                                     className={`text-xs ${isSelected ? "text-success" : "text-muted"}`}
                                   >
-                                    {isSelected ? "Selected" : ""}
+                                    {isSelected ? t("settings.videoSelected") : ""}
                                   </Text>
                                 </View>
                               )}
@@ -527,7 +527,7 @@ export function VideoProcessingSheet({
                                 <Text
                                   className={`text-xs ${isSelected ? "text-success" : "text-muted"}`}
                                 >
-                                  {isSelected ? "Selected" : ""}
+                                  {isSelected ? t("settings.videoSelected") : ""}
                                 </Text>
                               </View>
                             )}

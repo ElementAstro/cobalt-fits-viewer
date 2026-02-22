@@ -17,6 +17,8 @@ const FORMAT_OPTIONS: FormatOption[] = [
   { key: "tiff", label: "TIFF", descriptionKey: "converter.fmtTiffDesc" },
   { key: "bmp", label: "BMP", descriptionKey: "converter.fmtBmpDesc" },
   { key: "fits", label: "FITS", descriptionKey: "converter.fmtFitsDesc" },
+  { key: "xisf", label: "XISF", descriptionKey: "converter.fmtXisfDesc" },
+  { key: "ser", label: "SER", descriptionKey: "converter.fmtSerDesc" },
 ];
 
 interface FormatSelectorProps {

@@ -1,7 +1,7 @@
-import { View, Text, ScrollView, Alert } from "react-native";
+import { View, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Separator } from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { SettingsHeader } from "../../components/settings";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
@@ -157,12 +157,7 @@ export default function StorageSettingsScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View className="flex-row items-center gap-3 mb-4">
-          <Ionicons name="arrow-back" size={24} color="#888" onPress={() => router.back()} />
-          <Text className="text-xl font-bold text-foreground">
-            {t("settings.categories.storage")}
-          </Text>
-        </View>
+        <SettingsHeader title={t("settings.categories.storage")} />
 
         {/* Storage Info */}
         <SettingsSection title={t("settings.storage")}>

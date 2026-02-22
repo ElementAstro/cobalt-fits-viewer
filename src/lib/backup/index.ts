@@ -28,7 +28,22 @@ export {
 export type { ICloudProvider } from "./cloudProvider";
 export { BaseCloudProvider } from "./cloudProvider";
 
-export { createManifest, parseManifest, serializeManifest, getManifestSummary } from "./manifest";
+export {
+  createManifest,
+  parseManifest,
+  serializeManifest,
+  getManifestSummary,
+  inferMediaKind,
+} from "./manifest";
+
+export {
+  toSafeRemoteFilename,
+  toSafeThumbnailFilename,
+  bytesToHex,
+  computeSha256Hex,
+  resolveRestoreStrategy,
+  restoreMetadataDomains,
+} from "./backupUtils";
 
 export { performBackup, performRestore, getBackupInfo } from "./backupService";
 export type { BackupDataSource, RestoreTarget } from "./backupService";

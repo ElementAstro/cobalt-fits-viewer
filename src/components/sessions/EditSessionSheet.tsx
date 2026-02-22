@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { View, Text, Alert, ScrollView } from "react-native";
 import {
   BottomSheet,
@@ -16,6 +16,8 @@ import { useI18n } from "../../i18n/useI18n";
 import type { ObservationSession } from "../../lib/fits/types";
 import { useTargetStore } from "../../stores/useTargetStore";
 import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
+import { BORTLE_OPTIONS, RATING_OPTIONS } from "../../lib/sessions/constants";
+import { useChipInput } from "../../hooks/useChipInput";
 
 interface EditSessionSheetProps {
   visible: boolean;
@@ -24,9 +26,6 @@ interface EditSessionSheetProps {
   onSave: (updates: Partial<ObservationSession>) => void;
   onDelete: () => void;
 }
-
-const BORTLE_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
-const RATING_OPTIONS = [1, 2, 3, 4, 5] as const;
 
 export function EditSessionSheet({
   visible,
@@ -86,28 +85,7 @@ export function EditSessionSheet({
     session.tags,
   ]);
 
-  const addChipItem = useCallback(
-    (
-      value: string,
-      list: string[],
-      setter: (v: string[]) => void,
-      inputSetter: (v: string) => void,
-    ) => {
-      const trimmed = value.trim();
-      if (trimmed && !list.includes(trimmed)) {
-        setter([...list, trimmed]);
-      }
-      inputSetter("");
-    },
-    [],
-  );
-
-  const removeChipItem = useCallback(
-    (value: string, list: string[], setter: (v: string[]) => void) => {
-      setter(list.filter((item) => item !== value));
-    },
-    [],
-  );
+  const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();
 
   const handleSave = () => {
     onSave({

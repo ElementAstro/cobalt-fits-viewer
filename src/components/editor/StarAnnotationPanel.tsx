@@ -1,7 +1,7 @@
 import { View, Text } from "react-native";
 import { Button, Card } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useI18n, type TranslationKey } from "../../i18n/useI18n";
+import { useI18n } from "../../i18n/useI18n";
 import type { StarAnnotationStaleReason } from "../../lib/fits/types";
 
 interface StarAnnotationPanelProps {
@@ -49,7 +49,7 @@ export function StarAnnotationPanel({
             <View className="flex-row items-center gap-2">
               <Ionicons name="star-outline" size={14} color={successColor} />
               <Text className="text-xs font-semibold text-success">
-                {t("editor.starAnnotationMode" as TranslationKey)}
+                {t("editor.starAnnotationMode")}
               </Text>
             </View>
             <Button size="sm" variant="outline" onPress={onClose}>
@@ -61,15 +61,14 @@ export function StarAnnotationPanel({
             testID="e2e-text-editor__param_id-star-counts"
             className="mt-2 text-[10px] text-muted"
           >
-            {t("editor.detectedStars" as TranslationKey)}: {detectedStarCount} ·{" "}
-            {t("editor.manualStars" as TranslationKey)}: {manualStarCount} ·{" "}
-            {t("editor.enabledStars" as TranslationKey)}: {enabledStarCount}
+            {t("editor.detectedStars")}: {detectedStarCount} · {t("editor.manualStars")}:{" "}
+            {manualStarCount} · {t("editor.enabledStars")}: {enabledStarCount}
           </Text>
 
           {starAnnotationsStale && (
             <View className="mt-2 rounded-md bg-warning/15 px-2 py-1">
               <Text className="text-[9px] text-warning">
-                {t("editor.annotationStale" as TranslationKey)}
+                {t("editor.annotationStale")}
                 {starAnnotationsStaleReason ? ` (${starAnnotationsStaleReason})` : ""}
               </Text>
             </View>
@@ -78,8 +77,7 @@ export function StarAnnotationPanel({
           {isDetectingStars && (
             <View className="mt-2 rounded-md bg-success/10 px-2 py-1">
               <Text className="text-[9px] text-success">
-                {t("editor.reDetectStars" as TranslationKey)} · {starDetectionStage} ·{" "}
-                {starDetectionProgress}%
+                {t("editor.reDetectStars")} · {starDetectionStage} · {starDetectionProgress}%
               </Text>
             </View>
           )}
@@ -92,9 +90,7 @@ export function StarAnnotationPanel({
               onPress={onReDetect}
               isDisabled={isDetectingStars}
             >
-              <Button.Label className="text-[9px]">
-                {t("editor.reDetectStars" as TranslationKey)}
-              </Button.Label>
+              <Button.Label className="text-[9px]">{t("editor.reDetectStars")}</Button.Label>
             </Button>
             {isDetectingStars && (
               <Button size="sm" variant="outline" onPress={onCancelDetection}>
@@ -106,32 +102,24 @@ export function StarAnnotationPanel({
               variant={pendingAnchorIndex === 1 ? "primary" : "outline"}
               onPress={() => onSetAnchor(pendingAnchorIndex === 1 ? null : 1)}
             >
-              <Button.Label className="text-[9px]">
-                {t("editor.setAnchor1" as TranslationKey)}
-              </Button.Label>
+              <Button.Label className="text-[9px]">{t("editor.setAnchor1")}</Button.Label>
             </Button>
             <Button
               size="sm"
               variant={pendingAnchorIndex === 2 ? "primary" : "outline"}
               onPress={() => onSetAnchor(pendingAnchorIndex === 2 ? null : 2)}
             >
-              <Button.Label className="text-[9px]">
-                {t("editor.setAnchor2" as TranslationKey)}
-              </Button.Label>
+              <Button.Label className="text-[9px]">{t("editor.setAnchor2")}</Button.Label>
             </Button>
             <Button
               size="sm"
               variant={pendingAnchorIndex === 3 ? "primary" : "outline"}
               onPress={() => onSetAnchor(pendingAnchorIndex === 3 ? null : 3)}
             >
-              <Button.Label className="text-[9px]">
-                {t("editor.setAnchor3" as TranslationKey)}
-              </Button.Label>
+              <Button.Label className="text-[9px]">{t("editor.setAnchor3")}</Button.Label>
             </Button>
             <Button size="sm" variant="outline" onPress={onClearAnchors}>
-              <Button.Label className="text-[9px]">
-                {t("editor.clearAnchors" as TranslationKey)}
-              </Button.Label>
+              <Button.Label className="text-[9px]">{t("editor.clearAnchors")}</Button.Label>
             </Button>
           </View>
         </Card.Body>
