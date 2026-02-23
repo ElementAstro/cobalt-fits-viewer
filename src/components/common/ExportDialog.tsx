@@ -93,6 +93,10 @@ export function ExportDialog({
   const [tiffMultipage, setTiffMultipage] = useState<TiffMultipageMode>(
     DEFAULT_TIFF_TARGET_OPTIONS.multipage,
   );
+  const [tiffBitDepth, setTiffBitDepth] = useState<8 | 16 | 32>(
+    DEFAULT_TIFF_TARGET_OPTIONS.bitDepth ?? 16,
+  );
+  const [tiffDpi, setTiffDpi] = useState(DEFAULT_TIFF_TARGET_OPTIONS.dpi ?? 72);
   const [includeAnnotations, setIncludeAnnotations] = useState(savedAnnotations);
   const [includeWatermark, setIncludeWatermark] = useState(false);
   const [watermarkText, setWatermarkText] = useState("");
@@ -132,6 +136,8 @@ export function ExportDialog({
     ? {
         compression: tiffCompression,
         multipage: tiffMultipage,
+        bitDepth: tiffBitDepth,
+        dpi: tiffDpi,
       }
     : undefined;
   const renderOptions: ExportRenderOptions | undefined =
@@ -148,8 +154,8 @@ export function ExportDialog({
       ? estimateFileSize(width, height, {
           format,
           quality,
-          bitDepth: 8,
-          dpi: 72,
+          bitDepth: showTiffOptions ? tiffBitDepth : 8,
+          dpi: showTiffOptions ? tiffDpi : 72,
           tiff: {
             ...DEFAULT_TIFF_TARGET_OPTIONS,
             ...(tiffOptions ?? {}),
@@ -252,8 +258,12 @@ export function ExportDialog({
             <TiffExportOptions
               tiffCompression={tiffCompression}
               tiffMultipage={tiffMultipage}
+              tiffBitDepth={tiffBitDepth}
+              tiffDpi={tiffDpi}
               onTiffCompressionChange={setTiffCompression}
               onTiffMultipageChange={setTiffMultipage}
+              onTiffBitDepthChange={setTiffBitDepth}
+              onTiffDpiChange={setTiffDpi}
             />
           )}
 

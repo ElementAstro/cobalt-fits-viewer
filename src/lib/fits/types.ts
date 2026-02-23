@@ -272,7 +272,8 @@ export interface FitsMetadata {
     | "watermark"
     | "gif"
     | "compose-advanced"
-    | "stacking";
+    | "stacking"
+    | "timelapse";
 
   // 质量评分
   qualityScore?: number; // 0-100
@@ -336,7 +337,20 @@ export type ProcessingOperationId =
   | "scnr"
   | "colorCalibration"
   | "saturation"
-  | "colorBalance";
+  | "colorBalance"
+  | "cosmeticCorrection"
+  | "tgvDenoise"
+  | "mmt"
+  | "bilateralFilter"
+  | "backgroundNeutralize"
+  | "photometricCC"
+  | "perHueSaturation"
+  | "selectiveColor"
+  | "wienerDeconvolution"
+  | "waveletSharpen"
+  | "integerBin"
+  | "resample"
+  | "edgeMask";
 
 export type ProcessingParamPrimitive = number | string | boolean;
 
@@ -696,11 +710,15 @@ export type TiffMultipageMode = "preserve" | "firstFrame";
 export interface TiffTargetOptions {
   compression: TiffCompression;
   multipage: TiffMultipageMode;
+  bitDepth?: 8 | 16 | 32;
+  dpi?: number;
 }
 
 export const DEFAULT_TIFF_TARGET_OPTIONS: TiffTargetOptions = {
   compression: "lzw",
   multipage: "preserve",
+  bitDepth: 16,
+  dpi: 72,
 };
 
 export type FitsCompression = "none" | "gzip";

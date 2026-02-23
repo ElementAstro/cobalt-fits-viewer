@@ -4,13 +4,14 @@
  */
 
 import { useEffect, useState } from "react";
-import { View, Text, Animated } from "react-native";
+import { View, Text } from "react-native";
 import { Button, Card, Chip, Spinner } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useI18n } from "../../i18n/useI18n";
 import type { AstrometryJob, AstrometryJobStatus } from "../../lib/astrometry/types";
 import { formatDuration } from "../../lib/astrometry/formatUtils";
+import { AnimatedProgressBar } from "../common/AnimatedProgressBar";
 
 interface AstrometryJobCardProps {
   job: AstrometryJob;
@@ -44,30 +45,6 @@ function formatFieldSize(w: number, h: number): string {
   const wm = w * 60;
   const hm = h * 60;
   return `${wm.toFixed(1)}' × ${hm.toFixed(1)}'`;
-}
-
-function AnimatedProgressBar({ progress }: { progress: number }) {
-  const [animValue] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    Animated.timing(animValue, {
-      toValue: progress,
-      duration: 400,
-      useNativeDriver: false,
-    }).start();
-  }, [progress, animValue]);
-
-  const width = animValue.interpolate({
-    inputRange: [0, 100],
-    outputRange: ["0%", "100%"],
-    extrapolate: "clamp",
-  });
-
-  return (
-    <View className="mt-2 h-1.5 rounded-full bg-surface-secondary overflow-hidden">
-      <Animated.View className="h-full rounded-full bg-accent" style={{ width }} />
-    </View>
-  );
 }
 
 function useElapsedTime(startTime: number, isActive: boolean): string {

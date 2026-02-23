@@ -225,6 +225,38 @@ jest.mock("../../lib/backup/providers/webdav", () => ({
     }
   },
 }));
+jest.mock("../../lib/backup/providers/sftp", () => ({
+  SFTPProvider: class {
+    name = "mock";
+    displayName = "Mock SFTP";
+    private connected = true;
+    isConnected() {
+      return this.connected;
+    }
+    async connect() {
+      this.connected = true;
+    }
+    async disconnect() {
+      this.connected = false;
+    }
+    async getUserInfo() {
+      return { name: "Mock", email: "mock@example.com" };
+    }
+    async getQuota() {
+      return null;
+    }
+    async testConnection() {
+      return true;
+    }
+    async ensureBackupDir() {}
+    async uploadFile() {}
+    async downloadFile() {}
+    async uploadManifest() {}
+    async downloadManifest() {
+      return null;
+    }
+  },
+}));
 
 jest.mock("../../lib/backup/oauthHelper", () => ({
   authenticateOneDrive: jest.fn(),
@@ -272,6 +304,7 @@ describe("useBackup consistency reconciliation", () => {
       autoBackupNetwork: "wifi",
       lastAutoBackupAttempt: 0,
       lastAutoBackupCheck: 0,
+      lastUsedBackupOptions: null,
       lastError: null,
     });
 
@@ -390,6 +423,40 @@ describe("useBackup consistency reconciliation", () => {
 
     expect(response).toEqual({ success: true });
     expect(mockPerformBackup).toHaveBeenCalled();
+  });
+
+  it("quickBackup returns error when no provider connected", async () => {
+    const { result } = renderHook(() => useBackup());
+    let response: { success: boolean; error?: string } | undefined;
+    await act(async () => {
+      response = await result.current.quickBackup();
+    });
+    expect(response).toEqual({ success: false, error: "No provider connected" });
+  });
+
+  it("quickBackup uses activeProvider when available", async () => {
+    useBackupStore.setState({ activeProvider: "webdav" });
+    mockPerformBackup.mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => useBackup());
+    let response: { success: boolean; error?: string } | undefined;
+    await act(async () => {
+      response = await result.current.quickBackup();
+    });
+    expect(response).toEqual({ success: true });
+    expect(mockPerformBackup).toHaveBeenCalled();
+  });
+
+  it("quickLocalExport delegates to localExport with default options", async () => {
+    mockExportLocalBackup.mockResolvedValue({ success: true });
+
+    const { result } = renderHook(() => useBackup());
+    let response: { success: boolean; error?: string } | undefined;
+    await act(async () => {
+      response = await result.current.quickLocalExport();
+    });
+    expect(response).toEqual({ success: true });
+    expect(mockExportLocalBackup).toHaveBeenCalled();
   });
 
   it("restore applies advanced stacking settings through whitelist", async () => {

@@ -1,6 +1,7 @@
 import pako from "pako";
 import type { TiffCompression } from "../../fits/types";
 
+const TIFF_TYPE_ASCII = 2;
 const TIFF_TYPE_SHORT = 3;
 const TIFF_TYPE_LONG = 4;
 const TIFF_TYPE_RATIONAL = 5;
@@ -37,14 +38,22 @@ export interface TiffEncodePage {
   orientation?: number;
 }
 
+export interface TiffMetadata {
+  software?: string;
+  dateTime?: string;
+  description?: string;
+  artist?: string;
+}
+
 export interface EncodeTiffOptions {
   bitDepth?: 8 | 16 | 32;
   colorMode?: "auto" | "mono" | "rgb";
   dpi?: number;
   compression?: TiffCompression;
-  predictor?: 1 | 2;
+  predictor?: 1 | 2 | 3;
   pages?: TiffEncodePage[];
   bigTiffThresholdBytes?: number | bigint;
+  metadata?: TiffMetadata;
 }
 
 interface EncodedPage {
@@ -56,7 +65,7 @@ interface EncodedPage {
   photometric: 1 | 2;
   orientation: number;
   compression: TiffCompression;
-  predictor: 1 | 2;
+  predictor: 1 | 2 | 3;
   compressedData: Uint8Array;
 }
 
@@ -203,6 +212,24 @@ function applyHorizontalPredictor(
   return output;
 }
 
+function applyFloatingPointPredictor(
+  bytes: Uint8Array,
+  width: number,
+  height: number,
+  samplesPerPixel: number,
+  bytesPerSample: number,
+): Uint8Array {
+  const rowStride = width * samplesPerPixel * bytesPerSample;
+  const output = new Uint8Array(bytes);
+  for (let y = 0; y < height; y++) {
+    const rowStart = y * rowStride;
+    for (let i = rowStride - 1; i >= bytesPerSample; i--) {
+      output[rowStart + i] = (output[rowStart + i] - output[rowStart + i - bytesPerSample]) & 0xff;
+    }
+  }
+  return output;
+}
+
 function encodeLzw(data: Uint8Array): Uint8Array {
   const CLEAR_CODE = 256;
   const EOI_CODE = 257;
@@ -298,21 +325,33 @@ function compressPageData(
   rawData: Uint8Array,
 ): {
   data: Uint8Array;
-  predictor: 1 | 2;
+  predictor: 1 | 2 | 3;
 } {
   const bytesPerSample = page.bitDepth / 8;
-  const allowPredictor = page.sampleFormat !== TIFF_SAMPLEFORMAT_IEEEFP && page.bitDepth >= 8;
-  const predictor = page.compression === "none" || !allowPredictor ? 1 : page.predictor;
-  const prepared =
-    predictor === 2
-      ? applyHorizontalPredictor(
-          rawData,
-          page.width,
-          page.height,
-          page.samplesPerPixel,
-          bytesPerSample,
-        )
-      : rawData;
+  const isFloat = page.sampleFormat === TIFF_SAMPLEFORMAT_IEEEFP;
+  const allowPredictor = page.bitDepth >= 8;
+  const basePredictor = page.compression === "none" || !allowPredictor ? 1 : page.predictor;
+  const predictor: 1 | 2 | 3 = basePredictor === 1 ? 1 : isFloat ? 3 : (basePredictor as 1 | 2);
+  let prepared: Uint8Array;
+  if (predictor === 3) {
+    prepared = applyFloatingPointPredictor(
+      rawData,
+      page.width,
+      page.height,
+      page.samplesPerPixel,
+      bytesPerSample,
+    );
+  } else if (predictor === 2) {
+    prepared = applyHorizontalPredictor(
+      rawData,
+      page.width,
+      page.height,
+      page.samplesPerPixel,
+      bytesPerSample,
+    );
+  } else {
+    prepared = rawData;
+  }
 
   if (page.compression === "none") {
     return { data: prepared, predictor };
@@ -329,6 +368,7 @@ function buildPage(page: TiffEncodePage, defaults: EncodeTiffOptions): EncodedPa
   const colorMode = page.colorMode ?? defaults.colorMode ?? "auto";
   const bitDepth = page.bitDepth ?? defaults.bitDepth ?? 8;
   const sampleFormatRaw = page.sampleFormat ?? (bitDepth === 32 ? "float" : "uint");
+  const isFloat = sampleFormatRaw === "float";
   const sampleFormat =
     sampleFormatRaw === "float"
       ? TIFF_SAMPLEFORMAT_IEEEFP
@@ -337,7 +377,7 @@ function buildPage(page: TiffEncodePage, defaults: EncodeTiffOptions): EncodedPa
         : TIFF_SAMPLEFORMAT_UINT;
   const compression = page.compression ?? defaults.compression ?? "lzw";
   const orientation = Math.max(1, Math.min(8, page.orientation ?? 1));
-  const predictor = defaults.predictor ?? 2;
+  const predictor: 1 | 2 | 3 = defaults.predictor ?? (isFloat ? 3 : 2);
 
   const pixelCount = width * height;
   const hasScientificRgb = !!page.channels;
@@ -376,6 +416,8 @@ function buildPage(page: TiffEncodePage, defaults: EncodeTiffOptions): EncodedPa
       if (wantsRgb) {
         if (bitDepth === 32 && sampleFormat === TIFF_SAMPLEFORMAT_IEEEFP) {
           rawValues.push(r / 255, g / 255, b / 255);
+        } else if (bitDepth === 16 && sampleFormat === TIFF_SAMPLEFORMAT_UINT) {
+          rawValues.push(r * 257, g * 257, b * 257);
         } else {
           rawValues.push(r, g, b);
         }
@@ -383,6 +425,8 @@ function buildPage(page: TiffEncodePage, defaults: EncodeTiffOptions): EncodedPa
         const luma = r * 0.2126 + g * 0.7152 + b * 0.0722;
         if (bitDepth === 32 && sampleFormat === TIFF_SAMPLEFORMAT_IEEEFP) {
           rawValues.push(luma / 255);
+        } else if (bitDepth === 16 && sampleFormat === TIFF_SAMPLEFORMAT_UINT) {
+          rawValues.push(luma * 257);
         } else {
           rawValues.push(luma);
         }
@@ -444,10 +488,20 @@ function writeBigIfdEntry(
   return offset + 20;
 }
 
+function asciiBytes(value: string): Uint8Array {
+  const bytes = new Uint8Array(value.length + 1);
+  for (let i = 0; i < value.length; i++) {
+    bytes[i] = value.charCodeAt(i) & 0x7f;
+  }
+  bytes[value.length] = 0;
+  return bytes;
+}
+
 function buildPageEntries(
   page: EncodedPage,
   dpi: number,
   useBigTiff: boolean,
+  metadata?: TiffMetadata,
 ): {
   entries: TiffIfdEntry[];
   chunks: Array<{ key: string; bytes: Uint8Array }>;
@@ -482,22 +536,49 @@ function buildPageEntries(
     { tag: 296, type: TIFF_TYPE_SHORT, count: 1, value: 2 },
     { tag: 339, type: TIFF_TYPE_SHORT, count: 1, value: page.sampleFormat },
   ];
-  if (page.predictor === 2) {
-    entries.push({ tag: 317, type: TIFF_TYPE_SHORT, count: 1, value: 2 });
+  if (page.predictor === 2 || page.predictor === 3) {
+    entries.push({ tag: 317, type: TIFF_TYPE_SHORT, count: 1, value: page.predictor });
   }
 
-  return {
-    entries,
-    chunks: [
-      { key: "bits", bytes: bitsPerSample },
-      { key: "xres", bytes: xResolution },
-      { key: "yres", bytes: yResolution },
-      { key: "pixels", bytes: page.compressedData },
-    ],
-  };
+  const chunks: Array<{ key: string; bytes: Uint8Array }> = [
+    { key: "bits", bytes: bitsPerSample },
+    { key: "xres", bytes: xResolution },
+    { key: "yres", bytes: yResolution },
+    { key: "pixels", bytes: page.compressedData },
+  ];
+
+  if (metadata) {
+    if (metadata.description) {
+      const bytes = asciiBytes(metadata.description);
+      entries.push({ tag: 270, type: TIFF_TYPE_ASCII, count: bytes.length, value: bytes });
+      chunks.push({ key: "desc", bytes });
+    }
+    if (metadata.software) {
+      const bytes = asciiBytes(metadata.software);
+      entries.push({ tag: 305, type: TIFF_TYPE_ASCII, count: bytes.length, value: bytes });
+      chunks.push({ key: "sw", bytes });
+    }
+    if (metadata.dateTime) {
+      const bytes = asciiBytes(metadata.dateTime);
+      entries.push({ tag: 306, type: TIFF_TYPE_ASCII, count: bytes.length, value: bytes });
+      chunks.push({ key: "dt", bytes });
+    }
+    if (metadata.artist) {
+      const bytes = asciiBytes(metadata.artist);
+      entries.push({ tag: 315, type: TIFF_TYPE_ASCII, count: bytes.length, value: bytes });
+      chunks.push({ key: "artist", bytes });
+    }
+  }
+
+  return { entries, chunks };
 }
 
-function buildLayout(pages: EncodedPage[], dpi: number, useBigTiff: boolean): LayoutResult {
+function buildLayout(
+  pages: EncodedPage[],
+  dpi: number,
+  useBigTiff: boolean,
+  metadata?: TiffMetadata,
+): LayoutResult {
   const ifdEntrySize = useBigTiff ? 20 : 12;
   const ifdCountSize = useBigTiff ? 8 : 2;
   const ifdNextSize = useBigTiff ? 8 : 4;
@@ -505,7 +586,9 @@ function buildLayout(pages: EncodedPage[], dpi: number, useBigTiff: boolean): La
 
   const ifdOffsets: Array<number | bigint> = [];
   let cursor = BigInt(headerSize);
-  const prepared = pages.map((page) => buildPageEntries(page, dpi, useBigTiff));
+  const prepared = pages.map((page, i) =>
+    buildPageEntries(page, dpi, useBigTiff, i === 0 ? metadata : undefined),
+  );
 
   for (const block of prepared) {
     ifdOffsets.push(cursor);
@@ -632,7 +715,11 @@ export function encodeTiffDocument(
       ? options.bigTiffThresholdBytes
       : BigInt(Math.max(0, Math.floor(options.bigTiffThresholdBytes ?? 0xffffffff)));
   const requiresBigTiff = estimateClassicSize(encodedPages, dpi) > threshold;
-  const layout = buildLayout(encodedPages, dpi, requiresBigTiff);
+  const defaultMetadata: TiffMetadata = {
+    software: "Cobalt FITS Viewer",
+    ...options.metadata,
+  };
+  const layout = buildLayout(encodedPages, dpi, requiresBigTiff, defaultMetadata);
   return layout.bytes;
 }
 

@@ -4,7 +4,7 @@
  */
 
 import type { RestoreTarget } from "./backupService";
-import type { RestoreConflictStrategy } from "./types";
+import type { CloudProvider, RestoreConflictStrategy } from "./types";
 import type { useFitsStore } from "../../stores/useFitsStore";
 import type { useAlbumStore } from "../../stores/useAlbumStore";
 import type { useTargetStore } from "../../stores/useTargetStore";
@@ -35,7 +35,7 @@ interface RestoreTargetCallbacks {
   setAutoBackupEnabled: (enabled: boolean) => void;
   setAutoBackupIntervalHours: (hours: number) => void;
   setAutoBackupNetwork: (network: "wifi" | "any") => void;
-  setActiveProvider: (provider: "google-drive" | "onedrive" | "dropbox" | "webdav" | null) => void;
+  setActiveProvider: (provider: CloudProvider | null) => void;
 }
 
 function resolveStrategy(strategy: RestoreConflictStrategy | undefined): RestoreConflictStrategy {

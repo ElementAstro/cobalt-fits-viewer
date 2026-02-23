@@ -30,6 +30,7 @@ import { AlbumExportSheet } from "../../components/gallery/AlbumExportSheet";
 import { DuplicateImagesSheet } from "../../components/gallery/DuplicateImagesSheet";
 import { ThumbnailLoadingBanner } from "../../components/gallery/ThumbnailLoadingBanner";
 import { EmptyState } from "../../components/common/EmptyState";
+import { GuideTarget } from "../../components/common/GuideTarget";
 import { PromptDialog } from "../../components/common/PromptDialog";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { routeForMedia } from "../../lib/media/routing";
@@ -333,39 +334,41 @@ export default function GalleryScreen() {
   const handleOpenReport = useCallback(() => setShowReport(true), []);
 
   const galleryHeaderElement = (
-    <GalleryHeader
-      totalCount={totalCount}
-      displayCount={displayFiles.length}
-      viewMode={viewMode}
-      searchQuery={searchQuery}
-      filterObject={filterObject}
-      filterFrameType={filterFrameType}
-      filterTargetId={filterTargetId}
-      filterFavoriteOnly={filterFavoriteOnly}
-      activeFilterCount={activeFilterCount}
-      metadataIndex={metadataIndex}
-      frameTypes={FRAME_TYPES}
-      isLandscape={isLandscape}
-      isSelectionMode={isSelectionMode}
-      selectedCount={selectedIds.length}
-      allDisplaySelected={allDisplaySelected}
-      onViewModeChange={setViewMode}
-      onSearchChange={setSearchQuery}
-      onFilterObjectChange={setFilterObject}
-      onFilterFrameTypeChange={setFilterFrameType}
-      onFilterTargetIdChange={setFilterTargetId}
-      onFilterFavoriteOnlyChange={setFilterFavoriteOnly}
-      onClearFilters={clearFilters}
-      onSelectAllToggle={handleSelectAllToggle}
-      onAddToAlbum={handleOpenAlbumPicker}
-      onBatchTag={handleOpenBatchTag}
-      onBatchRename={handleOpenBatchRename}
-      onCompare={handleCompare}
-      onBatchDelete={handleBatchDelete}
-      onExitSelection={exitSelectionMode}
-      onOpenReport={handleOpenReport}
-      onOpenMap={handleOpenMap}
-    />
+    <GuideTarget name="gallery-header" page="gallery" order={1}>
+      <GalleryHeader
+        totalCount={totalCount}
+        displayCount={displayFiles.length}
+        viewMode={viewMode}
+        searchQuery={searchQuery}
+        filterObject={filterObject}
+        filterFrameType={filterFrameType}
+        filterTargetId={filterTargetId}
+        filterFavoriteOnly={filterFavoriteOnly}
+        activeFilterCount={activeFilterCount}
+        metadataIndex={metadataIndex}
+        frameTypes={FRAME_TYPES}
+        isLandscape={isLandscape}
+        isSelectionMode={isSelectionMode}
+        selectedCount={selectedIds.length}
+        allDisplaySelected={allDisplaySelected}
+        onViewModeChange={setViewMode}
+        onSearchChange={setSearchQuery}
+        onFilterObjectChange={setFilterObject}
+        onFilterFrameTypeChange={setFilterFrameType}
+        onFilterTargetIdChange={setFilterTargetId}
+        onFilterFavoriteOnlyChange={setFilterFavoriteOnly}
+        onClearFilters={clearFilters}
+        onSelectAllToggle={handleSelectAllToggle}
+        onAddToAlbum={handleOpenAlbumPicker}
+        onBatchTag={handleOpenBatchTag}
+        onBatchRename={handleOpenBatchRename}
+        onCompare={handleCompare}
+        onBatchDelete={handleBatchDelete}
+        onExitSelection={exitSelectionMode}
+        onOpenReport={handleOpenReport}
+        onOpenMap={handleOpenMap}
+      />
+    </GuideTarget>
   );
 
   const renderTimelineSection = useCallback(
@@ -418,23 +421,25 @@ export default function GalleryScreen() {
           paddingTop: isLandscape ? 8 : contentPaddingTop,
         }}
       >
-        <Tabs
-          value={activeMainTab}
-          onValueChange={(value) => setActiveMainTab(value as "images" | "albums")}
-          variant="secondary"
-        >
-          <Tabs.List>
-            <Tabs.Indicator />
-            <Tabs.Trigger value="images" testID="e2e-action-tabs__gallery-tab-images">
-              <Ionicons name="images-outline" size={14} color={mutedColor} />
-              <Tabs.Label>{t("gallery.imagesTab")}</Tabs.Label>
-            </Tabs.Trigger>
-            <Tabs.Trigger value="albums" testID="e2e-action-tabs__gallery-tab-albums">
-              <Ionicons name="albums-outline" size={14} color={mutedColor} />
-              <Tabs.Label>{t("gallery.albumsTab")}</Tabs.Label>
-            </Tabs.Trigger>
-          </Tabs.List>
-        </Tabs>
+        <GuideTarget name="gallery-tabs" page="gallery" order={0}>
+          <Tabs
+            value={activeMainTab}
+            onValueChange={(value) => setActiveMainTab(value as "images" | "albums")}
+            variant="secondary"
+          >
+            <Tabs.List>
+              <Tabs.Indicator />
+              <Tabs.Trigger value="images" testID="e2e-action-tabs__gallery-tab-images">
+                <Ionicons name="images-outline" size={14} color={mutedColor} />
+                <Tabs.Label>{t("gallery.imagesTab")}</Tabs.Label>
+              </Tabs.Trigger>
+              <Tabs.Trigger value="albums" testID="e2e-action-tabs__gallery-tab-albums">
+                <Ionicons name="albums-outline" size={14} color={mutedColor} />
+                <Tabs.Label>{t("gallery.albumsTab")}</Tabs.Label>
+              </Tabs.Trigger>
+            </Tabs.List>
+          </Tabs>
+        </GuideTarget>
       </View>
 
       {activeMainTab === "images" ? (

@@ -31,6 +31,7 @@ import { useFitsStore } from "../stores/useFitsStore";
 import { useTargetGroupStore } from "../stores/useTargetGroupStore";
 import { useSessionStore } from "../stores/useSessionStore";
 import { OnboardingScreen } from "../components/common/OnboardingScreen";
+import { TooltipGuideProvider } from "../hooks/useTooltipGuide";
 import { reconcileAllStores } from "../lib/targets/targetIntegrity";
 import { bootstrapE2EFullScenario } from "../e2e/bootstrap";
 import { isE2EMode } from "../e2e/env";
@@ -251,24 +252,26 @@ export default function RootLayout() {
                 <TargetIntegrityProvider>
                   <AnimatedSplashScreen>
                     <OnboardingGate>
-                      <ThemedAppContainer>
-                        <StatusBar style={theme === "dark" ? "light" : "dark"} />
-                        <ThemedRootStack />
-                        {e2eMode ? (
-                          <Text
-                            testID="e2e-bootstrap-ready"
-                            style={{
-                              position: "absolute",
-                              width: 0,
-                              height: 0,
-                              opacity: 0,
-                            }}
-                          >
-                            ready
-                          </Text>
-                        ) : null}
-                        <UpdateBanner />
-                      </ThemedAppContainer>
+                      <TooltipGuideProvider>
+                        <ThemedAppContainer>
+                          <StatusBar style={theme === "dark" ? "light" : "dark"} />
+                          <ThemedRootStack />
+                          {e2eMode ? (
+                            <Text
+                              testID="e2e-bootstrap-ready"
+                              style={{
+                                position: "absolute",
+                                width: 0,
+                                height: 0,
+                                opacity: 0,
+                              }}
+                            >
+                              ready
+                            </Text>
+                          ) : null}
+                          <UpdateBanner />
+                        </ThemedAppContainer>
+                      </TooltipGuideProvider>
                     </OnboardingGate>
                   </AnimatedSplashScreen>
                 </TargetIntegrityProvider>

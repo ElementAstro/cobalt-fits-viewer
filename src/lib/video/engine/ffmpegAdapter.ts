@@ -26,7 +26,7 @@ export type LocalFfmpegExecutor = (
 
 let overrideExecutor: LocalFfmpegExecutor | null = null;
 
-const PROCESSING_SUBDIR = "video_processing";
+export const PROCESSING_SUBDIR = "video_processing";
 const H264_ENCODER_CANDIDATES = ["h264_videotoolbox", "h264_mediacodec", "mpeg4"] as const;
 const HEVC_ENCODER_CANDIDATES = ["hevc_videotoolbox", "hevc_mediacodec"] as const;
 
@@ -287,6 +287,19 @@ function buildConcatListFile(outputDir: Directory, inputUris: string[]): File {
   return listFile;
 }
 
+function buildTimelapseListFile(outputDir: Directory, imageUris: string[], fps: number): File {
+  const listFile = new File(outputDir, `timelapse_${Date.now()}.txt`);
+  const frameDuration = (1 / Math.max(1, fps)).toFixed(6);
+  const content = imageUris
+    .map((uri) => {
+      const normalized = uri.replace(/'/g, `'\\''`);
+      return `file '${normalized}'\nduration ${frameDuration}`;
+    })
+    .join("\n");
+  listFile.write(content);
+  return listFile;
+}
+
 function buildCoreCommand(
   request: VideoProcessingRequest,
   commandContext: BuildCommandContext,
@@ -531,6 +544,13 @@ export function buildFfmpegCommandForRequest(
     ]);
   }
 
+  if (request.operation === "timelapse") {
+    if (!request.timelapse || request.timelapse.imageUris.length === 0) {
+      throw new Error("timelapse_images_required");
+    }
+    throw new Error("timelapse_requires_list_builder");
+  }
+
   // Fallback: re-encode with optional rotation from rotateNormalize
   const rotation = request.rotateNormalize?.rotationDeg ?? 0;
   const rotationFilter =
@@ -747,6 +767,63 @@ export class FfmpegVideoProcessingEngine implements VideoProcessingEngine {
       });
     };
 
+    if (request.operation === "timelapse") {
+      const tl = request.timelapse;
+      if (!tl || tl.imageUris.length === 0) {
+        throw new Error("timelapse_images_required");
+      }
+      if (!commandContext) {
+        throw new Error("encoder_h264_unavailable");
+      }
+      const timelapseList = buildTimelapseListFile(outputDir, tl.imageUris, tl.fps);
+      const outputFilename = buildOutputFilename(request, ".mp4");
+      const outputFile = new File(outputDir, outputFilename);
+      const scaleFilter = buildScaleFilter(undefined, tl.width, tl.height);
+      const vf = scaleFilter ? ["-vf", scaleFilter] : [];
+      const command = commandToString([
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "info",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        timelapseList.uri,
+        ...buildVideoCodecArgs(request.profile, commandContext.encoderSelection),
+        "-pix_fmt",
+        "yuv420p",
+        ...vf,
+        "-movflags",
+        "+faststart",
+        outputFile.uri,
+      ]);
+      const totalFrames = tl.imageUris.length;
+      const timelapseEmitLog = (line: string) => {
+        logLines.push(line);
+        const frameMatch = line.match(/frame=\s*(\d+)/);
+        if (frameMatch && options?.onProgress) {
+          const current = Number(frameMatch[1]);
+          options.onProgress({
+            ratio: clamp(current / totalFrames, 0, 1),
+            processedMs: Math.round((current / tl.fps) * 1000),
+          });
+        }
+      };
+      const result = await executor(command, { signal: options?.signal, onLog: timelapseEmitLog });
+      if (result.returnCode !== 0) {
+        throw new Error("ffmpeg_failed_timelapse");
+      }
+      return {
+        outputUri: outputFile.uri,
+        operation: request.operation,
+        sourceId: request.sourceId,
+        processingTag: mapProcessingTag(request.operation),
+        logLines,
+      };
+    }
+
     if (request.operation === "split") {
       const segments = request.split?.segments ?? [];
       if (!segments.length) {
@@ -834,4 +911,38 @@ export class FfmpegVideoProcessingEngine implements VideoProcessingEngine {
 
 export function createFfmpegVideoProcessingEngine(): VideoProcessingEngine {
   return new FfmpegVideoProcessingEngine();
+}
+
+export async function getVideoProcessingCacheSize(): Promise<number> {
+  try {
+    const dir = new Directory(Paths.cache, PROCESSING_SUBDIR);
+    if (!dir.exists) return 0;
+    let totalSize = 0;
+    for (const entry of dir.list()) {
+      if (entry instanceof File) {
+        totalSize += entry.size ?? 0;
+      }
+    }
+    return totalSize;
+  } catch {
+    return 0;
+  }
+}
+
+export function clearVideoProcessingCache(): void {
+  try {
+    const dir = new Directory(Paths.cache, PROCESSING_SUBDIR);
+    if (!dir.exists) return;
+    for (const entry of dir.list()) {
+      if (entry instanceof File) {
+        try {
+          entry.delete();
+        } catch {
+          // skip individual file deletion errors
+        }
+      }
+    }
+  } catch {
+    // noop
+  }
 }

@@ -1,0 +1,160 @@
+/**
+ * ConstellationOverlay 组件测试
+ */
+
+import React from "react";
+import { render } from "@testing-library/react-native";
+import { ConstellationOverlay } from "../ConstellationOverlay";
+import type { AstrometryCalibration } from "../../../lib/astrometry/types";
+import type { CanvasTransform } from "../../fits/FitsCanvas";
+
+jest.mock("@shopify/react-native-skia", () => {
+  const ReactLocal = require("react");
+  const { View: RNView, Text: RNText } = require("react-native");
+
+  const Canvas = (props: { children?: React.ReactNode; [k: string]: unknown }) =>
+    ReactLocal.createElement(RNView, { testID: "skia-canvas", ...props }, props.children);
+  const Group = (props: { children?: React.ReactNode }) =>
+    ReactLocal.createElement(RNView, { testID: "skia-group" }, props.children);
+  const SkiaPath = (props: Record<string, unknown>) =>
+    ReactLocal.createElement(RNView, { testID: "skia-path", ...props });
+  const SkiaText = (props: { text?: string; [k: string]: unknown }) =>
+    ReactLocal.createElement(RNText, { testID: "skia-text" }, props.text);
+
+  const mockPath = {
+    moveTo: jest.fn(),
+    lineTo: jest.fn(),
+  };
+
+  return {
+    Canvas,
+    Group,
+    Path: SkiaPath,
+    Text: SkiaText,
+    Skia: {
+      Path: {
+        Make: () => ({ ...mockPath }),
+      },
+    },
+    useFont: () => ({ measureText: () => ({ width: 40 }) }),
+  };
+});
+
+jest.mock("../../../lib/astrometry/wcsProjection", () => ({
+  raDecToPixel: jest.fn(() => ({
+    x: 400,
+    y: 300,
+  })),
+}));
+
+jest.mock("../../../lib/viewer/transform", () => ({
+  imageToScreenPoint: jest.fn((pt: { x: number; y: number }) => pt),
+  remapPointBetweenSpaces: jest.fn((pt: { x: number; y: number }) => pt),
+}));
+
+jest.mock("../../../lib/astrometry/constellationData", () => ({
+  CONSTELLATIONS: [
+    {
+      id: "Ori",
+      name: "Orion",
+      stars: [
+        { ra: 88.793, dec: 7.407 },
+        { ra: 78.634, dec: -8.202 },
+        { ra: 83.858, dec: -1.943 },
+      ],
+      lines: [
+        [0, 1],
+        [1, 2],
+        [0, 2],
+      ],
+    },
+    {
+      id: "UMa",
+      name: "Ursa Major",
+      stars: [
+        { ra: 165.46, dec: 61.75 },
+        { ra: 166.0, dec: 56.38 },
+      ],
+      lines: [[0, 1]],
+    },
+  ],
+}));
+
+const baseCalibration: AstrometryCalibration = {
+  ra: 83.633,
+  dec: -5.375,
+  radius: 1.5,
+  pixscale: 1.1,
+  orientation: 0,
+  parity: 0,
+  fieldWidth: 2.0,
+  fieldHeight: 1.5,
+};
+
+const baseTransform: CanvasTransform = {
+  scale: 1,
+  translateX: 0,
+  translateY: 0,
+  canvasWidth: 800,
+  canvasHeight: 600,
+};
+
+describe("ConstellationOverlay", () => {
+  const baseProps = {
+    calibration: baseCalibration,
+    renderWidth: 800,
+    renderHeight: 600,
+    sourceWidth: 800,
+    sourceHeight: 600,
+    transform: baseTransform,
+    visible: true,
+  };
+
+  it("renders null when visible is false", () => {
+    const { toJSON } = render(<ConstellationOverlay {...baseProps} visible={false} />);
+    expect(toJSON()).toBeNull();
+  });
+
+  it("renders null when sourceWidth is zero", () => {
+    const { toJSON } = render(<ConstellationOverlay {...baseProps} sourceWidth={0} />);
+    expect(toJSON()).toBeNull();
+  });
+
+  it("renders null when sourceHeight is zero", () => {
+    const { toJSON } = render(<ConstellationOverlay {...baseProps} sourceHeight={0} />);
+    expect(toJSON()).toBeNull();
+  });
+
+  it("renders null when renderWidth is zero", () => {
+    const { toJSON } = render(<ConstellationOverlay {...baseProps} renderWidth={0} />);
+    expect(toJSON()).toBeNull();
+  });
+
+  it("renders Skia canvas when visible with constellation data", () => {
+    const { getByTestId } = render(<ConstellationOverlay {...baseProps} />);
+    expect(getByTestId("skia-canvas")).toBeTruthy();
+  });
+
+  it("renders constellation name labels", () => {
+    const { getAllByTestId } = render(<ConstellationOverlay {...baseProps} />);
+    const textElements = getAllByTestId("skia-text");
+    const texts = textElements.map((el) => el.props.children);
+    expect(texts).toContain("Orion");
+  });
+
+  it("renders path elements for constellation lines", () => {
+    const { getAllByTestId } = render(<ConstellationOverlay {...baseProps} />);
+    const paths = getAllByTestId("skia-path");
+    expect(paths.length).toBeGreaterThan(0);
+  });
+
+  it("accepts custom color prop", () => {
+    const { getByTestId } = render(<ConstellationOverlay {...baseProps} color="#ff0000" />);
+    expect(getByTestId("skia-canvas")).toBeTruthy();
+  });
+
+  it("accepts custom opacity prop", () => {
+    const { getByTestId } = render(<ConstellationOverlay {...baseProps} opacity={0.8} />);
+    expect(getByTestId("skia-canvas")).toBeTruthy();
+  });
+});

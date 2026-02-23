@@ -12,7 +12,8 @@ export type VideoProcessingTag =
   | "rotate"
   | "speed"
   | "watermark"
-  | "gif";
+  | "gif"
+  | "timelapse";
 
 export type VideoProfile = "compatibility" | "balanced" | "quality";
 export type VideoTargetPreset = "1080p" | "720p" | "custom";
@@ -87,6 +88,13 @@ export interface GifOptions {
   fps?: number;
 }
 
+export interface TimelapseOptions {
+  imageUris: string[];
+  fps: number;
+  width?: number;
+  height?: number;
+}
+
 export interface VideoProcessingRequest {
   sourceId: string;
   sourceFilename: string;
@@ -108,6 +116,7 @@ export interface VideoProcessingRequest {
   speed?: SpeedOptions;
   watermark?: WatermarkOptions;
   gif?: GifOptions;
+  timelapse?: TimelapseOptions;
 }
 
 export interface VideoProcessingProgress {

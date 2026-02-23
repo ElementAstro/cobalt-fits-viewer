@@ -52,6 +52,8 @@ export {
   exportLocalBackup,
   importLocalBackup,
   previewLocalBackup,
+  buildFullPackage,
+  importFromPackage,
   type LocalBackupPreview,
 } from "./localBackup";
 export { authenticateOneDrive, authenticateDropbox } from "./oauthHelper";
@@ -60,3 +62,11 @@ export { GoogleDriveProvider } from "./providers/googleDrive";
 export { OneDriveProvider, ONEDRIVE_DISCOVERY, ONEDRIVE_SCOPES } from "./providers/onedrive";
 export { DropboxProvider, DROPBOX_DISCOVERY } from "./providers/dropbox";
 export { WebDAVProvider } from "./providers/webdav";
+export { SFTPProvider } from "./providers/sftp";
+
+export {
+  startLANServer,
+  downloadFromLAN,
+  type LANServerInfo,
+  type LANServerHandle,
+} from "./lanTransfer";

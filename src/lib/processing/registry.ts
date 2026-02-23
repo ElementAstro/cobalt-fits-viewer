@@ -199,6 +199,11 @@ function applyLegacyOperation(
           op.regularization,
         ),
       );
+    default: {
+      const { applyOperation } = require("../utils/imageOperations");
+      const result = applyOperation(input.pixels, input.width, input.height, op);
+      return result as ProcessingImageState;
+    }
   }
 }
 
@@ -880,6 +885,309 @@ const legacyOps: Array<{
       regularization: asNumber(p, "regularization", 0.1),
     }),
   },
+  {
+    id: "cosmeticCorrection",
+    label: "Cosmetic Correction",
+    category: "process",
+    complexity: "medium",
+    supportsPreview: true,
+    params: [
+      {
+        key: "hotSigma",
+        label: "Hot σ",
+        control: { kind: "slider", min: 2, max: 10, step: 0.5 },
+        defaultValue: 5,
+      },
+      {
+        key: "coldSigma",
+        label: "Cold σ",
+        control: { kind: "slider", min: 2, max: 10, step: 0.5 },
+        defaultValue: 5,
+      },
+      {
+        key: "useMedian",
+        label: "Median Interpolation",
+        control: { kind: "toggle" },
+        defaultValue: true,
+      },
+    ],
+    build: (p) => ({
+      type: "cosmeticCorrection" as const,
+      hotSigma: asNumber(p, "hotSigma", 5),
+      coldSigma: asNumber(p, "coldSigma", 5),
+      useMedian: asBoolean(p, "useMedian", true),
+    }),
+  },
+  {
+    id: "tgvDenoise",
+    label: "TGV Denoise",
+    category: "process",
+    complexity: "heavy",
+    supportsPreview: false,
+    params: [
+      {
+        key: "strength",
+        label: "Strength",
+        control: { kind: "slider", min: 0.1, max: 10, step: 0.1 },
+        defaultValue: 2,
+      },
+      {
+        key: "smoothness",
+        label: "Smoothness",
+        control: { kind: "slider", min: 1, max: 5, step: 0.5 },
+        defaultValue: 2,
+      },
+      {
+        key: "iterations",
+        label: "Iterations",
+        control: { kind: "slider", min: 50, max: 500, step: 10 },
+        defaultValue: 200,
+      },
+      {
+        key: "edgeProtection",
+        label: "Edge Protection",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 0.5,
+      },
+    ],
+    build: (p) => ({
+      type: "tgvDenoise" as const,
+      strength: asNumber(p, "strength", 2),
+      smoothness: asNumber(p, "smoothness", 2),
+      iterations: Math.round(asNumber(p, "iterations", 200)),
+      edgeProtection: asNumber(p, "edgeProtection", 0.5),
+    }),
+  },
+  {
+    id: "mmt",
+    label: "Multiscale Median Transform",
+    category: "process",
+    complexity: "heavy",
+    supportsPreview: true,
+    params: [
+      {
+        key: "layers",
+        label: "Layers",
+        control: { kind: "slider", min: 1, max: 8, step: 1 },
+        defaultValue: 4,
+      },
+      {
+        key: "noiseThreshold",
+        label: "Noise Threshold",
+        control: { kind: "slider", min: 0.5, max: 10, step: 0.5 },
+        defaultValue: 3,
+      },
+      {
+        key: "noiseReduction",
+        label: "Noise Reduction",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 0.5,
+      },
+      {
+        key: "bias",
+        label: "Bias",
+        control: { kind: "slider", min: -1, max: 1, step: 0.05 },
+        defaultValue: 0,
+      },
+    ],
+    build: (p) => ({
+      type: "mmt" as const,
+      layers: Math.round(asNumber(p, "layers", 4)),
+      noiseThreshold: asNumber(p, "noiseThreshold", 3),
+      noiseReduction: asNumber(p, "noiseReduction", 0.5),
+      bias: asNumber(p, "bias", 0),
+    }),
+  },
+  {
+    id: "bilateralFilter",
+    label: "Bilateral Filter",
+    category: "process",
+    complexity: "heavy",
+    supportsPreview: true,
+    params: [
+      {
+        key: "spatialSigma",
+        label: "Spatial σ",
+        control: { kind: "slider", min: 0.5, max: 10, step: 0.5 },
+        defaultValue: 2,
+      },
+      {
+        key: "rangeSigma",
+        label: "Range σ",
+        control: { kind: "slider", min: 0.01, max: 0.5, step: 0.01 },
+        defaultValue: 0.1,
+      },
+    ],
+    build: (p) => ({
+      type: "bilateralFilter" as const,
+      spatialSigma: asNumber(p, "spatialSigma", 2),
+      rangeSigma: asNumber(p, "rangeSigma", 0.1),
+    }),
+  },
+  {
+    id: "waveletSharpen",
+    label: "Wavelet Sharpen",
+    category: "process",
+    complexity: "heavy",
+    supportsPreview: true,
+    params: [
+      {
+        key: "layers",
+        label: "Layers",
+        control: { kind: "slider", min: 1, max: 6, step: 1 },
+        defaultValue: 3,
+      },
+      {
+        key: "amount",
+        label: "Amount",
+        control: { kind: "slider", min: 0, max: 3, step: 0.1 },
+        defaultValue: 1.5,
+      },
+      {
+        key: "protectStars",
+        label: "Protect Stars",
+        control: { kind: "toggle" },
+        defaultValue: false,
+      },
+    ],
+    build: (p) => ({
+      type: "waveletSharpen" as const,
+      layers: Math.round(asNumber(p, "layers", 3)),
+      amount: asNumber(p, "amount", 1.5),
+      protectStars: asBoolean(p, "protectStars", false),
+    }),
+  },
+  {
+    id: "wienerDeconvolution",
+    label: "Wiener Deconvolution",
+    category: "process",
+    complexity: "heavy",
+    supportsPreview: false,
+    params: [
+      {
+        key: "psfSigma",
+        label: "PSF Sigma",
+        control: { kind: "slider", min: 0.5, max: 5, step: 0.1 },
+        defaultValue: 2,
+      },
+      {
+        key: "noiseRatio",
+        label: "Noise Ratio",
+        control: { kind: "slider", min: 0.001, max: 0.1, step: 0.001 },
+        defaultValue: 0.01,
+      },
+    ],
+    build: (p) => ({
+      type: "wienerDeconvolution" as const,
+      psfSigma: asNumber(p, "psfSigma", 2),
+      noiseRatio: asNumber(p, "noiseRatio", 0.01),
+    }),
+  },
+  {
+    id: "integerBin",
+    label: "Integer Bin",
+    category: "geometry",
+    complexity: "light",
+    supportsPreview: true,
+    params: [
+      {
+        key: "factor",
+        label: "Factor",
+        control: { kind: "slider", min: 2, max: 4, step: 1 },
+        defaultValue: 2,
+      },
+      {
+        key: "mode",
+        label: "Mode",
+        control: {
+          kind: "select",
+          options: [
+            { label: "Average", value: "average" },
+            { label: "Sum", value: "sum" },
+            { label: "Median", value: "median" },
+          ],
+        },
+        defaultValue: "average",
+      },
+    ],
+    build: (p) => ({
+      type: "integerBin" as const,
+      factor: Math.round(asNumber(p, "factor", 2)),
+      mode: (() => {
+        const m = asString(p, "mode", "average");
+        return m === "sum" || m === "median" ? m : "average";
+      })(),
+    }),
+  },
+  {
+    id: "resample",
+    label: "Resample",
+    category: "geometry",
+    complexity: "medium",
+    supportsPreview: true,
+    params: [
+      {
+        key: "targetScale",
+        label: "Scale",
+        control: { kind: "slider", min: 0.25, max: 4, step: 0.25 },
+        defaultValue: 1,
+      },
+      {
+        key: "method",
+        label: "Method",
+        control: {
+          kind: "select",
+          options: [
+            { label: "Bilinear", value: "bilinear" },
+            { label: "Bicubic", value: "bicubic" },
+            { label: "Lanczos-3", value: "lanczos3" },
+          ],
+        },
+        defaultValue: "lanczos3",
+      },
+    ],
+    build: (p) => ({
+      type: "resample" as const,
+      targetScale: asNumber(p, "targetScale", 1),
+      method: (() => {
+        const m = asString(p, "method", "lanczos3");
+        return m === "bilinear" || m === "bicubic" ? m : "lanczos3";
+      })(),
+    }),
+  },
+  {
+    id: "edgeMask",
+    label: "Edge Mask",
+    category: "mask",
+    complexity: "medium",
+    supportsPreview: true,
+    params: [
+      {
+        key: "preBlurSigma",
+        label: "Pre-Blur",
+        control: { kind: "slider", min: 0, max: 5, step: 0.5 },
+        defaultValue: 1,
+      },
+      {
+        key: "threshold",
+        label: "Threshold",
+        control: { kind: "slider", min: 0, max: 1, step: 0.01 },
+        defaultValue: 0.1,
+      },
+      {
+        key: "postBlurSigma",
+        label: "Post-Blur",
+        control: { kind: "slider", min: 0, max: 5, step: 0.5 },
+        defaultValue: 1,
+      },
+    ],
+    build: (p) => ({
+      type: "edgeMask" as const,
+      preBlurSigma: asNumber(p, "preBlurSigma", 1),
+      threshold: asNumber(p, "threshold", 0.1),
+      postBlurSigma: asNumber(p, "postBlurSigma", 1),
+    }),
+  },
 ];
 
 const registry = new Map<ProcessingOperationId, ProcessingOperationSchema>();
@@ -903,7 +1211,14 @@ for (const entry of legacyOps) {
 
 type ColorRegistryOperationId = Extract<
   ProcessingOperationId,
-  "scnr" | "colorCalibration" | "saturation" | "colorBalance"
+  | "scnr"
+  | "colorCalibration"
+  | "saturation"
+  | "colorBalance"
+  | "backgroundNeutralize"
+  | "photometricCC"
+  | "perHueSaturation"
+  | "selectiveColor"
 >;
 
 const colorOps: Array<{
@@ -998,6 +1313,114 @@ const colorOps: Array<{
       },
     ],
   },
+  {
+    id: "backgroundNeutralize",
+    label: "Background Neutralization",
+    category: "color",
+    complexity: "medium",
+    supportsPreview: true,
+    params: [
+      {
+        key: "upperLimit",
+        label: "Upper Limit",
+        control: { kind: "slider", min: 0.05, max: 0.5, step: 0.01 },
+        defaultValue: 0.2,
+      },
+      {
+        key: "shadowsClip",
+        label: "Shadows Clip",
+        control: { kind: "slider", min: 0, max: 0.1, step: 0.005 },
+        defaultValue: 0.01,
+      },
+    ],
+  },
+  {
+    id: "photometricCC",
+    label: "Photometric Color Calibration",
+    category: "color",
+    complexity: "heavy",
+    supportsPreview: false,
+    params: [
+      {
+        key: "minStars",
+        label: "Min Stars",
+        control: { kind: "slider", min: 5, max: 100, step: 5 },
+        defaultValue: 20,
+      },
+      {
+        key: "percentileLow",
+        label: "Low Percentile",
+        control: { kind: "slider", min: 0, max: 0.5, step: 0.05 },
+        defaultValue: 0.25,
+      },
+      {
+        key: "percentileHigh",
+        label: "High Percentile",
+        control: { kind: "slider", min: 0.5, max: 1, step: 0.05 },
+        defaultValue: 0.75,
+      },
+    ],
+  },
+  {
+    id: "perHueSaturation",
+    label: "Per-Hue Saturation",
+    category: "color",
+    complexity: "light",
+    supportsPreview: true,
+    params: [
+      {
+        key: "amount",
+        label: "Amount",
+        control: { kind: "slider", min: 0, max: 3, step: 0.05 },
+        defaultValue: 1,
+      },
+    ],
+  },
+  {
+    id: "selectiveColor",
+    label: "Selective Color",
+    category: "color",
+    complexity: "light",
+    supportsPreview: true,
+    params: [
+      {
+        key: "targetHue",
+        label: "Target Hue",
+        control: { kind: "slider", min: 0, max: 360, step: 5 },
+        defaultValue: 120,
+      },
+      {
+        key: "hueRange",
+        label: "Hue Range",
+        control: { kind: "slider", min: 10, max: 180, step: 5 },
+        defaultValue: 60,
+      },
+      {
+        key: "hueShift",
+        label: "Hue Shift",
+        control: { kind: "slider", min: -180, max: 180, step: 5 },
+        defaultValue: 0,
+      },
+      {
+        key: "satShift",
+        label: "Saturation",
+        control: { kind: "slider", min: -1, max: 1, step: 0.05 },
+        defaultValue: 0,
+      },
+      {
+        key: "lumShift",
+        label: "Luminance",
+        control: { kind: "slider", min: -1, max: 1, step: 0.05 },
+        defaultValue: 0,
+      },
+      {
+        key: "feather",
+        label: "Feather",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 0.3,
+      },
+    ],
+  },
 ];
 
 for (const entry of colorOps) {
@@ -1051,6 +1474,19 @@ export const REQUIRED_PROCESSING_OPERATION_IDS: ProcessingOperationId[] = [
   "colorCalibration",
   "saturation",
   "colorBalance",
+  "cosmeticCorrection",
+  "tgvDenoise",
+  "mmt",
+  "bilateralFilter",
+  "backgroundNeutralize",
+  "photometricCC",
+  "perHueSaturation",
+  "selectiveColor",
+  "wienerDeconvolution",
+  "waveletSharpen",
+  "integerBin",
+  "resample",
+  "edgeMask",
 ];
 
 export function assertProcessingRegistryCoverage() {

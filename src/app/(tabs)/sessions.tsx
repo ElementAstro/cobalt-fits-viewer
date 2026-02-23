@@ -4,6 +4,7 @@ import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { EmptyState } from "../../components/common/EmptyState";
+import { GuideTarget } from "../../components/common/GuideTarget";
 import { SearchBar } from "../../components/common/SearchBar";
 import { ActiveSessionBanner } from "../../components/sessions/ActiveSessionBanner";
 import { CreateSessionSheet } from "../../components/sessions/CreateSessionSheet";
@@ -682,22 +683,26 @@ export default function SessionsScreen() {
           </Text>
         </View>
         <View className="flex-row gap-2">
-          <Button
-            testID="e2e-action-tabs__sessions-open-create"
-            size="sm"
-            variant="outline"
-            onPress={() => setShowCreateSheet(true)}
-          >
-            <Ionicons name="add-outline" size={14} color={mutedColor} />
-          </Button>
-          <Button
-            testID="e2e-action-tabs__sessions-open-plan"
-            size="sm"
-            variant="outline"
-            onPress={() => setShowPlanSheet(true)}
-          >
-            <Ionicons name="calendar-outline" size={14} color={mutedColor} />
-          </Button>
+          <GuideTarget name="sessions-create" page="sessions" order={0}>
+            <Button
+              testID="e2e-action-tabs__sessions-open-create"
+              size="sm"
+              variant="outline"
+              onPress={() => setShowCreateSheet(true)}
+            >
+              <Ionicons name="add-outline" size={14} color={mutedColor} />
+            </Button>
+          </GuideTarget>
+          <GuideTarget name="sessions-plan" page="sessions" order={1}>
+            <Button
+              testID="e2e-action-tabs__sessions-open-plan"
+              size="sm"
+              variant="outline"
+              onPress={() => setShowPlanSheet(true)}
+            >
+              <Ionicons name="calendar-outline" size={14} color={mutedColor} />
+            </Button>
+          </GuideTarget>
           {sessions.length > 1 && (
             <Button
               testID="e2e-action-tabs__sessions-open-selection"
@@ -718,9 +723,11 @@ export default function SessionsScreen() {
               <Ionicons name="sync-outline" size={14} color={mutedColor} />
             </Button>
           )}
-          <Button size="sm" variant="outline" onPress={handleDetectSessions}>
-            <Ionicons name="scan-outline" size={14} color={mutedColor} />
-          </Button>
+          <GuideTarget name="sessions-detect" page="sessions" order={2}>
+            <Button size="sm" variant="outline" onPress={handleDetectSessions}>
+              <Ionicons name="scan-outline" size={14} color={mutedColor} />
+            </Button>
+          </GuideTarget>
         </View>
       </View>
 

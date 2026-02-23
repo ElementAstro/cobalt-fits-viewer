@@ -372,4 +372,34 @@ describe("estimateFileSize", () => {
     const size = estimateFileSize(100, 100, { ...baseOpts, format: "bmp" });
     expect(size).toBe(10000 * 3 + 54);
   });
+
+  it("estimates TIFF size with LZW compression at 8-bit", () => {
+    const size = estimateFileSize(100, 100, {
+      ...baseOpts,
+      format: "tiff",
+      bitDepth: 8,
+      tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS, compression: "lzw" },
+    });
+    expect(size).toBe(Math.round(10000 * 1 * 3 * 0.65) + 512);
+  });
+
+  it("estimates TIFF size with deflate compression at 16-bit", () => {
+    const size = estimateFileSize(100, 100, {
+      ...baseOpts,
+      format: "tiff",
+      bitDepth: 16,
+      tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS, compression: "deflate" },
+    });
+    expect(size).toBe(Math.round(10000 * 2 * 3 * 0.55) + 512);
+  });
+
+  it("estimates TIFF size with no compression at 32-bit", () => {
+    const size = estimateFileSize(100, 100, {
+      ...baseOpts,
+      format: "tiff",
+      bitDepth: 32,
+      tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS, compression: "none" },
+    });
+    expect(size).toBe(Math.round(10000 * 4 * 3 * 1.0) + 512);
+  });
 });

@@ -18,6 +18,7 @@ import { AdvancedSearchSheet } from "../../components/targets/AdvancedSearchShee
 import { DuplicateMergeSheet } from "../../components/targets/DuplicateMergeSheet";
 import { GroupManagerSheet } from "../../components/targets/GroupManagerSheet";
 import { TargetListHeader, TargetSearchBar } from "../../components/targets/TargetListHeader";
+import { GuideTarget } from "../../components/common/GuideTarget";
 import { TargetBatchActionBar } from "../../components/targets/TargetBatchActionBar";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
@@ -435,11 +436,13 @@ export default function TargetsScreen() {
           onExitSelectionMode={exitSelectionMode}
         />
       ) : (
-        <TargetSearchBar
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
-          interactionUi={resolvedInteractionUi}
-        />
+        <GuideTarget name="targets-scan" page="targets" order={1}>
+          <TargetSearchBar
+            searchQuery={searchQuery}
+            onSearchQueryChange={setSearchQuery}
+            interactionUi={resolvedInteractionUi}
+          />
+        </GuideTarget>
       )}
       {isLandscapeTablet ? (
         <View className="flex-1 flex-row">

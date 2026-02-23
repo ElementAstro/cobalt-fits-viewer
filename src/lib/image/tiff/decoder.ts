@@ -2,6 +2,8 @@ import type { HeaderKeyword } from "../../fits/types";
 
 type SampleFormatKind = "uint" | "int" | "float" | "unknown";
 
+export type TiffAlphaType = "unassociated" | "associated" | "unspecified" | "none";
+
 export interface TiffPageInfo {
   index: number;
   width: number;
@@ -12,6 +14,8 @@ export interface TiffPageInfo {
   compression: number;
   orientation: number;
   samplesPerPixel: number;
+  hasAlpha: boolean;
+  alphaType: TiffAlphaType;
 }
 
 export interface RasterFrame {
@@ -404,17 +408,38 @@ class TiffFrameProvider implements RasterFrameProvider {
         pixels = remappedBands[0];
       }
 
+      const useAlpha = page.hasAlpha && page.alphaType !== "none" && remappedBands.length >= 4;
+      const alphaBand = useAlpha ? remappedBands[3] : null;
+      const alpha8 = alphaBand ? channelToUint8(alphaBand) : null;
+
       const rgba = new Uint8Array(pixelCount * 4);
       if (channels) {
         const r8 = channelToUint8(channels.r);
         const g8 = channelToUint8(channels.g);
         const b8 = channelToUint8(channels.b);
-        for (let i = 0; i < pixelCount; i++) {
-          const offset = i * 4;
-          rgba[offset] = r8[i];
-          rgba[offset + 1] = g8[i];
-          rgba[offset + 2] = b8[i];
-          rgba[offset + 3] = 255;
+        if (alpha8 && page.alphaType === "associated") {
+          for (let i = 0; i < pixelCount; i++) {
+            const offset = i * 4;
+            const a = alpha8[i];
+            if (a === 0) {
+              rgba[offset] = 0;
+              rgba[offset + 1] = 0;
+              rgba[offset + 2] = 0;
+            } else {
+              rgba[offset] = Math.min(255, Math.round((r8[i] * 255) / a));
+              rgba[offset + 1] = Math.min(255, Math.round((g8[i] * 255) / a));
+              rgba[offset + 2] = Math.min(255, Math.round((b8[i] * 255) / a));
+            }
+            rgba[offset + 3] = a;
+          }
+        } else {
+          for (let i = 0; i < pixelCount; i++) {
+            const offset = i * 4;
+            rgba[offset] = r8[i];
+            rgba[offset + 1] = g8[i];
+            rgba[offset + 2] = b8[i];
+            rgba[offset + 3] = alpha8 ? alpha8[i] : 255;
+          }
         }
       } else {
         const mono = monoToUint8(pixels);
@@ -423,7 +448,7 @@ class TiffFrameProvider implements RasterFrameProvider {
           rgba[offset] = mono[i];
           rgba[offset + 1] = mono[i];
           rgba[offset + 2] = mono[i];
-          rgba[offset + 3] = 255;
+          rgba[offset + 3] = alpha8 ? alpha8[i] : 255;
         }
       }
 
@@ -489,6 +514,17 @@ export async function createTiffFrameProvider(
     const orientation = getFirstNumeric(fileDirectory.Orientation, 1);
     const sampleFormat = toSampleFormat(fileDirectory.SampleFormat);
     const samplesPerPixel = getFirstNumeric(fileDirectory.SamplesPerPixel, 1);
+    const extraSamples = Array.isArray(fileDirectory.ExtraSamples)
+      ? (fileDirectory.ExtraSamples as number[])
+      : [];
+    const hasAlpha = samplesPerPixel > 3 && extraSamples.length > 0;
+    const alphaType: TiffPageInfo["alphaType"] = hasAlpha
+      ? extraSamples[0] === 2
+        ? "unassociated"
+        : extraSamples[0] === 1
+          ? "associated"
+          : "unspecified"
+      : "none";
     pages.push({
       index,
       width: image.getWidth(),
@@ -499,6 +535,8 @@ export async function createTiffFrameProvider(
       compression,
       orientation,
       samplesPerPixel,
+      hasAlpha,
+      alphaType,
     });
   }
   return new TiffFrameProvider(tiff, pages, Math.max(1, cacheSize));

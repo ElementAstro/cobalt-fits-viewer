@@ -361,6 +361,31 @@ describe("ffmpeg command builder", () => {
     ).toThrow("gif_options_required");
   });
 
+  it("throws when timelapse images are missing", () => {
+    expect(() =>
+      buildFfmpegCommandForRequest(
+        {
+          ...baseRequest,
+          operation: "timelapse",
+        },
+        "file:///out/timelapse.mp4",
+      ),
+    ).toThrow("timelapse_images_required");
+  });
+
+  it("throws when timelapse has empty imageUris", () => {
+    expect(() =>
+      buildFfmpegCommandForRequest(
+        {
+          ...baseRequest,
+          operation: "timelapse",
+          timelapse: { imageUris: [], fps: 24 },
+        },
+        "file:///out/timelapse.mp4",
+      ),
+    ).toThrow("timelapse_images_required");
+  });
+
   it("parses ffmpeg timestamp and progress", () => {
     expect(parseFfmpegTimestampToMs("00:00:03.250")).toBe(3250);
     const progress = parseProgressFromFfmpegLog(

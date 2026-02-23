@@ -17,6 +17,10 @@ import { ProviderCard } from "../../components/backup/ProviderCard";
 import { BackupProgressSheet } from "../../components/backup/BackupProgressSheet";
 import { AddProviderSheet } from "../../components/backup/AddProviderSheet";
 import { WebDAVConfigSheet } from "../../components/backup/WebDAVConfigSheet";
+import { SFTPConfigSheet } from "../../components/backup/SFTPConfigSheet";
+import { LANSendSheet } from "../../components/backup/LANSendSheet";
+import { LANReceiveSheet } from "../../components/backup/LANReceiveSheet";
+import { useLANTransfer } from "../../hooks/useLANTransfer";
 import {
   BackupOptionsSheet,
   type BackupOptionsSheetMode,
@@ -30,6 +34,21 @@ export default function BackupScreen() {
   const mutedColor = useThemeColor("muted");
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
   const isWeb = Platform.OS === "web";
+
+  const {
+    sendStatus,
+    sendInfo,
+    sendError,
+    startSending,
+    stopSending,
+    receiveStatus,
+    receiveProgress,
+    receiveError,
+    startReceiving,
+    resetReceive,
+  } = useLANTransfer();
+  const [showLANSend, setShowLANSend] = useState(false);
+  const [showLANReceive, setShowLANReceive] = useState(false);
 
   const {
     connections,
@@ -46,6 +65,8 @@ export default function BackupScreen() {
     localImport,
     previewLocalImport,
     getBackupInfo,
+    quickBackup,
+    quickLocalExport,
   } = useBackup();
 
   const lastError = useBackupStore((s) => s.lastError);
@@ -60,6 +81,7 @@ export default function BackupScreen() {
   const lastAutoBackupError = useBackupStore((s) => s.lastAutoBackupError);
   const history = useBackupStore((s) => s.history);
   const clearHistory = useBackupStore((s) => s.clearHistory);
+  const setLastUsedBackupOptions = useBackupStore((s) => s.setLastUsedBackupOptions);
   const summary = useBackupSummary();
   const [backupInfoMap, setBackupInfoMap] = useState<Record<string, BackupInfo | null>>({});
   const fetchedProviders = useRef(new Set<string>());
@@ -79,6 +101,7 @@ export default function BackupScreen() {
 
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [showWebDAVConfig, setShowWebDAVConfig] = useState(false);
+  const [showSFTPConfig, setShowSFTPConfig] = useState(false);
   const [optionsSheet, setOptionsSheet] = useState<{
     visible: boolean;
     mode: BackupOptionsSheetMode;
@@ -118,6 +141,11 @@ export default function BackupScreen() {
         return;
       }
 
+      if (provider === "sftp") {
+        setShowSFTPConfig(true);
+        return;
+      }
+
       // For OAuth providers, initiate connection
       const success = await connectProvider(provider);
       if (!success) {
@@ -129,6 +157,27 @@ export default function BackupScreen() {
       }
     },
     [connectProvider, lastError, t, showConfirm, closeConfirm],
+  );
+
+  const handleSFTPConnect = useCallback(
+    async (
+      host: string,
+      port: number,
+      username: string,
+      password: string,
+      remotePath: string,
+    ): Promise<boolean> => {
+      const success = await connectProvider("sftp", {
+        provider: "sftp",
+        sftpHost: host,
+        sftpPort: port,
+        sftpUsername: username,
+        sftpPassword: password,
+        sftpRemotePath: remotePath,
+      });
+      return success;
+    },
+    [connectProvider],
   );
 
   const handleWebDAVConnect = useCallback(
@@ -233,12 +282,39 @@ export default function BackupScreen() {
     });
   }, [previewLocalImport, t, showConfirm, closeConfirm]);
 
+  const handleQuickBackup = useCallback(async () => {
+    const result = await quickBackup();
+    showConfirm({
+      title: result.success ? t("backup.backupComplete") : t("backup.backupFailed"),
+      description: result.success ? "" : (result.error ?? ""),
+      onConfirm: closeConfirm,
+    });
+  }, [quickBackup, t, showConfirm, closeConfirm]);
+
+  const handleQuickLocalExport = useCallback(async () => {
+    const result = await quickLocalExport();
+    if (result.success) {
+      showConfirm({
+        title: t("backup.exportComplete"),
+        description: "",
+        onConfirm: closeConfirm,
+      });
+    } else if (result.error !== "No file selected") {
+      showConfirm({
+        title: t("backup.exportFailed"),
+        description: result.error ?? "",
+        onConfirm: closeConfirm,
+      });
+    }
+  }, [quickLocalExport, t, showConfirm, closeConfirm]);
+
   const handleRunWithOptions = useCallback(
     async (options: BackupOptions) => {
       if (optionsSheet.mode === "cloud-backup") {
         const provider = optionsSheet.provider;
         if (!provider) return;
         const result = await backup(provider, options);
+        if (result.success) setLastUsedBackupOptions(options);
         showConfirm({
           title: result.success ? t("backup.backupComplete") : t("backup.backupFailed"),
           description: result.success ? "" : (result.error ?? ""),
@@ -262,6 +338,7 @@ export default function BackupScreen() {
       if (optionsSheet.mode === "local-export") {
         const result = await localExport(options);
         if (result.success) {
+          setLastUsedBackupOptions(options);
           showConfirm({
             title: t("backup.exportComplete"),
             description: "",
@@ -306,6 +383,7 @@ export default function BackupScreen() {
       localImport,
       showConfirm,
       closeConfirm,
+      setLastUsedBackupOptions,
       t,
     ],
   );
@@ -333,6 +411,47 @@ export default function BackupScreen() {
         contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Quick backup */}
+        <View className="mt-4">
+          <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+            {t("backup.quickBackup")}
+          </Text>
+          <Card>
+            <Card.Body>
+              <Text className="mb-3 text-xs text-muted">{t("backup.quickBackupDesc")}</Text>
+              <View className="flex-row gap-2">
+                <View className="flex-1">
+                  <Button
+                    testID="e2e-action-backup__index-quick-cloud"
+                    variant="primary"
+                    size="sm"
+                    onPress={handleQuickBackup}
+                    isDisabled={isOperating || !activeProvider || isWeb}
+                  >
+                    <Ionicons name="cloud-upload-outline" size={16} color="#fff" />
+                    <Button.Label>{t("backup.quickCloudBackup")}</Button.Label>
+                  </Button>
+                </View>
+                <View className="flex-1">
+                  <Button
+                    testID="e2e-action-backup__index-quick-local"
+                    variant="outline"
+                    size="sm"
+                    onPress={handleQuickLocalExport}
+                    isDisabled={isOperating}
+                  >
+                    <Ionicons name="save-outline" size={16} color={mutedColor} />
+                    <Button.Label>{t("backup.quickLocalExport")}</Button.Label>
+                  </Button>
+                </View>
+              </View>
+              {!activeProvider && !isWeb && (
+                <Text className="mt-2 text-xs text-muted">{t("backup.noProviderHint")}</Text>
+              )}
+            </Card.Body>
+          </Card>
+        </View>
+
         {/* Connected providers */}
         {connections.length > 0 && (
           <View className="mt-4">
@@ -351,6 +470,52 @@ export default function BackupScreen() {
                 disabled={isOperating}
               />
             ))}
+          </View>
+        )}
+
+        {/* LAN transfer section */}
+        {!isWeb && (
+          <View className="mt-4">
+            <Text className="mb-2 text-xs font-semibold uppercase text-muted">
+              {t("backup.lanTransfer")}
+            </Text>
+            <Card>
+              <Card.Body>
+                <Text className="mb-3 text-xs text-muted">{t("backup.lanTransferDesc")}</Text>
+                <View className="flex-row gap-2">
+                  <View className="flex-1">
+                    <Button
+                      testID="e2e-action-backup__index-lan-send"
+                      variant="primary"
+                      size="sm"
+                      onPress={async () => {
+                        setShowLANSend(true);
+                        await startSending();
+                      }}
+                      isDisabled={isOperating}
+                    >
+                      <Ionicons name="push-outline" size={16} color="#fff" />
+                      <Button.Label>{t("backup.lanSend")}</Button.Label>
+                    </Button>
+                  </View>
+                  <View className="flex-1">
+                    <Button
+                      testID="e2e-action-backup__index-lan-receive"
+                      variant="outline"
+                      size="sm"
+                      onPress={() => {
+                        resetReceive();
+                        setShowLANReceive(true);
+                      }}
+                      isDisabled={isOperating}
+                    >
+                      <Ionicons name="download-outline" size={16} color={mutedColor} />
+                      <Button.Label>{t("backup.lanReceive")}</Button.Label>
+                    </Button>
+                  </View>
+                </View>
+              </Card.Body>
+            </Card>
           </View>
         )}
 
@@ -630,6 +795,36 @@ export default function BackupScreen() {
         visible={showWebDAVConfig}
         onConnect={handleWebDAVConnect}
         onClose={() => setShowWebDAVConfig(false)}
+      />
+
+      {/* SFTP config sheet */}
+      <SFTPConfigSheet
+        visible={showSFTPConfig}
+        onConnect={handleSFTPConnect}
+        onClose={() => setShowSFTPConfig(false)}
+      />
+
+      {/* LAN Send sheet */}
+      <LANSendSheet
+        visible={showLANSend}
+        status={sendStatus}
+        info={sendInfo}
+        error={sendError}
+        onStop={stopSending}
+        onClose={() => setShowLANSend(false)}
+      />
+
+      {/* LAN Receive sheet */}
+      <LANReceiveSheet
+        visible={showLANReceive}
+        status={receiveStatus}
+        progress={receiveProgress}
+        error={receiveError}
+        onConnect={(host, port, pin) => startReceiving(host, port, pin)}
+        onClose={() => {
+          resetReceive();
+          setShowLANReceive(false);
+        }}
       />
 
       {/* Backup/Restore options sheet */}

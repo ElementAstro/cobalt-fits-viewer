@@ -34,6 +34,7 @@ import { GoogleDriveProvider } from "../lib/backup/providers/googleDrive";
 import { OneDriveProvider } from "../lib/backup/providers/onedrive";
 import { DropboxProvider } from "../lib/backup/providers/dropbox";
 import { WebDAVProvider } from "../lib/backup/providers/webdav";
+import { SFTPProvider } from "../lib/backup/providers/sftp";
 import type {
   CloudProvider,
   BackupOptions,
@@ -65,6 +66,9 @@ function getOrCreateProvider(type: CloudProvider): ICloudProvider {
         break;
       case "webdav":
         providers[type] = new WebDAVProvider();
+        break;
+      case "sftp":
+        providers[type] = new SFTPProvider();
         break;
     }
   }
@@ -524,6 +528,20 @@ export function useBackup() {
     ],
   );
 
+  const quickBackup = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    const provider = activeProvider ?? connections.find((c) => c.connected)?.provider ?? null;
+    if (!provider) {
+      return { success: false, error: "No provider connected" };
+    }
+    const options = useBackupStore.getState().lastUsedBackupOptions ?? DEFAULT_BACKUP_OPTIONS;
+    return backup(provider, options);
+  }, [activeProvider, connections, backup]);
+
+  const quickLocalExport = useCallback(async (): Promise<{ success: boolean; error?: string }> => {
+    const options = useBackupStore.getState().lastUsedBackupOptions ?? DEFAULT_BACKUP_OPTIONS;
+    return localExport(options);
+  }, [localExport]);
+
   const previewLocalImport = useCallback(async (): Promise<{
     success: boolean;
     cancelled?: boolean;
@@ -623,5 +641,7 @@ export function useBackup() {
     localImport,
     previewLocalImport,
     verifyBackup,
+    quickBackup,
+    quickLocalExport,
   };
 }

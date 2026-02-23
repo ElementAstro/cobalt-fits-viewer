@@ -17,6 +17,7 @@ import {
   withRetry,
 } from "./backupUtils";
 import type {
+  CloudProvider,
   BackupOptions,
   BackupProgress,
   BackupInfo,
@@ -68,7 +69,7 @@ export interface BackupDataSource {
     status: "running" | "paused";
   } | null;
   getBackupPrefs(): {
-    activeProvider: "google-drive" | "onedrive" | "dropbox" | "webdav" | null;
+    activeProvider: CloudProvider | null;
     autoBackupEnabled: boolean;
     autoBackupIntervalHours: number;
     autoBackupNetwork: "wifi" | "any";
@@ -105,7 +106,7 @@ export interface RestoreTarget {
     strategy?: RestoreConflictStrategy,
   ): void;
   setBackupPrefs(prefs: {
-    activeProvider: "google-drive" | "onedrive" | "dropbox" | "webdav" | null;
+    activeProvider: CloudProvider | null;
     autoBackupEnabled: boolean;
     autoBackupIntervalHours: number;
     autoBackupNetwork: "wifi" | "any";

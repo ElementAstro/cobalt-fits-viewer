@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
+import * as Notifications from "expo-notifications";
 import { File } from "expo-file-system";
 import { useVideoTaskStore } from "../stores/useVideoTaskStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
@@ -10,16 +11,32 @@ import {
   type VideoProcessingCapabilities,
   type VideoProcessingRequest,
 } from "../lib/video/engine";
-import { extractVideoMetadata } from "../lib/video/metadata";
+import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
 import { detectSupportedMediaFormat, toImageSourceFormat } from "../lib/import/fileFormat";
 import { generateFileId, importFile } from "../lib/utils/fileManager";
 import { copyThumbnailToCache, generateAndSaveThumbnail } from "../lib/gallery/thumbnailCache";
 import { classifyWithDetail } from "../lib/gallery/frameClassifier";
 import { parseRasterFromBufferAsync, extractRasterMetadata } from "../lib/image/rasterParser";
 import type { FitsMetadata } from "../lib/fits/types";
+import { useI18n } from "../i18n/useI18n";
 
 function deriveOutputEntries(taskOutput: string, extraOutputs?: string[]): string[] {
   return [taskOutput, ...(extraOutputs ?? [])];
+}
+
+async function notifyTaskResult(title: string, body: string): Promise<void> {
+  if (Platform.OS === "web") return;
+  if (AppState.currentState === "active") return;
+  try {
+    const { status } = await Notifications.getPermissionsAsync();
+    if (status !== "granted") return;
+    await Notifications.scheduleNotificationAsync({
+      content: { title, body },
+      trigger: null,
+    });
+  } catch {
+    // best effort
+  }
 }
 
 interface EnqueueProcessingResult {
@@ -61,6 +78,7 @@ export function useVideoProcessing() {
   const concurrency = useSettingsStore((s) => s.videoProcessingConcurrency);
   const videoProcessingEnabled = useSettingsStore((s) => s.videoProcessingEnabled);
 
+  const { t } = useI18n();
   const engine = useMemo(() => getVideoProcessingEngine(), []);
   const abortControllersRef = useRef<Map<string, AbortController>>(new Map());
   const [isEngineAvailable, setIsEngineAvailable] = useState(false);
@@ -119,7 +137,7 @@ export function useVideoProcessing() {
           importedFile.name,
           frameClassificationConfig,
         );
-        let videoMeta = {};
+        let videoMeta: Partial<VideoMetadataSnapshot> = {};
         try {
           videoMeta = await extractVideoMetadata(importedFile.uri);
         } catch {
@@ -138,17 +156,6 @@ export function useVideoProcessing() {
           }
         }
 
-        const meta = videoMeta as {
-          durationMs?: number;
-          frameRate?: number;
-          videoWidth?: number;
-          videoHeight?: number;
-          videoCodec?: string;
-          audioCodec?: string;
-          bitrateKbps?: number;
-          rotationDeg?: number;
-          hasAudioTrack?: boolean;
-        };
         const next: FitsMetadata = {
           id: fileId,
           filename: importedFile.name,
@@ -166,21 +173,21 @@ export function useVideoProcessing() {
           sourceFormat: toImageSourceFormat(format),
           mediaKind: "video",
           thumbnailUri,
-          durationMs: meta.durationMs,
-          frameRate: meta.frameRate,
-          videoWidth: meta.videoWidth,
-          videoHeight: meta.videoHeight,
-          videoCodec: meta.videoCodec,
-          audioCodec: meta.audioCodec,
-          bitrateKbps: meta.bitrateKbps,
-          rotationDeg: meta.rotationDeg,
-          hasAudioTrack: meta.hasAudioTrack,
+          durationMs: videoMeta.durationMs,
+          frameRate: videoMeta.frameRate,
+          videoWidth: videoMeta.videoWidth,
+          videoHeight: videoMeta.videoHeight,
+          videoCodec: videoMeta.videoCodec,
+          audioCodec: videoMeta.audioCodec,
+          bitrateKbps: videoMeta.bitrateKbps,
+          rotationDeg: videoMeta.rotationDeg,
+          hasAudioTrack: videoMeta.hasAudioTrack,
           thumbnailAtMs: source?.thumbnailAtMs ?? 1000,
           derivedFromId: source?.id,
           processingTag: request.operation,
           naxis: 2,
-          naxis1: meta.videoWidth,
-          naxis2: meta.videoHeight,
+          naxis1: videoMeta.videoWidth,
+          naxis2: videoMeta.videoHeight,
           naxis3: 1,
           bitpix: 8,
         };
@@ -195,19 +202,13 @@ export function useVideoProcessing() {
           importedFile.name,
           frameClassificationConfig,
         );
-        let audioMeta = {};
+        let audioMeta: Partial<VideoMetadataSnapshot> = {};
         try {
           audioMeta = await extractVideoMetadata(importedFile.uri);
         } catch {
           // best effort
         }
 
-        const meta = audioMeta as {
-          durationMs?: number;
-          audioCodec?: string;
-          bitrateKbps?: number;
-          hasAudioTrack?: boolean;
-        };
         const next: FitsMetadata = {
           id: fileId,
           filename: importedFile.name,
@@ -224,10 +225,10 @@ export function useVideoProcessing() {
           sourceType: "audio",
           sourceFormat: toImageSourceFormat(format),
           mediaKind: "audio",
-          durationMs: meta.durationMs,
-          audioCodec: meta.audioCodec,
-          bitrateKbps: meta.bitrateKbps,
-          hasAudioTrack: meta.hasAudioTrack ?? true,
+          durationMs: audioMeta.durationMs,
+          audioCodec: audioMeta.audioCodec,
+          bitrateKbps: audioMeta.bitrateKbps,
+          hasAudioTrack: audioMeta.hasAudioTrack ?? true,
           derivedFromId: source?.id,
           processingTag: request.operation,
         };
@@ -312,18 +313,26 @@ export function useVideoProcessing() {
           outputFileIds.push(await importOutputUri(task.request, outputUri));
         }
         markCompleted(taskId, outputEntries, outputFileIds, result.logLines);
+        void notifyTaskResult(
+          t("settings.videoNotifComplete"),
+          `${task.request.operation.toUpperCase()} — ${task.request.sourceFilename}`,
+        );
       } catch (error) {
         if (controller.signal.aborted) {
           markCancelled(taskId);
         } else {
           const parsed = parseEngineError(error);
           markFailed(taskId, parsed.message, [], parsed.code);
+          void notifyTaskResult(
+            t("settings.videoNotifFailed"),
+            `${task.request.operation.toUpperCase()} — ${task.request.sourceFilename}`,
+          );
         }
       } finally {
         abortControllersRef.current.delete(taskId);
       }
     },
-    [engine, importOutputUri, markCancelled, markCompleted, markFailed, markRunning, updateTask],
+    [engine, importOutputUri, markCancelled, markCompleted, markFailed, markRunning, updateTask, t],
   );
 
   useEffect(() => {

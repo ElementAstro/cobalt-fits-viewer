@@ -249,6 +249,8 @@ jest.mock("heroui-native", () => {
     TextArea,
     FieldError,
     Input: (props) => React.createElement(TextInput, { testID: "input", ...props }),
+    Description: (props) =>
+      React.createElement(Text, { testID: "description", ...props }, props.children),
     Label: (props) => React.createElement(Text, { testID: "label", ...props }, props.children),
     Switch,
     PressableFeedback,
@@ -257,6 +259,7 @@ jest.mock("heroui-native", () => {
     Skeleton,
     Surface: c("surface"),
     ScrollShadow: c("scroll-shadow"),
+    CloseButton: c("close-button"),
     HeroUINativeProvider: (props) => React.createElement(View, null, props.children),
     useThemeColor: (keys) => (Array.isArray(keys) ? keys.map(() => "#000000") : "#000000"),
   };

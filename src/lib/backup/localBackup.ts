@@ -267,7 +267,7 @@ function isZipPayload(bytes: Uint8Array): boolean {
   );
 }
 
-async function buildFullPackage(
+export async function buildFullPackage(
   manifest: BackupManifest,
   options: BackupOptions,
 ): Promise<{ zipFile: File; workingDir: Directory }> {
@@ -423,7 +423,7 @@ export async function exportLocalBackup(
   }
 }
 
-async function importFromPackage(
+export async function importFromPackage(
   restoreTarget: RestoreTarget,
   sourceUri: string,
   options: BackupOptions,

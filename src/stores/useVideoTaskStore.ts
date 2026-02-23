@@ -5,6 +5,9 @@ import type { VideoProcessingRequest } from "../lib/video/engine";
 
 export type VideoTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
+export const MAX_TASK_HISTORY = 100;
+export const MAX_VIDEO_RETRIES = 3;
+
 export interface VideoTaskRecord {
   id: string;
   request: VideoProcessingRequest;
@@ -62,7 +65,18 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
           retries: 0,
           logLines: [],
         };
-        set((state) => ({ tasks: [next, ...state.tasks] }));
+        set((state) => {
+          let tasks = [next, ...state.tasks];
+          if (tasks.length > MAX_TASK_HISTORY) {
+            const removable = new Set<VideoTaskStatus>(["completed", "cancelled", "failed"]);
+            for (let i = tasks.length - 1; i >= 0 && tasks.length > MAX_TASK_HISTORY; i--) {
+              if (removable.has(tasks[i].status)) {
+                tasks = [...tasks.slice(0, i), ...tasks.slice(i + 1)];
+              }
+            }
+          }
+          return { tasks };
+        });
         return id;
       },
 
@@ -137,7 +151,7 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
       retryTask: (id) =>
         set((state) => ({
           tasks: state.tasks.map((task) =>
-            task.id === id
+            task.id === id && task.retries < MAX_VIDEO_RETRIES
               ? {
                   ...task,
                   status: "pending",

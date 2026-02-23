@@ -41,6 +41,7 @@ export default function AboutSettingsScreen() {
   const setLogConsoleOutput = useSettingsStore((s) => s.setLogConsoleOutput);
   const setLogPersistEnabled = useSettingsStore((s) => s.setLogPersistEnabled);
   const resetOnboarding = useOnboardingStore((s) => s.resetOnboarding);
+  const resetTooltipGuide = useOnboardingStore((s) => s.resetTooltipGuide);
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
   const LOG_LEVEL_OPTIONS = [
@@ -193,6 +194,25 @@ export default function AboutSettingsScreen() {
         >
           <Ionicons name="book-outline" size={16} />
           <Button.Label>{t("onboarding.restartGuide")}</Button.Label>
+        </Button>
+
+        <View className="h-2" />
+
+        {/* Restart Tooltip Guide Only */}
+        <Button
+          variant="outline"
+          className="rounded-xl"
+          onPress={() => {
+            haptics.selection();
+            resetTooltipGuide();
+            haptics.notify(Haptics.NotificationFeedbackType.Success);
+          }}
+          accessibilityLabel={t("onboarding.restartTooltipGuide" as Parameters<typeof t>[0])}
+        >
+          <Ionicons name="chatbubble-ellipses-outline" size={16} />
+          <Button.Label>
+            {t("onboarding.restartTooltipGuide" as Parameters<typeof t>[0])}
+          </Button.Label>
         </Button>
 
         <View className="h-3" />

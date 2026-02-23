@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useVideoPlayerState } from "../../hooks/useVideoPlayerState";
 import { Alert, ScrollView, StatusBar, Text, View } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import { Ionicons } from "@expo/vector-icons";
@@ -15,13 +16,7 @@ import {
   Tabs,
   useThemeColor,
 } from "heroui-native";
-import {
-  VideoView,
-  isPictureInPictureSupported,
-  useVideoPlayer,
-  type AudioTrack,
-  type SubtitleTrack,
-} from "expo-video";
+import { VideoView, isPictureInPictureSupported, useVideoPlayer } from "expo-video";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { formatFileSize } from "../../lib/utils/fileManager";
@@ -29,7 +24,11 @@ import {
   formatVideoDuration,
   formatVideoDurationWithMs,
   formatVideoResolution,
+  translateEngineError,
+  taskStatusColor,
+  translateTaskStatus,
 } from "../../lib/video/format";
+import { AnimatedProgressBar } from "../../components/common/AnimatedProgressBar";
 import { shareFile, type MediaExportFormat } from "../../lib/utils/imageExport";
 import { useMediaLibrary } from "../../hooks/useMediaLibrary";
 import { useVideoProcessing } from "../../hooks/useVideoProcessing";
@@ -41,8 +40,6 @@ import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-
-const RATE_OPTIONS = [0.5, 1, 1.5, 2];
 
 function toMediaExportFormat(
   format?: string,
@@ -107,21 +104,6 @@ export default function VideoDetailScreen() {
   } = useVideoProcessing();
 
   const [activeTab, setActiveTab] = useState("info");
-  const [isPlayerReady, setIsPlayerReady] = useState(false);
-  const [playerStatus, setPlayerStatus] = useState<"idle" | "loading" | "readyToPlay" | "error">(
-    "idle",
-  );
-  const [playerError, setPlayerError] = useState<string | null>(null);
-  const [durationSec, setDurationSec] = useState(0);
-  const [currentTimeSec, setCurrentTimeSec] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [playbackRate, setPlaybackRate] = useState(1);
-  const [isMuted, setIsMuted] = useState(false);
-  const [volume, setVolume] = useState(1);
-  const [availableAudioTracks, setAvailableAudioTracks] = useState<AudioTrack[]>([]);
-  const [availableSubtitleTracks, setAvailableSubtitleTracks] = useState<SubtitleTrack[]>([]);
-  const [activeAudioTrackId, setActiveAudioTrackId] = useState<string | null>(null);
-  const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<string | null>(null);
   const [showProcessingSheet, setShowProcessingSheet] = useState(false);
   const [showQueueSheet, setShowQueueSheet] = useState(false);
   const [abLoopA, setAbLoopA] = useState<number | null>(null);
@@ -188,157 +170,41 @@ export default function VideoDetailScreen() {
 
   useEffect(() => {
     player.muted = videoMutedByDefault;
-    setIsMuted(videoMutedByDefault);
   }, [player, videoMutedByDefault]);
 
-  useEffect(() => {
-    setIsMuted(player.muted);
-    setVolume(player.volume ?? 1);
-    setAvailableAudioTracks(player.availableAudioTracks ?? []);
-    setAvailableSubtitleTracks(player.availableSubtitleTracks ?? []);
-    setActiveAudioTrackId(player.audioTrack?.id ?? null);
-    setActiveSubtitleTrackId(player.subtitleTrack?.id ?? null);
-
-    const subPlaying = player.addListener("playingChange", ({ isPlaying: next }) => {
-      setIsPlaying(next);
-    });
-    const subRate = player.addListener("playbackRateChange", ({ playbackRate: nextRate }) => {
-      setPlaybackRate(nextRate);
-    });
-    const subTime = player.addListener("timeUpdate", ({ currentTime }) => {
-      setCurrentTimeSec(currentTime);
-      if (abLoopA !== null && abLoopB !== null && currentTime >= abLoopB) {
-        player.currentTime = abLoopA;
-      }
-    });
-    const subLoad = player.addListener(
-      "sourceLoad",
-      ({ duration, availableAudioTracks, availableSubtitleTracks }) => {
-        setDurationSec(duration);
-        setAvailableAudioTracks(availableAudioTracks);
-        setAvailableSubtitleTracks(availableSubtitleTracks);
-        setIsPlayerReady(true);
-        setPlayerStatus("readyToPlay");
-        setPlayerError(null);
-      },
-    );
-    const subStatus = player.addListener("statusChange", ({ status, error }) => {
-      setPlayerStatus(status);
-      if (status === "readyToPlay") {
-        setIsPlayerReady(true);
-      }
-      if (status === "loading") {
-        setIsPlayerReady(false);
-      }
-      if (status === "error") {
-        setPlayerError(error?.message ?? t("settings.videoPlaybackError"));
-      }
-    });
-    const subMuted = player.addListener("mutedChange", ({ muted }) => {
-      setIsMuted(muted);
-    });
-    const subVolume = player.addListener("volumeChange", ({ volume }) => {
-      setVolume(volume);
-    });
-    const subSource = player.addListener("sourceChange", () => {
-      setIsPlayerReady(false);
-      setPlayerStatus("loading");
-      setPlayerError(null);
-      setCurrentTimeSec(0);
-      setDurationSec(0);
-      setAvailableAudioTracks([]);
-      setAvailableSubtitleTracks([]);
-      setActiveAudioTrackId(null);
-      setActiveSubtitleTrackId(null);
-    });
-    const subAudioTracks = player.addListener(
-      "availableAudioTracksChange",
-      ({ availableAudioTracks }) => {
-        setAvailableAudioTracks(availableAudioTracks);
-      },
-    );
-    const subSubtitleTracks = player.addListener(
-      "availableSubtitleTracksChange",
-      ({ availableSubtitleTracks }) => {
-        setAvailableSubtitleTracks(availableSubtitleTracks);
-      },
-    );
-    const subAudioTrack = player.addListener("audioTrackChange", ({ audioTrack }) => {
-      setActiveAudioTrackId(audioTrack?.id ?? null);
-    });
-    const subSubtitleTrack = player.addListener("subtitleTrackChange", ({ subtitleTrack }) => {
-      setActiveSubtitleTrackId(subtitleTrack?.id ?? null);
-    });
-
-    return () => {
-      subPlaying.remove();
-      subRate.remove();
-      subTime.remove();
-      subLoad.remove();
-      subStatus.remove();
-      subMuted.remove();
-      subVolume.remove();
-      subSource.remove();
-      subAudioTracks.remove();
-      subSubtitleTracks.remove();
-      subAudioTrack.remove();
-      subSubtitleTrack.remove();
-    };
-  }, [player, abLoopA, abLoopB, t]);
+  const {
+    isPlayerReady,
+    playerStatus,
+    playerError,
+    durationSec,
+    currentTimeSec,
+    isPlaying,
+    playbackRate,
+    isMuted,
+    volume,
+    availableAudioTracks,
+    availableSubtitleTracks,
+    activeAudioTrackId,
+    activeSubtitleTrackId,
+    handlePlayPause,
+    handleSeekBy,
+    handleSeekTo,
+    handleCycleRate,
+    handleToggleMute,
+    handleToggleLoop,
+    handleVolumeChange,
+    handleSelectAudioTrack,
+    handleSelectSubtitleTrack,
+    handleRetryPlayback,
+  } = useVideoPlayerState(player, haptics, {
+    abLoopA,
+    abLoopB,
+    errorFallbackMessage: t("settings.videoPlaybackError"),
+  });
 
   const fileTasks = useMemo(
     () => tasks.filter((task) => task.request.sourceId === file?.id),
     [file?.id, tasks],
-  );
-
-  const handlePlayPause = useCallback(() => {
-    haptics.selection();
-    if (player.playing) {
-      player.pause();
-      return;
-    }
-    player.play();
-  }, [player, haptics]);
-
-  const handleSeekBy = useCallback(
-    (deltaSeconds: number) => {
-      player.seekBy(deltaSeconds);
-    },
-    [player],
-  );
-
-  const handleSeekTo = useCallback(
-    (nextSeconds: number) => {
-      const safeDuration = Number.isFinite(durationSec) && durationSec > 0 ? durationSec : 0;
-      const clamped = Math.max(0, Math.min(safeDuration, nextSeconds));
-      player.currentTime = clamped;
-      setCurrentTimeSec(clamped);
-    },
-    [durationSec, player],
-  );
-
-  const handleCycleRate = useCallback(() => {
-    haptics.selection();
-    const current = RATE_OPTIONS.findIndex((value) => value === playbackRate);
-    const next = RATE_OPTIONS[(current + 1) % RATE_OPTIONS.length];
-    player.playbackRate = next;
-  }, [playbackRate, player, haptics]);
-
-  const handleToggleMute = useCallback(() => {
-    haptics.selection();
-    player.muted = !player.muted;
-  }, [player, haptics]);
-
-  const handleToggleLoop = useCallback(() => {
-    haptics.selection();
-    player.loop = !player.loop;
-  }, [player, haptics]);
-
-  const handleVolumeChange = useCallback(
-    (next: number) => {
-      player.volume = Math.max(0, Math.min(1, next));
-    },
-    [player],
   );
 
   const handleSetAbLoopA = useCallback(() => {
@@ -358,37 +224,6 @@ export default function VideoDetailScreen() {
     setAbLoopA(null);
     setAbLoopB(null);
   }, [haptics]);
-
-  const handleSelectAudioTrack = useCallback(
-    (trackId: string | null) => {
-      if (!trackId) {
-        player.audioTrack = null;
-        return;
-      }
-      const selected = availableAudioTracks.find((track) => track.id === trackId) ?? null;
-      player.audioTrack = selected;
-    },
-    [availableAudioTracks, player],
-  );
-
-  const handleSelectSubtitleTrack = useCallback(
-    (trackId: string | null) => {
-      if (!trackId) {
-        player.subtitleTrack = null;
-        return;
-      }
-      const selected = availableSubtitleTracks.find((track) => track.id === trackId) ?? null;
-      player.subtitleTrack = selected;
-    },
-    [availableSubtitleTracks, player],
-  );
-
-  const handleRetryPlayback = useCallback(() => {
-    setPlayerError(null);
-    setPlayerStatus("loading");
-    setIsPlayerReady(false);
-    player.replay();
-  }, [player]);
 
   const handleFullscreen = useCallback(async () => {
     haptics.selection();
@@ -932,24 +767,20 @@ export default function VideoDetailScreen() {
                   <Text className="text-sm font-semibold text-foreground">
                     {task.request.operation.toUpperCase()}
                   </Text>
-                  <Chip
-                    size="sm"
-                    variant="soft"
-                    color={
-                      task.status === "completed"
-                        ? "success"
-                        : task.status === "failed"
-                          ? "danger"
-                          : task.status === "running"
-                            ? "warning"
-                            : "default"
-                    }
-                  >
-                    <Chip.Label>{task.status}</Chip.Label>
+                  <Chip size="sm" variant="soft" color={taskStatusColor(task.status)}>
+                    <Chip.Label>{translateTaskStatus(task.status, t)}</Chip.Label>
                   </Chip>
                 </View>
                 <Text className="text-xs text-muted">{Math.round(task.progress * 100)}%</Text>
-                {!!task.error && <Text className="text-xs text-danger">{task.error}</Text>}
+                {(task.status === "running" || task.status === "completed") && (
+                  <AnimatedProgressBar
+                    progress={task.progress * 100}
+                    color={task.status === "completed" ? "#22c55e" : undefined}
+                  />
+                )}
+                {!!task.error && (
+                  <Text className="text-xs text-danger">{translateEngineError(task.error, t)}</Text>
+                )}
                 {!!task.engineErrorCode && (
                   <Text className="text-[10px] text-muted">
                     {t("settings.videoErrorCodeLabel", { code: task.engineErrorCode })}

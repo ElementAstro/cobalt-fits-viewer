@@ -136,6 +136,69 @@ describe("exportCore.encodeExportRequest", () => {
     expect(result.extension).toBe("tiff");
   });
 
+  it("uses encodeTiffDocument with scientific pixels for single-page TIFF at 32-bit", async () => {
+    const result = await encodeExportRequest({
+      rgbaData: new Uint8ClampedArray([0, 0, 0, 255]),
+      width: 1,
+      height: 1,
+      filename: "astro.tiff",
+      format: "tiff",
+      bitDepth: 32,
+      tiff: { compression: "lzw", multipage: "firstFrame", bitDepth: 32 },
+      source: {
+        sourceType: "fits",
+        sourceFormat: "fits",
+        scientificPixels: new Float32Array([0.42]),
+      },
+    });
+
+    expect(mockEncodeTiffDocument).toHaveBeenCalled();
+    const pages = mockEncodeTiffDocument.mock.calls[0][0];
+    expect(pages[0].bitDepth).toBe(32);
+    expect(pages[0].sampleFormat).toBe("float");
+    expect(pages[0].pixels).toEqual(new Float32Array([0.42]));
+    expect(mockEncodeTiff).not.toHaveBeenCalled();
+    expect(result.bytes).toEqual(new Uint8Array([9, 9]));
+    expect(result.extension).toBe("tiff");
+  });
+
+  it("falls back to rgba path for single-page TIFF at 8-bit even with scientific data", async () => {
+    const result = await encodeExportRequest({
+      rgbaData: new Uint8ClampedArray([128, 128, 128, 255]),
+      width: 1,
+      height: 1,
+      filename: "low.tiff",
+      format: "tiff",
+      bitDepth: 8,
+      tiff: { compression: "none", multipage: "firstFrame", bitDepth: 8 },
+      source: {
+        sourceType: "fits",
+        sourceFormat: "fits",
+        scientificPixels: new Float32Array([0.5]),
+      },
+    });
+
+    expect(mockEncodeTiff).toHaveBeenCalled();
+    expect(mockEncodeTiffDocument).not.toHaveBeenCalled();
+    expect(result.bytes).toEqual(new Uint8Array([8, 8, 8]));
+  });
+
+  it("passes dpi from tiff options through to encoder", async () => {
+    await encodeExportRequest({
+      rgbaData: new Uint8ClampedArray([0, 0, 0, 255]),
+      width: 1,
+      height: 1,
+      filename: "hi-res.tiff",
+      format: "tiff",
+      tiff: { compression: "lzw", multipage: "firstFrame", bitDepth: 8, dpi: 300 },
+      source: { sourceType: "raster", sourceFormat: "png" },
+    });
+
+    expect(mockEncodeTiff).toHaveBeenCalled();
+    const opts = mockEncodeTiff.mock.calls[0][3];
+    expect(opts.dpi).toBe(300);
+  });
+
   it("encodes XISF by converting intermediate FITS via fitsjs-ng", async () => {
     const result = await encodeExportRequest({
       rgbaData: new Uint8ClampedArray([0, 0, 0, 255]),

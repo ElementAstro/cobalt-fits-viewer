@@ -5,7 +5,7 @@
  * Uses heroui-native components and react-native-reanimated for animations.
  */
 
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
@@ -15,6 +15,7 @@ import Animated, {
   withTiming,
   runOnJS,
 } from "react-native-reanimated";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { Button, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
@@ -196,6 +197,22 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     transform: [{ translateX: contentTranslateX.value }],
   }));
 
+  const swipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .activeOffsetX([-20, 20])
+        .failOffsetY([-15, 15])
+        .onEnd((e) => {
+          "worklet";
+          if (e.translationX < -50 && !isLast) {
+            runOnJS(handleNext)();
+          } else if (e.translationX > 50 && !isFirst) {
+            runOnJS(handlePrev)();
+          }
+        }),
+    [isFirst, isLast, handleNext, handlePrev],
+  );
+
   const iconSize = isLandscape ? 56 : 96;
   const iconFontSize = isLandscape ? 28 : 48;
 
@@ -222,74 +239,76 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       )}
 
       {/* Main content — scrollable for landscape / small screens */}
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={false}
-      >
-        <Animated.View style={[styles.content, contentAnimStyle]}>
-          {/* Icon */}
-          <View
-            style={[
-              styles.iconCircle,
-              {
-                width: iconSize,
-                height: iconSize,
-                borderRadius: iconSize / 2,
-                borderColor: accentColor,
-                backgroundColor: `${accentColor}10`,
-                marginBottom: isLandscape ? 12 : 24,
-              },
-            ]}
-          >
-            <Ionicons name={step.icon} size={iconFontSize} color={accentColor} />
-          </View>
+      <GestureDetector gesture={swipeGesture}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+        >
+          <Animated.View style={[styles.content, contentAnimStyle]}>
+            {/* Icon */}
+            <View
+              style={[
+                styles.iconCircle,
+                {
+                  width: iconSize,
+                  height: iconSize,
+                  borderRadius: iconSize / 2,
+                  borderColor: accentColor,
+                  backgroundColor: `${accentColor}10`,
+                  marginBottom: isLandscape ? 12 : 24,
+                },
+              ]}
+            >
+              <Ionicons name={step.icon} size={iconFontSize} color={accentColor} />
+            </View>
 
-          {/* Step indicator */}
-          <View style={[styles.stepIndicator, { marginBottom: isLandscape ? 12 : 24 }]}>
-            {STEPS.map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.dot,
-                  {
-                    backgroundColor: index === currentStep ? accentColor : `${mutedColor}40`,
-                    width: index === currentStep ? 24 : 8,
-                  },
-                ]}
-              />
-            ))}
-          </View>
-
-          {/* Title & Description */}
-          <Text
-            style={[styles.title, isLandscape && { fontSize: 20, marginBottom: 4 }]}
-            className="text-foreground"
-          >
-            {t(step.titleKey as Parameters<typeof t>[0])}
-          </Text>
-          <Text style={styles.description} className="text-muted">
-            {t(step.descriptionKey as Parameters<typeof t>[0])}
-          </Text>
-
-          {/* Feature list card */}
-          <Card variant="secondary" className={`w-full ${isLandscape ? "mt-3" : "mt-6"}`}>
-            <Card.Body className="px-4 py-3 gap-3">
-              {step.features.map((featureKey, index) => (
-                <View key={index}>
-                  <View style={styles.featureRow}>
-                    <Ionicons name="checkmark-circle" size={18} color={accentColor} />
-                    <Text className="ml-3 flex-1 text-sm text-foreground">
-                      {t(featureKey as Parameters<typeof t>[0])}
-                    </Text>
-                  </View>
-                  {index < step.features.length - 1 && <Separator className="mt-3" />}
-                </View>
+            {/* Step indicator */}
+            <View style={[styles.stepIndicator, { marginBottom: isLandscape ? 12 : 24 }]}>
+              {STEPS.map((_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.dot,
+                    {
+                      backgroundColor: index === currentStep ? accentColor : `${mutedColor}40`,
+                      width: index === currentStep ? 24 : 8,
+                    },
+                  ]}
+                />
               ))}
-            </Card.Body>
-          </Card>
-        </Animated.View>
-      </ScrollView>
+            </View>
+
+            {/* Title & Description */}
+            <Text
+              style={[styles.title, isLandscape && { fontSize: 20, marginBottom: 4 }]}
+              className="text-foreground"
+            >
+              {t(step.titleKey as Parameters<typeof t>[0])}
+            </Text>
+            <Text style={styles.description} className="text-muted">
+              {t(step.descriptionKey as Parameters<typeof t>[0])}
+            </Text>
+
+            {/* Feature list card */}
+            <Card variant="secondary" className={`w-full ${isLandscape ? "mt-3" : "mt-6"}`}>
+              <Card.Body className="px-4 py-3 gap-3">
+                {step.features.map((featureKey, index) => (
+                  <View key={index}>
+                    <View style={styles.featureRow}>
+                      <Ionicons name="checkmark-circle" size={18} color={accentColor} />
+                      <Text className="ml-3 flex-1 text-sm text-foreground">
+                        {t(featureKey as Parameters<typeof t>[0])}
+                      </Text>
+                    </View>
+                    {index < step.features.length - 1 && <Separator className="mt-3" />}
+                  </View>
+                ))}
+              </Card.Body>
+            </Card>
+          </Animated.View>
+        </ScrollView>
+      </GestureDetector>
 
       {/* Bottom navigation */}
       <View style={styles.bottomNav}>

@@ -21,6 +21,7 @@ beforeEach(() => {
     lastAutoBackupResult: null,
     lastAutoBackupError: null,
     history: [],
+    lastUsedBackupOptions: null,
     lastError: null,
   });
 });
@@ -225,6 +226,53 @@ describe("useBackupStore", () => {
 
       useBackupStore.getState().clearHistory();
       expect(useBackupStore.getState().history).toHaveLength(0);
+    });
+  });
+
+  describe("lastUsedBackupOptions", () => {
+    it("should store last used backup options", () => {
+      const options = {
+        includeFiles: true,
+        includeAlbums: true,
+        includeTargets: false,
+        includeSessions: true,
+        includeSettings: true,
+        includeThumbnails: false,
+        localPayloadMode: "full" as const,
+        localEncryption: { enabled: false },
+      };
+      useBackupStore.getState().setLastUsedBackupOptions(options);
+      expect(useBackupStore.getState().lastUsedBackupOptions).toEqual(options);
+    });
+
+    it("should default to null", () => {
+      expect(useBackupStore.getState().lastUsedBackupOptions).toBeNull();
+    });
+  });
+
+  describe("history with new types", () => {
+    it("should add lan-send history entry", () => {
+      useBackupStore.getState().addHistoryEntry({
+        type: "lan-send",
+        provider: "local",
+        result: "success",
+      });
+      const { history } = useBackupStore.getState();
+      expect(history).toHaveLength(1);
+      expect(history[0].type).toBe("lan-send");
+    });
+
+    it("should add lan-receive history entry", () => {
+      useBackupStore.getState().addHistoryEntry({
+        type: "lan-receive",
+        provider: "local",
+        result: "failed",
+        error: "connection lost",
+      });
+      const { history } = useBackupStore.getState();
+      expect(history).toHaveLength(1);
+      expect(history[0].type).toBe("lan-receive");
+      expect(history[0].error).toBe("connection lost");
     });
   });
 

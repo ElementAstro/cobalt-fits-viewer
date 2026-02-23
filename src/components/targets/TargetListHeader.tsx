@@ -9,6 +9,7 @@ import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { EmptyState } from "../common/EmptyState";
+import { GuideTarget } from "../common/GuideTarget";
 import { STATUS_COLORS, TARGET_STATUSES } from "../../lib/targets/targetConstants";
 import type { TargetType, TargetStatus, TargetGroup, Target } from "../../lib/fits/types";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
@@ -544,15 +545,17 @@ export const TargetListHeader = React.memo(function TargetListHeader(props: Targ
 
   return (
     <View className="px-4">
-      <TargetHeaderActions
-        actions={headerActions}
-        compact={useCompactHeaderActions}
-        gapClassName={headerActionGapClassName}
-        buttonSize={headerActionButtonSize}
-        iconSize={actionIconSize}
-        title={t("targets.title")}
-        subtitle={`${t("targets.subtitle")} (${targets.length})`}
-      />
+      <GuideTarget name="targets-add" page="targets" order={0}>
+        <TargetHeaderActions
+          actions={headerActions}
+          compact={useCompactHeaderActions}
+          gapClassName={headerActionGapClassName}
+          buttonSize={headerActionButtonSize}
+          iconSize={actionIconSize}
+          title={t("targets.title")}
+          subtitle={`${t("targets.subtitle")} (${targets.length})`}
+        />
+      </GuideTarget>
 
       <TargetStatusSummary
         targets={targets}

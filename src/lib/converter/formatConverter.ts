@@ -575,8 +575,15 @@ export function estimateFileSize(width: number, height: number, options: Convert
     case "webp":
       return Math.round(totalPixels * 3 * (options.quality / 100) * 0.1);
     case "tiff": {
-      const bytesPerPixel = options.bitDepth / 8;
-      return totalPixels * bytesPerPixel;
+      const bytesPerSample = options.bitDepth / 8;
+      const samplesPerPixel = 3;
+      const compressionRatio =
+        options.tiff.compression === "lzw"
+          ? 0.65
+          : options.tiff.compression === "deflate"
+            ? 0.55
+            : 1.0;
+      return Math.round(totalPixels * bytesPerSample * samplesPerPixel * compressionRatio) + 512;
     }
     case "bmp":
       return totalPixels * 3 + 54; // 24-bit BMP + header

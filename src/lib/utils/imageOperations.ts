@@ -1256,7 +1256,7 @@ const B3_KERNEL = [
 /**
  * à trous 平滑 (单层)
  */
-function atrousSmooth(
+export function atrousSmooth(
   pixels: Float32Array,
   width: number,
   height: number,
@@ -1882,6 +1882,123 @@ export function deconvolutionAuto(
   return richardsonLucy(pixels, width, height, psfSigma, iterations, regularization);
 }
 
+// ===== Edge Mask (Sobel 梯度) =====
+
+/**
+ * 创建边缘检测掩膜
+ * Sobel 3×3 卷积 → gradient magnitude → 归一化 → 阈值 → 后模糊
+ */
+export function createEdgeMask(
+  pixels: Float32Array,
+  width: number,
+  height: number,
+  options?: {
+    preBlurSigma?: number;
+    threshold?: number;
+    postBlurSigma?: number;
+  },
+): Float32Array {
+  const preBlur = Math.max(0, options?.preBlurSigma ?? 1);
+  const threshold = Math.max(0, Math.min(1, options?.threshold ?? 0.1));
+  const postBlur = Math.max(0, options?.postBlurSigma ?? 1);
+  const n = width * height;
+
+  // 预模糊
+  const blurred = preBlur > 0.1 ? gaussianBlur(pixels, width, height, preBlur) : pixels;
+
+  // Sobel 梯度
+  const grad = new Float32Array(n);
+  let maxGrad = 0;
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idx = y * width + x;
+      const tl = blurred[(y - 1) * width + (x - 1)];
+      const tc = blurred[(y - 1) * width + x];
+      const tr = blurred[(y - 1) * width + (x + 1)];
+      const ml = blurred[y * width + (x - 1)];
+      const mr = blurred[y * width + (x + 1)];
+      const bl = blurred[(y + 1) * width + (x - 1)];
+      const bc = blurred[(y + 1) * width + x];
+      const br = blurred[(y + 1) * width + (x + 1)];
+
+      const gx = -tl - 2 * ml - bl + tr + 2 * mr + br;
+      const gy = -tl - 2 * tc - tr + bl + 2 * bc + br;
+      const magnitude = Math.sqrt(gx * gx + gy * gy);
+      grad[idx] = magnitude;
+      if (magnitude > maxGrad) maxGrad = magnitude;
+    }
+  }
+
+  // 归一化 + 阈值
+  if (maxGrad > 0) {
+    const invMax = 1 / maxGrad;
+    for (let i = 0; i < n; i++) {
+      const v = grad[i] * invMax;
+      grad[i] = v > threshold ? Math.min(1, (v - threshold) / (1 - threshold)) : 0;
+    }
+  }
+
+  // 后模糊
+  return postBlur > 0.1 ? gaussianBlur(grad, width, height, postBlur) : grad;
+}
+
+// ===== Luminance Mask =====
+
+/**
+ * 从 RGBA 数据创建亮度掩膜
+ * 提取亮度通道 → 可选反转 → MTF 拉伸 → 模糊
+ */
+export function createLuminanceMask(
+  rgbaData: Uint8ClampedArray,
+  width: number,
+  height: number,
+  options?: {
+    invert?: boolean;
+    midtoneBalance?: number;
+    blurSigma?: number;
+  },
+): Float32Array {
+  const invert = options?.invert ?? false;
+  const midtoneBalance = Math.max(0.01, Math.min(0.99, options?.midtoneBalance ?? 0.5));
+  const blurSigma = Math.max(0, options?.blurSigma ?? 0);
+  const n = width * height;
+
+  // 提取亮度
+  const mask = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const off = i * 4;
+    const r = rgbaData[off] / 255;
+    const g = rgbaData[off + 1] / 255;
+    const b = rgbaData[off + 2] / 255;
+    let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (invert) lum = 1 - lum;
+    mask[i] = lum;
+  }
+
+  // MTF 拉伸 (复用 mtf 函数逻辑)
+  if (midtoneBalance !== 0.5) {
+    for (let i = 0; i < n; i++) {
+      const x = Math.max(0, Math.min(1, mask[i]));
+      if (x <= 0) {
+        mask[i] = 0;
+      } else if (x >= 1) {
+        mask[i] = 1;
+      } else {
+        mask[i] = ((midtoneBalance - 1) * x) / ((2 * midtoneBalance - 1) * x - midtoneBalance);
+      }
+    }
+  }
+
+  // 模糊
+  if (blurSigma > 0.1) {
+    const blurred = gaussianBlur(mask, width, height, blurSigma);
+    return blurred;
+  }
+
+  return mask;
+}
+
 // ===== 操作类型定义 =====
 
 export type ScientificImageOperation =
@@ -1924,7 +2041,22 @@ export type ScientificImageOperation =
   | { type: "multiscaleDenoise"; layers: number; threshold: number }
   | { type: "localContrast"; sigma: number; amount: number }
   | { type: "starReduction"; scale: number; strength: number }
-  | { type: "deconvolutionAuto"; iterations: number; regularization: number };
+  | { type: "deconvolutionAuto"; iterations: number; regularization: number }
+  | { type: "cosmeticCorrection"; hotSigma: number; coldSigma: number; useMedian: boolean }
+  | {
+      type: "tgvDenoise";
+      strength: number;
+      smoothness: number;
+      iterations: number;
+      edgeProtection: number;
+    }
+  | { type: "mmt"; layers: number; noiseThreshold: number; noiseReduction: number; bias: number }
+  | { type: "bilateralFilter"; spatialSigma: number; rangeSigma: number }
+  | { type: "waveletSharpen"; layers: number; amount: number; protectStars: boolean }
+  | { type: "wienerDeconvolution"; psfSigma: number; noiseRatio: number }
+  | { type: "integerBin"; factor: number; mode: "average" | "sum" | "median" }
+  | { type: "resample"; targetScale: number; method: "bilinear" | "bicubic" | "lanczos3" }
+  | { type: "edgeMask"; preBlurSigma: number; threshold: number; postBlurSigma: number };
 
 export type ColorImageOperation =
   | { type: "scnr"; method: "averageNeutral" | "maximumNeutral"; amount: number }
@@ -2061,6 +2193,83 @@ export function applyOperation(
     case "deconvolutionAuto":
       return {
         pixels: deconvolutionAuto(pixels, width, height, op.iterations, op.regularization),
+        width,
+        height,
+      };
+    case "cosmeticCorrection": {
+      const { cosmeticCorrection: cc } = require("../processing/cosmeticCorrection");
+      return {
+        pixels: cc(pixels, width, height, {
+          hotSigma: op.hotSigma,
+          coldSigma: op.coldSigma,
+          useMedian: op.useMedian,
+        }).pixels,
+        width,
+        height,
+      };
+    }
+    case "tgvDenoise": {
+      const { tgvDenoise: tgv } = require("../processing/tgvDenoise");
+      return {
+        pixels: tgv(pixels, width, height, {
+          strength: op.strength,
+          smoothness: op.smoothness,
+          iterations: op.iterations,
+          edgeProtection: op.edgeProtection,
+        }),
+        width,
+        height,
+      };
+    }
+    case "mmt": {
+      const {
+        multiscaleMedianTransform: mmtFn,
+      } = require("../processing/multiscaleMedianTransform");
+      const layerConfigs = Array.from({ length: op.layers }, () => ({
+        noiseThreshold: op.noiseThreshold,
+        noiseReduction: op.noiseReduction,
+        bias: op.bias,
+      }));
+      return { pixels: mmtFn(pixels, width, height, layerConfigs), width, height };
+    }
+    case "bilateralFilter": {
+      const { bilateralFilter: bf } = require("../processing/bilateralFilter");
+      return { pixels: bf(pixels, width, height, op.spatialSigma, op.rangeSigma), width, height };
+    }
+    case "waveletSharpen": {
+      const { waveletSharpen: ws } = require("../processing/waveletSharpen");
+      const wsLayers = Array.from({ length: op.layers }, () => ({ amount: op.amount }));
+      return {
+        pixels: ws(pixels, width, height, wsLayers, { protectStars: op.protectStars }),
+        width,
+        height,
+      };
+    }
+    case "wienerDeconvolution": {
+      const { wienerDeconvolution: wd } = require("../processing/wienerDeconvolution");
+      return {
+        pixels: wd(pixels, width, height, { psfSigma: op.psfSigma, noiseRatio: op.noiseRatio }),
+        width,
+        height,
+      };
+    }
+    case "integerBin": {
+      const { integerBin: ib } = require("../processing/resample");
+      return ib(pixels, width, height, op.factor, op.mode);
+    }
+    case "resample": {
+      const { resampleImage: ri } = require("../processing/resample");
+      const tw = Math.round(width * op.targetScale);
+      const th = Math.round(height * op.targetScale);
+      return ri(pixels, width, height, tw, th, op.method);
+    }
+    case "edgeMask":
+      return {
+        pixels: createEdgeMask(pixels, width, height, {
+          preBlurSigma: op.preBlurSigma,
+          threshold: op.threshold,
+          postBlurSigma: op.postBlurSigma,
+        }),
         width,
         height,
       };

@@ -2,14 +2,15 @@
  * 添加云服务选择器组件
  */
 
-import { View, Text } from "react-native";
+import { View, Text, Platform } from "react-native";
 import { BottomSheet, PressableFeedback, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { CloudProvider } from "../../lib/backup/types";
 import { PROVIDER_DISPLAY } from "../../lib/backup/types";
 
-const ALL_PROVIDERS: CloudProvider[] = ["google-drive", "onedrive", "dropbox", "webdav"];
+const ALL_PROVIDERS: CloudProvider[] = ["google-drive", "onedrive", "dropbox", "webdav", "sftp"];
+const WEB_UNSUPPORTED: CloudProvider[] = ["google-drive", "onedrive", "dropbox", "sftp"];
 
 interface AddProviderSheetProps {
   visible: boolean;
@@ -27,7 +28,10 @@ export function AddProviderSheet({
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
 
-  const availableProviders = ALL_PROVIDERS.filter((p) => !existingProviders.includes(p));
+  const availableProviders = ALL_PROVIDERS.filter(
+    (p) =>
+      !existingProviders.includes(p) && !(Platform.OS === "web" && WEB_UNSUPPORTED.includes(p)),
+  );
 
   return (
     <BottomSheet

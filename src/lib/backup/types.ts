@@ -16,7 +16,7 @@ import type {
 import type { AstrometryConfig, AstrometryJob } from "../astrometry/types";
 
 // ===== 云服务提供商 =====
-export type CloudProvider = "google-drive" | "onedrive" | "dropbox" | "webdav";
+export type CloudProvider = "google-drive" | "onedrive" | "dropbox" | "webdav" | "sftp";
 
 export interface BackupBinaryInfo {
   remotePath?: string;
@@ -126,6 +126,12 @@ export interface CloudProviderConfig {
   webdavUrl?: string;
   webdavUsername?: string;
   webdavPassword?: string;
+  // SFTP
+  sftpHost?: string;
+  sftpPort?: number;
+  sftpUsername?: string;
+  sftpPassword?: string;
+  sftpRemotePath?: string;
 }
 
 // ===== 远端文件信息 =====
@@ -251,6 +257,11 @@ export const PROVIDER_DISPLAY: Record<
     name: "WebDAV",
     icon: "server-outline",
     color: "#FF6600",
+  },
+  sftp: {
+    name: "SFTP",
+    icon: "terminal-outline",
+    color: "#2ECC71",
   },
 };
 

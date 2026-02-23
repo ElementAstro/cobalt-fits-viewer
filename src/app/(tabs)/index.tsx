@@ -29,6 +29,7 @@ import {
   UndoSnackbar,
 } from "../../components/files";
 import { SelectionActionsSheet } from "../../components/files/SelectionActionsSheet";
+import { GuideTarget } from "../../components/common/GuideTarget";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { routeForMedia } from "../../lib/media/routing";
@@ -658,20 +659,22 @@ export default function FilesScreen() {
           isLandscape={isLandscape}
         />
 
-        <FilesToolbar
-          isSelectionMode={isSelectionMode}
-          selectedCount={selectedIds.length}
-          trashCount={trashItems.length}
-          shouldStack={shouldStackTopActions}
-          onImport={openImportSheet}
-          onEnterSelection={() => setSelectionMode(true)}
-          onConvert={() => router.push("/convert")}
-          onTrash={() => setShowTrashSheet(true)}
-          onSelectAllVisible={handleSelectAllVisible}
-          onMoreActions={() => setShowSelectionActions(true)}
-          onBatchDelete={handleBatchDelete}
-          onClearSelection={clearSelection}
-        />
+        <GuideTarget name="files-import" page="files" order={0}>
+          <FilesToolbar
+            isSelectionMode={isSelectionMode}
+            selectedCount={selectedIds.length}
+            trashCount={trashItems.length}
+            shouldStack={shouldStackTopActions}
+            onImport={openImportSheet}
+            onEnterSelection={() => setSelectionMode(true)}
+            onConvert={() => router.push("/convert")}
+            onTrash={() => setShowTrashSheet(true)}
+            onSelectAllVisible={handleSelectAllVisible}
+            onMoreActions={() => setShowSelectionActions(true)}
+            onBatchDelete={handleBatchDelete}
+            onClearSelection={clearSelection}
+          />
+        </GuideTarget>
 
         {isSelectionMode && (
           <FilesSelectionBar
@@ -684,15 +687,17 @@ export default function FilesScreen() {
 
         {allFiles.length > 0 && (
           <>
-            <FilesSortBar
-              sortBy={sortBy}
-              sortOrder={sortOrder}
-              fileListStyle={fileListStyle}
-              fileListGridColumns={fileListGridColumns}
-              onSortToggle={handleSortToggle}
-              onStyleChange={setFileListStyle}
-              onGridColumnsChange={setFileListGridColumns}
-            />
+            <GuideTarget name="files-sort" page="files" order={1}>
+              <FilesSortBar
+                sortBy={sortBy}
+                sortOrder={sortOrder}
+                fileListStyle={fileListStyle}
+                fileListGridColumns={fileListGridColumns}
+                onSortToggle={handleSortToggle}
+                onStyleChange={setFileListStyle}
+                onGridColumnsChange={setFileListGridColumns}
+              />
+            </GuideTarget>
 
             <FilesFilterBar
               favoriteOnly={filters.favoriteOnly}

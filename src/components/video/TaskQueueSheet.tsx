@@ -1,6 +1,11 @@
 import { ScrollView, Text, View } from "react-native";
-import { Button, Card, Chip, Dialog, Spinner } from "heroui-native";
+import { Accordion, Button, Card, Chip, Dialog, Spinner, useThemeColor } from "heroui-native";
+import * as Clipboard from "expo-clipboard";
+import { Ionicons } from "@expo/vector-icons";
 import type { VideoTaskRecord } from "../../stores/useVideoTaskStore";
+import { MAX_VIDEO_RETRIES } from "../../stores/useVideoTaskStore";
+import { translateEngineError, taskStatusColor, translateTaskStatus } from "../../lib/video/format";
+import { AnimatedProgressBar } from "../common/AnimatedProgressBar";
 import { useI18n } from "../../i18n/useI18n";
 
 interface TaskQueueSheetProps {
@@ -12,15 +17,6 @@ interface TaskQueueSheetProps {
   onRemoveTask: (taskId: string) => void;
   onClearFinished: () => void;
   onOpenOutputFile?: (fileId: string) => void;
-}
-
-function statusColor(
-  status: VideoTaskRecord["status"],
-): "default" | "success" | "danger" | "warning" {
-  if (status === "completed") return "success";
-  if (status === "failed") return "danger";
-  if (status === "running") return "warning";
-  return "default";
 }
 
 function progressLabel(task: VideoTaskRecord): string {
@@ -42,6 +38,7 @@ export function TaskQueueSheet({
   onOpenOutputFile,
 }: TaskQueueSheetProps) {
   const { t } = useI18n();
+  const mutedColor = useThemeColor("muted");
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
@@ -64,15 +61,65 @@ export function TaskQueueSheet({
                       <Text className="flex-1 text-sm font-semibold text-foreground">
                         {task.request.operation.toUpperCase()} · {task.request.sourceFilename}
                       </Text>
-                      <Chip size="sm" variant="soft" color={statusColor(task.status)}>
-                        <Chip.Label className="text-[10px]">{task.status}</Chip.Label>
+                      <Chip size="sm" variant="soft" color={taskStatusColor(task.status)}>
+                        <Chip.Label className="text-[10px]">
+                          {translateTaskStatus(task.status, t)}
+                        </Chip.Label>
                       </Chip>
                     </View>
                     <View className="flex-row items-center justify-between">
                       <Text className="text-xs text-muted">{progressLabel(task)}</Text>
                       {task.status === "running" && <Spinner size="sm" />}
                     </View>
-                    {!!task.error && <Text className="text-xs text-danger">{task.error}</Text>}
+                    {(task.status === "running" || task.status === "completed") && (
+                      <AnimatedProgressBar
+                        progress={task.progress * 100}
+                        color={task.status === "completed" ? "#22c55e" : undefined}
+                      />
+                    )}
+                    {!!task.error && (
+                      <Text className="text-xs text-danger">
+                        {translateEngineError(task.error, t)}
+                      </Text>
+                    )}
+                    {task.logLines.length > 0 && (
+                      <Accordion>
+                        <Accordion.Item value="logs">
+                          <Accordion.Trigger>
+                            <Text className="flex-1 text-[10px] text-muted">
+                              FFmpeg Log ({task.logLines.length})
+                            </Text>
+                            <Accordion.Indicator />
+                          </Accordion.Trigger>
+                          <Accordion.Content>
+                            <View className="mb-1 flex-row justify-end">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onPress={() => {
+                                  void Clipboard.setStringAsync(task.logLines.join("\n"));
+                                }}
+                                accessibilityLabel={t("settings.videoCopyLog")}
+                              >
+                                <Ionicons name="copy-outline" size={12} color={mutedColor} />
+                                <Button.Label className="text-[10px]">
+                                  {t("settings.videoCopyLog")}
+                                </Button.Label>
+                              </Button>
+                            </View>
+                            <ScrollView className="max-h-40">
+                              <Text
+                                className="text-[9px] text-muted"
+                                style={{ fontFamily: "monospace" }}
+                                selectable
+                              >
+                                {task.logLines.slice(-50).join("\n")}
+                              </Text>
+                            </ScrollView>
+                          </Accordion.Content>
+                        </Accordion.Item>
+                      </Accordion>
+                    )}
                     <View className="flex-row flex-wrap items-center gap-2">
                       {task.status === "completed" &&
                         (task.outputFileIds?.length ?? 0) > 0 &&
@@ -94,7 +141,12 @@ export function TaskQueueSheet({
                         </Button>
                       )}
                       {task.status === "failed" && (
-                        <Button size="sm" variant="outline" onPress={() => onRetryTask(task.id)}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          isDisabled={task.retries >= MAX_VIDEO_RETRIES}
+                          onPress={() => onRetryTask(task.id)}
+                        >
                           <Button.Label>{t("settings.videoRetry")}</Button.Label>
                         </Button>
                       )}

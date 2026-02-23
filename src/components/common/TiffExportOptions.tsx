@@ -10,18 +10,29 @@ const TIFF_COMPRESSION_LABEL_KEYS: Record<TiffCompression, string> = {
   none: "converter.tiffCompressionNone",
 };
 
+const TIFF_BIT_DEPTHS: Array<8 | 16 | 32> = [8, 16, 32];
+const TIFF_DPI_PRESETS = [72, 150, 300, 600];
+
 interface TiffExportOptionsProps {
   tiffCompression: TiffCompression;
   tiffMultipage: TiffMultipageMode;
+  tiffBitDepth?: 8 | 16 | 32;
+  tiffDpi?: number;
   onTiffCompressionChange: (comp: TiffCompression) => void;
   onTiffMultipageChange: (mode: TiffMultipageMode) => void;
+  onTiffBitDepthChange?: (depth: 8 | 16 | 32) => void;
+  onTiffDpiChange?: (dpi: number) => void;
 }
 
 export function TiffExportOptions({
   tiffCompression,
   tiffMultipage,
+  tiffBitDepth,
+  tiffDpi,
   onTiffCompressionChange,
   onTiffMultipageChange,
+  onTiffBitDepthChange,
+  onTiffDpiChange,
 }: TiffExportOptionsProps) {
   const { t } = useI18n();
 
@@ -46,6 +57,42 @@ export function TiffExportOptions({
           ))}
         </View>
       </View>
+
+      {onTiffBitDepthChange && tiffBitDepth != null && (
+        <View>
+          <Text className="text-xs font-semibold text-muted mb-2">{t("converter.bitDepth")}</Text>
+          <View className="flex-row gap-2">
+            {TIFF_BIT_DEPTHS.map((d) => (
+              <Chip
+                key={d}
+                size="sm"
+                variant={tiffBitDepth === d ? "primary" : "secondary"}
+                onPress={() => onTiffBitDepthChange(d)}
+              >
+                <Chip.Label className="text-[9px]">{d}-bit</Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {onTiffDpiChange && tiffDpi != null && (
+        <View>
+          <Text className="text-xs font-semibold text-muted mb-2">{t("converter.dpi")}</Text>
+          <View className="flex-row gap-2">
+            {TIFF_DPI_PRESETS.map((d) => (
+              <Chip
+                key={d}
+                size="sm"
+                variant={tiffDpi === d ? "primary" : "secondary"}
+                onPress={() => onTiffDpiChange(d)}
+              >
+                <Chip.Label className="text-[9px]">{d}</Chip.Label>
+              </Chip>
+            ))}
+          </View>
+        </View>
+      )}
 
       <View>
         <Text className="text-xs font-semibold text-muted mb-2">{t("converter.multipage")}</Text>

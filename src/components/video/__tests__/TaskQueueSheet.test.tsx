@@ -59,9 +59,9 @@ describe("TaskQueueSheet", () => {
     );
 
     expect(screen.getByText("Video Task Queue")).toBeTruthy();
-    expect(screen.getByText("running")).toBeTruthy();
-    expect(screen.getByText("failed")).toBeTruthy();
-    expect(screen.getByText("completed")).toBeTruthy();
+    expect(screen.getByText("Running")).toBeTruthy();
+    expect(screen.getByText("Failed")).toBeTruthy();
+    expect(screen.getByText("Completed")).toBeTruthy();
 
     fireEvent.press(screen.getByText("Cancel"));
     expect(onCancelTask).toHaveBeenCalledWith("task-running");
@@ -96,5 +96,56 @@ describe("TaskQueueSheet", () => {
     );
 
     expect(screen.getByText("No queued tasks.")).toBeTruthy();
+  });
+
+  it("shows translated engine error for failed tasks", () => {
+    const tasks: VideoTaskRecord[] = [
+      makeTask({
+        id: "task-err",
+        status: "failed",
+        error: "ffmpeg_failed_trim",
+      }),
+    ];
+
+    render(
+      <TaskQueueSheet
+        visible
+        tasks={tasks}
+        onClose={jest.fn()}
+        onCancelTask={jest.fn()}
+        onRetryTask={jest.fn()}
+        onRemoveTask={jest.fn()}
+        onClearFinished={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Video processing failed. Check logs for details.")).toBeTruthy();
+  });
+
+  it("renders retry button for failed task with retries < MAX_VIDEO_RETRIES", () => {
+    const onRetryTask = jest.fn();
+    const tasks: VideoTaskRecord[] = [
+      makeTask({
+        id: "task-retriable",
+        status: "failed",
+        error: "err",
+        retries: 0,
+      }),
+    ];
+
+    render(
+      <TaskQueueSheet
+        visible
+        tasks={tasks}
+        onClose={jest.fn()}
+        onCancelTask={jest.fn()}
+        onRetryTask={onRetryTask}
+        onRemoveTask={jest.fn()}
+        onClearFinished={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("Retry"));
+    expect(onRetryTask).toHaveBeenCalledWith("task-retriable");
   });
 });

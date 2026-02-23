@@ -28,6 +28,8 @@ export const LOG_TAGS = {
   OneDriveProvider: "OneDriveProvider",
   DropboxProvider: "DropboxProvider",
   WebDAVProvider: "WebDAVProvider",
+  SFTPProvider: "SFTPProvider",
+  LANTransfer: "LANTransfer",
   AstrometryClient: "AstrometryClient",
   AstrometryService: "AstrometryService",
   SyncToTarget: "SyncToTarget",

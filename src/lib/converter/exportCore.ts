@@ -656,13 +656,41 @@ export async function encodeExportRequest(request: ExportRequest): Promise<Encod
         ...DEFAULT_TIFF_TARGET_OPTIONS,
         ...(effectiveRequest.tiff ?? {}),
       };
+      const tiffBitDepth = normalizeTiffBitDepth(
+        tiffOptions.bitDepth ?? effectiveRequest.bitDepth,
+        8,
+      );
+      const tiffDpi = tiffOptions.dpi ?? 72;
       const preservedPages = await buildPreservedTiffPages(effectiveRequest);
       if (preservedPages && preservedPages.length > 1) {
         return {
           bytes: encodeTiffDocument(preservedPages, {
-            bitDepth: effectiveRequest.bitDepth ?? 8,
+            bitDepth: tiffBitDepth,
             colorMode: "auto",
             compression: tiffOptions.compression,
+            dpi: tiffDpi,
+          }),
+          extension: getOutputExtension(effectiveRequest),
+          diagnostics,
+        };
+      }
+      const source = effectiveRequest.source;
+      const hasScientific =
+        tiffBitDepth >= 16 && source && (source.scientificPixels || source.rgbChannels);
+      if (hasScientific) {
+        const page: TiffEncodePage = {
+          width: effectiveRequest.width,
+          height: effectiveRequest.height,
+          pixels: source.rgbChannels ? undefined : (source.scientificPixels ?? undefined),
+          channels: source.rgbChannels ?? undefined,
+          bitDepth: tiffBitDepth,
+          sampleFormat: tiffBitDepth === 32 ? "float" : "uint",
+          colorMode: source.rgbChannels ? "rgb" : "mono",
+        };
+        return {
+          bytes: encodeTiffDocument([page], {
+            compression: tiffOptions.compression,
+            dpi: tiffDpi,
           }),
           extension: getOutputExtension(effectiveRequest),
           diagnostics,
@@ -674,9 +702,10 @@ export async function encodeExportRequest(request: ExportRequest): Promise<Encod
           effectiveRequest.width,
           effectiveRequest.height,
           {
-            bitDepth: effectiveRequest.bitDepth ?? 8,
+            bitDepth: tiffBitDepth,
             colorMode: "auto",
             compression: tiffOptions.compression,
+            dpi: tiffDpi,
           },
         ),
         extension: getOutputExtension(effectiveRequest),

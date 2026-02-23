@@ -68,4 +68,35 @@ describe("ExportDialog", () => {
       }),
     );
   });
+
+  it("propagates default TIFF bitDepth and dpi into action options", async () => {
+    const onExport = jest.fn();
+
+    render(
+      <ExportDialog
+        visible
+        filename="m42.tiff"
+        format="tiff"
+        width={80}
+        height={40}
+        onFormatChange={jest.fn()}
+        onExport={onExport}
+        onShare={jest.fn()}
+        onSaveToDevice={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    await act(async () => {
+      screen.getByTestId("e2e-action-export-dialog-export").props.onPress();
+    });
+
+    expect(onExport).toHaveBeenCalledTimes(1);
+    const [_quality, options] = onExport.mock.calls[0] as [number, any];
+    expect(options.tiff).toBeDefined();
+    expect(options.tiff.bitDepth).toBe(16);
+    expect(options.tiff.dpi).toBe(72);
+    expect(options.tiff.compression).toBe("lzw");
+    expect(options.tiff.multipage).toBe("preserve");
+  });
 });

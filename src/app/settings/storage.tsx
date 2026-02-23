@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from "react";
 import { View, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Separator } from "heroui-native";
@@ -10,8 +11,13 @@ import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useVideoTaskStore } from "../../stores/useVideoTaskStore";
 import { useThumbnail } from "../../hooks/useThumbnail";
 import { pruneThumbnailCache } from "../../lib/gallery/thumbnailCache";
+import {
+  getVideoProcessingCacheSize,
+  clearVideoProcessingCache,
+} from "../../lib/video/engine/ffmpegAdapter";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { formatBytes } from "../../lib/utils/format";
@@ -113,6 +119,29 @@ export default function StorageSettingsScreen() {
     );
   };
 
+  const hasActiveVideoTasks = useVideoTaskStore((s) =>
+    s.tasks.some((t) => t.status === "running" || t.status === "pending"),
+  );
+  const [videoCacheSizeBytes, setVideoCacheSizeBytes] = useState(0);
+  const refreshVideoCacheSize = useCallback(() => {
+    void getVideoProcessingCacheSize().then(setVideoCacheSizeBytes);
+  }, []);
+  useEffect(() => {
+    refreshVideoCacheSize();
+  }, [refreshVideoCacheSize]);
+
+  const handleClearVideoCache = () => {
+    runDestructiveAction(
+      t("settings.clearVideoProcessingCache"),
+      t("settings.clearVideoProcessingCacheConfirm"),
+      () => {
+        clearVideoProcessingCache();
+        refreshVideoCacheSize();
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
+      },
+    );
+  };
+
   const handleRegenerateThumbnails = () => {
     if (filesCount === 0 || isGenerating) return;
 
@@ -198,6 +227,19 @@ export default function StorageSettingsScreen() {
             }
             onPress={handleRegenerateThumbnails}
             disabled={filesCount === 0 || isGenerating}
+          />
+          <Separator />
+          <SettingsRow
+            icon="videocam-outline"
+            label={t("settings.videoProcessingCache")}
+            value={formatBytes(videoCacheSizeBytes)}
+          />
+          <Separator />
+          <SettingsRow
+            icon="trash-outline"
+            label={t("settings.clearVideoProcessingCache")}
+            onPress={handleClearVideoCache}
+            disabled={hasActiveVideoTasks}
           />
         </SettingsSection>
 

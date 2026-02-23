@@ -5,14 +5,19 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { zustandMMKVStorage } from "../lib/storage";
-import type { CloudProvider, BackupProgress, ProviderConnectionState } from "../lib/backup/types";
+import type {
+  CloudProvider,
+  BackupOptions,
+  BackupProgress,
+  ProviderConnectionState,
+} from "../lib/backup/types";
 
 const MAX_HISTORY_ENTRIES = 50;
 
 export interface BackupHistoryEntry {
   id: string;
   timestamp: number;
-  type: "backup" | "restore" | "local-export" | "local-import";
+  type: "backup" | "restore" | "local-export" | "local-import" | "lan-send" | "lan-receive";
   provider: CloudProvider | "local";
   result: "success" | "failed";
   fileCount?: number;
@@ -39,6 +44,8 @@ interface BackupStoreState {
   lastAutoBackupError: string | null;
   // 历史记录
   history: BackupHistoryEntry[];
+  // 一键备份
+  lastUsedBackupOptions: BackupOptions | null;
   // 错误
   lastError: string | null;
 
@@ -59,6 +66,7 @@ interface BackupStoreState {
   setLastError: (error: string | null) => void;
   getConnection: (provider: CloudProvider) => ProviderConnectionState | undefined;
   resetProgress: () => void;
+  setLastUsedBackupOptions: (options: BackupOptions) => void;
   addHistoryEntry: (entry: Omit<BackupHistoryEntry, "id" | "timestamp">) => void;
   clearHistory: () => void;
 }
@@ -85,6 +93,7 @@ export const useBackupStore = create<BackupStoreState>()(
       lastAutoBackupResult: null,
       lastAutoBackupError: null,
       history: [],
+      lastUsedBackupOptions: null,
       lastError: null,
 
       setActiveProvider: (provider) => set({ activeProvider: provider }),
@@ -138,6 +147,8 @@ export const useBackupStore = create<BackupStoreState>()(
 
       resetProgress: () => set({ progress: IDLE_PROGRESS }),
 
+      setLastUsedBackupOptions: (options) => set({ lastUsedBackupOptions: options }),
+
       addHistoryEntry: (entry) =>
         set((state) => ({
           history: [
@@ -166,6 +177,7 @@ export const useBackupStore = create<BackupStoreState>()(
         lastAutoBackupResult: state.lastAutoBackupResult,
         lastAutoBackupError: state.lastAutoBackupError,
         history: state.history,
+        lastUsedBackupOptions: state.lastUsedBackupOptions,
       }),
     },
   ),

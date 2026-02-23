@@ -1,3 +1,12 @@
+jest.mock("expo-notifications", () => ({
+  getPermissionsAsync: jest.fn(async () => ({ status: "granted" })),
+  scheduleNotificationAsync: jest.fn(async () => "notif-id"),
+}));
+
+jest.mock("../../i18n/useI18n", () => ({
+  useI18n: () => ({ t: (key: string) => key }),
+}));
+
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { useVideoProcessing } from "../useVideoProcessing";
 import { useFitsStore } from "../../stores/useFitsStore";
