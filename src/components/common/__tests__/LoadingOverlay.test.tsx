@@ -4,19 +4,25 @@ import { LoadingOverlay } from "../LoadingOverlay";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "common.loading": "Loading...",
-          "files.cancelImport": "Cancel",
-          "files.currentFile": "Current: {name}",
-          "files.progressDetail": "{current} / {total}",
-          "files.progressSuccess": "Imported: {count}",
-          "files.progressFailed": "Failed: {count}",
-          "files.progressSkippedDuplicate": "Skipped duplicates: {count}",
-          "files.progressSkippedUnsupported": "Skipped unsupported: {count}",
-        }) as Record<string, string>
-      )[key] ?? key,
+    t: (key: string, opts?: Record<string, string>) => {
+      const templates: Record<string, string> = {
+        "common.loading": "Loading...",
+        "files.cancelImport": "Cancel",
+        "files.currentFile": "Current: {{name}}",
+        "files.progressDetail": "{{current}} / {{total}}",
+        "files.progressSuccess": "Imported: {{count}}",
+        "files.progressFailed": "Failed: {{count}}",
+        "files.progressSkippedDuplicate": "Skipped duplicates: {{count}}",
+        "files.progressSkippedUnsupported": "Skipped unsupported: {{count}}",
+      };
+      let result = templates[key] ?? key;
+      if (opts) {
+        Object.entries(opts).forEach(([k, v]) => {
+          result = result.replace(`{{${k}}}`, v);
+        });
+      }
+      return result;
+    },
   }),
 }));
 

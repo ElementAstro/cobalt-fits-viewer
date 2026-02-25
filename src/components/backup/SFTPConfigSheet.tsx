@@ -2,10 +2,11 @@
  * SFTP 配置表单组件
  */
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { View } from "react-native";
 import { Alert, Button, Dialog, FieldError, Input, Label, Spinner, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
+import { useConnectionTest } from "../../hooks/useConnectionTest";
 
 interface SFTPConfigSheetProps {
   visible: boolean;
@@ -27,38 +28,31 @@ export function SFTPConfigSheet({ visible, onConnect, onClose }: SFTPConfigSheet
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [remotePath, setRemotePath] = useState("/");
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<boolean | null>(null);
 
-  const handleConnect = async () => {
-    if (!host || !username) return;
+  const {
+    testing,
+    testResult,
+    runTest,
+    handleClose: closeWithReset,
+  } = useConnectionTest({
+    onClose,
+  });
 
-    setTesting(true);
-    setTestResult(null);
-
-    try {
-      const portNum = parseInt(port, 10) || 22;
-      const success = await onConnect(host, portNum, username, password, remotePath);
-      setTestResult(success);
-      if (success) {
-        setTimeout(onClose, 1000);
-      }
-    } catch {
-      setTestResult(false);
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const handleClose = () => {
+  const resetFields = useCallback(() => {
     setHost("");
     setPort("22");
     setUsername("");
     setPassword("");
     setRemotePath("/");
-    setTestResult(null);
-    onClose();
+  }, []);
+
+  const handleConnect = async () => {
+    if (!host || !username) return;
+    const portNum = parseInt(port, 10) || 22;
+    await runTest(() => onConnect(host, portNum, username, password, remotePath));
   };
+
+  const handleClose = () => closeWithReset(resetFields);
 
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && handleClose()}>

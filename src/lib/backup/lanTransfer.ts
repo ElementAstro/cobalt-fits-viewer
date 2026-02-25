@@ -30,8 +30,10 @@ function generatePin(): string {
   return String(Math.floor(1000 + Math.random() * 9000));
 }
 
+export const LAN_PORT_BASE = 18080;
+
 function randomPort(): number {
-  return 18080 + Math.floor(Math.random() * 920);
+  return LAN_PORT_BASE + Math.floor(Math.random() * 920);
 }
 
 type HttpServerModule = {

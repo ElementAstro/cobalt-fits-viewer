@@ -1,15 +1,16 @@
 import { ScrollView, View } from "react-native";
 import { Chip } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
+import type { FitsSortBy, FitsSortOrder } from "../../stores/useFitsStore";
 
 const FILE_LIST_GRID_COLUMNS: Array<2 | 3 | 4> = [2, 3, 4];
 
 interface FilesSortBarProps {
-  sortBy: string;
-  sortOrder: string;
-  fileListStyle: string;
-  fileListGridColumns: number;
-  onSortToggle: (key: "name" | "date" | "size" | "quality") => void;
+  sortBy: FitsSortBy;
+  sortOrder: FitsSortOrder;
+  fileListStyle: "grid" | "list" | "compact";
+  fileListGridColumns: 2 | 3 | 4;
+  onSortToggle: (key: FitsSortBy) => void;
   onStyleChange: (style: "grid" | "list" | "compact") => void;
   onGridColumnsChange: (cols: 2 | 3 | 4) => void;
 }

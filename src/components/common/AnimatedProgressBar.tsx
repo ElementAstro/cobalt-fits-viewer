@@ -1,5 +1,12 @@
-import { useEffect, useState } from "react";
-import { Animated, View } from "react-native";
+import { useEffect } from "react";
+import { View } from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  interpolate,
+  Extrapolation,
+} from "react-native-reanimated";
 
 interface AnimatedProgressBarProps {
   progress: number;
@@ -8,27 +15,22 @@ interface AnimatedProgressBarProps {
 }
 
 export function AnimatedProgressBar({ progress, color, className }: AnimatedProgressBarProps) {
-  const [animValue] = useState(() => new Animated.Value(0));
+  const animValue = useSharedValue(0);
 
   useEffect(() => {
-    Animated.timing(animValue, {
-      toValue: progress,
-      duration: 400,
-      useNativeDriver: false,
-    }).start();
+    animValue.value = withTiming(progress, { duration: 400 });
   }, [progress, animValue]);
 
-  const width = animValue.interpolate({
-    inputRange: [0, 100],
-    outputRange: ["0%", "100%"],
-    extrapolate: "clamp",
+  const animStyle = useAnimatedStyle(() => {
+    const widthPercent = interpolate(animValue.value, [0, 100], [0, 100], Extrapolation.CLAMP);
+    return { width: `${widthPercent}%` };
   });
 
   return (
     <View className={className ?? "mt-2 h-1.5 rounded-full bg-surface-secondary overflow-hidden"}>
       <Animated.View
         className={`h-full rounded-full${color ? "" : " bg-accent"}`}
-        style={{ width, ...(color ? { backgroundColor: color } : {}) }}
+        style={[animStyle, color ? { backgroundColor: color } : undefined]}
       />
     </View>
   );

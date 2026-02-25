@@ -1,5 +1,6 @@
 import React from "react";
 import { render, screen } from "@testing-library/react-native";
+import { PanResponder } from "react-native";
 import { SimpleSlider } from "../SimpleSlider";
 
 describe("SimpleSlider", () => {
@@ -67,5 +68,14 @@ describe("SimpleSlider", () => {
     render(<SimpleSlider {...defaultProps} defaultValue={50} />);
 
     expect(screen.toJSON()).toBeTruthy();
+  });
+
+  it("does not recreate PanResponder on re-render", () => {
+    const createSpy = jest.spyOn(PanResponder, "create");
+    const { rerender } = render(<SimpleSlider {...defaultProps} />);
+    const initialCount = createSpy.mock.calls.length;
+    rerender(<SimpleSlider {...defaultProps} value={75} />);
+    expect(createSpy.mock.calls.length).toBe(initialCount);
+    createSpy.mockRestore();
   });
 });

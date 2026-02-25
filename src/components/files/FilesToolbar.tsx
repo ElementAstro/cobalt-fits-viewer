@@ -33,7 +33,7 @@ export function FilesToolbar({
   onClearSelection,
 }: FilesToolbarProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, dangerColor] = useThemeColor(["muted", "danger"]);
 
   return (
     <View className="flex-row flex-wrap items-center gap-2">
@@ -92,7 +92,7 @@ export function FilesToolbar({
             onPress={onBatchDelete}
             isDisabled={selectedCount === 0}
           >
-            <Ionicons name="trash-outline" size={16} color="#ef4444" />
+            <Ionicons name="trash-outline" size={16} color={dangerColor} />
           </Button>
           <Button size="sm" isIconOnly variant="outline" onPress={onClearSelection}>
             <Ionicons name="close-outline" size={16} color={mutedColor} />

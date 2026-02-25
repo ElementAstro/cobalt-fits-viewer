@@ -45,23 +45,34 @@ export function SimpleSlider({
     [trackWidth, min, max, step],
   );
 
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onMoveShouldSetPanResponder: () => true,
-    onPanResponderGrant: (evt) => {
-      const now = Date.now();
-      if (defaultValue != null && now - lastTapRef.current < DOUBLE_TAP_MS) {
-        onValueChange(defaultValue);
-        lastTapRef.current = 0;
-        return;
-      }
-      lastTapRef.current = now;
-      onValueChange(computeValue(evt.nativeEvent.locationX));
-    },
-    onPanResponderMove: (evt) => {
-      onValueChange(computeValue(evt.nativeEvent.locationX));
-    },
-  });
+  const computeValueRef = useRef(computeValue);
+  computeValueRef.current = computeValue;
+  const onValueChangeRef = useRef(onValueChange);
+  onValueChangeRef.current = onValueChange;
+  const defaultValueRef = useRef(defaultValue);
+  defaultValueRef.current = defaultValue;
+
+  const panResponderRef = useRef<ReturnType<typeof PanResponder.create> | null>(null);
+  if (!panResponderRef.current) {
+    panResponderRef.current = PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const now = Date.now();
+        if (defaultValueRef.current != null && now - lastTapRef.current < DOUBLE_TAP_MS) {
+          onValueChangeRef.current(defaultValueRef.current);
+          lastTapRef.current = 0;
+          return;
+        }
+        lastTapRef.current = now;
+        onValueChangeRef.current(computeValueRef.current(evt.nativeEvent.locationX));
+      },
+      onPanResponderMove: (evt) => {
+        onValueChangeRef.current(computeValueRef.current(evt.nativeEvent.locationX));
+      },
+    });
+  }
+  const panResponder = panResponderRef.current;
 
   const displayValue =
     step >= 1 ? value.toFixed(0) : step >= 0.1 ? value.toFixed(1) : value.toFixed(2);

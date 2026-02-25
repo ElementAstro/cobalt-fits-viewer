@@ -1,3 +1,4 @@
+import React from "react";
 import { View, Text } from "react-native";
 import { Button, Card } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,7 +23,7 @@ interface StarAnnotationPanelProps {
   onClearAnchors: () => void;
 }
 
-export function StarAnnotationPanel({
+export const StarAnnotationPanel = React.memo(function StarAnnotationPanel({
   successColor,
   detectedStarCount,
   manualStarCount,
@@ -126,4 +127,4 @@ export function StarAnnotationPanel({
       </Card>
     </View>
   );
-}
+});

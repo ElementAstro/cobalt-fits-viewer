@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text } from "react-native";
 import { Image } from "expo-image";
-import { Button, Dialog, Separator, Spinner } from "heroui-native";
+import { Button, Dialog, Separator, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useI18n } from "../../i18n/useI18n";
@@ -16,6 +16,7 @@ import { formatVideoDuration, formatVideoResolution } from "../../lib/video/form
 import { isMediaWorkspaceFile } from "../../lib/media/routing";
 import { useFitsStore } from "../../stores/useFitsStore";
 import type { FitsMetadata } from "../../lib/fits/types";
+import { InfoRow } from "./InfoRow";
 
 interface QuickLookModalProps {
   visible: boolean;
@@ -41,6 +42,8 @@ export function QuickLookModal({
   onAddTag,
 }: QuickLookModalProps) {
   const { t } = useI18n();
+  const mutedColor = useThemeColor("muted");
+  const dangerColor = useThemeColor("danger");
   const updateFile = useFitsStore((s) => s.updateFile);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const thumbnailUri = useMemo(
@@ -102,7 +105,7 @@ export function QuickLookModal({
             </View>
           ) : isAudio ? (
             <View className="mt-3 h-48 rounded-lg bg-black/70 items-center justify-center">
-              <Ionicons name="musical-notes-outline" size={48} color="#d0d0d0" />
+              <Ionicons name="musical-notes-outline" size={48} color={mutedColor} />
               <Text className="mt-2 text-xs text-muted">
                 {formatVideoDuration(file.durationMs)}
               </Text>
@@ -123,14 +126,14 @@ export function QuickLookModal({
                 <Spinner size="sm" />
               ) : (
                 <>
-                  <Ionicons name="image-outline" size={48} color="#555" />
+                  <Ionicons name="image-outline" size={48} color={mutedColor} />
                   <Button
                     variant="outline"
                     size="sm"
                     className="mt-3"
                     onPress={handleRegenerateThumbnail}
                   >
-                    <Ionicons name="refresh-outline" size={12} color="#888" />
+                    <Ionicons name="refresh-outline" size={12} color={mutedColor} />
                     <Button.Label>{t("settings.regenerateThumbnail")}</Button.Label>
                   </Button>
                 </>
@@ -179,7 +182,7 @@ export function QuickLookModal({
                 <QuickAction
                   icon={file.isFavorite ? "heart" : "heart-outline"}
                   label={t("files.toggleFavorite")}
-                  color={file.isFavorite ? "#ef4444" : "#888"}
+                  color={file.isFavorite ? dangerColor : mutedColor}
                   onPress={() => {
                     onToggleFavorite(file.id);
                   }}
@@ -209,7 +212,7 @@ export function QuickLookModal({
                 <QuickAction
                   icon="trash-outline"
                   label={t("common.delete")}
-                  color="#ef4444"
+                  color={dangerColor}
                   onPress={() => {
                     onClose();
                     onDelete(file.id);
@@ -235,7 +238,7 @@ export function QuickLookModal({
                   onOpenEditor(file.id);
                 }}
               >
-                <Ionicons name="create-outline" size={12} color="#888" />
+                <Ionicons name="create-outline" size={12} color={mutedColor} />
                 <Button.Label>{t("common.edit")}</Button.Label>
               </Button>
             )}
@@ -275,14 +278,5 @@ function QuickAction({
         {label}
       </Text>
     </Button>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="flex-row items-center justify-between">
-      <Text className="text-[10px] text-muted">{label}</Text>
-      <Text className="text-[10px] font-medium text-foreground">{value}</Text>
-    </View>
   );
 }

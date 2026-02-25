@@ -1,3 +1,4 @@
+import React from "react";
 import { View, Text } from "react-native";
 import { Alert as HAlert, Button } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,7 +26,7 @@ interface EditorHeaderProps {
   onClearError: () => void;
 }
 
-export function EditorHeader({
+export const EditorHeader = React.memo(function EditorHeader({
   filename,
   successColor,
   mutedColor,
@@ -106,7 +107,7 @@ export function EditorHeader({
             <Ionicons
               name={showOriginal ? "eye-outline" : "eye-off-outline"}
               size={14}
-              color={showOriginal ? "#fff" : mutedColor}
+              color={showOriginal ? successColor : mutedColor}
             />
           </Button>
           <Button
@@ -159,4 +160,4 @@ export function EditorHeader({
       )}
     </>
   );
-}
+});

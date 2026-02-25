@@ -1,12 +1,13 @@
 import { View, Text } from "react-native";
 import { Input, Separator, TextField } from "heroui-native";
+import { useShallow } from "zustand/react/shallow";
 import { SettingsToggleRow } from "../../common/SettingsToggleRow";
 import { useI18n } from "../../../i18n/useI18n";
 import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../../stores/useSettingsStore";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../../common/SettingsRow";
-import { SimpleSlider } from "../../common/SimpleSlider";
+import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
 
@@ -19,58 +20,84 @@ export function ProcessingComposeSection() {
   const haptics = useHapticFeedback();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
-  const defaultComposePreset = useSettingsStore((s) => s.defaultComposePreset);
-  const composeRedWeight = useSettingsStore((s) => s.composeRedWeight);
-  const composeGreenWeight = useSettingsStore((s) => s.composeGreenWeight);
-  const composeBlueWeight = useSettingsStore((s) => s.composeBlueWeight);
-  const advancedComposeRegistrationMode = useSettingsStore(
-    (s) => s.advancedComposeRegistrationMode,
+  const {
+    defaultComposePreset,
+    composeRedWeight,
+    composeGreenWeight,
+    composeBlueWeight,
+    advancedComposeRegistrationMode,
+    advancedComposeFramingMode,
+    advancedComposeAutoLinearMatch,
+    advancedComposeAutoBrightnessBalance,
+    advancedComposePreviewScale,
+    advancedComposePixelMathR,
+    advancedComposePixelMathG,
+    advancedComposePixelMathB,
+    setDefaultComposePreset,
+    setComposeRedWeight,
+    setComposeGreenWeight,
+    setComposeBlueWeight,
+    setAdvancedComposeRegistrationMode,
+    setAdvancedComposeFramingMode,
+    setAdvancedComposeAutoLinearMatch,
+    setAdvancedComposeAutoBrightnessBalance,
+    setAdvancedComposePreviewScale,
+    setAdvancedComposePixelMathR,
+    setAdvancedComposePixelMathG,
+    setAdvancedComposePixelMathB,
+    resetSection,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      defaultComposePreset: s.defaultComposePreset,
+      composeRedWeight: s.composeRedWeight,
+      composeGreenWeight: s.composeGreenWeight,
+      composeBlueWeight: s.composeBlueWeight,
+      advancedComposeRegistrationMode: s.advancedComposeRegistrationMode,
+      advancedComposeFramingMode: s.advancedComposeFramingMode,
+      advancedComposeAutoLinearMatch: s.advancedComposeAutoLinearMatch,
+      advancedComposeAutoBrightnessBalance: s.advancedComposeAutoBrightnessBalance,
+      advancedComposePreviewScale: s.advancedComposePreviewScale,
+      advancedComposePixelMathR: s.advancedComposePixelMathR,
+      advancedComposePixelMathG: s.advancedComposePixelMathG,
+      advancedComposePixelMathB: s.advancedComposePixelMathB,
+      setDefaultComposePreset: s.setDefaultComposePreset,
+      setComposeRedWeight: s.setComposeRedWeight,
+      setComposeGreenWeight: s.setComposeGreenWeight,
+      setComposeBlueWeight: s.setComposeBlueWeight,
+      setAdvancedComposeRegistrationMode: s.setAdvancedComposeRegistrationMode,
+      setAdvancedComposeFramingMode: s.setAdvancedComposeFramingMode,
+      setAdvancedComposeAutoLinearMatch: s.setAdvancedComposeAutoLinearMatch,
+      setAdvancedComposeAutoBrightnessBalance: s.setAdvancedComposeAutoBrightnessBalance,
+      setAdvancedComposePreviewScale: s.setAdvancedComposePreviewScale,
+      setAdvancedComposePixelMathR: s.setAdvancedComposePixelMathR,
+      setAdvancedComposePixelMathG: s.setAdvancedComposePixelMathG,
+      setAdvancedComposePixelMathB: s.setAdvancedComposePixelMathB,
+      resetSection: s.resetSection,
+    })),
   );
-  const advancedComposeFramingMode = useSettingsStore((s) => s.advancedComposeFramingMode);
-  const advancedComposeAutoLinearMatch = useSettingsStore((s) => s.advancedComposeAutoLinearMatch);
-  const advancedComposeAutoBrightnessBalance = useSettingsStore(
-    (s) => s.advancedComposeAutoBrightnessBalance,
-  );
-  const advancedComposePreviewScale = useSettingsStore((s) => s.advancedComposePreviewScale);
-  const advancedComposePixelMathR = useSettingsStore((s) => s.advancedComposePixelMathR);
-  const advancedComposePixelMathG = useSettingsStore((s) => s.advancedComposePixelMathG);
-  const advancedComposePixelMathB = useSettingsStore((s) => s.advancedComposePixelMathB);
-  const setDefaultComposePreset = useSettingsStore((s) => s.setDefaultComposePreset);
-  const setComposeRedWeight = useSettingsStore((s) => s.setComposeRedWeight);
-  const setComposeGreenWeight = useSettingsStore((s) => s.setComposeGreenWeight);
-  const setComposeBlueWeight = useSettingsStore((s) => s.setComposeBlueWeight);
-  const setAdvancedComposeRegistrationMode = useSettingsStore(
-    (s) => s.setAdvancedComposeRegistrationMode,
-  );
-  const setAdvancedComposeFramingMode = useSettingsStore((s) => s.setAdvancedComposeFramingMode);
-  const setAdvancedComposeAutoLinearMatch = useSettingsStore(
-    (s) => s.setAdvancedComposeAutoLinearMatch,
-  );
-  const setAdvancedComposeAutoBrightnessBalance = useSettingsStore(
-    (s) => s.setAdvancedComposeAutoBrightnessBalance,
-  );
-  const setAdvancedComposePreviewScale = useSettingsStore((s) => s.setAdvancedComposePreviewScale);
-  const setAdvancedComposePixelMathR = useSettingsStore((s) => s.setAdvancedComposePixelMathR);
-  const setAdvancedComposePixelMathG = useSettingsStore((s) => s.setAdvancedComposePixelMathG);
-  const setAdvancedComposePixelMathB = useSettingsStore((s) => s.setAdvancedComposePixelMathB);
-  const resetSection = useSettingsStore((s) => s.resetSection);
 
+  const COMPOSE_PRESET_I18N: Record<string, string> = {
+    custom: "settings.composePresetCustom",
+  };
   const composePresetLabel = (value: (typeof COMPOSE_PRESET_VALUES)[number]) =>
-    value === "custom" ? t("settings.composePresetCustom") : value.toUpperCase();
+    COMPOSE_PRESET_I18N[value] ? t(COMPOSE_PRESET_I18N[value]) : value.toUpperCase();
+
+  const ADV_COMPOSE_REGISTRATION_I18N: Record<string, string> = {
+    none: "editor.alignNone",
+    translation: "editor.alignTranslation",
+    full: "editor.alignFull",
+  };
   const advancedComposeRegistrationLabel = (
     value: (typeof ADV_COMPOSE_REGISTRATION_VALUES)[number],
-  ) =>
-    value === "none"
-      ? t("editor.alignNone")
-      : value === "translation"
-        ? t("editor.alignTranslation")
-        : t("editor.alignFull");
+  ) => t(ADV_COMPOSE_REGISTRATION_I18N[value] ?? value);
+
+  const ADV_COMPOSE_FRAMING_I18N: Record<string, string> = {
+    first: "settings.composeAdvancedFramingFirst",
+    min: "settings.composeAdvancedFramingMin",
+    cog: "settings.composeAdvancedFramingCog",
+  };
   const advancedComposeFramingLabel = (value: (typeof ADV_COMPOSE_FRAMING_VALUES)[number]) =>
-    value === "first"
-      ? t("settings.composeAdvancedFramingFirst")
-      : value === "min"
-        ? t("settings.composeAdvancedFramingMin")
-        : t("settings.composeAdvancedFramingCog");
+    t(ADV_COMPOSE_FRAMING_I18N[value] ?? value);
 
   const composePresetOptions = COMPOSE_PRESET_VALUES.map((value) => ({
     label: composePresetLabel(value),
@@ -102,53 +129,35 @@ export function ProcessingComposeSection() {
           onPress={() => openPicker("composePreset")}
         />
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="ellipse"
           label={t("settings.composeRedWeight")}
-          value={composeRedWeight.toFixed(1)}
+          value={composeRedWeight}
+          min={0}
+          max={2}
+          step={0.1}
+          onValueChange={setComposeRedWeight}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={composeRedWeight}
-            min={0}
-            max={2}
-            step={0.1}
-            onValueChange={setComposeRedWeight}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="ellipse"
           label={t("settings.composeGreenWeight")}
-          value={composeGreenWeight.toFixed(1)}
+          value={composeGreenWeight}
+          min={0}
+          max={2}
+          step={0.1}
+          onValueChange={setComposeGreenWeight}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={composeGreenWeight}
-            min={0}
-            max={2}
-            step={0.1}
-            onValueChange={setComposeGreenWeight}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="ellipse"
           label={t("settings.composeBlueWeight")}
-          value={composeBlueWeight.toFixed(1)}
+          value={composeBlueWeight}
+          min={0}
+          max={2}
+          step={0.1}
+          onValueChange={setComposeBlueWeight}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={composeBlueWeight}
-            min={0}
-            max={2}
-            step={0.1}
-            onValueChange={setComposeBlueWeight}
-          />
-        </View>
       </SettingsSection>
 
       <SettingsSection title={t("settings.composeAdvancedDefaults")} collapsible defaultCollapsed>
@@ -182,21 +191,15 @@ export function ProcessingComposeSection() {
           onSelectedChange={setAdvancedComposeAutoBrightnessBalance}
         />
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="resize-outline"
           label={t("settings.composeAdvancedPreviewScale")}
-          value={advancedComposePreviewScale.toFixed(2)}
+          value={advancedComposePreviewScale}
+          min={0.1}
+          max={1}
+          step={0.05}
+          onValueChange={setAdvancedComposePreviewScale}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={advancedComposePreviewScale}
-            min={0.1}
-            max={1}
-            step={0.05}
-            onValueChange={setAdvancedComposePreviewScale}
-          />
-        </View>
         <Separator />
         <View className="px-2 py-2">
           <Text className="mb-2 text-xs text-muted">{t("settings.composeAdvancedPixelMath")}</Text>

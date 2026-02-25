@@ -4,7 +4,8 @@
  */
 
 import { useState, useEffect, useCallback } from "react";
-import { View, Text, Animated } from "react-native";
+import { View, Text } from "react-native";
+import ReAnimated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
 import { Button, CloseButton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -23,7 +24,7 @@ export function UpdateBanner() {
   const { status, checkForUpdate, downloadUpdate, applyUpdate } = useAppUpdate();
 
   const [dismissed, setDismissed] = useState(false);
-  const [slideAnim] = useState(() => new Animated.Value(-100));
+  const slideAnim = useSharedValue(-100);
 
   const showBanner = !dismissed && (status === "available" || status === "ready");
 
@@ -39,13 +40,12 @@ export function UpdateBanner() {
 
   // Animate banner in/out
   useEffect(() => {
-    Animated.spring(slideAnim, {
-      toValue: showBanner ? 0 : -100,
-      useNativeDriver: true,
-      tension: 80,
-      friction: 12,
-    }).start();
+    slideAnim.value = withSpring(showBanner ? 0 : -100, { damping: 12, stiffness: 80 });
   }, [showBanner, slideAnim]);
+
+  const bannerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: slideAnim.value }],
+  }));
 
   const handleAction = useCallback(async () => {
     haptics.impact(Haptics.ImpactFeedbackStyle.Medium);
@@ -64,8 +64,8 @@ export function UpdateBanner() {
   if (dismissed && status !== "ready") return null;
 
   return (
-    <Animated.View
-      style={{ transform: [{ translateY: slideAnim }] }}
+    <ReAnimated.View
+      style={bannerStyle}
       className="absolute top-0 left-0 right-0 z-50"
       pointerEvents={showBanner ? "auto" : "none"}
     >
@@ -90,6 +90,6 @@ export function UpdateBanner() {
         </Button>
         <CloseButton onPress={handleDismiss} />
       </View>
-    </Animated.View>
+    </ReAnimated.View>
   );
 }

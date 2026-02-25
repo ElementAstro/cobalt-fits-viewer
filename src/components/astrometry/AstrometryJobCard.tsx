@@ -3,15 +3,20 @@
  * 参考 BatchTaskItem 的 Card + Chip + Button 模式
  */
 
-import { useEffect, useState } from "react";
 import { View, Text } from "react-native";
-import { Button, Card, Chip, Spinner } from "heroui-native";
+import { Button, Card, Chip, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useI18n } from "../../i18n/useI18n";
 import type { AstrometryJob, AstrometryJobStatus } from "../../lib/astrometry/types";
-import { formatDuration } from "../../lib/astrometry/formatUtils";
+import {
+  formatDuration,
+  formatRACompact,
+  formatDecCompact,
+  formatFieldSize as formatFieldSizeDeg,
+} from "../../lib/astrometry/formatUtils";
 import { AnimatedProgressBar } from "../common/AnimatedProgressBar";
+import { useElapsedTime } from "../../hooks/useElapsedTime";
 
 interface AstrometryJobCardProps {
   job: AstrometryJob;
@@ -35,28 +40,11 @@ const STATUS_CHIP_CONFIG: Record<
 };
 
 function formatCoord(ra: number, dec: number): string {
-  const raH = (ra / 15).toFixed(2);
-  const decSign = dec >= 0 ? "+" : "";
-  return `RA ${raH}h  DEC ${decSign}${dec.toFixed(2)}°`;
+  return `RA ${formatRACompact(ra)}  DEC ${formatDecCompact(dec)}`;
 }
 
 function formatFieldSize(w: number, h: number): string {
-  if (w >= 1) return `${w.toFixed(1)}° × ${h.toFixed(1)}°`;
-  const wm = w * 60;
-  const hm = h * 60;
-  return `${wm.toFixed(1)}' × ${hm.toFixed(1)}'`;
-}
-
-function useElapsedTime(startTime: number, isActive: boolean): string {
-  const [elapsed, setElapsed] = useState(isActive ? Date.now() - startTime : 0);
-
-  useEffect(() => {
-    if (!isActive) return;
-    const interval = setInterval(() => setElapsed(Date.now() - startTime), 1000);
-    return () => clearInterval(interval);
-  }, [startTime, isActive]);
-
-  return formatDuration(elapsed);
+  return `${formatFieldSizeDeg(w)} × ${formatFieldSizeDeg(h)}`;
 }
 
 export function AstrometryJobCard({
@@ -67,6 +55,8 @@ export function AstrometryJobCard({
   onDelete,
 }: AstrometryJobCardProps) {
   const { t } = useI18n();
+  const mutedColor = useThemeColor("muted");
+  const dangerColor = useThemeColor("danger");
 
   const statusKey = job.status as keyof typeof STATUS_CHIP_CONFIG;
   const chipConfig = STATUS_CHIP_CONFIG[statusKey];
@@ -103,7 +93,7 @@ export function AstrometryJobCard({
             />
           ) : (
             <View className="w-10 h-10 rounded-md bg-surface-secondary items-center justify-center">
-              <Ionicons name="image-outline" size={20} color="#666" />
+              <Ionicons name="image-outline" size={20} color={mutedColor} />
             </View>
           )}
 
@@ -146,7 +136,12 @@ export function AstrometryJobCard({
         {/* 错误信息 */}
         {job.status === "failure" && job.error && (
           <View className="flex-row items-start gap-1.5 mt-1.5">
-            <Ionicons name="warning-outline" size={12} color="#ef4444" style={{ marginTop: 1 }} />
+            <Ionicons
+              name="warning-outline"
+              size={12}
+              color={dangerColor}
+              style={{ marginTop: 1 }}
+            />
             <Text className="text-[10px] text-danger flex-1" numberOfLines={2}>
               {job.error}
             </Text>
@@ -170,10 +165,7 @@ export function AstrometryJobCard({
             {job.result.annotations.length > 0 && (
               <Text className="text-[10px] text-success">
                 <Ionicons name="star-outline" size={10} />{" "}
-                {t("astrometry.objectsFound").replace(
-                  "{count}",
-                  String(job.result.annotations.length),
-                )}
+                {t("astrometry.objectsFound", { count: job.result.annotations.length })}
               </Text>
             )}
           </View>

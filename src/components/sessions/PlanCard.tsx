@@ -4,7 +4,8 @@ import { Card, Chip, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { ObservationPlan } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
-import { normalizePlanStatus } from "../../lib/sessions/planUtils";
+import { formatDuration, formatTimeHHMM } from "../../lib/sessions/format";
+import { normalizePlanStatus, toLocalDateKey } from "../../lib/sessions/planUtils";
 import { useTargetStore } from "../../stores/useTargetStore";
 import { resolveTargetName } from "../../lib/targets/targetRefs";
 
@@ -32,12 +33,6 @@ export const PlanCard = memo(function PlanCard({ plan, onPress, onLongPress }: P
     { targetId: plan.targetId, name: plan.targetName },
     targets,
   );
-
-  const formatDate = (d: Date) =>
-    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
-  const formatTime = (d: Date) =>
-    `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 
   const isPast = endDate.getTime() < Date.now();
 
@@ -73,7 +68,7 @@ export const PlanCard = memo(function PlanCard({ plan, onPress, onLongPress }: P
             <View className="flex-row items-center gap-1">
               <Ionicons name="time-outline" size={11} color={mutedColor} />
               <Text className="text-[10px] text-muted">
-                {formatDate(startDate)} {formatTime(startDate)} - {formatTime(endDate)}
+                {toLocalDateKey(startDate)} {formatTimeHHMM(startDate)} - {formatTimeHHMM(endDate)}
               </Text>
             </View>
           </View>
@@ -88,9 +83,7 @@ export const PlanCard = memo(function PlanCard({ plan, onPress, onLongPress }: P
             <View className="flex-row items-center gap-1">
               <Ionicons name="notifications-outline" size={10} color={mutedColor} />
               <Text className="text-[9px] text-muted">
-                {plan.reminderMinutes >= 60
-                  ? `${plan.reminderMinutes / 60}h`
-                  : `${plan.reminderMinutes} min`}
+                {formatDuration(plan.reminderMinutes * 60)}
               </Text>
             </View>
           )}

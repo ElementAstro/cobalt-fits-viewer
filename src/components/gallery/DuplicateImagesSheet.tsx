@@ -2,6 +2,7 @@
  * 重复图片面板
  */
 
+import { useMemo } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { BottomSheet, Button, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -26,7 +27,7 @@ export function DuplicateImagesSheet({
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
 
-  const getFileById = (id: string) => files.find((f) => f.id === id);
+  const fileMap = useMemo(() => new Map(files.map((f) => [f.id, f])), [files]);
 
   return (
     <BottomSheet isOpen={visible} onOpenChange={(open) => !open && onClose()}>
@@ -63,7 +64,7 @@ export function DuplicateImagesSheet({
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
                 {duplicates.map((dup) => {
-                  const file = getFileById(dup.imageId);
+                  const file = fileMap.get(dup.imageId);
                   if (!file) return null;
 
                   return (

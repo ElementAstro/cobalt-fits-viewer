@@ -24,4 +24,20 @@ describe("coerceOptionValue", () => {
 
     expect(coerceOptionValue(options, "not-found")).toBe("not-found");
   });
+
+  it("coerces unmatched numeric fallback correctly", () => {
+    const options = [
+      { label: "Small", value: 12 },
+      { label: "Large", value: 16 },
+    ];
+
+    expect(coerceOptionValue(options, "14")).toBe(14);
+    expect(typeof coerceOptionValue(options, "14")).toBe("number");
+  });
+
+  it("returns NaN for non-parseable string with numeric options", () => {
+    const options = [{ label: "A", value: 1 }];
+
+    expect(coerceOptionValue(options, "abc")).toBe("abc");
+  });
 });

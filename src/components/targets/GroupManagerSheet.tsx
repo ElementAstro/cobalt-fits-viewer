@@ -9,6 +9,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { TargetGroup } from "../../lib/fits/types";
+import { GROUP_COLORS } from "../../lib/targets/targetConstants";
+import { GroupColorPicker } from "./GroupColorPicker";
 
 interface GroupManagerSheetProps {
   visible: boolean;
@@ -20,17 +22,6 @@ interface GroupManagerSheetProps {
   onUpdateGroup: (id: string, updates: Partial<TargetGroup>) => void;
   onDeleteGroup: (id: string) => void;
 }
-
-const GROUP_COLORS = [
-  "#ef4444", // red
-  "#f97316", // orange
-  "#eab308", // yellow
-  "#22c55e", // green
-  "#14b8a6", // teal
-  "#3b82f6", // blue
-  "#8b5cf6", // violet
-  "#ec4899", // pink
-];
 
 export function GroupManagerSheet({
   visible,
@@ -166,19 +157,7 @@ export function GroupManagerSheet({
                   />
 
                   <Label>{t("targets.groups.color")}</Label>
-                  <View className="flex-row gap-2 flex-wrap">
-                    {GROUP_COLORS.map((color) => (
-                      <Button
-                        key={color}
-                        variant={newColor === color ? "primary" : "outline"}
-                        size="sm"
-                        className="w-8 h-8 p-0"
-                        onPress={() => setNewColor(color)}
-                      >
-                        <View className="w-5 h-5 rounded-full" style={{ backgroundColor: color }} />
-                      </Button>
-                    ))}
-                  </View>
+                  <GroupColorPicker selectedColor={newColor} onSelect={setNewColor} />
 
                   <View className="flex-row gap-2 mt-2">
                     <Button variant="ghost" className="flex-1" onPress={() => setShowCreate(false)}>
@@ -222,22 +201,7 @@ export function GroupManagerSheet({
                             onChangeText={setEditDescription}
                             autoCorrect={false}
                           />
-                          <View className="flex-row gap-2 flex-wrap">
-                            {GROUP_COLORS.map((color) => (
-                              <Button
-                                key={color}
-                                variant={editColor === color ? "primary" : "outline"}
-                                size="sm"
-                                className="w-8 h-8 p-0"
-                                onPress={() => setEditColor(color)}
-                              >
-                                <View
-                                  className="w-5 h-5 rounded-full"
-                                  style={{ backgroundColor: color }}
-                                />
-                              </Button>
-                            ))}
-                          </View>
+                          <GroupColorPicker selectedColor={editColor} onSelect={setEditColor} />
                           <View className="flex-row gap-2">
                             <Button
                               variant="ghost"

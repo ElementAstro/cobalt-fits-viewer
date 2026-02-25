@@ -49,6 +49,17 @@ interface AnnotationItem {
 const CIRCLE_OPACITY = 0.7;
 const TEXT_OPACITY = 0.9;
 const MIN_VISIBLE_SCALE = 0.3;
+const MAX_RENDERED = 200;
+
+const TYPE_RENDER_PRIORITY: Record<AstrometryAnnotationType, number> = {
+  messier: 0,
+  ngc: 1,
+  ic: 2,
+  bright_star: 3,
+  hd: 4,
+  star: 5,
+  other: 6,
+};
 
 function getRenderStyle(
   type: AstrometryAnnotationType,
@@ -107,7 +118,7 @@ export function AstrometryAnnotationOverlay({
       ? annotations.filter((a) => visibleTypes.includes(a.type))
       : annotations;
 
-    return filtered
+    const result = filtered
       .map((ann): AnnotationItem | null => {
         if (!shouldShowAtScale(ann.type, transform.scale)) return null;
 
@@ -154,6 +165,13 @@ export function AstrometryAnnotationOverlay({
         };
       })
       .filter(Boolean) as AnnotationItem[];
+
+    if (result.length > MAX_RENDERED) {
+      result.sort((a, b) => TYPE_RENDER_PRIORITY[a.type] - TYPE_RENDER_PRIORITY[b.type]);
+      result.length = MAX_RENDERED;
+    }
+
+    return result;
   }, [
     annotations,
     renderWidth,

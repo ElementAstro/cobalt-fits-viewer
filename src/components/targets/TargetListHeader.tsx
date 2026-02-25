@@ -10,7 +10,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { EmptyState } from "../common/EmptyState";
 import { GuideTarget } from "../common/GuideTarget";
-import { STATUS_COLORS, TARGET_STATUSES } from "../../lib/targets/targetConstants";
+import {
+  STATUS_COLORS,
+  TARGET_STATUSES,
+  targetTypeI18nKey,
+  targetStatusI18nKey,
+} from "../../lib/targets/targetConstants";
 import type { TargetType, TargetStatus, TargetGroup, Target } from "../../lib/fits/types";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
 import type { ResolvedTargetInteractionUi } from "../../lib/targets/targetInteractionUi";
@@ -142,14 +147,22 @@ const TargetStatusSummary = React.memo(function TargetStatusSummary({
 }) {
   const { t } = useI18n();
 
-  if (targets.length === 0) return null;
+  const { statusCounts, favoriteCount } = React.useMemo(() => {
+    const counts: Partial<Record<TargetStatus, number>> = {};
+    let favs = 0;
+    for (const target of targets) {
+      counts[target.status] = (counts[target.status] ?? 0) + 1;
+      if (target.isFavorite) favs++;
+    }
+    return { statusCounts: counts, favoriteCount: favs };
+  }, [targets]);
 
-  const favoriteCount = targets.filter((target) => target.isFavorite).length;
+  if (targets.length === 0) return null;
 
   return (
     <View className="mt-3 flex-row gap-2">
       {TARGET_STATUSES.map((status) => {
-        const count = targets.filter((target) => target.status === status).length;
+        const count = statusCounts[status] ?? 0;
         if (count === 0) return null;
         return (
           <View key={status} className="flex-row items-center gap-1">
@@ -158,14 +171,7 @@ const TargetStatusSummary = React.memo(function TargetStatusSummary({
               style={{ backgroundColor: STATUS_COLORS[status] }}
             />
             <Text className="text-[10px] text-muted">
-              {count}{" "}
-              {t(
-                `targets.${status}` as
-                  | "targets.planned"
-                  | "targets.acquiring"
-                  | "targets.completed"
-                  | "targets.processed",
-              )}
+              {count} {t(targetStatusI18nKey(status))}
             </Text>
           </View>
         );
@@ -249,16 +255,7 @@ const TargetFilterChips = React.memo(function TargetFilterChips({
             variant={filterType === type ? "primary" : "secondary"}
             onPress={() => onFilterTypeChange(filterType === type ? null : type)}
           >
-            <Chip.Label className={chipLabelClassName}>
-              {t(
-                `targets.types.${type}` as
-                  | "targets.types.galaxy"
-                  | "targets.types.nebula"
-                  | "targets.types.cluster"
-                  | "targets.types.planet"
-                  | "targets.types.other",
-              )}
-            </Chip.Label>
+            <Chip.Label className={chipLabelClassName}>{t(targetTypeI18nKey(type))}</Chip.Label>
           </Chip>
         ))}
 
@@ -271,15 +268,7 @@ const TargetFilterChips = React.memo(function TargetFilterChips({
             variant={filterStatus === status ? "primary" : "secondary"}
             onPress={() => onFilterStatusChange(filterStatus === status ? null : status)}
           >
-            <Chip.Label className={chipLabelClassName}>
-              {t(
-                `targets.${status}` as
-                  | "targets.planned"
-                  | "targets.acquiring"
-                  | "targets.completed"
-                  | "targets.processed",
-              )}
-            </Chip.Label>
+            <Chip.Label className={chipLabelClassName}>{t(targetStatusI18nKey(status))}</Chip.Label>
           </Chip>
         ))}
 

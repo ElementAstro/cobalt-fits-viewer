@@ -3,6 +3,7 @@
  * 提供按天体类型的独立显隐开关
  */
 
+import { useMemo } from "react";
 import { View } from "react-native";
 import { Chip } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
@@ -57,16 +58,23 @@ export function AnnotationLayerControls({
   const { t } = useI18n();
 
   // Count annotations per type
-  const typeCounts = ANNOTATION_TYPES_ORDERED.reduce(
-    (acc, type) => {
-      acc[type] = annotations.filter((a) => a.type === type).length;
-      return acc;
-    },
-    {} as Record<AstrometryAnnotationType, number>,
+  const typeCounts = useMemo(
+    () =>
+      ANNOTATION_TYPES_ORDERED.reduce(
+        (acc, type) => {
+          acc[type] = annotations.filter((a) => a.type === type).length;
+          return acc;
+        },
+        {} as Record<AstrometryAnnotationType, number>,
+      ),
+    [annotations],
   );
 
   // Only show types that have annotations
-  const activeTypes = ANNOTATION_TYPES_ORDERED.filter((t) => typeCounts[t] > 0);
+  const activeTypes = useMemo(
+    () => ANNOTATION_TYPES_ORDERED.filter((t) => typeCounts[t] > 0),
+    [typeCounts],
+  );
 
   return (
     <View className="flex-row flex-wrap gap-1 px-1 py-1">

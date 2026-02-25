@@ -8,26 +8,8 @@ import { CompassIndicator } from "../CompassIndicator";
 import type { AstrometryCalibration } from "../../../lib/astrometry/types";
 
 jest.mock("@shopify/react-native-skia", () => {
-  const ReactLocal = require("react");
-  const { View: RNView, Text: RNText } = require("react-native");
-
-  const Canvas = (props: { children?: React.ReactNode; [k: string]: unknown }) =>
-    ReactLocal.createElement(RNView, { testID: "skia-canvas", ...props }, props.children);
-  const Group = (props: { children?: React.ReactNode }) =>
-    ReactLocal.createElement(RNView, { testID: "skia-group" }, props.children);
-  const SkiaLine = (props: Record<string, unknown>) =>
-    ReactLocal.createElement(RNView, { testID: "skia-line", ...props });
-  const SkiaText = (props: { text?: string; [k: string]: unknown }) =>
-    ReactLocal.createElement(RNText, { testID: "skia-text" }, props.text);
-
-  return {
-    Canvas,
-    Group,
-    Line: SkiaLine,
-    Text: SkiaText,
-    useFont: () => ({ measureText: () => ({ width: 10 }) }),
-    vec: (x: number, y: number) => ({ x, y }),
-  };
+  const { createSkiaMock } = require("./helpers/mockSkia");
+  return createSkiaMock();
 });
 
 const baseCalibration: AstrometryCalibration = {

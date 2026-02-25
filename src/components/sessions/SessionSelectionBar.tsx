@@ -27,7 +27,7 @@ export function SessionSelectionBar({
   onBatchDelete,
 }: SessionSelectionBarProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, dangerColor] = useThemeColor(["muted", "danger"]);
 
   return (
     <View className="flex-row items-center justify-between bg-surface-secondary px-4 py-2">
@@ -89,7 +89,7 @@ export function SessionSelectionBar({
           isDisabled={selectedCount === 0}
           onPress={onBatchDelete}
         >
-          <Ionicons name="trash-outline" size={16} color="#ef4444" />
+          <Ionicons name="trash-outline" size={16} color={dangerColor} />
         </Button>
       </View>
     </View>

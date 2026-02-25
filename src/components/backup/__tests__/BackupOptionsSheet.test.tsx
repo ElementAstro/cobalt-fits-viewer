@@ -1,94 +1,34 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { BackupOptionsSheet } from "../BackupOptionsSheet";
-
-jest.mock("../../../i18n/useI18n", () => ({
-  useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "backup.selectBackupOptions": "Backup Options",
-          "backup.selectRestoreOptions": "Restore Options",
-          "backup.selectBackupOptionsDesc": "Choose backup items",
-          "backup.selectRestoreOptionsDesc": "Choose restore items",
-          "backup.optionFiles": "Files",
-          "backup.optionAlbums": "Albums",
-          "backup.optionTargets": "Targets",
-          "backup.optionSessions": "Sessions",
-          "backup.optionSettings": "Settings",
-          "backup.startBackup": "Start Backup",
-          "backup.startRestore": "Start Restore",
-          "backup.optionSelectAtLeastOne": "Select at least one item",
-          "backup.conflictTitle": "Conflict Strategy",
-          "backup.conflictSkip": "Skip Existing",
-          "backup.conflictOverwrite": "Overwrite Existing",
-          "backup.conflictMerge": "Merge",
-        }) as Record<string, string>
-      )[key] ?? key,
-  }),
-}));
+jest.mock("../../../i18n/useI18n", () => {
+  const { mockI18nFactory } = require("../testHelpers");
+  return mockI18nFactory({
+    "backup.selectBackupOptions": "Backup Options",
+    "backup.selectRestoreOptions": "Restore Options",
+    "backup.selectBackupOptionsDesc": "Choose backup items",
+    "backup.selectRestoreOptionsDesc": "Choose restore items",
+    "backup.optionFiles": "Files",
+    "backup.optionAlbums": "Albums",
+    "backup.optionTargets": "Targets",
+    "backup.optionSessions": "Sessions",
+    "backup.optionSettings": "Settings",
+    "backup.startBackup": "Start Backup",
+    "backup.startRestore": "Start Restore",
+    "backup.optionSelectAtLeastOne": "Select at least one item",
+    "backup.conflictTitle": "Conflict Strategy",
+    "backup.conflictSkip": "Skip Existing",
+    "backup.conflictOverwrite": "Overwrite Existing",
+    "backup.conflictMerge": "Merge",
+  });
+});
 
 jest.mock("heroui-native", () => {
-  const React = require("react");
-  const { View, Text, Pressable } = require("react-native");
-  type mockProps = { children?: unknown } & Record<string, unknown>;
-  type mockBottomSheetProps = mockProps & {
-    isOpen?: boolean;
-    onOpenChange?: (open: boolean) => void;
-  };
-  type mockButtonLikeProps = mockProps & {
-    onPress?: () => void;
-    isDisabled?: boolean;
-    testID?: string;
-  };
-  type mockSwitchProps = {
-    onSelectedChange?: (next: boolean) => void;
-    isSelected?: boolean;
-    testID?: string;
-  };
-
-  const BottomSheet = ({ isOpen, children, onOpenChange }: mockBottomSheetProps) =>
-    isOpen ? (
-      <View testID="bottom-sheet" onTouchEnd={() => onOpenChange?.(true)}>
-        {children}
-      </View>
-    ) : null;
-  BottomSheet.Portal = ({ children }: mockProps) => <View>{children}</View>;
-  BottomSheet.Overlay = () => <View />;
-  BottomSheet.Content = ({ children }: mockProps) => <View>{children}</View>;
-  BottomSheet.Title = ({ children }: mockProps) => <Text>{children}</Text>;
-  BottomSheet.Description = ({ children }: mockProps) => <Text>{children}</Text>;
-  BottomSheet.Close = () => <Pressable testID="bottom-sheet-close" />;
-
-  const Button = ({ children, onPress, isDisabled, testID }: mockButtonLikeProps) => (
-    <Pressable testID={testID ?? "button"} disabled={isDisabled} onPress={onPress}>
-      {children}
-    </Pressable>
-  );
-  Button.Label = ({ children }: mockProps) => <Text>{children}</Text>;
-
-  const Chip = ({ children, onPress, testID }: mockButtonLikeProps) => (
-    <Pressable testID={testID ?? "chip"} onPress={onPress}>
-      {children}
-    </Pressable>
-  );
-  Chip.Label = ({ children }: mockProps) => <Text>{children}</Text>;
-
-  const Switch = ({ onSelectedChange, isSelected, testID }: mockSwitchProps) => (
-    <Pressable
-      testID={testID ?? "switch"}
-      onPress={() => onSelectedChange?.(!isSelected)}
-      accessibilityState={{ checked: isSelected }}
-    >
-      <View />
-    </Pressable>
-  );
-  Switch.Thumb = () => <View />;
-
+  const h = require("../testHelpers");
   return {
-    BottomSheet,
-    Button,
-    Chip,
-    Switch,
+    ...h.mockBottomSheetFactory(),
+    ...h.mockButtonFactory(),
+    ...h.mockChipFactory(),
+    ...h.mockSwitchFactory(),
   };
 });
 
@@ -194,5 +134,45 @@ describe("BackupOptionsSheet", () => {
       enabled: true,
       password: "pass-123",
     });
+  });
+
+  it("shows local payload mode selector in local-export mode", () => {
+    render(
+      <BackupOptionsSheet visible mode="local-export" onConfirm={onConfirm} onClose={onClose} />,
+    );
+    expect(screen.getByTestId("backup-payload-full")).toBeTruthy();
+    expect(screen.getByTestId("backup-payload-metadata")).toBeTruthy();
+  });
+
+  it("does not show conflict strategy in backup modes", () => {
+    render(
+      <BackupOptionsSheet visible mode="cloud-backup" onConfirm={onConfirm} onClose={onClose} />,
+    );
+    expect(screen.queryByText("Conflict Strategy")).toBeNull();
+  });
+
+  it("shows thumbnails switch independently of data options", () => {
+    render(
+      <BackupOptionsSheet visible mode="cloud-backup" onConfirm={onConfirm} onClose={onClose} />,
+    );
+    expect(screen.getByTestId("backup-option-includeThumbnails")).toBeTruthy();
+  });
+
+  it("shows correct title and description for restore mode", () => {
+    render(
+      <BackupOptionsSheet visible mode="cloud-restore" onConfirm={onConfirm} onClose={onClose} />,
+    );
+    expect(screen.getByText("Restore Options")).toBeTruthy();
+    expect(screen.getByText("Choose restore items")).toBeTruthy();
+    expect(screen.getByText("Start Restore")).toBeTruthy();
+  });
+
+  it("shows correct title and description for backup mode", () => {
+    render(
+      <BackupOptionsSheet visible mode="cloud-backup" onConfirm={onConfirm} onClose={onClose} />,
+    );
+    expect(screen.getByText("Backup Options")).toBeTruthy();
+    expect(screen.getByText("Choose backup items")).toBeTruthy();
+    expect(screen.getByText("Start Backup")).toBeTruthy();
   });
 });

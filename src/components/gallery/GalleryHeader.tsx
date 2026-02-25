@@ -7,6 +7,8 @@ import { useI18n } from "../../i18n/useI18n";
 import { SearchBar } from "../common/SearchBar";
 import type { GalleryViewMode } from "../../lib/fits/types";
 import type { MetadataIndexResult } from "../../lib/gallery/metadataIndex";
+import { GalleryFilterChips } from "./GalleryFilterChips";
+import { GallerySelectionToolbar } from "./GallerySelectionToolbar";
 
 const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "grid", icon: "grid-outline" },
@@ -137,7 +139,7 @@ export const GalleryHeader = memo(function GalleryHeader({
         </View>
       </View>
 
-      {/* Search + Filters: side-by-side in landscape */}
+      {/* Search + Filters */}
       {isLandscape ? (
         <View className="flex-row items-center gap-2">
           <SearchBar
@@ -146,72 +148,20 @@ export const GalleryHeader = memo(function GalleryHeader({
             placeholder={t("gallery.searchPlaceholder") ?? t("files.searchPlaceholder")}
             compact
           />
-          <ScrollShadow LinearGradientComponent={LinearGradient} className="flex-1">
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
-              <View className="flex-row gap-1">
-                {metadataIndex.objects.length > 0 && (
-                  <>
-                    <Chip
-                      size="sm"
-                      variant={!filterObject ? "primary" : "secondary"}
-                      onPress={() => onFilterObjectChange("")}
-                    >
-                      <Chip.Label className="text-[9px]">{t("gallery.allImages")}</Chip.Label>
-                    </Chip>
-                    {metadataIndex.objects.map((obj) => (
-                      <Chip
-                        key={obj}
-                        size="sm"
-                        variant={filterObject === obj ? "primary" : "secondary"}
-                        onPress={() => onFilterObjectChange(obj)}
-                      >
-                        <Chip.Label className="text-[9px]">{obj}</Chip.Label>
-                      </Chip>
-                    ))}
-                    <View className="w-px bg-separator mx-1" />
-                  </>
-                )}
-                <Chip
-                  size="sm"
-                  variant={!filterFrameType ? "primary" : "secondary"}
-                  onPress={() => onFilterFrameTypeChange("")}
-                >
-                  <Chip.Label className="text-[9px]">{t("gallery.allTypes")}</Chip.Label>
-                </Chip>
-                {frameTypes.map((ft) => (
-                  <Chip
-                    key={ft.key}
-                    size="sm"
-                    variant={filterFrameType === ft.key ? "primary" : "secondary"}
-                    onPress={() => onFilterFrameTypeChange(ft.key)}
-                  >
-                    <Ionicons
-                      name={ft.icon}
-                      size={10}
-                      color={filterFrameType === ft.key ? successColor : mutedColor}
-                    />
-                    <Chip.Label className="text-[9px]">{ft.label}</Chip.Label>
-                  </Chip>
-                ))}
-                <Chip
-                  size="sm"
-                  variant={filterFavoriteOnly ? "primary" : "secondary"}
-                  onPress={() => onFilterFavoriteOnlyChange(!filterFavoriteOnly)}
-                >
-                  <Ionicons
-                    name={filterFavoriteOnly ? "star" : "star-outline"}
-                    size={10}
-                    color={filterFavoriteOnly ? successColor : mutedColor}
-                  />
-                  <Chip.Label className="text-[9px]">{t("gallery.favoritesOnly")}</Chip.Label>
-                </Chip>
-              </View>
-            </ScrollView>
-          </ScrollShadow>
+          <GalleryFilterChips
+            filterObject={filterObject}
+            filterFrameType={filterFrameType}
+            filterFavoriteOnly={filterFavoriteOnly}
+            objects={metadataIndex.objects}
+            frameTypes={frameTypes}
+            compact
+            onFilterObjectChange={onFilterObjectChange}
+            onFilterFrameTypeChange={onFilterFrameTypeChange}
+            onFilterFavoriteOnlyChange={onFilterFavoriteOnlyChange}
+          />
         </View>
       ) : (
         <>
-          {/* Search Bar */}
           <SearchBar
             value={searchQuery}
             onChangeText={onSearchChange}
@@ -220,74 +170,16 @@ export const GalleryHeader = memo(function GalleryHeader({
 
           <Separator />
 
-          {/* Object Filters */}
-          {metadataIndex.objects.length > 0 && (
-            <ScrollShadow LinearGradientComponent={LinearGradient}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View className="flex-row gap-1.5">
-                  <Chip
-                    size="sm"
-                    variant={!filterObject ? "primary" : "secondary"}
-                    onPress={() => onFilterObjectChange("")}
-                  >
-                    <Chip.Label className="text-[10px]">{t("gallery.allImages")}</Chip.Label>
-                  </Chip>
-                  {metadataIndex.objects.map((obj) => (
-                    <Chip
-                      key={obj}
-                      size="sm"
-                      variant={filterObject === obj ? "primary" : "secondary"}
-                      onPress={() => onFilterObjectChange(obj)}
-                    >
-                      <Chip.Label className="text-[10px]">{obj}</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </ScrollView>
-            </ScrollShadow>
-          )}
-
-          {/* Frame Type Filters */}
-          <ScrollShadow LinearGradientComponent={LinearGradient}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="flex-row gap-1.5">
-                <Chip
-                  size="sm"
-                  variant={!filterFrameType ? "primary" : "secondary"}
-                  onPress={() => onFilterFrameTypeChange("")}
-                >
-                  <Chip.Label className="text-[10px]">{t("gallery.allTypes")}</Chip.Label>
-                </Chip>
-                {frameTypes.map((ft) => (
-                  <Chip
-                    key={ft.key}
-                    size="sm"
-                    variant={filterFrameType === ft.key ? "primary" : "secondary"}
-                    onPress={() => onFilterFrameTypeChange(ft.key)}
-                  >
-                    <Ionicons
-                      name={ft.icon}
-                      size={10}
-                      color={filterFrameType === ft.key ? successColor : mutedColor}
-                    />
-                    <Chip.Label className="text-[10px]">{ft.label}</Chip.Label>
-                  </Chip>
-                ))}
-                <Chip
-                  size="sm"
-                  variant={filterFavoriteOnly ? "primary" : "secondary"}
-                  onPress={() => onFilterFavoriteOnlyChange(!filterFavoriteOnly)}
-                >
-                  <Ionicons
-                    name={filterFavoriteOnly ? "star" : "star-outline"}
-                    size={10}
-                    color={filterFavoriteOnly ? "#fff" : mutedColor}
-                  />
-                  <Chip.Label className="text-[10px]">{t("gallery.favoritesOnly")}</Chip.Label>
-                </Chip>
-              </View>
-            </ScrollView>
-          </ScrollShadow>
+          <GalleryFilterChips
+            filterObject={filterObject}
+            filterFrameType={filterFrameType}
+            filterFavoriteOnly={filterFavoriteOnly}
+            objects={metadataIndex.objects}
+            frameTypes={frameTypes}
+            onFilterObjectChange={onFilterObjectChange}
+            onFilterFrameTypeChange={onFilterFrameTypeChange}
+            onFilterFavoriteOnlyChange={onFilterFavoriteOnlyChange}
+          />
 
           {/* Target Filter */}
           {filterTargetId && (
@@ -310,72 +202,18 @@ export const GalleryHeader = memo(function GalleryHeader({
 
       {/* Selection Toolbar */}
       {isSelectionMode && (
-        <View className="flex-row items-center justify-between rounded-xl bg-surface-secondary px-3 py-2">
-          <Text className="text-xs text-foreground">
-            {selectedCount} {t("album.selected")}
-          </Text>
-          <View className="flex-row gap-1">
-            <Button size="sm" variant="outline" onPress={onSelectAllToggle}>
-              <Ionicons
-                name={allDisplaySelected ? "checkmark-done-outline" : "checkmark-outline"}
-                size={12}
-                color={mutedColor}
-              />
-              {!isLandscape && (
-                <Button.Label className="text-[10px]">
-                  {allDisplaySelected ? t("common.deselectAll") : t("common.selectAll")}
-                </Button.Label>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={onAddToAlbum}
-              isDisabled={selectedCount === 0}
-            >
-              <Ionicons name="albums-outline" size={12} color={mutedColor} />
-              {!isLandscape && (
-                <Button.Label className="text-[10px]">{t("gallery.addToAlbum")}</Button.Label>
-              )}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={onBatchTag}
-              isDisabled={selectedCount === 0}
-            >
-              <Ionicons name="pricetag-outline" size={12} color={mutedColor} />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={onBatchRename}
-              isDisabled={selectedCount === 0}
-            >
-              <Ionicons name="text-outline" size={12} color={mutedColor} />
-            </Button>
-            <Button
-              testID="e2e-action-tabs__gallery-open-compare"
-              size="sm"
-              variant="outline"
-              onPress={onCompare}
-              isDisabled={selectedCount < 2}
-            >
-              <Ionicons name="git-compare-outline" size={12} color={mutedColor} />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onPress={onBatchDelete}
-              isDisabled={selectedCount === 0}
-            >
-              <Ionicons name="trash-outline" size={12} color="#ef4444" />
-            </Button>
-            <Button size="sm" variant="outline" onPress={onExitSelection}>
-              <Ionicons name="close-outline" size={14} color={mutedColor} />
-            </Button>
-          </View>
-        </View>
+        <GallerySelectionToolbar
+          selectedCount={selectedCount}
+          allDisplaySelected={allDisplaySelected}
+          isLandscape={isLandscape}
+          onSelectAllToggle={onSelectAllToggle}
+          onAddToAlbum={onAddToAlbum}
+          onBatchTag={onBatchTag}
+          onBatchRename={onBatchRename}
+          onCompare={onCompare}
+          onBatchDelete={onBatchDelete}
+          onExitSelection={onExitSelection}
+        />
       )}
 
       {/* Images Title + Report Button */}

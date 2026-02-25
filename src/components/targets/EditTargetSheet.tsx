@@ -20,7 +20,12 @@ import { useI18n } from "../../i18n/useI18n";
 import { FilterExposurePlan } from "./FilterExposurePlan";
 import { CategorySelector } from "./CategorySelector";
 import { TagInput } from "./TagInput";
-import { TARGET_TYPES, TARGET_STATUSES } from "../../lib/targets/targetConstants";
+import {
+  TARGET_TYPES,
+  TARGET_STATUSES,
+  targetTypeI18nKey,
+  targetStatusI18nKey,
+} from "../../lib/targets/targetConstants";
 import type { Target, TargetType, TargetStatus } from "../../lib/fits/types";
 
 interface EditTargetSheetProps {
@@ -79,7 +84,8 @@ export function EditTargetSheet({
         seconds: target.plannedExposure[f] ?? 0,
       })),
     );
-  }, [target]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target.id]);
 
   const handleAddAlias = () => {
     const trimmed = newAlias.trim();
@@ -161,19 +167,7 @@ export function EditTargetSheet({
                   variant={type === tt ? "primary" : "secondary"}
                   onPress={() => setType(tt)}
                 >
-                  <Chip.Label className="text-[10px]">
-                    {t(
-                      `targets.types.${tt}` as
-                        | "targets.types.galaxy"
-                        | "targets.types.nebula"
-                        | "targets.types.cluster"
-                        | "targets.types.planet"
-                        | "targets.types.moon"
-                        | "targets.types.sun"
-                        | "targets.types.comet"
-                        | "targets.types.other",
-                    )}
-                  </Chip.Label>
+                  <Chip.Label className="text-[10px]">{t(targetTypeI18nKey(tt))}</Chip.Label>
                 </Chip>
               ))}
             </View>
@@ -188,15 +182,7 @@ export function EditTargetSheet({
                   variant={status === s ? "primary" : "secondary"}
                   onPress={() => setStatus(s)}
                 >
-                  <Chip.Label className="text-[10px]">
-                    {t(
-                      `targets.${s}` as
-                        | "targets.planned"
-                        | "targets.acquiring"
-                        | "targets.completed"
-                        | "targets.processed",
-                    )}
-                  </Chip.Label>
+                  <Chip.Label className="text-[10px]">{t(targetStatusI18nKey(s))}</Chip.Label>
                 </Chip>
               ))}
             </View>

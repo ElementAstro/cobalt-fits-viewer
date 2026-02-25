@@ -4,7 +4,7 @@
  */
 
 import { View, Text } from "react-native";
-import { Button, Dialog, Spinner } from "heroui-native";
+import { Button, Dialog, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { LANSendStatus } from "../../hooks/useLANTransfer";
@@ -21,6 +21,8 @@ interface LANSendSheetProps {
 
 export function LANSendSheet({ visible, status, info, error, onStop, onClose }: LANSendSheetProps) {
   const { t } = useI18n();
+  const successColor = useThemeColor("success");
+  const dangerColor = useThemeColor("danger");
 
   const handleClose = () => {
     onStop();
@@ -52,7 +54,7 @@ export function LANSendSheet({ visible, status, info, error, onStop, onClose }: 
 
               {/* Connection info card */}
               <View className="items-center gap-3 rounded-xl bg-secondary/50 px-4 py-5">
-                <Ionicons name="wifi" size={32} color="#2ECC71" />
+                <Ionicons name="wifi" size={32} color={successColor} />
                 <Text className="text-lg font-bold text-foreground">
                   {info.ip}:{info.port}
                 </Text>
@@ -82,7 +84,7 @@ export function LANSendSheet({ visible, status, info, error, onStop, onClose }: 
 
           {status === "error" && (
             <View className="items-center gap-3 py-4">
-              <Ionicons name="alert-circle" size={32} color="#ef4444" />
+              <Ionicons name="alert-circle" size={32} color={dangerColor} />
               <Text className="text-center text-sm text-danger">{error}</Text>
             </View>
           )}

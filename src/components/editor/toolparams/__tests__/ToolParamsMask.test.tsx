@@ -2,24 +2,6 @@ import React from "react";
 import { render } from "@testing-library/react-native";
 import { ToolParamsMask } from "../ToolParamsMask";
 
-jest.mock("heroui-native", () => {
-  const { Text, Pressable } = require("react-native");
-  return {
-    Button: Object.assign(
-      ({ children, onPress, ...props }: Record<string, unknown>) => (
-        <Pressable onPress={onPress as () => void} {...props}>
-          {children as React.ReactNode}
-        </Pressable>
-      ),
-      {
-        Label: ({ children, ...props }: Record<string, unknown>) => (
-          <Text {...props}>{children as React.ReactNode}</Text>
-        ),
-      },
-    ),
-  };
-});
-
 jest.mock("../../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
@@ -71,7 +53,9 @@ describe("ToolParamsMask", () => {
   });
 
   it("returns null for unknown tool", () => {
-    const { toJSON } = render(<ToolParamsMask activeTool="unknown" params={mockParams} />);
+    const { toJSON } = render(
+      <ToolParamsMask activeTool={"unknown" as never} params={mockParams} />,
+    );
     expect(toJSON()).toBeNull();
   });
 });

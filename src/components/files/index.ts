@@ -1,7 +1,10 @@
+export { FilesContent } from "./FilesContent";
 export { FilesHeader } from "./FilesHeader";
 export { FilesToolbar } from "./FilesToolbar";
 export { FilesSelectionBar } from "./FilesSelectionBar";
 export { FilesSortBar } from "./FilesSortBar";
 export { FilesFilterBar } from "./FilesFilterBar";
 export { ImportOptionsSheet } from "./ImportOptionsSheet";
+export { SelectionActionsSheet } from "./SelectionActionsSheet";
+export { SheetActionItem } from "./SheetActionItem";
 export { UndoSnackbar } from "./UndoSnackbar";

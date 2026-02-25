@@ -52,11 +52,7 @@ export function ProviderCard({
             className="h-10 w-10 items-center justify-center rounded-lg"
             style={{ backgroundColor: display.color + "20" }}
           >
-            <Ionicons
-              name={display.icon as keyof typeof Ionicons.glyphMap}
-              size={22}
-              color={display.color}
-            />
+            <Ionicons name={display.icon} size={22} color={display.color} />
           </View>
           <View>
             <Card.Title className="text-sm">{display.name}</Card.Title>

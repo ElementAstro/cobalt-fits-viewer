@@ -17,41 +17,14 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 jest.mock("@shopify/react-native-skia", () => {
-  const ReactLocal = require("react");
-  const { View: RNView, Text: RNText } = require("react-native");
-
-  const Canvas = (props: { children?: React.ReactNode; [k: string]: unknown }) =>
-    ReactLocal.createElement(RNView, { testID: "skia-canvas", ...props }, props.children);
-  const Group = (props: { children?: React.ReactNode }) =>
-    ReactLocal.createElement(RNView, { testID: "skia-group" }, props.children);
-  const Circle = (props: Record<string, unknown>) =>
-    ReactLocal.createElement(RNView, { testID: "skia-circle", ...props });
-  const SkiaLine = (props: Record<string, unknown>) =>
-    ReactLocal.createElement(RNView, { testID: "skia-line", ...props });
-  const SkiaText = (props: { text?: string; [k: string]: unknown }) =>
-    ReactLocal.createElement(RNText, { testID: "skia-text" }, props.text);
-  const DashPathEffect = () => null;
-
-  return {
-    Canvas,
-    Group,
-    Circle,
-    Line: SkiaLine,
-    Text: SkiaText,
-    DashPathEffect,
-    useFont: () => ({ measureText: () => ({ width: 50 }) }),
-    vec: (x: number, y: number) => ({ x, y }),
-  };
+  const { createSkiaMock } = require("./helpers/mockSkia");
+  return createSkiaMock();
 });
 
-jest.mock("../../../lib/viewer/transform", () => ({
-  imageToScreenPoint: jest.fn(
-    (pt: { x: number; y: number }, _transform: CanvasTransform, _rw: number, _rh: number) => pt,
-  ),
-  remapPointBetweenSpaces: jest.fn(
-    (pt: { x: number; y: number }, _sw: number, _sh: number, _rw: number, _rh: number) => pt,
-  ),
-}));
+jest.mock("../../../lib/viewer/transform", () => {
+  const { createTransformMock } = require("./helpers/mockTransform");
+  return createTransformMock();
+});
 
 const baseTransform: CanvasTransform = {
   scale: 1,
@@ -182,6 +155,68 @@ describe("AstrometryAnnotationOverlay", () => {
     );
     // Off-screen annotations get filtered out => empty items => null
     expect(toJSON()).toBeNull();
+  });
+
+  it("caps rendered annotations at MAX_RENDERED (200) with priority ordering", () => {
+    // Create 250 annotations: 5 messier + 245 star
+    const annotations: AstrometryAnnotation[] = [
+      ...Array.from({ length: 5 }, (_, i) =>
+        makeAnnotation({ type: "messier", names: [`M${i + 1}`], pixelx: 50 + i * 10, pixely: 50 }),
+      ),
+      ...Array.from({ length: 245 }, (_, i) =>
+        makeAnnotation({
+          type: "star",
+          names: [`Star${i}`],
+          pixelx: 50 + i * 2,
+          pixely: 100 + i * 2,
+        }),
+      ),
+    ];
+    const { getAllByTestId, getByTestId } = render(
+      <AstrometryAnnotationOverlay
+        {...baseProps}
+        annotations={annotations}
+        transform={{ ...baseTransform, scale: 2.0 }}
+      />,
+    );
+    expect(getByTestId("skia-canvas")).toBeTruthy();
+    // Should render some groups but capped at 200 (not all 250)
+    const groups = getAllByTestId("skia-group");
+    // The outer Group + inner Groups per item. Items capped at 200.
+    // With mock, each item renders as a Group. Total groups = 1 (outer) + 200 (items) = 201
+    expect(groups.length).toBeLessThanOrEqual(201);
+  });
+
+  it("prioritizes messier over star annotations when capped", () => {
+    // Create 210 annotations: 10 messier (priority 0) + 200 star (priority 5)
+    const annotations: AstrometryAnnotation[] = [
+      ...Array.from({ length: 200 }, (_, i) =>
+        makeAnnotation({
+          type: "star",
+          names: [`Star${i}`],
+          pixelx: 50 + i * 3,
+          pixely: 50 + i * 2,
+        }),
+      ),
+      ...Array.from({ length: 10 }, (_, i) =>
+        makeAnnotation({
+          type: "messier",
+          names: [`M${i + 1}`],
+          pixelx: 100 + i * 10,
+          pixely: 100,
+        }),
+      ),
+    ];
+    const { queryByText } = render(
+      <AstrometryAnnotationOverlay
+        {...baseProps}
+        annotations={annotations}
+        transform={{ ...baseTransform, scale: 2.0 }}
+      />,
+    );
+    // Messier has higher priority (0) than star (5), so all messier should survive the cap
+    expect(queryByText("M1")).toBeTruthy();
+    expect(queryByText("M10")).toBeTruthy();
   });
 
   it("uses empty label for annotations with no names", () => {

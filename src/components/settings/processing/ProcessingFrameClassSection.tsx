@@ -1,11 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
-import { Alert, View, Text, ScrollView } from "react-native";
-import { Button, Chip, Dialog, Input, Separator, Switch, TextField } from "heroui-native";
+import { Alert, View, Text } from "react-native";
+import { Button, Chip, Dialog, Input, Separator, TextField } from "heroui-native";
+import { useShallow } from "zustand/react/shallow";
 import { useI18n } from "../../../i18n/useI18n";
 import { useFileManager } from "../../../hooks/useFileManager";
 import { useSettingsStore } from "../../../stores/useSettingsStore";
 import { useFitsStore } from "../../../stores/useFitsStore";
 import { SettingsSection } from "../SettingsSection";
+import { ClassificationRuleCard } from "./ClassificationRuleCard";
+import { AddRuleForm } from "./AddRuleForm";
 import type {
   FrameClassificationRule,
   FrameClassificationRuleHeaderField,
@@ -14,20 +17,30 @@ import type {
 } from "../../../lib/fits/types";
 import { classifyWithDetail, getFrameTypeDefinitions } from "../../../lib/gallery/frameClassifier";
 
-const RULE_TARGET_OPTIONS: FrameClassificationRuleTarget[] = ["header", "filename"];
-const RULE_MATCH_OPTIONS: FrameClassificationRuleMatchType[] = ["exact", "contains", "regex"];
-const RULE_HEADER_OPTIONS: FrameClassificationRuleHeaderField[] = ["IMAGETYP", "FRAME", "ANY"];
-
 export function ProcessingFrameClassSection() {
   const { t } = useI18n();
 
-  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
-  const reportFrameTypes = useSettingsStore((s) => s.reportFrameTypes);
-  const setFrameClassificationConfig = useSettingsStore((s) => s.setFrameClassificationConfig);
-  const setReportFrameTypes = useSettingsStore((s) => s.setReportFrameTypes);
-  const resetFrameClassificationConfig = useSettingsStore((s) => s.resetFrameClassificationConfig);
-  const files = useFitsStore((s) => s.files);
-  const updateFile = useFitsStore((s) => s.updateFile);
+  const {
+    frameClassificationConfig,
+    reportFrameTypes,
+    setFrameClassificationConfig,
+    setReportFrameTypes,
+    resetFrameClassificationConfig,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      frameClassificationConfig: s.frameClassificationConfig,
+      reportFrameTypes: s.reportFrameTypes,
+      setFrameClassificationConfig: s.setFrameClassificationConfig,
+      setReportFrameTypes: s.setReportFrameTypes,
+      resetFrameClassificationConfig: s.resetFrameClassificationConfig,
+    })),
+  );
+  const { files, updateFile } = useFitsStore(
+    useShallow((s) => ({
+      files: s.files,
+      updateFile: s.updateFile,
+    })),
+  );
 
   const { reclassifyAllFrames } = useFileManager();
 
@@ -373,237 +386,41 @@ export function ProcessingFrameClassSection() {
         <Text className="px-2 pt-2 text-xs text-muted">{t("settings.classificationRules")}</Text>
         {[...frameClassificationConfig.rules]
           .sort((a, b) => b.priority - a.priority)
-          .map((rule) => {
-            const matchedType = evaluateRuleMatch(rule.id);
-            return (
-              <View key={rule.id} className="mx-2 my-2 rounded-lg border border-separator p-2">
-                <View className="mb-2 flex-row items-center justify-between">
-                  <Text className="text-xs text-muted">{rule.id}</Text>
-                  <View className="flex-row items-center gap-2">
-                    <Switch
-                      isSelected={rule.enabled}
-                      onSelectedChange={(value: boolean) => updateRule(rule.id, { enabled: value })}
-                    />
-                    <Button size="sm" variant="ghost" onPress={() => removeRule(rule.id)}>
-                      <Button.Label>{t("common.delete")}</Button.Label>
-                    </Button>
-                  </View>
-                </View>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="mb-2 flex-row gap-1">
-                    {RULE_TARGET_OPTIONS.map((target) => (
-                      <Chip
-                        key={`${rule.id}-target-${target}`}
-                        size="sm"
-                        variant={rule.target === target ? "primary" : "secondary"}
-                        onPress={() => updateRule(rule.id, { target })}
-                      >
-                        <Chip.Label className="text-[10px]">{target}</Chip.Label>
-                      </Chip>
-                    ))}
-                  </View>
-                </ScrollView>
-
-                {rule.target === "header" && (
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                    <View className="mb-2 flex-row gap-1">
-                      {RULE_HEADER_OPTIONS.map((field) => (
-                        <Chip
-                          key={`${rule.id}-header-${field}`}
-                          size="sm"
-                          variant={(rule.headerField ?? "ANY") === field ? "primary" : "secondary"}
-                          onPress={() => updateRule(rule.id, { headerField: field })}
-                        >
-                          <Chip.Label className="text-[10px]">{field}</Chip.Label>
-                        </Chip>
-                      ))}
-                    </View>
-                  </ScrollView>
-                )}
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="mb-2 flex-row gap-1">
-                    {RULE_MATCH_OPTIONS.map((matchType) => (
-                      <Chip
-                        key={`${rule.id}-match-${matchType}`}
-                        size="sm"
-                        variant={rule.matchType === matchType ? "primary" : "secondary"}
-                        onPress={() => updateRule(rule.id, { matchType })}
-                      >
-                        <Chip.Label className="text-[10px]">{matchType}</Chip.Label>
-                      </Chip>
-                    ))}
-                  </View>
-                </ScrollView>
-
-                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                  <View className="mb-2 flex-row gap-1">
-                    {frameTypeDefinitions.map((definition) => (
-                      <Chip
-                        key={`${rule.id}-type-${definition.key}`}
-                        size="sm"
-                        variant={rule.frameType === definition.key ? "primary" : "secondary"}
-                        onPress={() => updateRule(rule.id, { frameType: definition.key })}
-                      >
-                        <Chip.Label className="text-[10px]">
-                          {frameTypeLabels.get(definition.key) ?? definition.key}
-                        </Chip.Label>
-                      </Chip>
-                    ))}
-                  </View>
-                </ScrollView>
-
-                <TextField>
-                  <Input
-                    value={rule.pattern}
-                    onChangeText={(value) => updateRule(rule.id, { pattern: value })}
-                    placeholder={t("settings.rulePattern")}
-                    autoCorrect={false}
-                    autoCapitalize="none"
-                  />
-                </TextField>
-                <View className="mt-2 flex-row items-center gap-2">
-                  <TextField className="flex-1">
-                    <Input
-                      value={String(rule.priority)}
-                      onChangeText={(value) =>
-                        updateRule(rule.id, { priority: Number(value) || 0 })
-                      }
-                      keyboardType="numeric"
-                      placeholder={t("settings.rulePriority")}
-                    />
-                  </TextField>
-                  <View className="flex-row items-center gap-2">
-                    <Text className="text-xs text-muted">{t("settings.caseSensitive")}</Text>
-                    <Switch
-                      isSelected={rule.caseSensitive === true}
-                      onSelectedChange={(value: boolean) =>
-                        updateRule(rule.id, { caseSensitive: value })
-                      }
-                    />
-                  </View>
-                </View>
-                <TextField className="mt-2">
-                  <Input
-                    value={ruleTestValues[rule.id] ?? ""}
-                    onChangeText={(value) =>
-                      setRuleTestValues((prev) => ({
-                        ...prev,
-                        [rule.id]: value,
-                      }))
-                    }
-                    placeholder={
-                      rule.target === "filename"
-                        ? t("settings.ruleTestFilename")
-                        : t("settings.ruleTestHeader")
-                    }
-                  />
-                </TextField>
-                <Text className="mt-1 text-xs text-muted">
-                  {matchedType
-                    ? t("settings.ruleMatched").replace(
-                        "{type}",
-                        frameTypeLabels.get(matchedType) ?? matchedType,
-                      )
-                    : t("settings.ruleNoMatch")}
-                </Text>
-              </View>
-            );
-          })}
-
-        <View className="mx-2 my-2 rounded-lg border border-dashed border-separator p-2">
-          <Text className="mb-2 text-xs text-muted">{t("settings.addRule")}</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="mb-2 flex-row gap-1">
-              {RULE_TARGET_OPTIONS.map((target) => (
-                <Chip
-                  key={`new-target-${target}`}
-                  size="sm"
-                  variant={newRuleTarget === target ? "primary" : "secondary"}
-                  onPress={() => setNewRuleTarget(target)}
-                >
-                  <Chip.Label className="text-[10px]">{target}</Chip.Label>
-                </Chip>
-              ))}
-            </View>
-          </ScrollView>
-          {newRuleTarget === "header" && (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View className="mb-2 flex-row gap-1">
-                {RULE_HEADER_OPTIONS.map((field) => (
-                  <Chip
-                    key={`new-header-${field}`}
-                    size="sm"
-                    variant={newRuleHeaderField === field ? "primary" : "secondary"}
-                    onPress={() => setNewRuleHeaderField(field)}
-                  >
-                    <Chip.Label className="text-[10px]">{field}</Chip.Label>
-                  </Chip>
-                ))}
-              </View>
-            </ScrollView>
-          )}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="mb-2 flex-row gap-1">
-              {RULE_MATCH_OPTIONS.map((matchType) => (
-                <Chip
-                  key={`new-match-${matchType}`}
-                  size="sm"
-                  variant={newRuleMatchType === matchType ? "primary" : "secondary"}
-                  onPress={() => setNewRuleMatchType(matchType)}
-                >
-                  <Chip.Label className="text-[10px]">{matchType}</Chip.Label>
-                </Chip>
-              ))}
-            </View>
-          </ScrollView>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View className="mb-2 flex-row gap-1">
-              {frameTypeDefinitions.map((definition) => (
-                <Chip
-                  key={`new-type-${definition.key}`}
-                  size="sm"
-                  variant={newRuleFrameType === definition.key ? "primary" : "secondary"}
-                  onPress={() => setNewRuleFrameType(definition.key)}
-                >
-                  <Chip.Label className="text-[10px]">
-                    {frameTypeLabels.get(definition.key) ?? definition.key}
-                  </Chip.Label>
-                </Chip>
-              ))}
-            </View>
-          </ScrollView>
-          <TextField>
-            <Input
-              value={newRulePattern}
-              onChangeText={setNewRulePattern}
-              placeholder={t("settings.rulePattern")}
-              autoCorrect={false}
-              autoCapitalize="none"
+          .map((rule) => (
+            <ClassificationRuleCard
+              key={rule.id}
+              rule={rule}
+              frameTypeDefinitions={frameTypeDefinitions}
+              frameTypeLabels={frameTypeLabels}
+              matchedType={evaluateRuleMatch(rule.id)}
+              testValue={ruleTestValues[rule.id] ?? ""}
+              onUpdateRule={updateRule}
+              onRemoveRule={removeRule}
+              onTestValueChange={(ruleId, value) =>
+                setRuleTestValues((prev) => ({ ...prev, [ruleId]: value }))
+              }
             />
-          </TextField>
-          <View className="mt-2 flex-row items-center gap-2">
-            <TextField className="flex-1">
-              <Input
-                value={newRulePriority}
-                onChangeText={setNewRulePriority}
-                keyboardType="numeric"
-                placeholder={t("settings.rulePriority")}
-              />
-            </TextField>
-            <View className="flex-row items-center gap-2">
-              <Text className="text-xs text-muted">{t("settings.caseSensitive")}</Text>
-              <Switch
-                isSelected={newRuleCaseSensitive}
-                onSelectedChange={(value: boolean) => setNewRuleCaseSensitive(value)}
-              />
-            </View>
-          </View>
-          <Button className="mt-2" variant="outline" onPress={addRule}>
-            <Button.Label>{t("settings.addRule")}</Button.Label>
-          </Button>
-        </View>
+          ))}
+
+        <AddRuleForm
+          frameTypeDefinitions={frameTypeDefinitions}
+          frameTypeLabels={frameTypeLabels}
+          newRuleTarget={newRuleTarget}
+          newRuleMatchType={newRuleMatchType}
+          newRuleHeaderField={newRuleHeaderField}
+          newRulePattern={newRulePattern}
+          newRuleFrameType={newRuleFrameType}
+          newRulePriority={newRulePriority}
+          newRuleCaseSensitive={newRuleCaseSensitive}
+          onTargetChange={setNewRuleTarget}
+          onMatchTypeChange={setNewRuleMatchType}
+          onHeaderFieldChange={setNewRuleHeaderField}
+          onPatternChange={setNewRulePattern}
+          onFrameTypeChange={setNewRuleFrameType}
+          onPriorityChange={setNewRulePriority}
+          onCaseSensitiveChange={setNewRuleCaseSensitive}
+          onAddRule={addRule}
+        />
 
         <Separator />
         <View className="px-2 py-2">

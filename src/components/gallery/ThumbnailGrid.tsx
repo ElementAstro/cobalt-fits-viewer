@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable, useWindowDimensions } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { Image } from "expo-image";
@@ -17,6 +17,7 @@ import {
   type ThumbnailLoadingSummary,
 } from "./thumbnailLoading";
 import { ThumbnailProgressOverlay } from "./ThumbnailProgressOverlay";
+import { MediaTypeBadge } from "./MediaTypeBadge";
 
 interface ThumbnailGridProps {
   files: FitsMetadata[];
@@ -179,25 +180,12 @@ const ThumbnailItem = memo(function ThumbnailItem({
           </Skeleton>
         )}
 
-        {isVideo && (
-          <>
-            <View className="absolute right-1 top-1 rounded-full bg-black/60 p-1">
-              <Ionicons name="play" size={10} color="#fff" />
-            </View>
-            <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
-              <Text className="text-[8px] font-semibold text-white">{duration}</Text>
-            </View>
-          </>
-        )}
-        {isAudio && (
-          <>
-            <View className="absolute right-1 top-1 rounded-full bg-black/60 p-1">
-              <Ionicons name="musical-note" size={10} color="#fff" />
-            </View>
-            <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
-              <Text className="text-[8px] font-semibold text-white">{duration}</Text>
-            </View>
-          </>
+        {(isVideo || isAudio) && (
+          <MediaTypeBadge
+            mediaKind={isVideo ? "video" : "audio"}
+            duration={duration}
+            iconPosition="top-right"
+          />
         )}
 
         {/* Overlay info */}
@@ -277,21 +265,24 @@ export function ThumbnailGrid({
   const itemSize = Math.floor((screenWidth - gridPadding) / columns);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const [snapshots, setSnapshots] = useState<Record<string, ThumbnailLoadSnapshot>>({});
-
-  const fileIdsKey = useMemo(() => files.map((file) => file.id).join(","), [files]);
+  const prevFileIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     const currentIds = new Set(files.map((file) => file.id));
-    setSnapshots((prev) => {
-      const next: Record<string, ThumbnailLoadSnapshot> = {};
-      for (const [fileId, snapshot] of Object.entries(prev)) {
-        if (currentIds.has(fileId)) {
-          next[fileId] = snapshot;
+    const prev = prevFileIdsRef.current;
+    if (currentIds.size !== prev.size || [...currentIds].some((id) => !prev.has(id))) {
+      setSnapshots((prevSnaps) => {
+        const next: Record<string, ThumbnailLoadSnapshot> = {};
+        for (const [fileId, snapshot] of Object.entries(prevSnaps)) {
+          if (currentIds.has(fileId)) {
+            next[fileId] = snapshot;
+          }
         }
-      }
-      return next;
-    });
-  }, [fileIdsKey, files]);
+        return next;
+      });
+      prevFileIdsRef.current = currentIds;
+    }
+  }, [files]);
 
   const loadingSummary = useMemo(() => buildLoadingSummary(files, snapshots), [files, snapshots]);
 

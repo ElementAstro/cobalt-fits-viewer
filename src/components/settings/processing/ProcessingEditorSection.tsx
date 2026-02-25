@@ -1,11 +1,11 @@
-import { View } from "react-native";
 import { Separator } from "heroui-native";
+import { useShallow } from "zustand/react/shallow";
 import { useI18n } from "../../../i18n/useI18n";
 import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../../stores/useSettingsStore";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../../common/SettingsRow";
-import { SimpleSlider } from "../../common/SimpleSlider";
+import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
 
@@ -21,15 +21,29 @@ export function ProcessingEditorSection() {
   const haptics = useHapticFeedback();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
-  const defaultBlurSigma = useSettingsStore((s) => s.defaultBlurSigma);
-  const defaultSharpenAmount = useSettingsStore((s) => s.defaultSharpenAmount);
-  const defaultDenoiseRadius = useSettingsStore((s) => s.defaultDenoiseRadius);
-  const editorMaxUndo = useSettingsStore((s) => s.editorMaxUndo);
-  const setDefaultBlurSigma = useSettingsStore((s) => s.setDefaultBlurSigma);
-  const setDefaultSharpenAmount = useSettingsStore((s) => s.setDefaultSharpenAmount);
-  const setDefaultDenoiseRadius = useSettingsStore((s) => s.setDefaultDenoiseRadius);
-  const setEditorMaxUndo = useSettingsStore((s) => s.setEditorMaxUndo);
-  const resetSection = useSettingsStore((s) => s.resetSection);
+  const {
+    defaultBlurSigma,
+    defaultSharpenAmount,
+    defaultDenoiseRadius,
+    editorMaxUndo,
+    setDefaultBlurSigma,
+    setDefaultSharpenAmount,
+    setDefaultDenoiseRadius,
+    setEditorMaxUndo,
+    resetSection,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      defaultBlurSigma: s.defaultBlurSigma,
+      defaultSharpenAmount: s.defaultSharpenAmount,
+      defaultDenoiseRadius: s.defaultDenoiseRadius,
+      editorMaxUndo: s.editorMaxUndo,
+      setDefaultBlurSigma: s.setDefaultBlurSigma,
+      setDefaultSharpenAmount: s.setDefaultSharpenAmount,
+      setDefaultDenoiseRadius: s.setDefaultDenoiseRadius,
+      setEditorMaxUndo: s.setEditorMaxUndo,
+      resetSection: s.resetSection,
+    })),
+  );
 
   return (
     <>
@@ -40,56 +54,38 @@ export function ProcessingEditorSection() {
           resetSection("editor");
         }}
       >
-        <SettingsRow
+        <SettingsSliderRow
           testID="e2e-action-settings__processing-open-blur-sigma"
           icon="water-outline"
           label={t("settings.defaultBlurSigma")}
-          value={defaultBlurSigma.toFixed(1)}
+          value={defaultBlurSigma}
+          min={0.5}
+          max={10}
+          step={0.5}
+          onValueChange={setDefaultBlurSigma}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={defaultBlurSigma}
-            min={0.5}
-            max={10}
-            step={0.5}
-            onValueChange={setDefaultBlurSigma}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           testID="e2e-action-settings__processing-open-sharpen-amount"
           icon="sparkles-outline"
           label={t("settings.defaultSharpenAmount")}
-          value={defaultSharpenAmount.toFixed(1)}
+          value={defaultSharpenAmount}
+          min={0.5}
+          max={5}
+          step={0.5}
+          onValueChange={setDefaultSharpenAmount}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={defaultSharpenAmount}
-            min={0.5}
-            max={5}
-            step={0.5}
-            onValueChange={setDefaultSharpenAmount}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           testID="e2e-action-settings__processing-open-denoise-radius"
           icon="layers-outline"
           label={t("settings.defaultDenoiseRadius")}
-          value={`${defaultDenoiseRadius}`}
+          value={defaultDenoiseRadius}
+          min={1}
+          max={5}
+          step={1}
+          onValueChange={setDefaultDenoiseRadius}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={defaultDenoiseRadius}
-            min={1}
-            max={5}
-            step={1}
-            onValueChange={setDefaultDenoiseRadius}
-          />
-        </View>
         <Separator />
         <SettingsRow
           testID="e2e-action-settings__processing-open-editor-max-undo"

@@ -27,7 +27,7 @@ import {
 } from "../../lib/targets/coordinates";
 import { CategorySelector } from "./CategorySelector";
 import { TagInput } from "./TagInput";
-import { TARGET_TYPES } from "../../lib/targets/targetConstants";
+import { TARGET_TYPES, targetTypeI18nKey } from "../../lib/targets/targetConstants";
 import type { TargetType } from "../../lib/fits/types";
 
 interface AddTargetSheetProps {
@@ -227,19 +227,7 @@ export function AddTargetSheet({
                   variant={type === tt ? "primary" : "secondary"}
                   onPress={() => setType(tt)}
                 >
-                  <Chip.Label className="text-[10px]">
-                    {t(
-                      `targets.types.${tt}` as
-                        | "targets.types.galaxy"
-                        | "targets.types.nebula"
-                        | "targets.types.cluster"
-                        | "targets.types.planet"
-                        | "targets.types.moon"
-                        | "targets.types.sun"
-                        | "targets.types.comet"
-                        | "targets.types.other",
-                    )}
-                  </Chip.Label>
+                  <Chip.Label className="text-[10px]">{t(targetTypeI18nKey(tt))}</Chip.Label>
                 </Chip>
               ))}
             </View>

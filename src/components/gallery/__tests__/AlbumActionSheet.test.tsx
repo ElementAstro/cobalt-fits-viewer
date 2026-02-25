@@ -41,7 +41,7 @@ jest.mock("heroui-native", () => {
     BottomSheet,
     Button,
     Separator: () => null,
-    useThemeColor: () => ["#999", "#00ff00"],
+    useThemeColor: () => ["#999", "#00ff00", "#f00"],
   };
 });
 

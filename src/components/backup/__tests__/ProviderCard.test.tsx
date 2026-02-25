@@ -6,14 +6,30 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { ProviderCard } from "../ProviderCard";
 import type { ProviderConnectionState, BackupInfo } from "../../../lib/backup/types";
+jest.mock("../../../i18n/useI18n", () => {
+  const { mockI18nFactory } = require("../testHelpers");
+  return mockI18nFactory();
+});
 
-jest.mock("../../../i18n/useI18n", () => ({
-  useI18n: () => ({
-    t: (key: string) => key,
-    locale: "en",
-    setLocale: jest.fn(),
-  }),
-}));
+jest.mock("../../../lib/utils/fileManager", () => {
+  const { mockFormatFileSizeFactory } = require("../testHelpers");
+  return mockFormatFileSizeFactory();
+});
+
+jest.mock("heroui-native", () => {
+  const h = require("../testHelpers");
+  return {
+    ...h.mockCardFactory(),
+    ...h.mockButtonFactory(),
+    ...h.mockChipFactory(),
+    ...h.mockUseThemeColorFactory(),
+  };
+});
+
+jest.mock("@expo/vector-icons", () => {
+  const { mockIoniconsFactory } = require("../testHelpers");
+  return mockIoniconsFactory();
+});
 
 const baseConnection: ProviderConnectionState = {
   provider: "webdav",
@@ -142,5 +158,79 @@ describe("ProviderCard", () => {
       />,
     );
     expect(screen.getByText("backup.activeProvider")).toBeTruthy();
+  });
+
+  it("calls onDisconnect when disconnect button is pressed", () => {
+    const onDisconnect = jest.fn();
+    render(
+      <ProviderCard
+        connection={baseConnection}
+        onBackup={noop}
+        onRestore={noop}
+        onDisconnect={onDisconnect}
+      />,
+    );
+    // The disconnect button is the last button (icon-only)
+    const buttons = screen.getAllByTestId("button");
+    fireEvent.press(buttons[buttons.length - 1]);
+    expect(onDisconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables backup/restore buttons when disabled prop is true", () => {
+    render(
+      <ProviderCard
+        connection={baseConnection}
+        disabled
+        onBackup={noop}
+        onRestore={noop}
+        onDisconnect={noop}
+      />,
+    );
+    const buttons = screen.getAllByTestId("button");
+    // First two buttons are backup and restore
+    expect(buttons[0].props.accessibilityState?.disabled).toBe(true);
+    expect(buttons[1].props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it("disables backup/restore buttons when not connected", () => {
+    render(
+      <ProviderCard
+        connection={{ ...baseConnection, connected: false }}
+        onBackup={noop}
+        onRestore={noop}
+        onDisconnect={noop}
+      />,
+    );
+    const buttons = screen.getAllByTestId("button");
+    expect(buttons[0].props.accessibilityState?.disabled).toBe(true);
+    expect(buttons[1].props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it("displays quota information when quotaUsed and quotaTotal are provided", () => {
+    const connWithQuota: ProviderConnectionState = {
+      ...baseConnection,
+      quotaUsed: 1024 * 1024 * 500,
+      quotaTotal: 1024 * 1024 * 1024,
+    };
+    render(
+      <ProviderCard
+        connection={connWithQuota}
+        onBackup={noop}
+        onRestore={noop}
+        onDisconnect={noop}
+      />,
+    );
+    expect(screen.getByText("backup.storageUsed")).toBeTruthy();
+  });
+
+  it("shows 'never' for last backup when no lastBackupDate", () => {
+    const connNoDate: ProviderConnectionState = {
+      ...baseConnection,
+      lastBackupDate: undefined,
+    };
+    render(
+      <ProviderCard connection={connNoDate} onBackup={noop} onRestore={noop} onDisconnect={noop} />,
+    );
+    expect(screen.getByText("backup.never")).toBeTruthy();
   });
 });

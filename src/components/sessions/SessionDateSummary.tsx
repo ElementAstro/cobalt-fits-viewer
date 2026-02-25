@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { View, Text } from "react-native";
 import { Button, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,7 +17,7 @@ interface SessionDateSummaryProps {
   getPlanTargetName: (plan: ObservationPlan) => string;
 }
 
-export function SessionDateSummary({
+export const SessionDateSummary = memo(function SessionDateSummary({
   selectedDate,
   sessionsOnDate,
   plansOnDate,
@@ -113,4 +114,4 @@ export function SessionDateSummary({
       </View>
     </>
   );
-}
+});

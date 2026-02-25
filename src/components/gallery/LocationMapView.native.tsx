@@ -251,6 +251,10 @@ export function LocationMapView({
     [currentZoom, handleOpenNode, mapIndex, nodeById, onClusterAction],
   );
 
+  const handleMapRef = useCallback((mapInstance: MapRefLike | null) => {
+    mapRef.current = mapInstance;
+  }, []);
+
   if (!initialCamera) {
     return (
       <View className="flex-1 items-center justify-center" style={style}>
@@ -271,9 +275,7 @@ export function LocationMapView({
     return (
       <View style={[{ flex: 1 }, style]} onLayout={handleLayout}>
         <AppleMaps.View
-          ref={(ref) => {
-            mapRef.current = ref as MapRefLike | null;
-          }}
+          ref={handleMapRef as (ref: unknown) => void}
           style={{ flex: 1 }}
           cameraPosition={initialCamera}
           annotations={appleAnnotations}
@@ -313,9 +315,7 @@ export function LocationMapView({
     return (
       <View style={[{ flex: 1 }, style]} onLayout={handleLayout}>
         <GoogleMaps.View
-          ref={(ref) => {
-            mapRef.current = ref as MapRefLike | null;
-          }}
+          ref={handleMapRef as (ref: unknown) => void}
           style={{ flex: 1 }}
           cameraPosition={initialCamera}
           markers={googleMarkers}

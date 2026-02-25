@@ -1,17 +1,22 @@
+import React from "react";
 import { View } from "react-native";
 import { Button } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
-import type { EditorToolParams } from "../../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolParams } from "../../../hooks/useEditorToolState";
 import type { ImageEditOperation } from "../../../lib/utils/imageOperations";
 
 interface ToolParamsGeometryProps {
-  activeTool: string;
+  activeTool: EditorTool & string;
   params: EditorToolParams;
   onQuickAction: (op: ImageEditOperation) => void;
 }
 
-export function ToolParamsGeometry({ activeTool, params, onQuickAction }: ToolParamsGeometryProps) {
+export const ToolParamsGeometry = React.memo(function ToolParamsGeometry({
+  activeTool,
+  params,
+  onQuickAction,
+}: ToolParamsGeometryProps) {
   const { t } = useI18n();
 
   switch (activeTool) {
@@ -96,4 +101,4 @@ export function ToolParamsGeometry({ activeTool, params, onQuickAction }: ToolPa
     default:
       return null;
   }
-}
+});

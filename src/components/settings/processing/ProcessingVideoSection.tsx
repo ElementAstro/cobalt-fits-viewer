@@ -1,12 +1,12 @@
-import { View } from "react-native";
 import { Separator } from "heroui-native";
-import { SettingsToggleRow } from "../../../components/common/SettingsToggleRow";
+import { useShallow } from "zustand/react/shallow";
+import { SettingsToggleRow } from "../../common/SettingsToggleRow";
 import { useI18n } from "../../../i18n/useI18n";
 import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../../stores/useSettingsStore";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../../common/SettingsRow";
-import { SimpleSlider } from "../../common/SimpleSlider";
+import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
 
@@ -18,35 +18,63 @@ export function ProcessingVideoSection() {
   const haptics = useHapticFeedback();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
-  const videoCoreEnabled = useSettingsStore((s) => s.videoCoreEnabled);
-  const videoProcessingEnabled = useSettingsStore((s) => s.videoProcessingEnabled);
-  const videoAutoplay = useSettingsStore((s) => s.videoAutoplay);
-  const videoLoopByDefault = useSettingsStore((s) => s.videoLoopByDefault);
-  const videoMutedByDefault = useSettingsStore((s) => s.videoMutedByDefault);
-  const videoThumbnailTimeMs = useSettingsStore((s) => s.videoThumbnailTimeMs);
-  const videoProcessingConcurrency = useSettingsStore((s) => s.videoProcessingConcurrency);
-  const defaultVideoProfile = useSettingsStore((s) => s.defaultVideoProfile);
-  const defaultVideoTargetPreset = useSettingsStore((s) => s.defaultVideoTargetPreset);
-  const setVideoCoreEnabled = useSettingsStore((s) => s.setVideoCoreEnabled);
-  const setVideoProcessingEnabled = useSettingsStore((s) => s.setVideoProcessingEnabled);
-  const setVideoAutoplay = useSettingsStore((s) => s.setVideoAutoplay);
-  const setVideoLoopByDefault = useSettingsStore((s) => s.setVideoLoopByDefault);
-  const setVideoMutedByDefault = useSettingsStore((s) => s.setVideoMutedByDefault);
-  const setVideoThumbnailTimeMs = useSettingsStore((s) => s.setVideoThumbnailTimeMs);
-  const setVideoProcessingConcurrency = useSettingsStore((s) => s.setVideoProcessingConcurrency);
-  const setDefaultVideoProfile = useSettingsStore((s) => s.setDefaultVideoProfile);
-  const setDefaultVideoTargetPreset = useSettingsStore((s) => s.setDefaultVideoTargetPreset);
-  const resetSection = useSettingsStore((s) => s.resetSection);
+  const {
+    videoCoreEnabled,
+    videoProcessingEnabled,
+    videoAutoplay,
+    videoLoopByDefault,
+    videoMutedByDefault,
+    videoThumbnailTimeMs,
+    videoProcessingConcurrency,
+    defaultVideoProfile,
+    defaultVideoTargetPreset,
+    setVideoCoreEnabled,
+    setVideoProcessingEnabled,
+    setVideoAutoplay,
+    setVideoLoopByDefault,
+    setVideoMutedByDefault,
+    setVideoThumbnailTimeMs,
+    setVideoProcessingConcurrency,
+    setDefaultVideoProfile,
+    setDefaultVideoTargetPreset,
+    resetSection,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      videoCoreEnabled: s.videoCoreEnabled,
+      videoProcessingEnabled: s.videoProcessingEnabled,
+      videoAutoplay: s.videoAutoplay,
+      videoLoopByDefault: s.videoLoopByDefault,
+      videoMutedByDefault: s.videoMutedByDefault,
+      videoThumbnailTimeMs: s.videoThumbnailTimeMs,
+      videoProcessingConcurrency: s.videoProcessingConcurrency,
+      defaultVideoProfile: s.defaultVideoProfile,
+      defaultVideoTargetPreset: s.defaultVideoTargetPreset,
+      setVideoCoreEnabled: s.setVideoCoreEnabled,
+      setVideoProcessingEnabled: s.setVideoProcessingEnabled,
+      setVideoAutoplay: s.setVideoAutoplay,
+      setVideoLoopByDefault: s.setVideoLoopByDefault,
+      setVideoMutedByDefault: s.setVideoMutedByDefault,
+      setVideoThumbnailTimeMs: s.setVideoThumbnailTimeMs,
+      setVideoProcessingConcurrency: s.setVideoProcessingConcurrency,
+      setDefaultVideoProfile: s.setDefaultVideoProfile,
+      setDefaultVideoTargetPreset: s.setDefaultVideoTargetPreset,
+      resetSection: s.resetSection,
+    })),
+  );
 
+  const VIDEO_PROFILE_I18N: Record<string, string> = {
+    compatibility: "settings.videoProfileCompatibility",
+    balanced: "settings.videoProfileBalanced",
+    quality: "settings.videoProfileQuality",
+  };
   const videoProfileLabel = (value: (typeof VIDEO_PROFILE_VALUES)[number]) =>
-    value === "compatibility"
-      ? t("settings.videoProfileCompatibility")
-      : value === "quality"
-        ? t("settings.videoProfileQuality")
-        : t("settings.videoProfileBalanced");
+    t(VIDEO_PROFILE_I18N[value] ?? value);
 
+  const VIDEO_TARGET_PRESET_I18N: Record<string, string> = {
+    custom: "settings.videoPresetCustom",
+  };
   const videoTargetPresetLabel = (value: (typeof VIDEO_TARGET_PRESET_VALUES)[number]) =>
-    value === "custom" ? t("settings.videoPresetCustom") : value;
+    VIDEO_TARGET_PRESET_I18N[value] ? t(VIDEO_TARGET_PRESET_I18N[value]) : value;
 
   const videoProfileOptions = VIDEO_PROFILE_VALUES.map((value) => ({
     label: videoProfileLabel(value),
@@ -125,37 +153,26 @@ export function ProcessingVideoSection() {
           onPress={() => openPicker("videoTargetPreset")}
         />
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="image-outline"
           label={t("settings.videoThumbnailTimeMs")}
-          value={`${videoThumbnailTimeMs}ms`}
+          value={videoThumbnailTimeMs}
+          format={(v) => `${v}ms`}
+          min={0}
+          max={5000}
+          step={100}
+          onValueChange={setVideoThumbnailTimeMs}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={videoThumbnailTimeMs}
-            min={0}
-            max={5000}
-            step={100}
-            onValueChange={setVideoThumbnailTimeMs}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="git-branch-outline"
           label={t("settings.videoProcessingConcurrency")}
-          value={`${videoProcessingConcurrency}`}
+          value={videoProcessingConcurrency}
+          min={1}
+          max={6}
+          step={1}
+          onValueChange={setVideoProcessingConcurrency}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={videoProcessingConcurrency}
-            min={1}
-            max={6}
-            step={1}
-            onValueChange={setVideoProcessingConcurrency}
-          />
-        </View>
       </SettingsSection>
 
       <OptionPickerModal

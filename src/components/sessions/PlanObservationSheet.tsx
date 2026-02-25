@@ -16,6 +16,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
+import { formatTimeHHMM, parseGeoCoordinate } from "../../lib/sessions/format";
+import { toLocalDateKey } from "../../lib/sessions/planUtils";
 import { useCalendar } from "../../hooks/useCalendar";
 import { LocationService } from "../../hooks/useLocation";
 import { useSettingsStore } from "../../stores/useSettingsStore";
@@ -204,24 +206,12 @@ export function PlanObservationSheet({
       return;
     }
 
-    const parseCoordinate = (
-      rawValue: string,
-      range: { min: number; max: number },
-    ): number | undefined | null => {
-      const trimmed = rawValue.trim();
-      if (!trimmed) return undefined;
-      const value = Number(trimmed);
-      if (!Number.isFinite(value)) return null;
-      if (value < range.min || value > range.max) return null;
-      return value;
-    };
-
-    const latitude = parseCoordinate(latitudeInput, { min: -90, max: 90 });
+    const latitude = parseGeoCoordinate(latitudeInput, { min: -90, max: 90 });
     if (latitude === null) {
       Alert.alert(t("common.error"), t("sessions.invalidLatitude"));
       return;
     }
-    const longitude = parseCoordinate(longitudeInput, { min: -180, max: 180 });
+    const longitude = parseGeoCoordinate(longitudeInput, { min: -180, max: 180 });
     if (longitude === null) {
       Alert.alert(t("common.error"), t("sessions.invalidLongitude"));
       return;
@@ -308,12 +298,6 @@ export function PlanObservationSheet({
       onClose();
     }
   };
-
-  const formatDate = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-
-  const formatTime = (date: Date) =>
-    `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
 
   const targetSuggestions = useMemo(() => {
     const q = targetName.trim().toLowerCase();
@@ -420,7 +404,7 @@ export function PlanObservationSheet({
                     <Text className="text-xs text-muted">{t("sessions.plannedDate")}</Text>
                   </View>
                   <Text className="text-xs font-medium text-foreground">
-                    {formatDate(startDate)}
+                    {toLocalDateKey(startDate)}
                   </Text>
                 </View>
                 <Separator className="my-1.5" />
@@ -447,7 +431,7 @@ export function PlanObservationSheet({
                       <Ionicons name="play-back-outline" size={11} color={mutedColor} />
                     </Button>
                     <Text className="text-xs font-medium text-foreground w-12 text-center">
-                      {formatTime(startDate)}
+                      {formatTimeHHMM(startDate)}
                     </Text>
                     <Button
                       size="sm"
@@ -491,7 +475,7 @@ export function PlanObservationSheet({
                       <Ionicons name="play-back-outline" size={11} color={mutedColor} />
                     </Button>
                     <Text className="text-xs font-medium text-foreground w-12 text-center">
-                      {formatTime(endDate)}
+                      {formatTimeHHMM(endDate)}
                     </Text>
                     <Button
                       size="sm"

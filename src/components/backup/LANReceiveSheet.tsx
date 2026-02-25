@@ -5,12 +5,22 @@
 
 import { useState } from "react";
 import { View, Text } from "react-native";
-import { Button, Dialog, Input, Label, Spinner, Surface, TextField } from "heroui-native";
+import {
+  Button,
+  Dialog,
+  FieldError,
+  Input,
+  Label,
+  Spinner,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { LANReceiveStatus } from "../../hooks/useLANTransfer";
 import type { BackupProgress } from "../../lib/backup/types";
-import { formatFileSize } from "../../lib/utils/fileManager";
+import { LAN_PORT_BASE } from "../../lib/backup/lanTransfer";
+import { BackupProgressDisplay } from "./BackupProgressDisplay";
 
 interface LANReceiveSheetProps {
   visible: boolean;
@@ -30,33 +40,53 @@ export function LANReceiveSheet({
   onClose,
 }: LANReceiveSheetProps) {
   const { t } = useI18n();
+  const successColor = useThemeColor("success");
+  const dangerColor = useThemeColor("danger");
+  const foregroundColor = useThemeColor("foreground");
 
   const [host, setHost] = useState("");
   const [port, setPort] = useState("");
   const [pin, setPin] = useState("");
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {};
+    if (!host.trim()) {
+      errors.host = t("backup.lanHostRequired");
+    } else if (!/^[\w.-]+$/.test(host.trim())) {
+      errors.host = t("backup.lanHostInvalid");
+    }
+    if (port.trim()) {
+      const portNum = parseInt(port, 10);
+      if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
+        errors.port = t("backup.lanPortInvalid");
+      }
+    }
+    if (!pin.trim()) {
+      errors.pin = t("backup.lanPinRequired");
+    } else if (!/^\d{4}$/.test(pin.trim())) {
+      errors.pin = t("backup.lanPinInvalid");
+    }
+    setValidationErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
   const handleConnect = () => {
-    if (!host || !pin) return;
-    const portNum = parseInt(port, 10) || 18080;
-    onConnect(host, portNum, pin);
+    if (!validate()) return;
+    const portNum = parseInt(port, 10) || LAN_PORT_BASE;
+    onConnect(host.trim(), portNum, pin.trim());
   };
 
   const handleClose = () => {
     setHost("");
     setPort("");
     setPin("");
+    setValidationErrors({});
     onClose();
   };
 
   const isConnecting =
     status === "connecting" || status === "downloading" || status === "importing";
-
-  const percentage = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-  const hasByteProgress =
-    progress.bytesTransferred != null && progress.bytesTotal != null && progress.bytesTotal > 0;
-  const bytePercentage = hasByteProgress
-    ? Math.round((progress.bytesTransferred! / progress.bytesTotal!) * 100)
-    : percentage;
 
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && handleClose()}>
@@ -72,7 +102,7 @@ export function LANReceiveSheet({
             <View className="gap-3">
               <Text className="text-xs text-muted">{t("backup.lanReceiveInstructions")}</Text>
 
-              <TextField isRequired className="mb-1">
+              <TextField isRequired isInvalid={!!validationErrors.host} className="mb-1">
                 <Label>{t("backup.lanHost")}</Label>
                 <Input
                   value={host}
@@ -82,9 +112,10 @@ export function LANReceiveSheet({
                   autoCorrect={false}
                   keyboardType="url"
                 />
+                {validationErrors.host && <FieldError>{validationErrors.host}</FieldError>}
               </TextField>
 
-              <TextField className="mb-1">
+              <TextField isInvalid={!!validationErrors.port} className="mb-1">
                 <Label>{t("backup.lanPort")}</Label>
                 <Input
                   value={port}
@@ -92,9 +123,10 @@ export function LANReceiveSheet({
                   placeholder="18080"
                   keyboardType="number-pad"
                 />
+                {validationErrors.port && <FieldError>{validationErrors.port}</FieldError>}
               </TextField>
 
-              <TextField isRequired className="mb-1">
+              <TextField isRequired isInvalid={!!validationErrors.pin} className="mb-1">
                 <Label>PIN</Label>
                 <Input
                   value={pin}
@@ -103,15 +135,16 @@ export function LANReceiveSheet({
                   keyboardType="number-pad"
                   maxLength={4}
                 />
+                {validationErrors.pin && <FieldError>{validationErrors.pin}</FieldError>}
               </TextField>
 
               <Button
                 variant="primary"
                 className="mt-2"
                 onPress={handleConnect}
-                isDisabled={!host || !pin}
+                isDisabled={!host.trim() || !pin.trim()}
               >
-                <Ionicons name="download-outline" size={16} color="#fff" />
+                <Ionicons name="download-outline" size={16} color={foregroundColor} />
                 <Button.Label>{t("backup.lanStartReceive")}</Button.Label>
               </Button>
             </View>
@@ -128,31 +161,13 @@ export function LANReceiveSheet({
                     : t("backup.lanImporting")}
               </Text>
 
-              {progress.total > 0 && (
-                <>
-                  <Surface variant="secondary" className="h-2 w-full overflow-hidden rounded-full">
-                    <View
-                      className="h-full rounded-full bg-accent"
-                      style={{ width: `${bytePercentage}%` }}
-                    />
-                  </Surface>
-                  <Text className="text-xs text-muted">
-                    {progress.current} / {progress.total} ({bytePercentage}%)
-                  </Text>
-                  {hasByteProgress && (
-                    <Text className="text-xs text-muted">
-                      {formatFileSize(progress.bytesTransferred!)} /{" "}
-                      {formatFileSize(progress.bytesTotal!)}
-                    </Text>
-                  )}
-                </>
-              )}
+              <BackupProgressDisplay progress={progress} />
             </View>
           )}
 
           {status === "done" && (
             <View className="items-center gap-3 py-4">
-              <Ionicons name="checkmark-circle" size={40} color="#22c55e" />
+              <Ionicons name="checkmark-circle" size={40} color={successColor} />
               <Text className="text-sm font-medium text-foreground">
                 {t("backup.lanReceiveComplete")}
               </Text>
@@ -161,7 +176,7 @@ export function LANReceiveSheet({
 
           {status === "error" && (
             <View className="items-center gap-3 py-4">
-              <Ionicons name="alert-circle" size={40} color="#ef4444" />
+              <Ionicons name="alert-circle" size={40} color={dangerColor} />
               <Text className="text-center text-sm text-danger">{error}</Text>
               <Button variant="outline" size="sm" onPress={onClose}>
                 <Button.Label>{t("common.close")}</Button.Label>

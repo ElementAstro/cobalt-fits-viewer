@@ -30,7 +30,7 @@ export function TrashSheet({
   onDeleteForever,
 }: TrashSheetProps) {
   const { t } = useI18n();
-  const [mutedColor] = useThemeColor(["muted"]);
+  const [mutedColor, dangerColor] = useThemeColor(["muted", "danger"]);
 
   const totalSize = useMemo(
     () => items.reduce((sum, item) => sum + item.file.fileSize, 0),
@@ -82,7 +82,7 @@ export function TrashSheet({
                       variant="ghost"
                       onPress={() => onDeleteForever([item.trashId])}
                     >
-                      <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                      <Ionicons name="trash-outline" size={16} color={dangerColor} />
                     </Button>
                   </View>
                 ))}

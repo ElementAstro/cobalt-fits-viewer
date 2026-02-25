@@ -6,91 +6,39 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { LANReceiveSheet } from "../LANReceiveSheet";
 import type { BackupProgress } from "../../../lib/backup/types";
+jest.mock("../../../i18n/useI18n", () => {
+  const { mockI18nFactory } = require("../testHelpers");
+  return mockI18nFactory();
+});
 
-jest.mock("../../../i18n/useI18n", () => ({
-  useI18n: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-jest.mock("../../../lib/utils/fileManager", () => ({
-  formatFileSize: (bytes: number) => `${bytes}B`,
-}));
+jest.mock("../../../lib/utils/fileManager", () => {
+  const { mockFormatFileSizeFactory } = require("../testHelpers");
+  return mockFormatFileSizeFactory();
+});
 
 jest.mock("heroui-native", () => {
-  const RN = require("react-native");
-  type MockProps = { children?: React.ReactNode } & Record<string, unknown>;
-  type MockDialogProps = MockProps & {
-    isOpen?: boolean;
-    onOpenChange?: (open: boolean) => void;
+  const h = require("../testHelpers");
+  return {
+    ...h.mockDialogFactory(),
+    ...h.mockButtonFactory(),
+    ...h.mockInputFactory(),
+    ...h.mockLabelFactory(),
+    ...h.mockSpinnerFactory(),
+    ...h.mockSurfaceFactory(),
+    ...h.mockTextFieldFactory(),
+    ...h.mockUseThemeColorFactory(),
+    ...h.mockFieldErrorFactory(),
   };
-  type MockButtonProps = MockProps & {
-    onPress?: () => void;
-    isDisabled?: boolean;
-  };
-  type MockTextFieldProps = MockProps & { isRequired?: boolean; isInvalid?: boolean };
-
-  const Dialog = ({ isOpen, children, onOpenChange }: MockDialogProps) =>
-    isOpen ? (
-      <RN.View testID="dialog" onTouchEnd={() => onOpenChange?.(false)}>
-        {children}
-      </RN.View>
-    ) : null;
-  Dialog.Portal = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Overlay = () => <RN.View />;
-  Dialog.Content = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Title = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  Dialog.Close = () => <RN.Pressable testID="dialog-close" />;
-
-  const Button = ({ children, onPress, isDisabled }: MockButtonProps) => (
-    <RN.Pressable
-      testID="button"
-      disabled={isDisabled}
-      onPress={onPress}
-      accessibilityState={{ disabled: !!isDisabled }}
-    >
-      {children}
-    </RN.Pressable>
-  );
-  Button.Label = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-
-  const Input = ({
-    value,
-    onChangeText,
-    placeholder,
-    testID,
-    ...rest
-  }: {
-    value?: string;
-    onChangeText?: (t: string) => void;
-    placeholder?: string;
-    testID?: string;
-  } & Record<string, unknown>) => (
-    <RN.TextInput
-      testID={testID ?? `input-${placeholder}`}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      {...rest}
-    />
-  );
-
-  const Label = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  const Spinner = () => <RN.View testID="spinner" />;
-  const Surface = ({ children }: MockProps) => <RN.View testID="surface">{children}</RN.View>;
-  const TextField = ({ children }: MockTextFieldProps) => <RN.View>{children}</RN.View>;
-
-  return { Button, Dialog, Input, Label, Spinner, Surface, TextField };
 });
 
 jest.mock("@expo/vector-icons", () => {
-  const RN = require("react-native");
-  return {
-    Ionicons: ({ name, ...props }: Record<string, unknown>) => (
-      <RN.Text testID={`icon-${name}`} {...props} />
-    ),
-  };
+  const { mockIoniconsFactory } = require("../testHelpers");
+  return mockIoniconsFactory();
 });
+
+jest.mock("../../../lib/backup/lanTransfer", () => ({
+  LAN_PORT_BASE: 18080,
+}));
 
 const idleProgress: BackupProgress = { phase: "idle", current: 0, total: 0 };
 
@@ -374,5 +322,112 @@ describe("LANReceiveSheet", () => {
     );
     fireEvent(screen.getByTestId("dialog"), "touchEnd");
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables connect button when host is empty", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="idle"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.changeText(screen.getByTestId("input-1234"), "5678");
+    const buttons = screen.getAllByTestId("button");
+    expect(buttons[0].props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it("disables connect button when pin is empty", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="idle"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.changeText(screen.getByTestId("input-192.168.1.100"), "10.0.0.1");
+    const buttons = screen.getAllByTestId("button");
+    expect(buttons[0].props.accessibilityState?.disabled).toBe(true);
+  });
+
+  it("shows validation error when pin is not 4 digits", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="idle"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.changeText(screen.getByTestId("input-192.168.1.100"), "10.0.0.1");
+    fireEvent.changeText(screen.getByTestId("input-1234"), "abc");
+    const buttons = screen.getAllByTestId("button");
+    fireEvent.press(buttons[0]);
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(screen.getByText("backup.lanPinInvalid")).toBeTruthy();
+  });
+
+  it("shows validation error when port is out of range", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="idle"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.changeText(screen.getByTestId("input-192.168.1.100"), "10.0.0.1");
+    fireEvent.changeText(screen.getByTestId("input-18080"), "99999");
+    fireEvent.changeText(screen.getByTestId("input-1234"), "5678");
+    const buttons = screen.getAllByTestId("button");
+    fireEvent.press(buttons[0]);
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(screen.getByText("backup.lanPortInvalid")).toBeTruthy();
+  });
+
+  it("allows valid IP address and connects successfully", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="idle"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.changeText(screen.getByTestId("input-192.168.1.100"), "192.168.1.50");
+    fireEvent.changeText(screen.getByTestId("input-1234"), "1234");
+    const buttons = screen.getAllByTestId("button");
+    fireEvent.press(buttons[0]);
+    expect(onConnect).toHaveBeenCalledWith("192.168.1.50", 18080, "1234");
+  });
+
+  it("allows valid hostname and connects successfully", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="idle"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.changeText(screen.getByTestId("input-192.168.1.100"), "my-nas.local");
+    fireEvent.changeText(screen.getByTestId("input-1234"), "9999");
+    const buttons = screen.getAllByTestId("button");
+    fireEvent.press(buttons[0]);
+    expect(onConnect).toHaveBeenCalledWith("my-nas.local", 18080, "9999");
   });
 });

@@ -1,14 +1,21 @@
 import {
+  FilesContent,
   FilesHeader,
   FilesToolbar,
   FilesSelectionBar,
   FilesSortBar,
   FilesFilterBar,
   ImportOptionsSheet,
+  SelectionActionsSheet,
+  SheetActionItem,
   UndoSnackbar,
 } from "../index";
 
 describe("files/index barrel exports", () => {
+  it("exports FilesContent", () => {
+    expect(FilesContent).toBeDefined();
+  });
+
   it("exports FilesHeader", () => {
     expect(FilesHeader).toBeDefined();
   });
@@ -31,6 +38,14 @@ describe("files/index barrel exports", () => {
 
   it("exports ImportOptionsSheet", () => {
     expect(ImportOptionsSheet).toBeDefined();
+  });
+
+  it("exports SelectionActionsSheet", () => {
+    expect(SelectionActionsSheet).toBeDefined();
+  });
+
+  it("exports SheetActionItem", () => {
+    expect(SheetActionItem).toBeDefined();
   });
 
   it("exports UndoSnackbar", () => {

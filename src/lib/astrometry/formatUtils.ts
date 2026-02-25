@@ -36,6 +36,21 @@ export function formatFieldSize(deg: number): string {
 }
 
 /**
+ * 将 RA (度) 格式化为简洁的小时字符串 e.g. "5.58h"
+ */
+export function formatRACompact(deg: number): string {
+  return `${(deg / 15).toFixed(2)}h`;
+}
+
+/**
+ * 将 DEC (度) 格式化为简洁的度数字符串 e.g. "+5.38°" / "-5.38°"
+ */
+export function formatDecCompact(deg: number): string {
+  const sign = deg >= 0 ? "+" : "";
+  return `${sign}${deg.toFixed(2)}°`;
+}
+
+/**
  * 格式化持续时间 (毫秒) 为可读字符串
  */
 export function formatDuration(ms: number): string {

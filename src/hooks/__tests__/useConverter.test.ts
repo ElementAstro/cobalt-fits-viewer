@@ -11,6 +11,10 @@ jest.mock("../../stores/useSettingsStore", () => ({
     }),
 }));
 
+jest.mock("zustand/react/shallow", () => ({
+  useShallow: <T>(fn: (state: unknown) => T) => fn,
+}));
+
 jest.mock("../../stores/useConverterStore", () => ({
   useConverterStore: jest.fn(),
 }));
@@ -73,6 +77,7 @@ describe("useConverter", () => {
   const applyPreset = jest.fn();
   const addBatchTask = jest.fn();
   const updateBatchTask = jest.fn();
+  const removeBatchTask = jest.fn();
   const clearCompletedTasks = jest.fn();
   const state = {
     currentOptions: {
@@ -93,6 +98,7 @@ describe("useConverter", () => {
     batchTasks: [],
     addBatchTask,
     updateBatchTask,
+    removeBatchTask,
     clearCompletedTasks,
   };
 
@@ -127,7 +133,7 @@ describe("useConverter", () => {
     expect(size).toBe(1234);
   });
 
-  it("handles batch start/cancel/retry and helpers", async () => {
+  it("handles batch start/cancel and helpers", async () => {
     let capturedSignal: AbortSignal | undefined;
     batchLib.executeBatchConvert.mockImplementation(
       (
@@ -159,25 +165,78 @@ describe("useConverter", () => {
     expect(updateBatchTask).toHaveBeenCalledWith(taskId, { status: "cancelled" });
     expect(capturedSignal?.aborted).toBe(true);
 
-    act(() => {
-      result.current.retryTask(taskId);
-    });
-    expect(updateBatchTask).toHaveBeenCalledWith(taskId, {
-      status: "pending",
-      progress: 0,
-      completed: 0,
-      failed: 0,
-      skipped: 0,
-      warnings: [],
-      error: undefined,
-    });
-
     expect(result.current.getOutputFilename("a.fits")).toBe("out.png");
     expect(batchLib.generateOutputFilename).toHaveBeenCalledWith("a.fits", "png", "original");
     expect(result.current.allPresets).toEqual(["p1"]);
     expect(result.current.supportsQuality("png")).toBe(true);
     expect(result.current.getSupportedBitDepths("png")).toEqual([8, 16]);
     expect(clearCompletedTasks).toBe(result.current.clearCompletedTasks);
+  });
+
+  it("retryTask removes old task and re-executes batch conversion using stored sourceFiles", () => {
+    const sourceFiles = [{ id: "f1", filepath: "/tmp/a", filename: "a.fits" }];
+    const stateWithTask = {
+      ...state,
+      batchTasks: [
+        {
+          id: "task-1",
+          type: "convert",
+          status: "failed" as const,
+          progress: 100,
+          total: 1,
+          completed: 0,
+          failed: 1,
+          createdAt: Date.now(),
+          sourceFiles,
+        },
+      ],
+    };
+    useConverterStore.mockImplementation((selector: (s: typeof stateWithTask) => unknown) =>
+      selector(stateWithTask),
+    );
+    batchLib.executeBatchConvert.mockReturnValue(Promise.resolve());
+
+    const { result } = renderHook(() => useConverter());
+
+    act(() => {
+      result.current.retryTask("task-1");
+    });
+
+    // Old task should be removed first
+    expect(removeBatchTask).toHaveBeenCalledWith("task-1");
+    // Then a new task is created via startBatchConvert
+    expect(batchLib.createBatchTask).toHaveBeenCalled();
+    expect(addBatchTask).toHaveBeenCalled();
+  });
+
+  it("retryTask does nothing when task has no sourceFiles", () => {
+    const stateWithTask = {
+      ...state,
+      batchTasks: [
+        {
+          id: "task-1",
+          type: "convert",
+          status: "failed" as const,
+          progress: 100,
+          total: 1,
+          completed: 0,
+          failed: 1,
+          createdAt: Date.now(),
+        },
+      ],
+    };
+    useConverterStore.mockImplementation((selector: (s: typeof stateWithTask) => unknown) =>
+      selector(stateWithTask),
+    );
+
+    const { result } = renderHook(() => useConverter());
+
+    act(() => {
+      result.current.retryTask("task-1");
+    });
+
+    expect(removeBatchTask).not.toHaveBeenCalled();
+    expect(batchLib.executeBatchConvert).not.toHaveBeenCalled();
   });
 
   it("prefilters non-image files as skipped before batch execution", () => {

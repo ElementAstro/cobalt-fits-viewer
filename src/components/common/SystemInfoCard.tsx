@@ -2,8 +2,8 @@
  * 系统信息展示卡片
  */
 
-import { View, Text, ActivityIndicator } from "react-native";
-import { Button, Card, Separator, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { Button, Card, Separator, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
@@ -11,17 +11,7 @@ import { useI18n } from "../../i18n/useI18n";
 import { useSystemInfo } from "../../hooks/useLogger";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { formatBytes } from "../../lib/logger";
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View className="flex-row items-center justify-between py-1.5">
-      <Text className="text-xs text-muted">{label}</Text>
-      <Text className="text-xs text-foreground" selectable>
-        {value || "N/A"}
-      </Text>
-    </View>
-  );
-}
+import { InfoRow } from "./InfoRow";
 
 function SectionHeader({
   icon,
@@ -61,7 +51,7 @@ export function SystemInfoCard() {
     return (
       <Card variant="secondary">
         <Card.Body className="items-center py-8">
-          <ActivityIndicator size="small" color={accentColor} />
+          <Spinner size="sm" color="default" />
           <Text className="mt-2 text-xs text-muted">{t("systemInfo.collecting")}</Text>
         </Card.Body>
       </Card>
@@ -77,18 +67,37 @@ export function SystemInfoCard() {
       <Card.Body className="px-4 py-2">
         {/* Device */}
         <SectionHeader icon="phone-portrait-outline" title={t("systemInfo.device")} />
-        <InfoRow label={t("systemInfo.brand")} value={device.brand ?? "N/A"} />
-        <InfoRow label={t("systemInfo.model")} value={device.modelName ?? "N/A"} />
-        <InfoRow label={t("systemInfo.deviceType")} value={device.deviceType} />
+        <InfoRow label={t("systemInfo.brand")} value={device.brand ?? "N/A"} size="sm" selectable />
+        <InfoRow
+          label={t("systemInfo.model")}
+          value={device.modelName ?? "N/A"}
+          size="sm"
+          selectable
+        />
+        <InfoRow
+          label={t("systemInfo.deviceType")}
+          value={device.deviceType}
+          size="sm"
+          selectable
+        />
         <InfoRow
           label={t("systemInfo.os")}
           value={`${device.osName ?? ""} ${device.osVersion ?? ""}`}
+          size="sm"
+          selectable
         />
         <InfoRow
           label={t("systemInfo.memory")}
           value={device.totalMemory ? formatBytes(device.totalMemory) : "N/A"}
+          size="sm"
+          selectable
         />
-        <InfoRow label={t("systemInfo.isDevice")} value={device.isDevice ? "Yes" : "Simulator"} />
+        <InfoRow
+          label={t("systemInfo.isDevice")}
+          value={device.isDevice ? "Yes" : "Simulator"}
+          size="sm"
+          selectable
+        />
 
         <Separator className="my-1" />
 
@@ -97,13 +106,27 @@ export function SystemInfoCard() {
         <InfoRow
           label={t("systemInfo.appVersion")}
           value={`${app.appVersion ?? "N/A"} (${app.buildVersion ?? "N/A"})`}
+          size="sm"
+          selectable
         />
-        <InfoRow label={t("systemInfo.appId")} value={app.appId ?? "N/A"} />
+        <InfoRow label={t("systemInfo.appId")} value={app.appId ?? "N/A"} size="sm" selectable />
         {app.runtimeVersion && (
-          <InfoRow label={t("systemInfo.runtimeVersion")} value={app.runtimeVersion} />
+          <InfoRow
+            label={t("systemInfo.runtimeVersion")}
+            value={app.runtimeVersion}
+            size="sm"
+            selectable
+          />
         )}
-        {app.sdkVersion && <InfoRow label={t("systemInfo.sdkVersion")} value={app.sdkVersion} />}
-        <InfoRow label={t("systemInfo.debugMode")} value={app.isDebugMode ? "Yes" : "No"} />
+        {app.sdkVersion && (
+          <InfoRow label={t("systemInfo.sdkVersion")} value={app.sdkVersion} size="sm" selectable />
+        )}
+        <InfoRow
+          label={t("systemInfo.debugMode")}
+          value={app.isDebugMode ? "Yes" : "No"}
+          size="sm"
+          selectable
+        />
 
         <Separator className="my-1" />
 
@@ -116,34 +139,60 @@ export function SystemInfoCard() {
         <InfoRow
           label={t("systemInfo.batteryLevel")}
           value={battery.level >= 0 ? `${battery.level}%` : "N/A"}
+          size="sm"
+          selectable
         />
-        <InfoRow label={t("systemInfo.batteryState")} value={battery.state} />
+        <InfoRow label={t("systemInfo.batteryState")} value={battery.state} size="sm" selectable />
         <InfoRow
           label={t("systemInfo.lowPowerMode")}
           value={battery.isLowPowerMode ? "Yes" : "No"}
+          size="sm"
+          selectable
         />
 
         <Separator className="my-1" />
 
         {/* Network */}
         <SectionHeader icon="wifi-outline" title={t("systemInfo.network")} />
-        <InfoRow label={t("systemInfo.networkType")} value={network.type} />
-        <InfoRow label={t("systemInfo.connected")} value={network.isConnected ? "Yes" : "No"} />
+        <InfoRow label={t("systemInfo.networkType")} value={network.type} size="sm" selectable />
+        <InfoRow
+          label={t("systemInfo.connected")}
+          value={network.isConnected ? "Yes" : "No"}
+          size="sm"
+          selectable
+        />
         {network.ipAddress && (
-          <InfoRow label={t("systemInfo.ipAddress")} value={network.ipAddress} />
+          <InfoRow
+            label={t("systemInfo.ipAddress")}
+            value={network.ipAddress}
+            size="sm"
+            selectable
+          />
         )}
 
         <Separator className="my-1" />
 
         {/* Runtime */}
         <SectionHeader icon="code-slash-outline" title={t("systemInfo.runtime")} />
-        <InfoRow label={t("systemInfo.platform")} value={runtime.platform} />
+        <InfoRow label={t("systemInfo.platform")} value={runtime.platform} size="sm" selectable />
         <InfoRow
           label={t("systemInfo.screen")}
           value={`${Math.round(runtime.screenWidth)}×${Math.round(runtime.screenHeight)}`}
+          size="sm"
+          selectable
         />
-        <InfoRow label={t("systemInfo.pixelRatio")} value={`${runtime.pixelRatio.toFixed(1)}`} />
-        <InfoRow label={t("systemInfo.fontScale")} value={`${runtime.fontScale.toFixed(2)}`} />
+        <InfoRow
+          label={t("systemInfo.pixelRatio")}
+          value={`${runtime.pixelRatio.toFixed(1)}`}
+          size="sm"
+          selectable
+        />
+        <InfoRow
+          label={t("systemInfo.fontScale")}
+          value={`${runtime.fontScale.toFixed(2)}`}
+          size="sm"
+          selectable
+        />
 
         <Separator className="my-2" />
 

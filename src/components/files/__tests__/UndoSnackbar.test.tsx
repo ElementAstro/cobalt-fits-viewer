@@ -8,6 +8,23 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
+const mockWithTiming = jest.fn((_val: number, _config?: object) => _val);
+
+jest.mock("react-native-reanimated", () => {
+  const ReactLocal = require("react");
+  const { View } = require("react-native");
+  return {
+    __esModule: true,
+    default: {
+      View: (props: Record<string, unknown>) =>
+        ReactLocal.createElement(View, props, props.children as React.ReactNode),
+    },
+    useSharedValue: (init: number) => ({ value: init }),
+    useAnimatedStyle: (fn: () => Record<string, unknown>) => fn(),
+    withTiming: (val: number, config?: object) => mockWithTiming(val, config),
+  };
+});
+
 const defaultProps = {
   visible: true,
   count: 3,
@@ -54,7 +71,6 @@ describe("UndoSnackbar", () => {
   it("resets animation when becoming invisible", () => {
     const { rerender } = render(<UndoSnackbar {...defaultProps} />);
     rerender(<UndoSnackbar {...defaultProps} visible={false} />);
-    // When invisible, should render nothing
     expect(screen.queryByText("common.undo")).toBeNull();
   });
 
@@ -63,5 +79,10 @@ describe("UndoSnackbar", () => {
     rerender(<UndoSnackbar {...defaultProps} visible={false} />);
     rerender(<UndoSnackbar {...defaultProps} visible />);
     expect(screen.getByText("common.undo")).toBeTruthy();
+  });
+
+  it("starts animation with correct duration when visible", () => {
+    render(<UndoSnackbar {...defaultProps} />);
+    expect(mockWithTiming).toHaveBeenCalledWith(0, { duration: 6000 });
   });
 });

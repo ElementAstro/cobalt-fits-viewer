@@ -56,15 +56,13 @@ export function LoadingOverlay({
 
         {currentFile && (
           <Text className="mt-2 text-xs text-muted" numberOfLines={1}>
-            {t("files.currentFile").replace("{name}", currentFile)}
+            {t("files.currentFile", { name: currentFile })}
           </Text>
         )}
 
         {current != null && total != null && total > 0 && (
           <Text className="mt-1 text-xs text-muted">
-            {t("files.progressDetail")
-              .replace("{current}", String(current))
-              .replace("{total}", String(total))}
+            {t("files.progressDetail", { current: String(current), total: String(total) })}
           </Text>
         )}
 
@@ -72,25 +70,24 @@ export function LoadingOverlay({
           <View className="mt-3 w-full rounded-lg bg-muted/10 px-3 py-2">
             {success != null && (
               <Text className="text-xs text-muted">
-                {t("files.progressSuccess").replace("{count}", String(success))}
+                {t("files.progressSuccess", { count: success })}
               </Text>
             )}
             {failed != null && (
               <Text className="text-xs text-muted">
-                {t("files.progressFailed").replace("{count}", String(failed))}
+                {t("files.progressFailed", { count: failed })}
               </Text>
             )}
             {skippedDuplicate != null && (
               <Text className="text-xs text-muted">
-                {t("files.progressSkippedDuplicate").replace("{count}", String(skippedDuplicate))}
+                {t("files.progressSkippedDuplicate", { count: skippedDuplicate })}
               </Text>
             )}
             {skippedUnsupported != null && (
               <Text className="text-xs text-muted">
-                {t("files.progressSkippedUnsupported").replace(
-                  "{count}",
-                  String(skippedUnsupported),
-                )}
+                {t("files.progressSkippedUnsupported", {
+                  count: skippedUnsupported,
+                })}
               </Text>
             )}
           </View>

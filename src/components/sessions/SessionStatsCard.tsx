@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { View, Text } from "react-native";
 import { Card, Chip, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -10,7 +11,10 @@ interface SessionStatsCardProps {
   visible: boolean;
 }
 
-export function SessionStatsCard({ stats, visible }: SessionStatsCardProps) {
+export const SessionStatsCard = memo(function SessionStatsCard({
+  stats,
+  visible,
+}: SessionStatsCardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
 
@@ -112,4 +116,4 @@ export function SessionStatsCard({ stats, visible }: SessionStatsCardProps) {
       )}
     </View>
   );
-}
+});

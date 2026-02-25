@@ -4,52 +4,26 @@
 
 import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
-import { BackupProgressSheet } from "../BackupProgressSheet";
+import { BackupProgressSheet, formatEta } from "../BackupProgressSheet";
 import type { BackupProgress } from "../../../lib/backup/types";
+jest.mock("../../../i18n/useI18n", () => {
+  const { mockI18nFactory } = require("../testHelpers");
+  return mockI18nFactory();
+});
 
-jest.mock("../../../i18n/useI18n", () => ({
-  useI18n: () => ({
-    t: (key: string) => key,
-  }),
-}));
-
-jest.mock("../../../lib/utils/fileManager", () => ({
-  formatFileSize: (bytes: number) => `${bytes}B`,
-}));
+jest.mock("../../../lib/utils/fileManager", () => {
+  const { mockFormatFileSizeFactory } = require("../testHelpers");
+  return mockFormatFileSizeFactory();
+});
 
 jest.mock("heroui-native", () => {
-  const RN = require("react-native");
-  type MockProps = { children?: React.ReactNode } & Record<string, unknown>;
-  type MockDialogProps = MockProps & {
-    isOpen?: boolean;
-    onOpenChange?: (open: boolean) => void;
+  const h = require("../testHelpers");
+  return {
+    ...h.mockDialogFactory(),
+    ...h.mockButtonFactory(),
+    ...h.mockSpinnerFactory(),
+    ...h.mockSurfaceFactory(),
   };
-  type MockButtonProps = MockProps & {
-    onPress?: () => void;
-    isDisabled?: boolean;
-  };
-
-  const Dialog = ({ isOpen, children }: MockDialogProps) =>
-    isOpen ? <RN.View testID="dialog">{children}</RN.View> : null;
-  Dialog.Portal = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Overlay = () => <RN.View />;
-  Dialog.Content = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Title = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  Dialog.Description = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  Dialog.Close = () => <RN.Pressable testID="dialog-close" />;
-
-  const Button = ({ children, onPress, isDisabled }: MockButtonProps) => (
-    <RN.Pressable testID="button" disabled={isDisabled} onPress={onPress}>
-      {children}
-    </RN.Pressable>
-  );
-  Button.Label = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-
-  const Spinner = () => <RN.View testID="spinner" />;
-
-  const Surface = ({ children }: MockProps) => <RN.View testID="surface">{children}</RN.View>;
-
-  return { Button, Dialog, Spinner, Surface };
 });
 
 const idleProgress: BackupProgress = {
@@ -157,5 +131,55 @@ describe("BackupProgressSheet", () => {
   it("shows cancel button label", () => {
     render(<BackupProgressSheet visible isBackup progress={idleProgress} onCancel={onCancel} />);
     expect(screen.getByText("common.cancel")).toBeTruthy();
+  });
+
+  it("shows empty string for idle phase", () => {
+    render(<BackupProgressSheet visible isBackup progress={idleProgress} onCancel={onCancel} />);
+    expect(screen.queryByText("backup.backupInProgress")).toBeNull();
+    expect(screen.queryByText("backup.restoreInProgress")).toBeNull();
+  });
+
+  it("renders correctly with all progress fields populated", () => {
+    const progress: BackupProgress = {
+      phase: "uploading",
+      current: 2,
+      total: 5,
+      bytesTransferred: 2048,
+      bytesTotal: 10240,
+      currentFile: "test_image.fits",
+    };
+    render(<BackupProgressSheet visible isBackup progress={progress} onCancel={onCancel} />);
+    expect(screen.getByText(/2 \/ 5/)).toBeTruthy();
+    expect(screen.getByText(/2048B/)).toBeTruthy();
+    expect(screen.getByText(/10240B/)).toBeTruthy();
+    expect(screen.getByText("test_image.fits")).toBeTruthy();
+  });
+});
+
+describe("formatEta", () => {
+  it("formats seconds < 60 correctly", () => {
+    expect(formatEta(0)).toBe("0s");
+    expect(formatEta(1)).toBe("1s");
+    expect(formatEta(30)).toBe("30s");
+    expect(formatEta(59.5)).toBe("60s");
+  });
+
+  it("formats minutes correctly", () => {
+    expect(formatEta(60)).toBe("1m 0s");
+    expect(formatEta(90)).toBe("1m 30s");
+    expect(formatEta(150)).toBe("2m 30s");
+    expect(formatEta(3599)).toBe("59m 59s");
+  });
+
+  it("formats hours correctly", () => {
+    expect(formatEta(3600)).toBe("1h 0m");
+    expect(formatEta(3660)).toBe("1h 1m");
+    expect(formatEta(7200)).toBe("2h 0m");
+    expect(formatEta(86400)).toBe("24h 0m");
+  });
+
+  it("handles edge cases", () => {
+    expect(formatEta(0.1)).toBe("1s");
+    expect(formatEta(0.001)).toBe("1s");
   });
 });

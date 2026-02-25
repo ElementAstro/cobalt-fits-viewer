@@ -5,6 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { TargetGroup } from "../../lib/fits/types";
+import { GROUP_COLORS } from "../../lib/targets/targetConstants";
+import { GroupColorPicker } from "./GroupColorPicker";
 
 interface TargetGroupAssignmentSheetProps {
   visible: boolean;
@@ -15,17 +17,6 @@ interface TargetGroupAssignmentSheetProps {
   onSave: (groupIds: string[]) => void;
   onCreateGroup: (name: string, description?: string, color?: string) => string;
 }
-
-const GROUP_COLORS = [
-  "#ef4444",
-  "#f97316",
-  "#eab308",
-  "#22c55e",
-  "#14b8a6",
-  "#3b82f6",
-  "#8b5cf6",
-  "#ec4899",
-];
 
 export function TargetGroupAssignmentSheet({
   visible,
@@ -123,19 +114,7 @@ export function TargetGroupAssignmentSheet({
                   onChangeText={setNewGroupDescription}
                   autoCorrect={false}
                 />
-                <View className="flex-row flex-wrap gap-2">
-                  {GROUP_COLORS.map((color) => (
-                    <Button
-                      key={color}
-                      size="sm"
-                      variant={newGroupColor === color ? "primary" : "outline"}
-                      className="h-8 w-8 p-0"
-                      onPress={() => setNewGroupColor(color)}
-                    >
-                      <View className="h-5 w-5 rounded-full" style={{ backgroundColor: color }} />
-                    </Button>
-                  ))}
-                </View>
+                <GroupColorPicker selectedColor={newGroupColor} onSelect={setNewGroupColor} />
                 <Button
                   variant="outline"
                   onPress={handleCreateGroup}

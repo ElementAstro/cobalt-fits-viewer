@@ -16,12 +16,8 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 jest.mock("expo-image", () => {
-  const ReactLocal = require("react");
-  const { View: RNView } = require("react-native");
-  return {
-    Image: (props: Record<string, unknown>) =>
-      ReactLocal.createElement(RNView, { testID: "expo-image", ...props }),
-  };
+  const { createExpoImageMock } = require("./helpers/mockExpoImage");
+  return createExpoImageMock();
 });
 
 jest.mock("@shopify/flash-list", () => {
@@ -170,8 +166,8 @@ describe("FilePickerSheet", () => {
     // Enter multi-select mode
     fireEvent.press(screen.getByText("checkbox-outline"));
     // Now should show selection counter
-    expect(screen.getByText(/0 \/ 3 selected/)).toBeTruthy();
-    expect(screen.getByText("Select All")).toBeTruthy();
+    expect(screen.getByText("astrometry.selectedCount")).toBeTruthy();
+    expect(screen.getByText("astrometry.selectAll")).toBeTruthy();
   });
 
   it("selects files in multi mode by pressing file rows", () => {
@@ -188,7 +184,7 @@ describe("FilePickerSheet", () => {
     fireEvent.press(screen.getByText("checkbox-outline"));
     // Select first file
     fireEvent.press(screen.getByText("M42_light_001.fits"));
-    expect(screen.getByText(/1 \/ 3 selected/)).toBeTruthy();
+    expect(screen.getByText("astrometry.selectedCount")).toBeTruthy();
   });
 
   it("select all selects all files", () => {
@@ -204,8 +200,8 @@ describe("FilePickerSheet", () => {
     // Enter multi-select mode
     fireEvent.press(screen.getByText("checkbox-outline"));
     // Select All
-    fireEvent.press(screen.getByText("Select All"));
-    expect(screen.getByText(/3 \/ 3 selected/)).toBeTruthy();
+    fireEvent.press(screen.getByText("astrometry.selectAll"));
+    expect(screen.getByText("astrometry.selectedCount")).toBeTruthy();
   });
 
   it("shows submit button with count when files are selected in multi mode", () => {
@@ -257,9 +253,9 @@ describe("FilePickerSheet", () => {
     fireEvent.press(screen.getByText("checkbox-outline"));
     // Select then deselect
     fireEvent.press(screen.getByText("M42_light_001.fits"));
-    expect(screen.getByText(/1 \/ 3 selected/)).toBeTruthy();
+    expect(screen.getByText("astrometry.selectedCount")).toBeTruthy();
     fireEvent.press(screen.getByText("M42_light_001.fits"));
-    expect(screen.getByText(/0 \/ 3 selected/)).toBeTruthy();
+    expect(screen.getByText("astrometry.selectedCount")).toBeTruthy();
   });
 
   it("resets selection and multi mode when close is called", () => {

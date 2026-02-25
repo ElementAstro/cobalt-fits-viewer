@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import {
   Button,
@@ -94,6 +94,14 @@ export function SmartAlbumModal({
     setRules([{ field: "object", operator: "equals", value: "" }]);
     setShowSuggestions(true);
   };
+
+  useEffect(() => {
+    if (visible) {
+      setName("");
+      setRules([{ field: "object", operator: "equals", value: "" }]);
+      setShowSuggestions(true);
+    }
+  }, [visible]);
 
   const handleClose = () => {
     resetForm();

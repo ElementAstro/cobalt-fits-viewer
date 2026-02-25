@@ -2,7 +2,7 @@
  * 日志查看器组件
  */
 
-import { useState, useCallback, useRef, useMemo, memo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect, memo } from "react";
 import { View, Text, Pressable, Alert, ScrollView } from "react-native";
 import {
   BottomSheet,
@@ -24,6 +24,7 @@ import { useLogViewer } from "../../hooks/useLogger";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import type { LogLevel, LogEntry, LogExportOptions } from "../../lib/logger";
 
+// Log-level colors are intentionally hardcoded as semantic constants (not theme-dependent)
 const LEVEL_COLORS: Record<LogLevel, string> = {
   debug: "#6b7280",
   info: "#3b82f6",
@@ -414,16 +415,18 @@ export function LogViewer() {
   const reversedEntries = useMemo(() => [...entries].reverse(), [entries]);
 
   // Auto-scroll: detect new entries and scroll to top (newest first)
-  const currentEntryCount = reversedEntries.length;
-  if (currentEntryCount > prevEntryCountRef.current && prevEntryCountRef.current > 0) {
-    const diff = currentEntryCount - prevEntryCountRef.current;
-    if (autoScroll) {
-      setTimeout(() => flashListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
-    } else {
-      setNewLogCount((prev) => prev + diff);
+  useEffect(() => {
+    const currentEntryCount = reversedEntries.length;
+    if (currentEntryCount > prevEntryCountRef.current && prevEntryCountRef.current > 0) {
+      const diff = currentEntryCount - prevEntryCountRef.current;
+      if (autoScroll) {
+        setTimeout(() => flashListRef.current?.scrollToOffset({ offset: 0, animated: true }), 50);
+      } else {
+        setNewLogCount((prev) => prev + diff);
+      }
     }
-  }
-  prevEntryCountRef.current = currentEntryCount;
+    prevEntryCountRef.current = currentEntryCount;
+  }, [reversedEntries.length, autoScroll]);
 
   const handleToggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {

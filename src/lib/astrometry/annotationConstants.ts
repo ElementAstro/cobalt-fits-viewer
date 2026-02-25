@@ -37,6 +37,20 @@ export const ANNOTATION_TYPES_ORDERED: AstrometryAnnotationType[] = [
   "other",
 ];
 
+/** 各标注类型对应的 HeroUI Chip 颜色变体 */
+export const ANNOTATION_CHIP_COLORS: Record<
+  AstrometryAnnotationType,
+  "default" | "accent" | "success" | "danger"
+> = {
+  messier: "danger",
+  ngc: "accent",
+  ic: "accent",
+  hd: "default",
+  bright_star: "success",
+  star: "default",
+  other: "default",
+};
+
 /** 叠加层默认颜色 */
 export const OVERLAY_COLORS = {
   coordinateGrid: "#6688cc",

@@ -18,10 +18,8 @@ import { EmptyState } from "../../components/common/EmptyState";
 import { ImageRatingSheet } from "../../components/targets/ImageRatingSheet";
 import { BestImageSelector } from "../../components/targets/BestImageSelector";
 import { TargetGroupAssignmentSheet } from "../../components/targets/TargetGroupAssignmentSheet";
-import {
-  EquipmentCard,
-  EquipmentRecommendations,
-} from "../../components/targets/EquipmentRecommendations";
+import { EquipmentRecommendations } from "../../components/targets/EquipmentRecommendations";
+import { EquipmentCard } from "../../components/targets/EquipmentCard";
 import { ChangeHistorySheet } from "../../components/targets/ChangeHistorySheet";
 import { FavoriteButton, PinButton } from "../../components/targets/FavoriteButton";
 import { formatCoordinates } from "../../lib/targets/coordinates";

@@ -5,87 +5,23 @@
 import React from "react";
 import { render, screen, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { SFTPConfigSheet } from "../SFTPConfigSheet";
-
-jest.mock("../../../i18n/useI18n", () => ({
-  useI18n: () => ({
-    t: (key: string) => key,
-  }),
-}));
+jest.mock("../../../i18n/useI18n", () => {
+  const { mockI18nFactory } = require("../testHelpers");
+  return mockI18nFactory();
+});
 
 jest.mock("heroui-native", () => {
-  const RN = require("react-native");
-  type MockProps = { children?: React.ReactNode } & Record<string, unknown>;
-  type MockDialogProps = MockProps & {
-    isOpen?: boolean;
-    onOpenChange?: (open: boolean) => void;
+  const h = require("../testHelpers");
+  return {
+    ...h.mockDialogFactory(),
+    ...h.mockButtonFactory("connect-button"),
+    ...h.mockInputFactory(),
+    ...h.mockLabelFactory(),
+    ...h.mockFieldErrorFactory(),
+    ...h.mockSpinnerFactory(),
+    ...h.mockTextFieldFactory(),
+    ...h.mockAlertFactory(),
   };
-  type MockButtonProps = MockProps & {
-    onPress?: () => void;
-    isDisabled?: boolean;
-  };
-  type MockTextFieldProps = MockProps & { isRequired?: boolean; isInvalid?: boolean };
-  type MockAlertProps = MockProps & { status?: string };
-
-  const Dialog = ({ isOpen, children, onOpenChange }: MockDialogProps) =>
-    isOpen ? (
-      <RN.View testID="dialog" onTouchEnd={() => onOpenChange?.(false)}>
-        {children}
-      </RN.View>
-    ) : null;
-  Dialog.Portal = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Overlay = () => <RN.View />;
-  Dialog.Content = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Title = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  Dialog.Close = () => <RN.Pressable testID="dialog-close" />;
-
-  const Button = ({ children, onPress, isDisabled }: MockButtonProps) => (
-    <RN.Pressable
-      testID="connect-button"
-      disabled={isDisabled}
-      onPress={onPress}
-      accessibilityState={{ disabled: !!isDisabled }}
-    >
-      {children}
-    </RN.Pressable>
-  );
-  Button.Label = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-
-  const Input = ({
-    value,
-    onChangeText,
-    placeholder,
-    testID,
-    ...rest
-  }: {
-    value?: string;
-    onChangeText?: (t: string) => void;
-    placeholder?: string;
-    testID?: string;
-  } & Record<string, unknown>) => (
-    <RN.TextInput
-      testID={testID ?? `input-${placeholder}`}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      {...rest}
-    />
-  );
-
-  const Label = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  const FieldError = ({ children }: MockProps) => (
-    <RN.Text testID="field-error">{children}</RN.Text>
-  );
-  const Spinner = () => <RN.View testID="spinner" />;
-  const TextField = ({ children }: MockTextFieldProps) => <RN.View>{children}</RN.View>;
-
-  const Alert = ({ children, status }: MockAlertProps) => (
-    <RN.View testID={`alert-${status}`}>{children}</RN.View>
-  );
-  Alert.Indicator = () => <RN.View />;
-  Alert.Content = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Alert.Title = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-
-  return { Alert, Button, Dialog, FieldError, Input, Label, Spinner, TextField };
 });
 
 describe("SFTPConfigSheet", () => {

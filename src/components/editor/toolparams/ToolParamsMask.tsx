@@ -1,15 +1,19 @@
+import React from "react";
 import { View } from "react-native";
 import { Button } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
-import type { EditorToolParams } from "../../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolParams } from "../../../hooks/useEditorToolState";
 
 interface ToolParamsMaskProps {
-  activeTool: string;
+  activeTool: EditorTool & string;
   params: EditorToolParams;
 }
 
-export function ToolParamsMask({ activeTool, params }: ToolParamsMaskProps) {
+export const ToolParamsMask = React.memo(function ToolParamsMask({
+  activeTool,
+  params,
+}: ToolParamsMaskProps) {
   const { t } = useI18n();
 
   switch (activeTool) {
@@ -94,4 +98,4 @@ export function ToolParamsMask({ activeTool, params }: ToolParamsMaskProps) {
     default:
       return null;
   }
-}
+});

@@ -1,15 +1,19 @@
+import React from "react";
 import { View } from "react-native";
 import { Button } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
-import type { EditorToolParams, CurvesPreset } from "../../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolParams, CurvesPreset } from "../../../hooks/useEditorToolState";
 
 interface ToolParamsAdjustProps {
-  activeTool: string;
+  activeTool: EditorTool & string;
   params: EditorToolParams;
 }
 
-export function ToolParamsAdjust({ activeTool, params }: ToolParamsAdjustProps) {
+export const ToolParamsAdjust = React.memo(function ToolParamsAdjust({
+  activeTool,
+  params,
+}: ToolParamsAdjustProps) {
   const { t } = useI18n();
 
   switch (activeTool) {
@@ -195,4 +199,4 @@ export function ToolParamsAdjust({ activeTool, params }: ToolParamsAdjustProps) 
     default:
       return null;
   }
-}
+});

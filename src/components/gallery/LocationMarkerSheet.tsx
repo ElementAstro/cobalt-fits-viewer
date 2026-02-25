@@ -19,6 +19,57 @@ import { formatExposureTime } from "../../lib/gallery/albumStatistics";
 import { useFavoriteSitesStore } from "../../stores/useFavoriteSitesStore";
 import { ThumbnailGrid } from "./ThumbnailGrid";
 
+interface FavoriteSiteButtonProps {
+  location: {
+    latitude: number;
+    longitude: number;
+    placeName?: string;
+    city?: string;
+    region?: string;
+  };
+  sites: { id: string; latitude: number; longitude: number }[];
+  addSite: (site: { label: string; latitude: number; longitude: number }) => void;
+  removeSite: (id: string) => void;
+  warningColor: string;
+  mutedColor: string;
+}
+
+function FavoriteSiteButton({
+  location,
+  sites,
+  addSite,
+  removeSite,
+  warningColor,
+  mutedColor,
+}: FavoriteSiteButtonProps) {
+  const key = siteKey(location.latitude, location.longitude);
+  const favSite = sites.find((s) => siteKey(s.latitude, s.longitude) === key);
+  return (
+    <Button
+      size="sm"
+      isIconOnly
+      variant="ghost"
+      onPress={() => {
+        if (favSite) {
+          removeSite(favSite.id);
+        } else {
+          addSite({
+            label: location.placeName ?? location.city ?? location.region ?? key,
+            latitude: location.latitude,
+            longitude: location.longitude,
+          });
+        }
+      }}
+    >
+      <Ionicons
+        name={favSite ? "star" : "star-outline"}
+        size={18}
+        color={favSite ? warningColor : mutedColor}
+      />
+    </Button>
+  );
+}
+
 interface LocationMarkerSheetProps {
   cluster: MapClusterNode | null;
   onClose: () => void;
@@ -85,34 +136,14 @@ export function LocationMarkerSheet({
                     {location.altitude ? ` · ${Math.round(location.altitude)}m` : ""}
                   </Text>
                 </View>
-                {(() => {
-                  const key = siteKey(location.latitude, location.longitude);
-                  const favSite = sites.find((s) => siteKey(s.latitude, s.longitude) === key);
-                  return (
-                    <Button
-                      size="sm"
-                      isIconOnly
-                      variant="ghost"
-                      onPress={() => {
-                        if (favSite) {
-                          removeSite(favSite.id);
-                        } else {
-                          addSite({
-                            label: location.placeName ?? location.city ?? location.region ?? key,
-                            latitude: location.latitude,
-                            longitude: location.longitude,
-                          });
-                        }
-                      }}
-                    >
-                      <Ionicons
-                        name={favSite ? "star" : "star-outline"}
-                        size={18}
-                        color={favSite ? warningColor : mutedColor}
-                      />
-                    </Button>
-                  );
-                })()}
+                <FavoriteSiteButton
+                  location={location}
+                  sites={sites}
+                  addSite={addSite}
+                  removeSite={removeSite}
+                  warningColor={warningColor}
+                  mutedColor={mutedColor}
+                />
               </View>
 
               <Separator className="mx-4 my-1" />

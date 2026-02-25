@@ -7,9 +7,11 @@ import { render, screen, fireEvent } from "@testing-library/react-native";
 import { AstrometryJobCard } from "../AstrometryJobCard";
 import type { AstrometryJob } from "../../../lib/astrometry/types";
 
+const mockT = jest.fn((key: string) => key);
+
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) => key,
+    t: mockT,
     locale: "en",
     setLocale: jest.fn(),
   }),
@@ -17,6 +19,9 @@ jest.mock("../../../i18n/useI18n", () => ({
 
 jest.mock("../../../lib/astrometry/formatUtils", () => ({
   formatDuration: (ms: number) => `${Math.floor(ms / 1000)}s`,
+  formatRACompact: (deg: number) => `${(deg / 15).toFixed(2)}h`,
+  formatDecCompact: (deg: number) => `${deg >= 0 ? "+" : ""}${deg.toFixed(2)}°`,
+  formatFieldSize: (deg: number) => `${deg.toFixed(1)}°`,
 }));
 
 jest.mock("../../common/AnimatedProgressBar", () => {
@@ -29,13 +34,13 @@ jest.mock("../../common/AnimatedProgressBar", () => {
 });
 
 jest.mock("expo-image", () => {
-  const ReactLocal = require("react");
-  const { View: RNView } = require("react-native");
-  return {
-    Image: (props: Record<string, unknown>) =>
-      ReactLocal.createElement(RNView, { testID: "expo-image", ...props }),
-  };
+  const { createExpoImageMock } = require("./helpers/mockExpoImage");
+  return createExpoImageMock();
 });
+
+jest.mock("../../../hooks/useElapsedTime", () => ({
+  useElapsedTime: (_startTime: number, isActive: boolean) => (isActive ? "30s" : ""),
+}));
 
 const now = Date.now();
 
@@ -147,10 +152,11 @@ describe("AstrometryJobCard", () => {
     expect(screen.getByText(/RA.*DEC/)).toBeTruthy();
   });
 
-  it("renders annotation count for success jobs", () => {
+  it("renders annotation count for success jobs with correct interpolation", () => {
     render(<AstrometryJobCard job={successJob} />);
-    // Text node contains icon child + text, use includeHiddenElements or regex
     expect(screen.getByText(/astrometry\.objectsFound/)).toBeTruthy();
+    // Verify t() was called with count param for i18n interpolation
+    expect(mockT).toHaveBeenCalledWith("astrometry.objectsFound", { count: 2 });
   });
 
   it("renders error message for failure jobs", () => {

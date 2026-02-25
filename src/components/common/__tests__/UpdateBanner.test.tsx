@@ -2,6 +2,20 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { UpdateBanner } from "../UpdateBanner";
 
+jest.mock("react-native-reanimated", () => {
+  const ReactLocal = require("react");
+  const { View } = require("react-native");
+  return {
+    __esModule: true,
+    default: {
+      View: (props: any) => ReactLocal.createElement(View, props, props.children),
+    },
+    useSharedValue: (init: number) => ({ value: init }),
+    useAnimatedStyle: (fn: () => any) => fn(),
+    withSpring: jest.fn((val) => val),
+  };
+});
+
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
     t: (key: string) => key,

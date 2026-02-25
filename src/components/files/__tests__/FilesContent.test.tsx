@@ -52,9 +52,14 @@ jest.mock("../../gallery/FileListItem", () => ({
 }));
 
 jest.mock("../../common/EmptyState", () => ({
-  EmptyState: (props: { title: string }) => {
-    const { Text } = require("react-native");
-    return <Text testID="empty-state">{props.title}</Text>;
+  EmptyState: (props: { title: string; secondaryLabel?: string }) => {
+    const { View, Text } = require("react-native");
+    return (
+      <View testID="empty-state">
+        <Text>{props.title}</Text>
+        {props.secondaryLabel && <Text>{props.secondaryLabel}</Text>}
+      </View>
+    );
   },
 }));
 
@@ -153,5 +158,52 @@ describe("FilesContent", () => {
     );
     expect(screen.getByTestId("flash-list")).toBeTruthy();
     expect(screen.getByText("test.fits")).toBeTruthy();
+  });
+
+  it("renders grid empty state with clear filters action when filters active", () => {
+    render(
+      <FilesContent
+        {...baseProps}
+        isGridStyle={true}
+        fileListStyle="grid"
+        searchQuery="xyz"
+        activeFilterCount={2}
+      />,
+    );
+    expect(screen.getByText("files.noSupportedFound")).toBeTruthy();
+    expect(screen.getByText("targets.clearFilters")).toBeTruthy();
+  });
+
+  it("renders grid empty state without clear filters when no filters", () => {
+    render(
+      <FilesContent
+        {...baseProps}
+        isGridStyle={true}
+        fileListStyle="grid"
+        searchQuery="xyz"
+        activeFilterCount={0}
+      />,
+    );
+    expect(screen.getByText("files.noSupportedFound")).toBeTruthy();
+    expect(screen.queryByText("targets.clearFilters")).toBeNull();
+  });
+
+  it("renders list empty state with clear filters action when filters active", () => {
+    render(<FilesContent {...baseProps} searchQuery="xyz" activeFilterCount={3} />);
+    expect(screen.getByText("targets.clearFilters")).toBeTruthy();
+  });
+
+  it("renders grid mode with files in ThumbnailGrid", () => {
+    render(
+      <FilesContent
+        {...baseProps}
+        displayFiles={[makeFile(), makeFile({ id: "file-2", filename: "test2.fits" })]}
+        isGridStyle={true}
+        fileListStyle="grid"
+      />,
+    );
+    expect(screen.getByTestId("thumbnail-grid")).toBeTruthy();
+    expect(screen.getByText("test.fits")).toBeTruthy();
+    expect(screen.getByText("test2.fits")).toBeTruthy();
   });
 });

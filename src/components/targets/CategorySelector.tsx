@@ -7,17 +7,7 @@ import { Chip, Input, useThemeColor, Button } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { useI18n } from "../../i18n/useI18n";
-
-// Default categories for astronomical targets
-const DEFAULT_CATEGORIES = [
-  "Deep Sky",
-  "Solar System",
-  "Constellation",
-  "Comet",
-  "Asteroid",
-  "Variable Star",
-  "Double Star",
-];
+import { DEFAULT_CATEGORIES } from "../../lib/targets/targetConstants";
 
 interface CategorySelectorProps {
   selectedCategory?: string;

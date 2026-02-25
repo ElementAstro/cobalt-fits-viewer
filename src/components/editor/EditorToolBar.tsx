@@ -1,3 +1,4 @@
+import React, { useMemo } from "react";
 import { View, Text, ScrollView, Alert } from "react-native";
 import { PressableFeedback } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -52,14 +53,20 @@ const MASK_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphM
   { key: "pixelMath", icon: "calculator-outline" },
 ];
 
-const ADVANCED_TOOLS: { key: string; icon: keyof typeof Ionicons.glyphMap; route?: Href }[] = [
+type AdvancedEditorTool = "calibration" | "stacking" | "compose" | "statistics" | "starDetect";
+
+const ADVANCED_TOOLS: {
+  key: AdvancedEditorTool;
+  icon: keyof typeof Ionicons.glyphMap;
+  route?: Href;
+}[] = [
   { key: "calibration", icon: "flask-outline" },
   { key: "stacking", icon: "copy-outline", route: "/stacking" },
   { key: "compose", icon: "color-palette-outline", route: "/compose/advanced" },
   { key: "statistics", icon: "stats-chart-outline" },
   { key: "starDetect", icon: "star-outline" },
 ];
-const COMING_SOON_ADVANCED_TOOLS = new Set(["calibration", "statistics"]);
+const COMING_SOON_ADVANCED_TOOLS = new Set<AdvancedEditorTool>(["calibration", "statistics"]);
 
 const TOOL_GROUP_MAP: Record<
   EditorToolGroup,
@@ -85,7 +92,7 @@ interface EditorToolBarProps {
   onStarDetectToggle: () => void;
 }
 
-export function EditorToolBar({
+export const EditorToolBar = React.memo(function EditorToolBar({
   activeTool,
   activeToolGroup,
   onToolPress,
@@ -102,18 +109,23 @@ export function EditorToolBar({
 
   const tools = TOOL_GROUP_MAP[activeToolGroup];
 
+  const toolGroupTabs = useMemo(
+    () => [
+      { key: "geometry" as const, label: t("editor.geometry") },
+      { key: "adjust" as const, label: t("editor.adjust") },
+      { key: "process" as const, label: t("editor.process") },
+      { key: "mask" as const, label: t("editor.maskTools") },
+    ],
+    [t],
+  );
+
   return (
     <>
       {/* Tool Group Tabs */}
       <View className="border-t border-separator bg-background px-2 pt-1">
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <View className="flex-row gap-1">
-            {[
-              { key: "geometry" as const, label: t("editor.geometry") },
-              { key: "adjust" as const, label: t("editor.adjust") },
-              { key: "process" as const, label: t("editor.process") },
-              { key: "mask" as const, label: t("editor.maskTools") },
-            ].map((tab) => (
+            {toolGroupTabs.map((tab) => (
               <PressableFeedback key={tab.key} onPress={() => onToolGroupChange(tab.key)}>
                 <View
                   className={`px-3 py-1 rounded-full ${activeToolGroup === tab.key ? "bg-success/15" : ""}`}
@@ -220,4 +232,4 @@ export function EditorToolBar({
       </View>
     </>
   );
-}
+});

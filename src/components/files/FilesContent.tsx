@@ -9,6 +9,7 @@ import type { FitsMetadata } from "../../lib/fits/types";
 import type { ReactElement } from "react";
 
 const ListItemSeparator = () => <View className="h-2" />;
+const LIST_BOTTOM_PADDING = 24;
 
 interface FilesContentProps {
   displayFiles: FitsMetadata[];
@@ -65,6 +66,15 @@ export function FilesContent({
 }: FilesContentProps) {
   const { t } = useI18n();
 
+  const handleToggleFavorite = useCallback(
+    (file: FitsMetadata) => onToggleFavorite(file.id),
+    [onToggleFavorite],
+  );
+  const handleSingleDelete = useCallback(
+    (file: FitsMetadata) => onSingleDelete(file.id),
+    [onSingleDelete],
+  );
+
   const renderFileItem = useCallback(
     ({ item }: { item: FitsMetadata }) => {
       return (
@@ -76,10 +86,10 @@ export function FilesContent({
           showObject={thumbShowObject}
           showFilter={thumbShowFilter}
           showExposure={thumbShowExposure}
-          onPress={() => onFilePress(item)}
-          onLongPress={() => onFileLongPress(item)}
-          onToggleFavorite={() => onToggleFavorite(item.id)}
-          onDelete={() => onSingleDelete(item.id)}
+          onPress={onFilePress}
+          onLongPress={onFileLongPress}
+          onToggleFavorite={handleToggleFavorite}
+          onDelete={handleSingleDelete}
         />
       );
     },
@@ -92,8 +102,8 @@ export function FilesContent({
       thumbShowExposure,
       onFilePress,
       onFileLongPress,
-      onToggleFavorite,
-      onSingleDelete,
+      handleToggleFavorite,
+      handleSingleDelete,
     ],
   );
 
@@ -173,7 +183,7 @@ export function FilesContent({
       contentContainerStyle={{
         paddingHorizontal: horizontalPadding,
         paddingTop: isLandscape ? 8 : contentPaddingTop,
-        paddingBottom: 24,
+        paddingBottom: LIST_BOTTOM_PADDING,
       }}
       ItemSeparatorComponent={ListItemSeparator}
       showsVerticalScrollIndicator={false}

@@ -1,6 +1,6 @@
+import { memo, useMemo } from "react";
 import { View, Text } from "react-native";
 import { Button, PressableFeedback, useThemeColor } from "heroui-native";
-import { useMemo } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 
@@ -32,7 +32,7 @@ const MONTH_KEYS = [
   "dec",
 ] as const;
 
-export function ObservationCalendar({
+export const ObservationCalendar = memo(function ObservationCalendar({
   datesWithData,
   plannedDates = [],
   sessionCountByDate,
@@ -44,7 +44,7 @@ export function ObservationCalendar({
   onDateLongPress,
 }: ObservationCalendarProps) {
   const { t } = useI18n();
-  const [_successColor, mutedColor, _accentColor] = useThemeColor(["success", "muted", "accent"]);
+  const mutedColor = useThemeColor("muted");
 
   const weekdayLabels = WEEKDAY_KEYS.map((k: string) => t(`sessions.weekdays.${k}`));
   const monthName = t(`sessions.months.${MONTH_KEYS[month]}`);
@@ -197,4 +197,4 @@ export function ObservationCalendar({
       </View>
     </View>
   );
-}
+});

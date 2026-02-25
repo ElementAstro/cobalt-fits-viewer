@@ -3,7 +3,6 @@ import { View, Text, Alert, ScrollView } from "react-native";
 import {
   BottomSheet,
   Button,
-  Chip,
   Input,
   Label,
   Separator,
@@ -16,8 +15,11 @@ import { useI18n } from "../../i18n/useI18n";
 import type { ObservationSession } from "../../lib/fits/types";
 import { useTargetStore } from "../../stores/useTargetStore";
 import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
-import { BORTLE_OPTIONS, RATING_OPTIONS } from "../../lib/sessions/constants";
 import { useChipInput } from "../../hooks/useChipInput";
+import { ChipInputField } from "./ChipInputField";
+import { EquipmentFields } from "./EquipmentFields";
+import { RatingSelector } from "./RatingSelector";
+import { BortleSelector } from "./BortleSelector";
 
 interface EditSessionSheetProps {
   visible: boolean;
@@ -35,7 +37,7 @@ export function EditSessionSheet({
   onDelete,
 }: EditSessionSheetProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, dangerColor] = useThemeColor(["muted", "danger"]);
   const targetCatalog = useTargetStore((s) => s.targets);
 
   const [notes, setNotes] = useState(session.notes ?? "");
@@ -159,125 +161,44 @@ export function EditSessionSheet({
 
           <ScrollView className="max-h-96" showsVerticalScrollIndicator={false}>
             {/* Targets */}
-            <View className="mb-3">
-              <Label className="mb-1">{t("targets.title")}</Label>
-              {targets.length > 0 && (
-                <View className="flex-row flex-wrap gap-1 mb-1.5">
-                  {targets.map((tgt) => (
-                    <Chip
-                      key={tgt}
-                      size="sm"
-                      variant="secondary"
-                      onPress={() => removeChipItem(tgt, targets, setTargets)}
-                    >
-                      <Chip.Label className="text-[9px]">{tgt} ×</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              )}
-              <TextField>
-                <Input
-                  value={targetInput}
-                  onChangeText={setTargetInput}
-                  placeholder="e.g. M42, NGC 7000..."
-                  onSubmitEditing={() =>
-                    addChipItem(targetInput, targets, setTargets, setTargetInput)
-                  }
-                  returnKeyType="done"
-                />
-              </TextField>
-            </View>
+            <ChipInputField
+              label={t("targets.title")}
+              items={targets}
+              inputValue={targetInput}
+              onInputChange={setTargetInput}
+              onAdd={() => addChipItem(targetInput, targets, setTargets, setTargetInput)}
+              onRemove={(tgt) => removeChipItem(tgt, targets, setTargets)}
+              placeholder="e.g. M42, NGC 7000..."
+            />
 
             {/* Rating */}
-            <View className="mb-3">
-              <Label className="mb-1">{t("sessions.rating")}</Label>
-              <View className="flex-row gap-1">
-                {RATING_OPTIONS.map((r) => (
-                  <Button
-                    key={r}
-                    size="sm"
-                    variant={rating === r ? "primary" : "outline"}
-                    isIconOnly
-                    onPress={() => setRating(rating === r ? undefined : r)}
-                  >
-                    <Ionicons
-                      name={rating != null && rating >= r ? "star" : "star-outline"}
-                      size={14}
-                      color={rating != null && rating >= r ? "#f59e0b" : mutedColor}
-                    />
-                  </Button>
-                ))}
-              </View>
-            </View>
+            <RatingSelector value={rating} onChange={setRating} />
 
             {/* Bortle Scale */}
-            <View className="mb-3">
-              <Label className="mb-1">{t("sessions.bortle")}</Label>
-              <View className="flex-row flex-wrap gap-1">
-                {BORTLE_OPTIONS.map((b) => (
-                  <Chip
-                    key={b}
-                    size="sm"
-                    variant={bortle === b ? "primary" : "secondary"}
-                    onPress={() => setBortle(bortle === b ? undefined : b)}
-                  >
-                    <Chip.Label className="text-[9px]">{b}</Chip.Label>
-                  </Chip>
-                ))}
-              </View>
-            </View>
+            <BortleSelector value={bortle} onChange={setBortle} />
 
             <Separator className="mb-3" />
 
             {/* Equipment */}
-            <TextField className="mb-3">
-              <Label>{t("sessions.equipment")}: Telescope</Label>
-              <Input
-                value={telescope}
-                onChangeText={setTelescope}
-                placeholder="e.g. Sky-Watcher 200P"
-              />
-            </TextField>
-
-            <TextField className="mb-3">
-              <Label>{t("sessions.equipment")}: Camera</Label>
-              <Input value={camera} onChangeText={setCamera} placeholder="e.g. ZWO ASI294MC Pro" />
-            </TextField>
-
-            <TextField className="mb-3">
-              <Label>{t("sessions.equipment")}: Mount</Label>
-              <Input value={mount} onChangeText={setMount} placeholder="e.g. EQ6-R Pro" />
-            </TextField>
+            <EquipmentFields
+              telescope={telescope}
+              camera={camera}
+              mount={mount}
+              onTelescopeChange={setTelescope}
+              onCameraChange={setCamera}
+              onMountChange={setMount}
+            />
 
             {/* Filters */}
-            <View className="mb-3">
-              <Label className="mb-1">{t("sessions.filters")}</Label>
-              {filters.length > 0 && (
-                <View className="flex-row flex-wrap gap-1 mb-1.5">
-                  {filters.map((f) => (
-                    <Chip
-                      key={f}
-                      size="sm"
-                      variant="secondary"
-                      onPress={() => removeChipItem(f, filters, setFilters)}
-                    >
-                      <Chip.Label className="text-[9px]">{f} ×</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              )}
-              <TextField>
-                <Input
-                  value={filterInput}
-                  onChangeText={setFilterInput}
-                  placeholder="e.g. Ha, OIII, SII..."
-                  onSubmitEditing={() =>
-                    addChipItem(filterInput, filters, setFilters, setFilterInput)
-                  }
-                  returnKeyType="done"
-                />
-              </TextField>
-            </View>
+            <ChipInputField
+              label={t("sessions.filters")}
+              items={filters}
+              inputValue={filterInput}
+              onInputChange={setFilterInput}
+              onAdd={() => addChipItem(filterInput, filters, setFilters, setFilterInput)}
+              onRemove={(f) => removeChipItem(f, filters, setFilters)}
+              placeholder="e.g. Ha, OIII, SII..."
+            />
 
             <Separator className="mb-3" />
 
@@ -298,32 +219,15 @@ export function EditSessionSheet({
             </TextField>
 
             {/* Tags */}
-            <View className="mb-3">
-              <Label className="mb-1">{t("sessions.tags")}</Label>
-              {tags.length > 0 && (
-                <View className="flex-row flex-wrap gap-1 mb-1.5">
-                  {tags.map((tag) => (
-                    <Chip
-                      key={tag}
-                      size="sm"
-                      variant="secondary"
-                      onPress={() => removeChipItem(tag, tags, setTags)}
-                    >
-                      <Chip.Label className="text-[9px]">{tag} ×</Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              )}
-              <TextField>
-                <Input
-                  value={tagInput}
-                  onChangeText={setTagInput}
-                  placeholder="e.g. deep sky, planetary..."
-                  onSubmitEditing={() => addChipItem(tagInput, tags, setTags, setTagInput)}
-                  returnKeyType="done"
-                />
-              </TextField>
-            </View>
+            <ChipInputField
+              label={t("sessions.tags")}
+              items={tags}
+              inputValue={tagInput}
+              onInputChange={setTagInput}
+              onAdd={() => addChipItem(tagInput, tags, setTags, setTagInput)}
+              onRemove={(tag) => removeChipItem(tag, tags, setTags)}
+              placeholder="e.g. deep sky, planetary..."
+            />
 
             {/* Notes */}
             <TextField className="mb-4">
@@ -345,7 +249,7 @@ export function EditSessionSheet({
             </Button>
 
             <Button variant="outline" onPress={handleDelete} className="w-full">
-              <Ionicons name="trash-outline" size={16} color="#ef4444" />
+              <Ionicons name="trash-outline" size={16} color={dangerColor} />
               <Button.Label className="text-red-500">{t("sessions.deleteSession")}</Button.Label>
             </Button>
           </View>

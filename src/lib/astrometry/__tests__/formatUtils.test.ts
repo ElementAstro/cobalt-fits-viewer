@@ -1,4 +1,11 @@
-import { formatRA, formatDec, formatFieldSize, formatDuration } from "../formatUtils";
+import {
+  formatRA,
+  formatDec,
+  formatFieldSize,
+  formatRACompact,
+  formatDecCompact,
+  formatDuration,
+} from "../formatUtils";
 
 describe("formatRA", () => {
   it("formats 0° as 0h 0m 0.0s", () => {
@@ -68,6 +75,38 @@ describe("formatFieldSize", () => {
 
   it("formats zero as arcseconds", () => {
     expect(formatFieldSize(0)).toBe("0″");
+  });
+});
+
+describe("formatRACompact", () => {
+  it("formats 0° as 0.00h", () => {
+    expect(formatRACompact(0)).toBe("0.00h");
+  });
+
+  it("formats 180° as 12.00h", () => {
+    expect(formatRACompact(180)).toBe("12.00h");
+  });
+
+  it("formats 83.633° as compact hours", () => {
+    expect(formatRACompact(83.633)).toBe("5.58h");
+  });
+
+  it("formats 15° as 1.00h", () => {
+    expect(formatRACompact(15)).toBe("1.00h");
+  });
+});
+
+describe("formatDecCompact", () => {
+  it("formats positive declination with + sign", () => {
+    expect(formatDecCompact(45)).toBe("+45.00°");
+  });
+
+  it("formats negative declination", () => {
+    expect(formatDecCompact(-5.375)).toBe("-5.38°");
+  });
+
+  it("formats zero as positive", () => {
+    expect(formatDecCompact(0)).toBe("+0.00°");
   });
 });
 

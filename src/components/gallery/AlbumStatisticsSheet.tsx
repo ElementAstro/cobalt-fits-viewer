@@ -2,6 +2,7 @@
  * 相簿统计信息面板
  */
 
+import { useMemo } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { BottomSheet, Button, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -30,22 +31,31 @@ export function AlbumStatisticsSheet({
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
 
+  const frameTypeLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const definition of getFrameTypeDefinitions(frameClassificationConfig)) {
+      map.set(
+        definition.key,
+        definition.builtin
+          ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
+          : definition.label || definition.key,
+      );
+    }
+    return map;
+  }, [frameClassificationConfig, t]);
+
+  const frameEntries = useMemo(
+    () =>
+      statistics
+        ? Object.entries(statistics.frameBreakdown).sort(([a], [b]) => a.localeCompare(b))
+        : [],
+    [statistics],
+  );
+
   if (!statistics) return null;
 
   const hasFrames = Object.values(statistics.frameBreakdown).some((v) => v > 0);
   const hasFilters = Object.keys(statistics.filterBreakdown).length > 0;
-  const frameTypeLabelMap = new Map<string, string>();
-  for (const definition of getFrameTypeDefinitions(frameClassificationConfig)) {
-    frameTypeLabelMap.set(
-      definition.key,
-      definition.builtin
-        ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
-        : definition.label || definition.key,
-    );
-  }
-  const frameEntries = Object.entries(statistics.frameBreakdown).sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
 
   return (
     <BottomSheet isOpen={visible} onOpenChange={(open) => !open && onClose()}>

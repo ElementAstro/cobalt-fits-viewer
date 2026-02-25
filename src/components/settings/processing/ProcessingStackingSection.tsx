@@ -1,11 +1,13 @@
 import { View } from "react-native";
 import { Chip, Separator } from "heroui-native";
+import { useShallow } from "zustand/react/shallow";
 import { SettingsToggleRow } from "../../common/SettingsToggleRow";
 import { useI18n } from "../../../i18n/useI18n";
 import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../../stores/useSettingsStore";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../../common/SettingsRow";
+import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { SimpleSlider } from "../../common/SimpleSlider";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
@@ -27,114 +29,150 @@ export function ProcessingStackingSection() {
   const haptics = useHapticFeedback();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
-  const defaultStackMethod = useSettingsStore((s) => s.defaultStackMethod);
-  const defaultSigmaValue = useSettingsStore((s) => s.defaultSigmaValue);
-  const defaultAlignmentMode = useSettingsStore((s) => s.defaultAlignmentMode);
-  const defaultEnableQuality = useSettingsStore((s) => s.defaultEnableQuality);
-  const stackingDetectionProfile = useSettingsStore((s) => s.stackingDetectionProfile);
-  const stackingDetectSigmaThreshold = useSettingsStore((s) => s.stackingDetectSigmaThreshold);
-  const stackingDetectMaxStars = useSettingsStore((s) => s.stackingDetectMaxStars);
-  const stackingDetectMinArea = useSettingsStore((s) => s.stackingDetectMinArea);
-  const stackingDetectMaxArea = useSettingsStore((s) => s.stackingDetectMaxArea);
-  const stackingDetectBorderMargin = useSettingsStore((s) => s.stackingDetectBorderMargin);
-  const stackingDetectSigmaClipIters = useSettingsStore((s) => s.stackingDetectSigmaClipIters);
-  const stackingDetectApplyMatchedFilter = useSettingsStore(
-    (s) => s.stackingDetectApplyMatchedFilter,
+  const {
+    defaultStackMethod,
+    defaultSigmaValue,
+    defaultAlignmentMode,
+    defaultEnableQuality,
+    stackingDetectionProfile,
+    stackingDetectSigmaThreshold,
+    stackingDetectMaxStars,
+    stackingDetectMinArea,
+    stackingDetectMaxArea,
+    stackingDetectBorderMargin,
+    stackingDetectSigmaClipIters,
+    stackingDetectApplyMatchedFilter,
+    stackingDetectConnectivity,
+    stackingBackgroundMeshSize,
+    stackingDeblendNLevels,
+    stackingDeblendMinContrast,
+    stackingFilterFwhm,
+    stackingDetectMinFwhm,
+    stackingMaxFwhm,
+    stackingMaxEllipticity,
+    stackingDetectMinSharpness,
+    stackingDetectMaxSharpness,
+    stackingDetectPeakMax,
+    stackingDetectSnrMin,
+    stackingUseAnnotatedForAlignment,
+    stackingRansacMaxIterations,
+    stackingAlignmentInlierThreshold,
+    setDefaultStackMethod,
+    setDefaultSigmaValue,
+    setDefaultAlignmentMode,
+    setDefaultEnableQuality,
+    setStackingDetectionProfile,
+    setStackingDetectSigmaThreshold,
+    setStackingDetectMaxStars,
+    setStackingDetectMinArea,
+    setStackingDetectMaxArea,
+    setStackingDetectBorderMargin,
+    setStackingDetectSigmaClipIters,
+    setStackingDetectApplyMatchedFilter,
+    setStackingDetectConnectivity,
+    setStackingBackgroundMeshSize,
+    setStackingDeblendNLevels,
+    setStackingDeblendMinContrast,
+    setStackingFilterFwhm,
+    setStackingDetectMinFwhm,
+    setStackingMaxFwhm,
+    setStackingMaxEllipticity,
+    setStackingDetectMinSharpness,
+    setStackingDetectMaxSharpness,
+    setStackingDetectPeakMax,
+    setStackingDetectSnrMin,
+    setStackingUseAnnotatedForAlignment,
+    setStackingRansacMaxIterations,
+    setStackingAlignmentInlierThreshold,
+    resetSection,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      defaultStackMethod: s.defaultStackMethod,
+      defaultSigmaValue: s.defaultSigmaValue,
+      defaultAlignmentMode: s.defaultAlignmentMode,
+      defaultEnableQuality: s.defaultEnableQuality,
+      stackingDetectionProfile: s.stackingDetectionProfile,
+      stackingDetectSigmaThreshold: s.stackingDetectSigmaThreshold,
+      stackingDetectMaxStars: s.stackingDetectMaxStars,
+      stackingDetectMinArea: s.stackingDetectMinArea,
+      stackingDetectMaxArea: s.stackingDetectMaxArea,
+      stackingDetectBorderMargin: s.stackingDetectBorderMargin,
+      stackingDetectSigmaClipIters: s.stackingDetectSigmaClipIters,
+      stackingDetectApplyMatchedFilter: s.stackingDetectApplyMatchedFilter,
+      stackingDetectConnectivity: s.stackingDetectConnectivity,
+      stackingBackgroundMeshSize: s.stackingBackgroundMeshSize,
+      stackingDeblendNLevels: s.stackingDeblendNLevels,
+      stackingDeblendMinContrast: s.stackingDeblendMinContrast,
+      stackingFilterFwhm: s.stackingFilterFwhm,
+      stackingDetectMinFwhm: s.stackingDetectMinFwhm,
+      stackingMaxFwhm: s.stackingMaxFwhm,
+      stackingMaxEllipticity: s.stackingMaxEllipticity,
+      stackingDetectMinSharpness: s.stackingDetectMinSharpness,
+      stackingDetectMaxSharpness: s.stackingDetectMaxSharpness,
+      stackingDetectPeakMax: s.stackingDetectPeakMax,
+      stackingDetectSnrMin: s.stackingDetectSnrMin,
+      stackingUseAnnotatedForAlignment: s.stackingUseAnnotatedForAlignment,
+      stackingRansacMaxIterations: s.stackingRansacMaxIterations,
+      stackingAlignmentInlierThreshold: s.stackingAlignmentInlierThreshold,
+      setDefaultStackMethod: s.setDefaultStackMethod,
+      setDefaultSigmaValue: s.setDefaultSigmaValue,
+      setDefaultAlignmentMode: s.setDefaultAlignmentMode,
+      setDefaultEnableQuality: s.setDefaultEnableQuality,
+      setStackingDetectionProfile: s.setStackingDetectionProfile,
+      setStackingDetectSigmaThreshold: s.setStackingDetectSigmaThreshold,
+      setStackingDetectMaxStars: s.setStackingDetectMaxStars,
+      setStackingDetectMinArea: s.setStackingDetectMinArea,
+      setStackingDetectMaxArea: s.setStackingDetectMaxArea,
+      setStackingDetectBorderMargin: s.setStackingDetectBorderMargin,
+      setStackingDetectSigmaClipIters: s.setStackingDetectSigmaClipIters,
+      setStackingDetectApplyMatchedFilter: s.setStackingDetectApplyMatchedFilter,
+      setStackingDetectConnectivity: s.setStackingDetectConnectivity,
+      setStackingBackgroundMeshSize: s.setStackingBackgroundMeshSize,
+      setStackingDeblendNLevels: s.setStackingDeblendNLevels,
+      setStackingDeblendMinContrast: s.setStackingDeblendMinContrast,
+      setStackingFilterFwhm: s.setStackingFilterFwhm,
+      setStackingDetectMinFwhm: s.setStackingDetectMinFwhm,
+      setStackingMaxFwhm: s.setStackingMaxFwhm,
+      setStackingMaxEllipticity: s.setStackingMaxEllipticity,
+      setStackingDetectMinSharpness: s.setStackingDetectMinSharpness,
+      setStackingDetectMaxSharpness: s.setStackingDetectMaxSharpness,
+      setStackingDetectPeakMax: s.setStackingDetectPeakMax,
+      setStackingDetectSnrMin: s.setStackingDetectSnrMin,
+      setStackingUseAnnotatedForAlignment: s.setStackingUseAnnotatedForAlignment,
+      setStackingRansacMaxIterations: s.setStackingRansacMaxIterations,
+      setStackingAlignmentInlierThreshold: s.setStackingAlignmentInlierThreshold,
+      resetSection: s.resetSection,
+    })),
   );
-  const stackingDetectConnectivity = useSettingsStore((s) => s.stackingDetectConnectivity);
-  const stackingBackgroundMeshSize = useSettingsStore((s) => s.stackingBackgroundMeshSize);
-  const stackingDeblendNLevels = useSettingsStore((s) => s.stackingDeblendNLevels);
-  const stackingDeblendMinContrast = useSettingsStore((s) => s.stackingDeblendMinContrast);
-  const stackingFilterFwhm = useSettingsStore((s) => s.stackingFilterFwhm);
-  const stackingDetectMinFwhm = useSettingsStore((s) => s.stackingDetectMinFwhm);
-  const stackingMaxFwhm = useSettingsStore((s) => s.stackingMaxFwhm);
-  const stackingMaxEllipticity = useSettingsStore((s) => s.stackingMaxEllipticity);
-  const stackingDetectMinSharpness = useSettingsStore((s) => s.stackingDetectMinSharpness);
-  const stackingDetectMaxSharpness = useSettingsStore((s) => s.stackingDetectMaxSharpness);
-  const stackingDetectPeakMax = useSettingsStore((s) => s.stackingDetectPeakMax);
-  const stackingDetectSnrMin = useSettingsStore((s) => s.stackingDetectSnrMin);
-  const stackingUseAnnotatedForAlignment = useSettingsStore(
-    (s) => s.stackingUseAnnotatedForAlignment,
-  );
-  const stackingRansacMaxIterations = useSettingsStore((s) => s.stackingRansacMaxIterations);
-  const stackingAlignmentInlierThreshold = useSettingsStore(
-    (s) => s.stackingAlignmentInlierThreshold,
-  );
-  const setDefaultStackMethod = useSettingsStore((s) => s.setDefaultStackMethod);
-  const setDefaultSigmaValue = useSettingsStore((s) => s.setDefaultSigmaValue);
-  const setDefaultAlignmentMode = useSettingsStore((s) => s.setDefaultAlignmentMode);
-  const setDefaultEnableQuality = useSettingsStore((s) => s.setDefaultEnableQuality);
-  const setStackingDetectionProfile = useSettingsStore((s) => s.setStackingDetectionProfile);
-  const setStackingDetectSigmaThreshold = useSettingsStore(
-    (s) => s.setStackingDetectSigmaThreshold,
-  );
-  const setStackingDetectMaxStars = useSettingsStore((s) => s.setStackingDetectMaxStars);
-  const setStackingDetectMinArea = useSettingsStore((s) => s.setStackingDetectMinArea);
-  const setStackingDetectMaxArea = useSettingsStore((s) => s.setStackingDetectMaxArea);
-  const setStackingDetectBorderMargin = useSettingsStore((s) => s.setStackingDetectBorderMargin);
-  const setStackingDetectSigmaClipIters = useSettingsStore(
-    (s) => s.setStackingDetectSigmaClipIters,
-  );
-  const setStackingDetectApplyMatchedFilter = useSettingsStore(
-    (s) => s.setStackingDetectApplyMatchedFilter,
-  );
-  const setStackingDetectConnectivity = useSettingsStore((s) => s.setStackingDetectConnectivity);
-  const setStackingBackgroundMeshSize = useSettingsStore((s) => s.setStackingBackgroundMeshSize);
-  const setStackingDeblendNLevels = useSettingsStore((s) => s.setStackingDeblendNLevels);
-  const setStackingDeblendMinContrast = useSettingsStore((s) => s.setStackingDeblendMinContrast);
-  const setStackingFilterFwhm = useSettingsStore((s) => s.setStackingFilterFwhm);
-  const setStackingDetectMinFwhm = useSettingsStore((s) => s.setStackingDetectMinFwhm);
-  const setStackingMaxFwhm = useSettingsStore((s) => s.setStackingMaxFwhm);
-  const setStackingMaxEllipticity = useSettingsStore((s) => s.setStackingMaxEllipticity);
-  const setStackingDetectMinSharpness = useSettingsStore((s) => s.setStackingDetectMinSharpness);
-  const setStackingDetectMaxSharpness = useSettingsStore((s) => s.setStackingDetectMaxSharpness);
-  const setStackingDetectPeakMax = useSettingsStore((s) => s.setStackingDetectPeakMax);
-  const setStackingDetectSnrMin = useSettingsStore((s) => s.setStackingDetectSnrMin);
-  const setStackingUseAnnotatedForAlignment = useSettingsStore(
-    (s) => s.setStackingUseAnnotatedForAlignment,
-  );
-  const setStackingRansacMaxIterations = useSettingsStore((s) => s.setStackingRansacMaxIterations);
-  const setStackingAlignmentInlierThreshold = useSettingsStore(
-    (s) => s.setStackingAlignmentInlierThreshold,
-  );
-  const resetSection = useSettingsStore((s) => s.resetSection);
 
+  const STACK_METHOD_I18N: Record<string, string> = {
+    average: "editor.average",
+    median: "editor.median",
+    sigma: "editor.sigmaClip",
+    min: "editor.min",
+    max: "editor.max",
+    winsorized: "editor.winsorized",
+    weighted: "editor.weighted",
+  };
   const stackMethodLabel = (value: (typeof STACK_METHOD_VALUES)[number]) =>
-    t(
-      value === "average"
-        ? "editor.average"
-        : value === "median"
-          ? "editor.median"
-          : value === "sigma"
-            ? "editor.sigmaClip"
-            : value === "min"
-              ? "editor.min"
-              : value === "max"
-                ? "editor.max"
-                : value === "winsorized"
-                  ? "editor.winsorized"
-                  : "editor.weighted",
-    );
+    t(STACK_METHOD_I18N[value] ?? value);
 
+  const ALIGNMENT_MODE_I18N: Record<string, string> = {
+    none: "editor.alignNone",
+    translation: "editor.alignTranslation",
+    full: "editor.alignFull",
+  };
   const alignmentModeLabel = (value: (typeof ALIGNMENT_MODE_VALUES)[number]) =>
-    t(
-      value === "none"
-        ? "editor.alignNone"
-        : value === "translation"
-          ? "editor.alignTranslation"
-          : "editor.alignFull",
-    );
+    t(ALIGNMENT_MODE_I18N[value] ?? value);
 
+  const STACKING_DETECTION_PROFILE_I18N: Record<string, string> = {
+    fast: "settings.stackingProfileFast",
+    balanced: "settings.stackingProfileBalanced",
+    accurate: "settings.stackingProfileAccurate",
+  };
   const stackingDetectionProfileLabel = (
     value: (typeof STACKING_DETECTION_PROFILE_VALUES)[number],
-  ) =>
-    t(
-      value === "fast"
-        ? "settings.stackingProfileFast"
-        : value === "accurate"
-          ? "settings.stackingProfileAccurate"
-          : "settings.stackingProfileBalanced",
-    );
+  ) => t(STACKING_DETECTION_PROFILE_I18N[value] ?? value);
 
   const stackMethodOptions = STACK_METHOD_VALUES.map((value) => ({
     label: stackMethodLabel(value),
@@ -167,21 +205,15 @@ export function ProcessingStackingSection() {
           onPress={() => openPicker("stackMethod")}
         />
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="cut-outline"
           label={t("settings.defaultSigmaValue")}
-          value={defaultSigmaValue.toFixed(1)}
+          value={defaultSigmaValue}
+          min={1.0}
+          max={5.0}
+          step={0.1}
+          onValueChange={setDefaultSigmaValue}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={defaultSigmaValue}
-            min={1.0}
-            max={5.0}
-            step={0.1}
-            onValueChange={setDefaultSigmaValue}
-          />
-        </View>
         <Separator />
         <SettingsRow
           testID="e2e-action-settings__processing-open-alignment-mode"
@@ -215,85 +247,55 @@ export function ProcessingStackingSection() {
           onPress={() => openPicker("stackingDetectionProfile")}
         />
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="pulse-outline"
           label={t("settings.stackingDetectSigmaThreshold")}
-          value={stackingDetectSigmaThreshold.toFixed(1)}
+          value={stackingDetectSigmaThreshold}
+          min={1.0}
+          max={10.0}
+          step={0.1}
+          onValueChange={setStackingDetectSigmaThreshold}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDetectSigmaThreshold}
-            min={1.0}
-            max={10.0}
-            step={0.1}
-            onValueChange={setStackingDetectSigmaThreshold}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="star-outline"
           label={t("settings.stackingDetectMaxStars")}
-          value={`${stackingDetectMaxStars}`}
+          value={stackingDetectMaxStars}
+          min={50}
+          max={800}
+          step={10}
+          onValueChange={setStackingDetectMaxStars}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDetectMaxStars}
-            min={50}
-            max={800}
-            step={10}
-            onValueChange={setStackingDetectMaxStars}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="scan-outline"
           label={t("settings.stackingDetectMinArea")}
-          value={`${stackingDetectMinArea}`}
+          value={stackingDetectMinArea}
+          min={1}
+          max={20}
+          step={1}
+          onValueChange={setStackingDetectMinArea}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDetectMinArea}
-            min={1}
-            max={20}
-            step={1}
-            onValueChange={setStackingDetectMinArea}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="expand-outline"
           label={t("settings.stackingDetectMaxArea")}
-          value={`${stackingDetectMaxArea}`}
+          value={stackingDetectMaxArea}
+          min={50}
+          max={3000}
+          step={10}
+          onValueChange={setStackingDetectMaxArea}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDetectMaxArea}
-            min={50}
-            max={3000}
-            step={10}
-            onValueChange={setStackingDetectMaxArea}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="crop-outline"
           label={t("settings.stackingDetectBorderMargin")}
-          value={`${stackingDetectBorderMargin}`}
+          value={stackingDetectBorderMargin}
+          min={0}
+          max={64}
+          step={1}
+          onValueChange={setStackingDetectBorderMargin}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDetectBorderMargin}
-            min={0}
-            max={64}
-            step={1}
-            onValueChange={setStackingDetectBorderMargin}
-          />
-        </View>
         <Separator />
         <SettingsRow
           icon="git-network-outline"
@@ -342,69 +344,45 @@ export function ProcessingStackingSection() {
           </View>
         </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="grid-outline"
           label={t("settings.stackingBackgroundMeshSize")}
-          value={`${stackingBackgroundMeshSize}`}
+          value={stackingBackgroundMeshSize}
+          min={16}
+          max={256}
+          step={8}
+          onValueChange={setStackingBackgroundMeshSize}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingBackgroundMeshSize}
-            min={16}
-            max={256}
-            step={8}
-            onValueChange={setStackingBackgroundMeshSize}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="git-branch-outline"
           label={t("settings.stackingDeblendNLevels")}
-          value={`${stackingDeblendNLevels}`}
+          value={stackingDeblendNLevels}
+          min={1}
+          max={32}
+          step={1}
+          onValueChange={setStackingDeblendNLevels}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDeblendNLevels}
-            min={1}
-            max={32}
-            step={1}
-            onValueChange={setStackingDeblendNLevels}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="options-outline"
           label={t("settings.stackingDeblendMinContrast")}
-          value={stackingDeblendMinContrast.toFixed(2)}
+          value={stackingDeblendMinContrast}
+          min={0.01}
+          max={0.5}
+          step={0.01}
+          onValueChange={setStackingDeblendMinContrast}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDeblendMinContrast}
-            min={0.01}
-            max={0.5}
-            step={0.01}
-            onValueChange={setStackingDeblendMinContrast}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="funnel-outline"
           label={t("settings.stackingFilterFwhm")}
-          value={stackingFilterFwhm.toFixed(1)}
+          value={stackingFilterFwhm}
+          min={0.5}
+          max={8}
+          step={0.1}
+          onValueChange={setStackingFilterFwhm}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingFilterFwhm}
-            min={0.5}
-            max={8}
-            step={0.1}
-            onValueChange={setStackingFilterFwhm}
-          />
-        </View>
         <Separator />
         <SettingsRow
           icon="ellipse-outline"
@@ -425,37 +403,25 @@ export function ProcessingStackingSection() {
           />
         </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="ellipse-outline"
           label={t("settings.stackingMaxFwhm")}
-          value={stackingMaxFwhm.toFixed(1)}
+          value={stackingMaxFwhm}
+          min={1}
+          max={20}
+          step={0.1}
+          onValueChange={setStackingMaxFwhm}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingMaxFwhm}
-            min={1}
-            max={20}
-            step={0.1}
-            onValueChange={setStackingMaxFwhm}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="radio-button-on-outline"
           label={t("settings.stackingMaxEllipticity")}
-          value={stackingMaxEllipticity.toFixed(2)}
+          value={stackingMaxEllipticity}
+          min={0}
+          max={1}
+          step={0.01}
+          onValueChange={setStackingMaxEllipticity}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingMaxEllipticity}
-            min={0}
-            max={1}
-            step={0.01}
-            onValueChange={setStackingMaxEllipticity}
-          />
-        </View>
         <Separator />
         <SettingsRow
           icon="sparkles-outline"
@@ -495,69 +461,46 @@ export function ProcessingStackingSection() {
           />
         </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="analytics-outline"
           label={t("settings.stackingDetectPeakMax")}
-          value={`${Math.round(stackingDetectPeakMax)}`}
+          value={stackingDetectPeakMax}
+          format={(v) => `${Math.round(v)}`}
+          min={0}
+          max={10000}
+          step={10}
+          onValueChange={setStackingDetectPeakMax}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDetectPeakMax}
-            min={0}
-            max={10000}
-            step={10}
-            onValueChange={setStackingDetectPeakMax}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="speedometer-outline"
           label={t("settings.stackingDetectSnrMin")}
-          value={stackingDetectSnrMin.toFixed(1)}
+          value={stackingDetectSnrMin}
+          min={0}
+          max={50}
+          step={0.1}
+          onValueChange={setStackingDetectSnrMin}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingDetectSnrMin}
-            min={0}
-            max={50}
-            step={0.1}
-            onValueChange={setStackingDetectSnrMin}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="repeat-outline"
           label={t("settings.stackingRansacMaxIterations")}
-          value={`${stackingRansacMaxIterations}`}
+          value={stackingRansacMaxIterations}
+          min={20}
+          max={400}
+          step={10}
+          onValueChange={setStackingRansacMaxIterations}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingRansacMaxIterations}
-            min={20}
-            max={400}
-            step={10}
-            onValueChange={setStackingRansacMaxIterations}
-          />
-        </View>
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="resize-outline"
           label={t("settings.stackingAlignmentInlierThreshold")}
-          value={stackingAlignmentInlierThreshold.toFixed(1)}
+          value={stackingAlignmentInlierThreshold}
+          min={0.5}
+          max={10}
+          step={0.1}
+          onValueChange={setStackingAlignmentInlierThreshold}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={stackingAlignmentInlierThreshold}
-            min={0.5}
-            max={10}
-            step={0.1}
-            onValueChange={setStackingAlignmentInlierThreshold}
-          />
-        </View>
       </SettingsSection>
 
       <OptionPickerModal

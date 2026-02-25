@@ -14,6 +14,9 @@ import type {
   TrashedFitsRecord,
 } from "../fits/types";
 import type { AstrometryConfig, AstrometryJob } from "../astrometry/types";
+import type { Ionicons } from "@expo/vector-icons";
+
+type IoniconsName = keyof typeof Ionicons.glyphMap;
 
 // ===== 云服务提供商 =====
 export type CloudProvider = "google-drive" | "onedrive" | "dropbox" | "webdav" | "sftp";
@@ -236,7 +239,7 @@ export interface CloudProviderCapabilities {
 // ===== Provider 显示信息 =====
 export const PROVIDER_DISPLAY: Record<
   CloudProvider,
-  { name: string; icon: string; color: string }
+  { name: string; icon: IoniconsName; color: string }
 > = {
   "google-drive": {
     name: "Google Drive",

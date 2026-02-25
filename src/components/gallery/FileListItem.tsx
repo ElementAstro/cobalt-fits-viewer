@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useCallback, useMemo } from "react";
 import { View, Text, Pressable, Animated } from "react-native";
 import { Image } from "expo-image";
 import { Button, Card, Chip, useThemeColor } from "heroui-native";
@@ -8,15 +8,16 @@ import { formatFileSize } from "../../lib/utils/fileManager";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
+import { MediaTypeBadge } from "./MediaTypeBadge";
 
 type FileItemLayout = "grid" | "list" | "compact";
 
 interface FileListItemProps {
   file: FitsMetadata;
-  onPress?: () => void;
-  onLongPress?: () => void;
-  onDelete?: () => void;
-  onToggleFavorite?: () => void;
+  onPress?: (file: FitsMetadata) => void;
+  onLongPress?: (file: FitsMetadata) => void;
+  onDelete?: (file: FitsMetadata) => void;
+  onToggleFavorite?: (file: FitsMetadata) => void;
   selected?: boolean;
   layout?: FileItemLayout;
   showFilename?: boolean;
@@ -50,6 +51,14 @@ export const FileListItem = memo(function FileListItem({
     [file.id, file.thumbnailUri],
   );
 
+  const handlePress = useCallback(() => onPress?.(file), [onPress, file]);
+  const handleLongPress = useCallback(() => onLongPress?.(file), [onLongPress, file]);
+  const handleDelete = useCallback(() => onDelete?.(file), [onDelete, file]);
+  const handleToggleFavorite = useCallback(
+    () => onToggleFavorite?.(file),
+    [onToggleFavorite, file],
+  );
+
   const renderRightActions = (
     _progress: Animated.AnimatedInterpolation<number>,
     dragX: Animated.AnimatedInterpolation<number>,
@@ -64,7 +73,7 @@ export const FileListItem = memo(function FileListItem({
       <Animated.View style={{ flexDirection: "row", transform: [{ translateX }] }}>
         {onToggleFavorite && (
           <Button
-            onPress={onToggleFavorite}
+            onPress={handleToggleFavorite}
             variant="ghost"
             className="h-full w-16 items-center justify-center rounded-none rounded-l-xl bg-amber-500"
           >
@@ -73,7 +82,7 @@ export const FileListItem = memo(function FileListItem({
         )}
         {onDelete && (
           <Button
-            onPress={onDelete}
+            onPress={handleDelete}
             variant="ghost"
             className="h-full w-16 items-center justify-center rounded-none rounded-r-xl bg-red-500"
           >
@@ -100,8 +109,8 @@ export const FileListItem = memo(function FileListItem({
   const content =
     layout === "grid" ? (
       <Pressable
-        onPress={onPress}
-        onLongPress={onLongPress}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
         style={{ flex: 1 }}
         accessibilityLabel={file.filename}
         accessibilityRole="button"
@@ -125,25 +134,8 @@ export const FileListItem = memo(function FileListItem({
                   color={successColor}
                 />
               )}
-              {isVideo && (
-                <>
-                  <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
-                    <Text className="text-[8px] font-semibold text-white">{mediaDuration}</Text>
-                  </View>
-                  <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
-                    <Ionicons name="play" size={10} color="#fff" />
-                  </View>
-                </>
-              )}
-              {isAudio && (
-                <>
-                  <View className="absolute left-1 bottom-1 rounded-md bg-black/70 px-1 py-0.5">
-                    <Text className="text-[8px] font-semibold text-white">{mediaDuration}</Text>
-                  </View>
-                  <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
-                    <Ionicons name="musical-note" size={10} color="#fff" />
-                  </View>
-                </>
+              {(isVideo || isAudio) && (
+                <MediaTypeBadge mediaKind={isVideo ? "video" : "audio"} duration={mediaDuration} />
               )}
               {selected && (
                 <View className="absolute left-1 top-1 rounded-full bg-background/70 p-0.5">
@@ -184,8 +176,8 @@ export const FileListItem = memo(function FileListItem({
       </Pressable>
     ) : (
       <Pressable
-        onPress={onPress}
-        onLongPress={onLongPress}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
         accessibilityLabel={file.filename}
         accessibilityRole="button"
       >
@@ -213,15 +205,8 @@ export const FileListItem = memo(function FileListItem({
                   color={successColor}
                 />
               )}
-              {isVideo && (
-                <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
-                  <Ionicons name="play" size={10} color="#fff" />
-                </View>
-              )}
-              {isAudio && (
-                <View className="absolute bottom-1 right-1 rounded-full bg-black/60 p-1">
-                  <Ionicons name="musical-note" size={10} color="#fff" />
-                </View>
+              {(isVideo || isAudio) && (
+                <MediaTypeBadge mediaKind={isVideo ? "video" : "audio"} showDuration={false} />
               )}
             </View>
             <View className="min-w-0 flex-1">

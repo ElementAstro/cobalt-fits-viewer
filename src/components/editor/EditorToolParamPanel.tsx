@@ -1,3 +1,4 @@
+import React from "react";
 import { View, Text } from "react-native";
 import { Button, Card } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,7 +22,7 @@ interface EditorToolParamPanelProps {
   onReset?: () => void;
 }
 
-export function EditorToolParamPanel({
+export const EditorToolParamPanel = React.memo(function EditorToolParamPanel({
   activeTool,
   params,
   successColor,
@@ -65,10 +66,10 @@ export function EditorToolParamPanel({
       </Card>
     </View>
   );
-}
+});
 
-const GEOMETRY_TOOLS = new Set(["rotate", "flip", "rotateCustom", "background"]);
-const ADJUST_TOOLS = new Set([
+const PARAM_GEOMETRY_TOOLS = new Set(["rotate", "flip", "rotateCustom", "background"]);
+const PARAM_SLIDER_TOOLS = new Set([
   "blur",
   "sharpen",
   "denoise",
@@ -79,7 +80,7 @@ const ADJUST_TOOLS = new Set([
   "mtf",
   "curves",
 ]);
-const MASK_TOOLS = new Set(["starMask", "rangeMask", "binarize"]);
+const PARAM_MASK_TOOLS = new Set(["starMask", "rangeMask", "binarize"]);
 
 function ToolParams({
   activeTool,
@@ -90,15 +91,15 @@ function ToolParams({
   params: EditorToolParams;
   onQuickAction: (op: ImageEditOperation) => void;
 }) {
-  if (GEOMETRY_TOOLS.has(activeTool)) {
+  if (PARAM_GEOMETRY_TOOLS.has(activeTool)) {
     return (
       <ToolParamsGeometry activeTool={activeTool} params={params} onQuickAction={onQuickAction} />
     );
   }
-  if (ADJUST_TOOLS.has(activeTool)) {
+  if (PARAM_SLIDER_TOOLS.has(activeTool)) {
     return <ToolParamsAdjust activeTool={activeTool} params={params} />;
   }
-  if (MASK_TOOLS.has(activeTool)) {
+  if (PARAM_MASK_TOOLS.has(activeTool)) {
     return <ToolParamsMask activeTool={activeTool} params={params} />;
   }
   return <ToolParamsProcess activeTool={activeTool} params={params} />;

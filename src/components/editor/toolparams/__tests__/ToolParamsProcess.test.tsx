@@ -2,24 +2,6 @@ import React from "react";
 import { render } from "@testing-library/react-native";
 import { ToolParamsProcess } from "../ToolParamsProcess";
 
-jest.mock("heroui-native", () => {
-  const { Text, Pressable } = require("react-native");
-  return {
-    Button: Object.assign(
-      ({ children, onPress, ...props }: Record<string, unknown>) => (
-        <Pressable onPress={onPress as () => void} {...props}>
-          {children as React.ReactNode}
-        </Pressable>
-      ),
-      {
-        Label: ({ children, ...props }: Record<string, unknown>) => (
-          <Text {...props}>{children as React.ReactNode}</Text>
-        ),
-      },
-    ),
-  };
-});
-
 jest.mock("../../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
@@ -113,8 +95,8 @@ describe("ToolParamsProcess", () => {
       <ToolParamsProcess activeTool="morphology" params={mockParams} />,
     );
     expect(getByTestId("slider-editor.paramRadius")).toBeTruthy();
-    expect(getByText("erode")).toBeTruthy();
-    expect(getByText("dilate")).toBeTruthy();
+    expect(getByText("editor.paramMorphErode")).toBeTruthy();
+    expect(getByText("editor.paramMorphDilate")).toBeTruthy();
   });
 
   it("renders scnr amount slider + method buttons", () => {
@@ -141,7 +123,9 @@ describe("ToolParamsProcess", () => {
   });
 
   it("returns null for unknown tool", () => {
-    const { toJSON } = render(<ToolParamsProcess activeTool="unknown" params={mockParams} />);
+    const { toJSON } = render(
+      <ToolParamsProcess activeTool={"unknown" as never} params={mockParams} />,
+    );
     expect(toJSON()).toBeNull();
   });
 });

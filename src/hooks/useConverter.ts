@@ -3,6 +3,7 @@
  */
 
 import { useCallback, useEffect, useRef } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useConverterStore } from "../stores/useConverterStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { fitsToRGBA, estimateFileSize } from "../lib/converter/formatConverter";
@@ -29,18 +30,37 @@ interface BatchFileInfo {
 }
 
 export function useConverter() {
-  const currentOptions = useConverterStore((s) => s.currentOptions);
-  const setFormat = useConverterStore((s) => s.setFormat);
-  const setQuality = useConverterStore((s) => s.setQuality);
-  const setBitDepth = useConverterStore((s) => s.setBitDepth);
-  const setDpi = useConverterStore((s) => s.setDpi);
-  const setOptions = useConverterStore((s) => s.setOptions);
-  const applyPreset = useConverterStore((s) => s.applyPreset);
-  const presets = useConverterStore((s) => s.presets);
-  const batchTasks = useConverterStore((s) => s.batchTasks);
-  const addBatchTask = useConverterStore((s) => s.addBatchTask);
-  const updateBatchTask = useConverterStore((s) => s.updateBatchTask);
-  const clearCompletedTasks = useConverterStore((s) => s.clearCompletedTasks);
+  const {
+    currentOptions,
+    setFormat,
+    setQuality,
+    setBitDepth,
+    setDpi,
+    setOptions,
+    applyPreset,
+    presets,
+    batchTasks,
+    addBatchTask,
+    updateBatchTask,
+    removeBatchTask,
+    clearCompletedTasks,
+  } = useConverterStore(
+    useShallow((s) => ({
+      currentOptions: s.currentOptions,
+      setFormat: s.setFormat,
+      setQuality: s.setQuality,
+      setBitDepth: s.setBitDepth,
+      setDpi: s.setDpi,
+      setOptions: s.setOptions,
+      applyPreset: s.applyPreset,
+      presets: s.presets,
+      batchTasks: s.batchTasks,
+      addBatchTask: s.addBatchTask,
+      updateBatchTask: s.updateBatchTask,
+      removeBatchTask: s.removeBatchTask,
+      clearCompletedTasks: s.clearCompletedTasks,
+    })),
+  );
   const defaultConverterFormat = useSettingsStore((s) => s.defaultConverterFormat);
   const defaultConverterQuality = useSettingsStore((s) => s.defaultConverterQuality);
   const batchNamingRule = useSettingsStore((s) => s.batchNamingRule);
@@ -111,7 +131,16 @@ export function useConverter() {
     (files: BatchFileInfo[]) => {
       const fileIds = files.map((f) => f.id);
       const task = createBatchTask(fileIds, currentOptions);
-      addBatchTask(task);
+      addBatchTask({
+        ...task,
+        sourceFiles: files.map((f) => ({
+          id: f.id,
+          filepath: f.filepath,
+          filename: f.filename,
+          sourceType: f.sourceType,
+          mediaKind: f.mediaKind,
+        })),
+      });
 
       const controller = new AbortController();
       abortControllers.current.set(task.id, controller);
@@ -127,7 +156,8 @@ export function useConverter() {
           file.sourceType === "video" ||
           file.sourceType === "audio",
       );
-      const executableFiles = files.filter((file) => !preSkipped.includes(file));
+      const skippedIds = new Set(preSkipped.map((f) => f.id));
+      const executableFiles = files.filter((file) => !skippedIds.has(file.id));
       const preSkippedWarnings = preSkipped.map(
         (file) => `${file.filename}: prefiltered non-image source`,
       );
@@ -217,17 +247,16 @@ export function useConverter() {
 
   const retryTask = useCallback(
     (taskId: string) => {
-      updateBatchTask(taskId, {
-        status: "pending",
-        progress: 0,
-        completed: 0,
-        failed: 0,
-        skipped: 0,
-        warnings: [],
-        error: undefined,
-      });
+      const task = batchTasks.find((t) => t.id === taskId);
+      if (!task?.sourceFiles || task.sourceFiles.length === 0) {
+        Logger.warn(LOG_TAGS.Converter, `Cannot retry task ${taskId}: no sourceFiles stored`);
+        return;
+      }
+      const filesToRetry = task.sourceFiles;
+      removeBatchTask(taskId);
+      startBatchConvert(filesToRetry);
     },
-    [updateBatchTask],
+    [batchTasks, removeBatchTask, startBatchConvert],
   );
 
   return {

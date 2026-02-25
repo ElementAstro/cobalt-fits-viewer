@@ -2,6 +2,7 @@ import { View, Text } from "react-native";
 import { Surface, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { formatExposureTime } from "../../lib/targets/exposureStats";
+import { FILTER_COLORS } from "../../lib/targets/targetConstants";
 
 interface FilterProgress {
   filter: string;
@@ -14,17 +15,6 @@ interface ExposureProgressProps {
   filters: FilterProgress[];
   overallPercent: number;
 }
-
-const FILTER_COLORS: Record<string, string> = {
-  L: "#e5e7eb",
-  R: "#ef4444",
-  G: "#22c55e",
-  B: "#3b82f6",
-  Ha: "#dc2626",
-  SII: "#f59e0b",
-  OIII: "#06b6d4",
-  Unknown: "#6b7280",
-};
 
 export function ExposureProgress({ filters, overallPercent }: ExposureProgressProps) {
   const { t } = useI18n();

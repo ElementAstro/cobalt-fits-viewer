@@ -10,6 +10,7 @@ module.exports = {
     "\\\\node_modules\\\\",
     "src/app/__tests__/testUtils",
     "src/hooks/__tests__/helpers",
+    "src/components/astrometry/__tests__/helpers",
   ],
   moduleNameMapper: {
     "\\.css$": "<rootDir>/__mocks__/styleMock.js",

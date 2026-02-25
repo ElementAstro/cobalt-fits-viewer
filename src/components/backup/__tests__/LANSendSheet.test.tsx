@@ -6,56 +6,24 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { LANSendSheet } from "../LANSendSheet";
 import type { LANServerInfo } from "../../../lib/backup/lanTransfer";
-
-jest.mock("../../../i18n/useI18n", () => ({
-  useI18n: () => ({
-    t: (key: string) => key,
-  }),
-}));
+jest.mock("../../../i18n/useI18n", () => {
+  const { mockI18nFactory } = require("../testHelpers");
+  return mockI18nFactory();
+});
 
 jest.mock("heroui-native", () => {
-  const RN = require("react-native");
-  type MockProps = { children?: React.ReactNode } & Record<string, unknown>;
-  type MockDialogProps = MockProps & {
-    isOpen?: boolean;
-    onOpenChange?: (open: boolean) => void;
+  const h = require("../testHelpers");
+  return {
+    ...h.mockDialogFactory(),
+    ...h.mockButtonFactory("action-button"),
+    ...h.mockSpinnerFactory(),
+    ...h.mockUseThemeColorFactory(),
   };
-  type MockButtonProps = MockProps & {
-    onPress?: () => void;
-    isDisabled?: boolean;
-  };
-
-  const Dialog = ({ isOpen, children, onOpenChange }: MockDialogProps) =>
-    isOpen ? (
-      <RN.View testID="dialog" onTouchEnd={() => onOpenChange?.(false)}>
-        {children}
-      </RN.View>
-    ) : null;
-  Dialog.Portal = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Overlay = () => <RN.View />;
-  Dialog.Content = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  Dialog.Title = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  Dialog.Close = () => <RN.Pressable testID="dialog-close" />;
-
-  const Button = ({ children, onPress }: MockButtonProps) => (
-    <RN.Pressable testID="action-button" onPress={onPress}>
-      {children}
-    </RN.Pressable>
-  );
-  Button.Label = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-
-  const Spinner = () => <RN.View testID="spinner" />;
-
-  return { Button, Dialog, Spinner };
 });
 
 jest.mock("@expo/vector-icons", () => {
-  const RN = require("react-native");
-  return {
-    Ionicons: ({ name, ...props }: Record<string, unknown>) => (
-      <RN.Text testID={`icon-${name}`} {...props} />
-    ),
-  };
+  const { mockIoniconsFactory } = require("../testHelpers");
+  return mockIoniconsFactory();
 });
 
 const mockInfo: LANServerInfo = {

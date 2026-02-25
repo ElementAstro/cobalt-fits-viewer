@@ -88,7 +88,7 @@ describe("AstrometryResultView", () => {
 
   it("renders parity as Normal when 0", () => {
     render(<AstrometryResultView result={baseResult} />);
-    expect(screen.getByText("Normal")).toBeTruthy();
+    expect(screen.getByText("astrometry.parityNormal")).toBeTruthy();
   });
 
   it("renders parity as Flipped when non-zero", () => {
@@ -97,7 +97,7 @@ describe("AstrometryResultView", () => {
       calibration: { ...baseResult.calibration, parity: 1 },
     };
     render(<AstrometryResultView result={flipped} />);
-    expect(screen.getByText("Flipped")).toBeTruthy();
+    expect(screen.getByText("astrometry.parityFlipped")).toBeTruthy();
   });
 
   it("renders detected objects card with annotation count", () => {
@@ -113,8 +113,8 @@ describe("AstrometryResultView", () => {
 
   it("renders fallback name for annotations without names", () => {
     render(<AstrometryResultView result={baseResult} />);
-    // The third annotation has no names => "Object 3"
-    expect(screen.getByText("Object 3")).toBeTruthy();
+    // The third annotation has no names => t("astrometry.unnamedObject") with mock returns key
+    expect(screen.getByText("astrometry.unnamedObject")).toBeTruthy();
   });
 
   it("renders pixel coordinates for each annotation", () => {

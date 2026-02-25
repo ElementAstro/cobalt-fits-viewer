@@ -11,7 +11,6 @@ import { useFileGroupStore } from "../../stores/useFileGroupStore";
 import { useFileManager } from "../../hooks/useFileManager";
 import { useAlbums } from "../../hooks/useAlbums";
 import type { ImportResult } from "../../hooks/useFileManager";
-import { FilesContent } from "../../components/files/FilesContent";
 import { AlbumPickerSheet } from "../../components/gallery/AlbumPickerSheet";
 import { BatchTagSheet } from "../../components/gallery/BatchTagSheet";
 import { BatchRenameSheet } from "../../components/gallery/BatchRenameSheet";
@@ -20,15 +19,16 @@ import { FileGroupSheet } from "../../components/gallery/FileGroupSheet";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { QuickLookModal } from "../../components/common/QuickLookModal";
 import {
+  FilesContent,
   FilesHeader,
   FilesToolbar,
   FilesSelectionBar,
   FilesSortBar,
   FilesFilterBar,
   ImportOptionsSheet,
+  SelectionActionsSheet,
   UndoSnackbar,
 } from "../../components/files";
-import { SelectionActionsSheet } from "../../components/files/SelectionActionsSheet";
 import { GuideTarget } from "../../components/common/GuideTarget";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";

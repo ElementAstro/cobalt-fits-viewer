@@ -9,7 +9,7 @@ import { useSessions } from "../../hooks/useSessions";
 
 export function ActiveSessionBanner() {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, dangerColor] = useThemeColor(["muted", "danger"]);
 
   const activeSession = useSessionStore((s) => s.activeSession);
   const startLiveSession = useSessionStore((s) => s.startLiveSession);
@@ -26,15 +26,18 @@ export function ActiveSessionBanner() {
     (s) => s.files.filter((f) => f.sessionId === activeSession?.id).length,
   );
 
+  const sessionStatus = activeSession?.status;
+  const sessionStartedAt = activeSession?.startedAt;
+  const sessionTotalPausedMs = activeSession?.totalPausedMs;
+
   useEffect(() => {
-    if (!activeSession || activeSession.status !== "running") return;
+    if (sessionStatus !== "running" || !sessionStartedAt) return;
     const interval = setInterval(() => {
       const now = Date.now();
-      const totalPaused = activeSession.totalPausedMs;
-      setElapsed(Math.floor((now - activeSession.startedAt - totalPaused) / 1000));
+      setElapsed(Math.floor((now - sessionStartedAt - (sessionTotalPausedMs ?? 0)) / 1000));
     }, 1000);
     return () => clearInterval(interval);
-  }, [activeSession]);
+  }, [sessionStatus, sessionStartedAt, sessionTotalPausedMs]);
 
   useEffect(() => {
     if (activeSession?.status === "paused" && activeSession.pausedAt) {
@@ -118,7 +121,7 @@ export function ActiveSessionBanner() {
             </Button>
           )}
           <Button size="sm" variant="outline" onPress={handleEnd} className="flex-1">
-            <Ionicons name="stop" size={14} color="#ef4444" />
+            <Ionicons name="stop" size={14} color={dangerColor} />
             <Button.Label className="text-red-500">{t("sessions.endSession")}</Button.Label>
           </Button>
         </View>

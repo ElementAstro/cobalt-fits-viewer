@@ -2,10 +2,11 @@
  * WebDAV 配置表单组件
  */
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { View } from "react-native";
 import { Alert, Button, Dialog, FieldError, Input, Label, Spinner, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
+import { useConnectionTest } from "../../hooks/useConnectionTest";
 
 interface WebDAVConfigSheetProps {
   visible: boolean;
@@ -19,35 +20,28 @@ export function WebDAVConfigSheet({ visible, onConnect, onClose }: WebDAVConfigS
   const [url, setUrl] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<boolean | null>(null);
 
-  const handleConnect = async () => {
-    if (!url || !username) return;
+  const {
+    testing,
+    testResult,
+    runTest,
+    handleClose: closeWithReset,
+  } = useConnectionTest({
+    onClose,
+  });
 
-    setTesting(true);
-    setTestResult(null);
-
-    try {
-      const success = await onConnect(url, username, password);
-      setTestResult(success);
-      if (success) {
-        setTimeout(onClose, 1000);
-      }
-    } catch {
-      setTestResult(false);
-    } finally {
-      setTesting(false);
-    }
-  };
-
-  const handleClose = () => {
+  const resetFields = useCallback(() => {
     setUrl("");
     setUsername("");
     setPassword("");
-    setTestResult(null);
-    onClose();
+  }, []);
+
+  const handleConnect = async () => {
+    if (!url || !username) return;
+    await runTest(() => onConnect(url, username, password));
   };
+
+  const handleClose = () => closeWithReset(resetFields);
 
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && handleClose()}>

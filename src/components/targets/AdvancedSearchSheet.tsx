@@ -19,7 +19,12 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
-import { TARGET_TYPES, TARGET_STATUSES } from "../../lib/targets/targetConstants";
+import {
+  TARGET_TYPES,
+  TARGET_STATUSES,
+  targetTypeI18nKey,
+  targetStatusI18nKey,
+} from "../../lib/targets/targetConstants";
 
 interface AdvancedSearchSheetProps {
   visible: boolean;
@@ -28,6 +33,60 @@ interface AdvancedSearchSheetProps {
   initialConditions?: SearchConditions;
   allCategories?: string[];
   allTags?: string[];
+}
+
+interface SearchFormState {
+  query: string;
+  raMin: string;
+  raMax: string;
+  decMin: string;
+  decMax: string;
+  selectedTypes: TargetType[];
+  selectedStatuses: TargetStatus[];
+  selectedCategories: string[];
+  selectedTags: string[];
+  isFavorite: boolean | undefined;
+  hasCoordinates: boolean | undefined;
+  hasImages: boolean | undefined;
+  notesQuery: string;
+}
+
+const INITIAL_SEARCH_STATE: SearchFormState = {
+  query: "",
+  raMin: "",
+  raMax: "",
+  decMin: "",
+  decMax: "",
+  selectedTypes: [],
+  selectedStatuses: [],
+  selectedCategories: [],
+  selectedTags: [],
+  isFavorite: undefined,
+  hasCoordinates: undefined,
+  hasImages: undefined,
+  notesQuery: "",
+};
+
+function buildFormFromConditions(c?: SearchConditions): SearchFormState {
+  return {
+    query: c?.query ?? "",
+    raMin: c?.raMin?.toString() ?? "",
+    raMax: c?.raMax?.toString() ?? "",
+    decMin: c?.decMin?.toString() ?? "",
+    decMax: c?.decMax?.toString() ?? "",
+    selectedTypes: (c?.types as TargetType[]) ?? [],
+    selectedStatuses: (c?.statuses as TargetStatus[]) ?? [],
+    selectedCategories: c?.categories ?? [],
+    selectedTags: c?.tags ?? [],
+    isFavorite: c?.isFavorite,
+    hasCoordinates: c?.hasCoordinates,
+    hasImages: c?.hasImages,
+    notesQuery: c?.notes ?? "",
+  };
+}
+
+function toggleArrayItem<T>(arr: T[], item: T): T[] {
+  return arr.includes(item) ? arr.filter((v) => v !== item) : [...arr, item];
 }
 
 export function AdvancedSearchSheet({
@@ -42,137 +101,73 @@ export function AdvancedSearchSheet({
   const mutedColor = useThemeColor("muted");
   const insets = useSafeAreaInsets();
 
-  // 搜索条件状态
-  const [query, setQuery] = useState(initialConditions?.query ?? "");
-  const [raMin, setRaMin] = useState(initialConditions?.raMin?.toString() ?? "");
-  const [raMax, setRaMax] = useState(initialConditions?.raMax?.toString() ?? "");
-  const [decMin, setDecMin] = useState(initialConditions?.decMin?.toString() ?? "");
-  const [decMax, setDecMax] = useState(initialConditions?.decMax?.toString() ?? "");
-  const [selectedTypes, setSelectedTypes] = useState<TargetType[]>(
-    (initialConditions?.types as TargetType[]) ?? [],
+  const [form, setForm] = useState<SearchFormState>(() =>
+    buildFormFromConditions(initialConditions),
   );
-  const [selectedStatuses, setSelectedStatuses] = useState<TargetStatus[]>(
-    (initialConditions?.statuses as TargetStatus[]) ?? [],
+
+  const updateField = useCallback(
+    <K extends keyof SearchFormState>(key: K, value: SearchFormState[K]) => {
+      setForm((prev) => ({ ...prev, [key]: value }));
+    },
+    [],
   );
-  const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    initialConditions?.categories ?? [],
-  );
-  const [selectedTags, setSelectedTags] = useState<string[]>(initialConditions?.tags ?? []);
-  const [isFavorite, setIsFavorite] = useState<boolean | undefined>(initialConditions?.isFavorite);
-  const [hasCoordinates, setHasCoordinates] = useState<boolean | undefined>(
-    initialConditions?.hasCoordinates,
-  );
-  const [hasImages, setHasImages] = useState<boolean | undefined>(initialConditions?.hasImages);
-  const [notesQuery, setNotesQuery] = useState(initialConditions?.notes ?? "");
 
   useEffect(() => {
     if (!visible) return;
-    setQuery(initialConditions?.query ?? "");
-    setRaMin(initialConditions?.raMin?.toString() ?? "");
-    setRaMax(initialConditions?.raMax?.toString() ?? "");
-    setDecMin(initialConditions?.decMin?.toString() ?? "");
-    setDecMax(initialConditions?.decMax?.toString() ?? "");
-    setSelectedTypes((initialConditions?.types as TargetType[]) ?? []);
-    setSelectedStatuses((initialConditions?.statuses as TargetStatus[]) ?? []);
-    setSelectedCategories(initialConditions?.categories ?? []);
-    setSelectedTags(initialConditions?.tags ?? []);
-    setIsFavorite(initialConditions?.isFavorite);
-    setHasCoordinates(initialConditions?.hasCoordinates);
-    setHasImages(initialConditions?.hasImages);
-    setNotesQuery(initialConditions?.notes ?? "");
+    setForm(buildFormFromConditions(initialConditions));
   }, [visible, initialConditions]);
 
-  const toggleType = (type: TargetType) => {
-    setSelectedTypes((prev) =>
-      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-    );
-  };
+  const toggleType = (type: TargetType) =>
+    updateField("selectedTypes", toggleArrayItem(form.selectedTypes, type));
 
-  const toggleStatus = (status: TargetStatus) => {
-    setSelectedStatuses((prev) =>
-      prev.includes(status) ? prev.filter((s) => s !== status) : [...prev, status],
-    );
-  };
+  const toggleStatus = (status: TargetStatus) =>
+    updateField("selectedStatuses", toggleArrayItem(form.selectedStatuses, status));
 
-  const toggleCategory = (category: string) => {
-    setSelectedCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
-    );
-  };
+  const toggleCategory = (category: string) =>
+    updateField("selectedCategories", toggleArrayItem(form.selectedCategories, category));
 
-  const toggleTag = (tag: string) => {
-    setSelectedTags((prev) =>
-      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
-    );
-  };
+  const toggleTag = (tag: string) =>
+    updateField("selectedTags", toggleArrayItem(form.selectedTags, tag));
 
   const handleSearch = useCallback(() => {
     const conditions: SearchConditions = {
-      query: query.trim() || undefined,
-      raMin: raMin ? parseFloat(raMin) : undefined,
-      raMax: raMax ? parseFloat(raMax) : undefined,
-      decMin: decMin ? parseFloat(decMin) : undefined,
-      decMax: decMax ? parseFloat(decMax) : undefined,
-      types: selectedTypes.length > 0 ? selectedTypes : undefined,
-      statuses: selectedStatuses.length > 0 ? selectedStatuses : undefined,
-      categories: selectedCategories.length > 0 ? selectedCategories : undefined,
-      tags: selectedTags.length > 0 ? selectedTags : undefined,
-      isFavorite,
-      hasCoordinates,
-      hasImages,
-      notes: notesQuery.trim() || undefined,
+      query: form.query.trim() || undefined,
+      raMin: form.raMin ? parseFloat(form.raMin) : undefined,
+      raMax: form.raMax ? parseFloat(form.raMax) : undefined,
+      decMin: form.decMin ? parseFloat(form.decMin) : undefined,
+      decMax: form.decMax ? parseFloat(form.decMax) : undefined,
+      types: form.selectedTypes.length > 0 ? form.selectedTypes : undefined,
+      statuses: form.selectedStatuses.length > 0 ? form.selectedStatuses : undefined,
+      categories: form.selectedCategories.length > 0 ? form.selectedCategories : undefined,
+      tags: form.selectedTags.length > 0 ? form.selectedTags : undefined,
+      isFavorite: form.isFavorite,
+      hasCoordinates: form.hasCoordinates,
+      hasImages: form.hasImages,
+      notes: form.notesQuery.trim() || undefined,
     };
 
     onSearch(conditions);
     onClose();
-  }, [
-    decMax,
-    decMin,
-    hasCoordinates,
-    hasImages,
-    isFavorite,
-    notesQuery,
-    onClose,
-    onSearch,
-    query,
-    raMax,
-    raMin,
-    selectedCategories,
-    selectedStatuses,
-    selectedTags,
-    selectedTypes,
-  ]);
+  }, [form, onClose, onSearch]);
 
   const handleReset = useCallback(() => {
-    setQuery("");
-    setRaMin("");
-    setRaMax("");
-    setDecMin("");
-    setDecMax("");
-    setSelectedTypes([]);
-    setSelectedStatuses([]);
-    setSelectedCategories([]);
-    setSelectedTags([]);
-    setIsFavorite(undefined);
-    setHasCoordinates(undefined);
-    setHasImages(undefined);
-    setNotesQuery("");
+    setForm(INITIAL_SEARCH_STATE);
   }, []);
 
   const hasFilters =
-    query ||
-    raMin ||
-    raMax ||
-    decMin ||
-    decMax ||
-    selectedTypes.length > 0 ||
-    selectedStatuses.length > 0 ||
-    selectedCategories.length > 0 ||
-    selectedTags.length > 0 ||
-    isFavorite !== undefined ||
-    hasCoordinates !== undefined ||
-    hasImages !== undefined ||
-    notesQuery;
+    form.query ||
+    form.raMin ||
+    form.raMax ||
+    form.decMin ||
+    form.decMax ||
+    form.selectedTypes.length > 0 ||
+    form.selectedStatuses.length > 0 ||
+    form.selectedCategories.length > 0 ||
+    form.selectedTags.length > 0 ||
+    form.isFavorite !== undefined ||
+    form.hasCoordinates !== undefined ||
+    form.hasImages !== undefined ||
+    form.notesQuery;
 
   return (
     <BottomSheet isOpen={visible} onOpenChange={(open) => !open && onClose()}>
@@ -212,8 +207,8 @@ export function AdvancedSearchSheet({
               <Label>{t("common.search")}</Label>
               <Input
                 placeholder={t("targets.searchPlaceholder")}
-                value={query}
-                onChangeText={setQuery}
+                value={form.query}
+                onChangeText={(v) => updateField("query", v)}
                 autoCorrect={false}
               />
             </TextField>
@@ -223,8 +218,8 @@ export function AdvancedSearchSheet({
               <Label>{t("targets.search.notesSearch")}</Label>
               <Input
                 placeholder={t("targets.notes")}
-                value={notesQuery}
-                onChangeText={setNotesQuery}
+                value={form.notesQuery}
+                onChangeText={(v) => updateField("notesQuery", v)}
                 autoCorrect={false}
               />
             </TextField>
@@ -239,8 +234,8 @@ export function AdvancedSearchSheet({
                   <Label className="text-xs">{t("targets.search.raMin")}</Label>
                   <Input
                     placeholder="0"
-                    value={raMin}
-                    onChangeText={setRaMin}
+                    value={form.raMin}
+                    onChangeText={(v) => updateField("raMin", v)}
                     keyboardType="decimal-pad"
                   />
                 </TextField>
@@ -250,8 +245,8 @@ export function AdvancedSearchSheet({
                   <Label className="text-xs">{t("targets.search.raMax")}</Label>
                   <Input
                     placeholder="360"
-                    value={raMax}
-                    onChangeText={setRaMax}
+                    value={form.raMax}
+                    onChangeText={(v) => updateField("raMax", v)}
                     keyboardType="decimal-pad"
                   />
                 </TextField>
@@ -263,8 +258,8 @@ export function AdvancedSearchSheet({
                   <Label className="text-xs">{t("targets.search.decMin")}</Label>
                   <Input
                     placeholder="-90"
-                    value={decMin}
-                    onChangeText={setDecMin}
+                    value={form.decMin}
+                    onChangeText={(v) => updateField("decMin", v)}
                     keyboardType="decimal-pad"
                   />
                 </TextField>
@@ -274,8 +269,8 @@ export function AdvancedSearchSheet({
                   <Label className="text-xs">{t("targets.search.decMax")}</Label>
                   <Input
                     placeholder="90"
-                    value={decMax}
-                    onChangeText={setDecMax}
+                    value={form.decMax}
+                    onChangeText={(v) => updateField("decMax", v)}
                     keyboardType="decimal-pad"
                   />
                 </TextField>
@@ -291,22 +286,10 @@ export function AdvancedSearchSheet({
                 <Chip
                   key={tt}
                   size="sm"
-                  variant={selectedTypes.includes(tt) ? "primary" : "secondary"}
+                  variant={form.selectedTypes.includes(tt) ? "primary" : "secondary"}
                   onPress={() => toggleType(tt)}
                 >
-                  <Chip.Label className="text-[10px]">
-                    {t(
-                      `targets.types.${tt}` as
-                        | "targets.types.galaxy"
-                        | "targets.types.nebula"
-                        | "targets.types.cluster"
-                        | "targets.types.planet"
-                        | "targets.types.moon"
-                        | "targets.types.sun"
-                        | "targets.types.comet"
-                        | "targets.types.other",
-                    )}
-                  </Chip.Label>
+                  <Chip.Label className="text-[10px]">{t(targetTypeI18nKey(tt))}</Chip.Label>
                 </Chip>
               ))}
             </View>
@@ -318,18 +301,10 @@ export function AdvancedSearchSheet({
                 <Chip
                   key={s}
                   size="sm"
-                  variant={selectedStatuses.includes(s) ? "primary" : "secondary"}
+                  variant={form.selectedStatuses.includes(s) ? "primary" : "secondary"}
                   onPress={() => toggleStatus(s)}
                 >
-                  <Chip.Label className="text-[10px]">
-                    {t(
-                      `targets.${s}` as
-                        | "targets.planned"
-                        | "targets.acquiring"
-                        | "targets.completed"
-                        | "targets.processed",
-                    )}
-                  </Chip.Label>
+                  <Chip.Label className="text-[10px]">{t(targetStatusI18nKey(s))}</Chip.Label>
                 </Chip>
               ))}
             </View>
@@ -343,7 +318,7 @@ export function AdvancedSearchSheet({
                     <Chip
                       key={cat}
                       size="sm"
-                      variant={selectedCategories.includes(cat) ? "primary" : "secondary"}
+                      variant={form.selectedCategories.includes(cat) ? "primary" : "secondary"}
                       onPress={() => toggleCategory(cat)}
                     >
                       <Chip.Label className="text-[10px]">{cat}</Chip.Label>
@@ -362,7 +337,7 @@ export function AdvancedSearchSheet({
                     <Chip
                       key={tag}
                       size="sm"
-                      variant={selectedTags.includes(tag) ? "primary" : "secondary"}
+                      variant={form.selectedTags.includes(tag) ? "primary" : "secondary"}
                       onPress={() => toggleTag(tag)}
                     >
                       <Chip.Label className="text-[10px]">{tag}</Chip.Label>
@@ -379,33 +354,41 @@ export function AdvancedSearchSheet({
             <View className="flex-row flex-wrap gap-2">
               <Button
                 size="sm"
-                variant={isFavorite === true ? "primary" : "outline"}
-                onPress={() => setIsFavorite(isFavorite === true ? undefined : true)}
+                variant={form.isFavorite === true ? "primary" : "outline"}
+                onPress={() =>
+                  updateField("isFavorite", form.isFavorite === true ? undefined : true)
+                }
               >
-                <Ionicons name="star" size={12} color={isFavorite === true ? "#fff" : mutedColor} />
+                <Ionicons
+                  name="star"
+                  size={12}
+                  color={form.isFavorite === true ? "#fff" : mutedColor}
+                />
                 <Button.Label>{t("targets.favorites")}</Button.Label>
               </Button>
               <Button
                 size="sm"
-                variant={hasCoordinates === true ? "primary" : "outline"}
-                onPress={() => setHasCoordinates(hasCoordinates === true ? undefined : true)}
+                variant={form.hasCoordinates === true ? "primary" : "outline"}
+                onPress={() =>
+                  updateField("hasCoordinates", form.hasCoordinates === true ? undefined : true)
+                }
               >
                 <Ionicons
                   name="navigate"
                   size={12}
-                  color={hasCoordinates === true ? "#fff" : mutedColor}
+                  color={form.hasCoordinates === true ? "#fff" : mutedColor}
                 />
                 <Button.Label>{t("targets.coordinates")}</Button.Label>
               </Button>
               <Button
                 size="sm"
-                variant={hasImages === true ? "primary" : "outline"}
-                onPress={() => setHasImages(hasImages === true ? undefined : true)}
+                variant={form.hasImages === true ? "primary" : "outline"}
+                onPress={() => updateField("hasImages", form.hasImages === true ? undefined : true)}
               >
                 <Ionicons
                   name="images"
                   size={12}
-                  color={hasImages === true ? "#fff" : mutedColor}
+                  color={form.hasImages === true ? "#fff" : mutedColor}
                 />
                 <Button.Label>{t("targets.frameCount")}</Button.Label>
               </Button>

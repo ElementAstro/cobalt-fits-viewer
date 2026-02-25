@@ -925,6 +925,14 @@ export interface Annotation {
 // ===== 批量任务 =====
 export type BatchTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
 
+export interface BatchTaskSourceFile {
+  id: string;
+  filepath: string;
+  filename: string;
+  sourceType?: "fits" | "raster" | "video" | "audio";
+  mediaKind?: "image" | "video" | "audio";
+}
+
 export interface BatchTask {
   id: string;
   type: "convert" | "export" | "stack" | "video-process";
@@ -939,6 +947,7 @@ export interface BatchTask {
   startedAt?: number;
   finishedAt?: number;
   error?: string;
+  sourceFiles?: BatchTaskSourceFile[];
 }
 
 // ===== 相册视图模式 =====

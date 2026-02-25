@@ -1,4 +1,4 @@
-import { formatDuration } from "../format";
+import { formatDuration, formatTimeHHMM, parseGeoCoordinate } from "../format";
 
 describe("formatDuration", () => {
   it("formats seconds under a minute", () => {
@@ -47,5 +47,53 @@ describe("formatDuration", () => {
   it("handles negative or zero input", () => {
     expect(formatDuration(0)).toBe("0s");
     expect(formatDuration(-1)).toBe("-1s");
+  });
+});
+
+describe("formatTimeHHMM", () => {
+  it("formats time as HH:MM with zero-padding", () => {
+    expect(formatTimeHHMM(new Date(2025, 0, 1, 9, 5))).toBe("09:05");
+    expect(formatTimeHHMM(new Date(2025, 0, 1, 23, 59))).toBe("23:59");
+    expect(formatTimeHHMM(new Date(2025, 0, 1, 0, 0))).toBe("00:00");
+  });
+
+  it("handles noon and midnight", () => {
+    expect(formatTimeHHMM(new Date(2025, 5, 15, 12, 0))).toBe("12:00");
+    expect(formatTimeHHMM(new Date(2025, 5, 15, 0, 0))).toBe("00:00");
+  });
+});
+
+describe("parseGeoCoordinate", () => {
+  it("returns undefined for empty string", () => {
+    expect(parseGeoCoordinate("", { min: -90, max: 90 })).toBeUndefined();
+    expect(parseGeoCoordinate("  ", { min: -90, max: 90 })).toBeUndefined();
+  });
+
+  it("returns null for non-numeric input", () => {
+    expect(parseGeoCoordinate("abc", { min: -90, max: 90 })).toBeNull();
+    expect(parseGeoCoordinate("NaN", { min: -90, max: 90 })).toBeNull();
+    expect(parseGeoCoordinate("Infinity", { min: -90, max: 90 })).toBeNull();
+  });
+
+  it("returns null for out-of-range values", () => {
+    expect(parseGeoCoordinate("91", { min: -90, max: 90 })).toBeNull();
+    expect(parseGeoCoordinate("-91", { min: -90, max: 90 })).toBeNull();
+    expect(parseGeoCoordinate("181", { min: -180, max: 180 })).toBeNull();
+  });
+
+  it("parses valid coordinates", () => {
+    expect(parseGeoCoordinate("39.9042", { min: -90, max: 90 })).toBeCloseTo(39.9042);
+    expect(parseGeoCoordinate("-33.8688", { min: -90, max: 90 })).toBeCloseTo(-33.8688);
+    expect(parseGeoCoordinate("116.4074", { min: -180, max: 180 })).toBeCloseTo(116.4074);
+  });
+
+  it("handles boundary values", () => {
+    expect(parseGeoCoordinate("90", { min: -90, max: 90 })).toBe(90);
+    expect(parseGeoCoordinate("-90", { min: -90, max: 90 })).toBe(-90);
+    expect(parseGeoCoordinate("0", { min: -90, max: 90 })).toBe(0);
+  });
+
+  it("trims whitespace", () => {
+    expect(parseGeoCoordinate("  39.9  ", { min: -90, max: 90 })).toBeCloseTo(39.9);
   });
 });

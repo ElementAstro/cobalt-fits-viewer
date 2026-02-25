@@ -1,7 +1,12 @@
 import { ScrollView, View, Text } from "react-native";
-import { BottomSheet, PressableFeedback, useThemeColor } from "heroui-native";
-import { Ionicons } from "@expo/vector-icons";
+import { BottomSheet, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
+import { hexWithAlpha } from "../../lib/utils/colorUtils";
+import { SheetActionItem } from "./SheetActionItem";
+
+const SHEET_MAX_SNAP_HEIGHT = 520;
+const SHEET_HEIGHT_RATIO = 0.7;
+const SHEET_MAX_SCROLL_RATIO = 0.5;
 
 interface ImportOptionsSheetProps {
   visible: boolean;
@@ -16,51 +21,6 @@ interface ImportOptionsSheetProps {
   onImportClipboard: () => void;
   onImportMediaLibrary: () => void;
   onRecordVideo: () => void;
-}
-
-interface ImportOptionItemProps {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  subtitle: string;
-  onPress: () => void;
-  disabled?: boolean;
-  compact?: boolean;
-}
-
-function ImportOptionItem({
-  icon,
-  title,
-  subtitle,
-  onPress,
-  disabled,
-  compact,
-}: ImportOptionItemProps) {
-  const successColor = useThemeColor("success");
-  const mutedColor = useThemeColor("muted");
-
-  return (
-    <PressableFeedback
-      onPress={onPress}
-      className={`flex-row items-center gap-3 rounded-xl ${
-        disabled ? "bg-surface-secondary/60" : "bg-surface-secondary"
-      } ${compact ? "p-3" : "p-4"}`}
-    >
-      <View
-        className={`items-center justify-center rounded-full bg-success/10 ${
-          compact ? "h-8 w-8" : "h-10 w-10"
-        }`}
-      >
-        <Ionicons name={icon} size={compact ? 16 : 20} color={successColor} />
-      </View>
-      <View className="flex-1">
-        <Text className={`font-semibold text-foreground ${compact ? "text-xs" : "text-sm"}`}>
-          {title}
-        </Text>
-        <Text className="text-xs text-muted">{subtitle}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={mutedColor} />
-    </PressableFeedback>
-  );
 }
 
 export function ImportOptionsSheet({
@@ -78,7 +38,7 @@ export function ImportOptionsSheet({
   onRecordVideo,
 }: ImportOptionsSheetProps) {
   const { t } = useI18n();
-  const [mutedColor, surfaceColor] = useThemeColor(["muted", "surface"]);
+  const [mutedColor, surfaceColor, successColor] = useThemeColor(["muted", "surface", "success"]);
   const compact = isLandscape;
 
   return (
@@ -86,9 +46,9 @@ export function ImportOptionsSheet({
       <BottomSheet.Portal>
         <BottomSheet.Overlay />
         <BottomSheet.Content
-          snapPoints={[Math.min(520, screenHeight * 0.7)]}
+          snapPoints={[Math.min(SHEET_MAX_SNAP_HEIGHT, screenHeight * SHEET_HEIGHT_RATIO)]}
           enablePanDownToClose
-          backgroundStyle={{ backgroundColor: surfaceColor + "F2" }}
+          backgroundStyle={{ backgroundColor: hexWithAlpha(surfaceColor, 0.95) }}
           handleIndicatorStyle={{ backgroundColor: mutedColor }}
         >
           <View className={compact ? "px-4 pb-4" : "px-6 pb-8"}>
@@ -99,58 +59,79 @@ export function ImportOptionsSheet({
 
             <ScrollView
               showsVerticalScrollIndicator={false}
-              style={{ maxHeight: screenHeight * 0.5 }}
+              style={{ maxHeight: screenHeight * SHEET_MAX_SCROLL_RATIO }}
             >
               <View className={compact ? "gap-1.5" : "gap-2"}>
-                <ImportOptionItem
+                <SheetActionItem
                   icon="document-outline"
                   title={t("files.importFile")}
                   subtitle={t("files.supportedFormatsShort")}
                   onPress={onImportFile}
                   compact={compact}
+                  showChevron
+                  successColor={successColor}
+                  mutedColor={mutedColor}
                 />
-                <ImportOptionItem
+                <SheetActionItem
                   icon="folder-open-outline"
                   title={t("files.importFolder")}
                   subtitle={t("files.supportedFormatsHint")}
                   onPress={onImportFolder}
                   compact={compact}
+                  showChevron
+                  successColor={successColor}
+                  mutedColor={mutedColor}
                 />
-                <ImportOptionItem
+                <SheetActionItem
                   icon="archive-outline"
                   title={t("files.importZip")}
                   subtitle={isZipImportAvailable ? "ZIP" : t("files.importZipUnavailable")}
                   onPress={onImportZip}
                   disabled={!isZipImportAvailable}
                   compact={compact}
+                  showChevron
+                  successColor={successColor}
+                  mutedColor={mutedColor}
                 />
-                <ImportOptionItem
+                <SheetActionItem
                   icon="cloud-download-outline"
                   title={t("files.importFromUrl")}
                   subtitle={`HTTP / HTTPS · ${t("files.supportedFormatsShort")}`}
                   onPress={onImportUrl}
                   compact={compact}
+                  showChevron
+                  successColor={successColor}
+                  mutedColor={mutedColor}
                 />
-                <ImportOptionItem
+                <SheetActionItem
                   icon="clipboard-outline"
                   title={t("files.importFromClipboard")}
                   subtitle={t("files.supportedFormatsShort")}
                   onPress={onImportClipboard}
                   compact={compact}
+                  showChevron
+                  successColor={successColor}
+                  mutedColor={mutedColor}
                 />
-                <ImportOptionItem
+                <SheetActionItem
                   icon="images-outline"
                   title={t("files.importFromMediaLibrary")}
                   subtitle={t("files.mediaLibraryHint")}
                   onPress={onImportMediaLibrary}
                   compact={compact}
+                  showChevron
+                  successColor={successColor}
+                  mutedColor={mutedColor}
                 />
-                <ImportOptionItem
+                <SheetActionItem
                   icon="videocam-outline"
                   title={t("files.recordVideo")}
                   subtitle={t("files.recordVideoHint")}
                   onPress={onRecordVideo}
                   compact={compact}
+                  showChevron
+                  successColor={successColor}
+                  mutedColor={mutedColor}
                 />
               </View>
             </ScrollView>

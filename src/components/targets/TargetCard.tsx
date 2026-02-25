@@ -9,7 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { Target } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
 import { getTargetIcon } from "../../lib/targets/targetIcons";
-import { STATUS_COLORS } from "../../lib/targets/targetConstants";
+import { STATUS_COLORS, targetStatusI18nKey } from "../../lib/targets/targetConstants";
 import { formatCoordinates } from "../../lib/targets/coordinates";
 import { FavoriteButton, PinButton } from "./FavoriteButton";
 import type {
@@ -144,13 +144,7 @@ export const TargetCard = React.memo(function TargetCard({
                     }}
                   />
                   <Card.Description className={statusTextClassName}>
-                    {t(
-                      `targets.${target.status}` as
-                        | "targets.planned"
-                        | "targets.acquiring"
-                        | "targets.completed"
-                        | "targets.processed",
-                    )}
+                    {t(targetStatusI18nKey(target.status))}
                   </Card.Description>
                 </View>
               )}
@@ -168,13 +162,7 @@ export const TargetCard = React.memo(function TargetCard({
                 }}
               />
               <Card.Description className={statusTextClassName}>
-                {t(
-                  `targets.${target.status}` as
-                    | "targets.planned"
-                    | "targets.acquiring"
-                    | "targets.completed"
-                    | "targets.processed",
-                )}
+                {t(targetStatusI18nKey(target.status))}
               </Card.Description>
             </View>
           )}

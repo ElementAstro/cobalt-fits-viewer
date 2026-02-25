@@ -6,54 +6,24 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { AddProviderSheet } from "../AddProviderSheet";
 import type { CloudProvider } from "../../../lib/backup/types";
-
-jest.mock("../../../i18n/useI18n", () => ({
-  useI18n: () => ({
-    t: (key: string) => key,
-  }),
-}));
+jest.mock("../../../i18n/useI18n", () => {
+  const { mockI18nFactory } = require("../testHelpers");
+  return mockI18nFactory();
+});
 
 jest.mock("heroui-native", () => {
-  const RN = require("react-native");
-  type MockProps = { children?: React.ReactNode } & Record<string, unknown>;
-  type MockBottomSheetProps = MockProps & {
-    isOpen?: boolean;
-    onOpenChange?: (open: boolean) => void;
+  const h = require("../testHelpers");
+  return {
+    ...h.mockBottomSheetFactory(),
+    ...h.mockPressableFeedbackFactory(),
+    ...h.mockSeparatorFactory(),
+    ...h.mockUseThemeColorFactory(),
   };
-  type MockPressableProps = MockProps & { onPress?: () => void };
-
-  const BottomSheet = ({ isOpen, children, onOpenChange }: MockBottomSheetProps) =>
-    isOpen ? (
-      <RN.View testID="bottom-sheet" onTouchEnd={() => onOpenChange?.(false)}>
-        {children}
-      </RN.View>
-    ) : null;
-  BottomSheet.Portal = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  BottomSheet.Overlay = () => <RN.View />;
-  BottomSheet.Content = ({ children }: MockProps) => <RN.View>{children}</RN.View>;
-  BottomSheet.Title = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  BottomSheet.Description = ({ children }: MockProps) => <RN.Text>{children}</RN.Text>;
-  BottomSheet.Close = () => <RN.Pressable testID="bottom-sheet-close" />;
-
-  const PressableFeedback = ({ children, onPress }: MockPressableProps) => (
-    <RN.Pressable onPress={onPress}>{children}</RN.Pressable>
-  );
-  PressableFeedback.Highlight = () => <RN.View />;
-
-  const Separator = () => <RN.View testID="separator" />;
-
-  const useThemeColor = () => "#999";
-
-  return { BottomSheet, PressableFeedback, Separator, useThemeColor };
 });
 
 jest.mock("@expo/vector-icons", () => {
-  const RN = require("react-native");
-  return {
-    Ionicons: ({ name, ...props }: Record<string, unknown>) => (
-      <RN.Text testID={`icon-${name}`} {...props} />
-    ),
-  };
+  const { mockIoniconsFactory } = require("../testHelpers");
+  return mockIoniconsFactory();
 });
 
 describe("AddProviderSheet", () => {

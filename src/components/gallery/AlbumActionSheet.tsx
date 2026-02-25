@@ -35,7 +35,7 @@ export function AlbumActionSheet({
   onViewStats,
 }: AlbumActionSheetProps) {
   const { t } = useI18n();
-  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const [mutedColor, successColor, dangerColor] = useThemeColor(["muted", "success", "danger"]);
 
   const actions: {
     label: string;
@@ -125,7 +125,7 @@ export function AlbumActionSheet({
                 name={action.icon as keyof typeof Ionicons.glyphMap}
                 size={18}
                 color={
-                  action.destructive ? "#ef4444" : action.highlight ? successColor : mutedColor
+                  action.destructive ? dangerColor : action.highlight ? successColor : mutedColor
                 }
               />
               <Text

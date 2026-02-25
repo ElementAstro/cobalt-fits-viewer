@@ -65,6 +65,7 @@ export function AnimatedSplashScreen({ children }: PropsWithChildren) {
 
     // Subtitle: fade in
     subtitleOpacity.value = withDelay(SUBTITLE_DELAY, withTiming(1, { duration: 400 }));
+    // Entrance animations run once on mount; shared values are stable refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -105,6 +106,7 @@ export function AnimatedSplashScreen({ children }: PropsWithChildren) {
       duration: EXIT_DURATION,
       easing: Easing.out(Easing.cubic),
     });
+    // Exit animation depends only on isAppReady; overlay shared values are stable refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAppReady]);
 
@@ -173,6 +175,7 @@ export function AnimatedSplashScreen({ children }: PropsWithChildren) {
   );
 }
 
+// Colors are hardcoded because AnimatedSplashScreen renders before the theme provider is available
 const styles = StyleSheet.create({
   root: {
     flex: 1,

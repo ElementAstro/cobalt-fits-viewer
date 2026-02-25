@@ -11,6 +11,10 @@ export interface ActionItem {
   highlight?: boolean;
 }
 
+export interface ConditionalActionItem extends ActionItem {
+  _visible: boolean;
+}
+
 interface ActionSheetListProps {
   visible: boolean;
   title: string;
@@ -20,7 +24,7 @@ interface ActionSheetListProps {
 
 export function ActionSheetList({ visible, title, actions, onClose }: ActionSheetListProps) {
   const { t } = useI18n();
-  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
+  const [mutedColor, successColor, dangerColor] = useThemeColor(["muted", "success", "danger"]);
 
   return (
     <BottomSheet
@@ -47,7 +51,7 @@ export function ActionSheetList({ visible, title, actions, onClose }: ActionShee
                 name={action.icon as keyof typeof Ionicons.glyphMap}
                 size={18}
                 color={
-                  action.destructive ? "#ef4444" : action.highlight ? successColor : mutedColor
+                  action.destructive ? dangerColor : action.highlight ? successColor : mutedColor
                 }
               />
               <Text

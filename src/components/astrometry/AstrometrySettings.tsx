@@ -39,6 +39,7 @@ export function AstrometrySettings() {
   const { config, setConfig, saveApiKey, testConnection } = useAstrometry();
   const successColor = useThemeColor("success");
   const dangerColor = useThemeColor("danger");
+  const mutedColor = useThemeColor("muted");
 
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [serverInput, setServerInput] = useState(config.serverUrl);
@@ -50,7 +51,7 @@ export function AstrometrySettings() {
     if (!apiKeyInput.trim()) return;
     await saveApiKey(apiKeyInput.trim());
     setApiKeyInput("");
-    Alert.alert(t("common.success"), "API Key saved");
+    Alert.alert(t("common.success"), t("astrometry.apiKeySaved"));
   }, [apiKeyInput, saveApiKey, t]);
 
   const handleTestConnection = useCallback(async () => {
@@ -86,7 +87,7 @@ export function AstrometrySettings() {
             <Input
               value={apiKeyInput}
               onChangeText={setApiKeyInput}
-              placeholder="Enter your API key..."
+              placeholder={t("astrometry.apiKeyPlaceholder")}
               secureTextEntry
               autoCorrect={false}
             />
@@ -153,7 +154,7 @@ export function AstrometrySettings() {
               <Input
                 value={serverInput}
                 onChangeText={setServerInput}
-                placeholder="https://your-server.com"
+                placeholder={t("astrometry.serverPlaceholder")}
                 onBlur={handleSaveServer}
                 autoCorrect={false}
               />
@@ -180,7 +181,7 @@ export function AstrometrySettings() {
           <Separator />
           <View className="flex-row items-center justify-between py-3">
             <View className="flex-row items-center gap-3">
-              <Ionicons name="flash-outline" size={18} color="#888" />
+              <Ionicons name="flash-outline" size={18} color={mutedColor} />
               <Text className="text-sm text-foreground">{t("astrometry.autoSolve")}</Text>
             </View>
             <Switch

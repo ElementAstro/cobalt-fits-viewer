@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useI18n } from "../../i18n/useI18n";
 import type { ObservationSession } from "../../lib/fits/types";
-import { ActionSheetList, type ActionItem } from "./ActionSheetList";
+import { ActionSheetList, type ActionItem, type ConditionalActionItem } from "./ActionSheetList";
 
 interface SessionActionSheetProps {
   visible: boolean;
@@ -80,7 +80,7 @@ export function SessionActionSheet({
           destructive: true,
           _visible: !!onDelete,
         },
-      ] as (ActionItem & { _visible: boolean })[]
+      ] as ConditionalActionItem[]
     ).filter((a) => a._visible);
   }, [
     session,

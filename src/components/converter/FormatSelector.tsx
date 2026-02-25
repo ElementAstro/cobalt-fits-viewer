@@ -33,7 +33,11 @@ export function FormatSelector({ selected, onSelect }: FormatSelectorProps) {
   return (
     <RadioGroup
       value={selected}
-      onValueChange={(val) => onSelect(val as ExportFormat)}
+      onValueChange={(val) => {
+        if (FORMAT_OPTIONS.some((o) => o.key === val)) {
+          onSelect(val as ExportFormat);
+        }
+      }}
       className="gap-2"
     >
       {FORMAT_OPTIONS.map((fmt) => (

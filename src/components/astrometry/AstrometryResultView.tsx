@@ -7,8 +7,9 @@ import { View, Text, ScrollView } from "react-native";
 import { Button, Card, Chip, Separator } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { AstrometryResult, AstrometryAnnotationType } from "../../lib/astrometry/types";
+import type { AstrometryResult } from "../../lib/astrometry/types";
 import { formatRA, formatDec, formatFieldSize } from "../../lib/astrometry/formatUtils";
+import { ANNOTATION_CHIP_COLORS } from "../../lib/astrometry/annotationConstants";
 
 interface AstrometryResultViewProps {
   result: AstrometryResult;
@@ -18,16 +19,6 @@ interface AstrometryResultViewProps {
   onToggleAnnotations?: () => void;
   showAnnotations?: boolean;
 }
-
-const ANNOTATION_COLORS: Record<AstrometryAnnotationType, string> = {
-  messier: "danger",
-  ngc: "accent",
-  ic: "accent",
-  hd: "default",
-  bright_star: "success",
-  star: "default",
-  other: "default",
-};
 
 export function AstrometryResultView({
   result,
@@ -70,7 +61,11 @@ export function AstrometryResultView({
           <Separator />
           <DataRow
             label={t("astrometry.parity")}
-            value={calibration.parity === 0 ? "Normal" : "Flipped"}
+            value={
+              calibration.parity === 0
+                ? t("astrometry.parityNormal")
+                : t("astrometry.parityFlipped")
+            }
           />
         </Card.Body>
       </Card>
@@ -126,17 +121,13 @@ export function AstrometryResultView({
             <ScrollView style={{ maxHeight: 300 }}>
               {annotations.map((ann, i) => (
                 <View key={i} className="flex-row items-center gap-2 py-1.5">
-                  <Chip
-                    size="sm"
-                    variant="soft"
-                    color={
-                      ANNOTATION_COLORS[ann.type] as "default" | "accent" | "success" | "danger"
-                    }
-                  >
+                  <Chip size="sm" variant="soft" color={ANNOTATION_CHIP_COLORS[ann.type]}>
                     <Chip.Label className="text-[8px] uppercase">{ann.type}</Chip.Label>
                   </Chip>
                   <Text className="text-xs text-foreground flex-1" numberOfLines={1}>
-                    {ann.names.length > 0 ? ann.names.join(", ") : `Object ${i + 1}`}
+                    {ann.names.length > 0
+                      ? ann.names.join(", ")
+                      : t("astrometry.unnamedObject", { index: i + 1 })}
                   </Text>
                   <Text className="text-[10px] text-muted">
                     ({Math.round(ann.pixelx)}, {Math.round(ann.pixely)})

@@ -1,11 +1,11 @@
-import { View } from "react-native";
 import { Separator } from "heroui-native";
+import { useShallow } from "zustand/react/shallow";
 import { useI18n } from "../../../i18n/useI18n";
 import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../../stores/useSettingsStore";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../../common/SettingsRow";
-import { SimpleSlider } from "../../common/SimpleSlider";
+import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
 import type { ExportFormat } from "../../../lib/fits/types";
@@ -18,14 +18,6 @@ const EXPORT_FORMAT_OPTIONS: Array<{ label: string; value: ExportFormat }> = [
   { label: "BMP", value: "bmp" },
   { label: "FITS", value: "fits" },
 ];
-const CONVERTER_FORMAT_OPTIONS = [
-  { label: "PNG", value: "png" as const },
-  { label: "JPEG", value: "jpeg" as const },
-  { label: "TIFF", value: "tiff" as const },
-  { label: "WebP", value: "webp" as const },
-  { label: "BMP", value: "bmp" as const },
-  { label: "FITS", value: "fits" as const },
-];
 const BATCH_NAMING_VALUES = ["original", "prefix", "suffix", "sequence"] as const;
 
 export function ProcessingExportSection() {
@@ -33,24 +25,38 @@ export function ProcessingExportSection() {
   const haptics = useHapticFeedback();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
-  const defaultExportFormat = useSettingsStore((s) => s.defaultExportFormat);
-  const setDefaultExportFormat = useSettingsStore((s) => s.setDefaultExportFormat);
-  const defaultConverterFormat = useSettingsStore((s) => s.defaultConverterFormat);
-  const defaultConverterQuality = useSettingsStore((s) => s.defaultConverterQuality);
-  const batchNamingRule = useSettingsStore((s) => s.batchNamingRule);
-  const setDefaultConverterFormat = useSettingsStore((s) => s.setDefaultConverterFormat);
-  const setDefaultConverterQuality = useSettingsStore((s) => s.setDefaultConverterQuality);
-  const setBatchNamingRule = useSettingsStore((s) => s.setBatchNamingRule);
-  const resetSection = useSettingsStore((s) => s.resetSection);
+  const {
+    defaultExportFormat,
+    setDefaultExportFormat,
+    defaultConverterFormat,
+    defaultConverterQuality,
+    batchNamingRule,
+    setDefaultConverterFormat,
+    setDefaultConverterQuality,
+    setBatchNamingRule,
+    resetSection,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      defaultExportFormat: s.defaultExportFormat,
+      setDefaultExportFormat: s.setDefaultExportFormat,
+      defaultConverterFormat: s.defaultConverterFormat,
+      defaultConverterQuality: s.defaultConverterQuality,
+      batchNamingRule: s.batchNamingRule,
+      setDefaultConverterFormat: s.setDefaultConverterFormat,
+      setDefaultConverterQuality: s.setDefaultConverterQuality,
+      setBatchNamingRule: s.setBatchNamingRule,
+      resetSection: s.resetSection,
+    })),
+  );
 
+  const BATCH_NAMING_I18N: Record<string, string> = {
+    original: "settings.namingOriginal",
+    prefix: "settings.namingPrefix",
+    suffix: "settings.namingSuffix",
+    sequence: "settings.namingSequence",
+  };
   const batchNamingLabel = (value: (typeof BATCH_NAMING_VALUES)[number]) =>
-    value === "original"
-      ? t("settings.namingOriginal")
-      : value === "prefix"
-        ? t("settings.namingPrefix")
-        : value === "suffix"
-          ? t("settings.namingSuffix")
-          : t("settings.namingSequence");
+    t(BATCH_NAMING_I18N[value] ?? value);
 
   const batchNamingOptions = BATCH_NAMING_VALUES.map((value) => ({
     label: batchNamingLabel(value),
@@ -86,21 +92,16 @@ export function ProcessingExportSection() {
           onPress={() => openPicker("converterFormat")}
         />
         <Separator />
-        <SettingsRow
+        <SettingsSliderRow
           icon="options-outline"
           label={t("settings.defaultConverterQuality")}
-          value={`${defaultConverterQuality}%`}
+          value={defaultConverterQuality}
+          format={(v) => `${v}%`}
+          min={10}
+          max={100}
+          step={5}
+          onValueChange={setDefaultConverterQuality}
         />
-        <View className="px-2 pb-2">
-          <SimpleSlider
-            label=""
-            value={defaultConverterQuality}
-            min={10}
-            max={100}
-            step={5}
-            onValueChange={setDefaultConverterQuality}
-          />
-        </View>
         <Separator />
         <SettingsRow
           testID="e2e-action-settings__processing-open-batch-naming"
@@ -122,7 +123,7 @@ export function ProcessingExportSection() {
       <OptionPickerModal
         visible={activePicker === "converterFormat"}
         title={t("settings.defaultConverterFormat")}
-        options={CONVERTER_FORMAT_OPTIONS}
+        options={EXPORT_FORMAT_OPTIONS}
         selectedValue={defaultConverterFormat}
         onSelect={setDefaultConverterFormat}
         onClose={closePicker}

@@ -117,6 +117,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       duration: ANIM_DURATION,
       easing: Easing.out(Easing.cubic),
     });
+    // Entrance animation runs once on mount; shared values are stable refs
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

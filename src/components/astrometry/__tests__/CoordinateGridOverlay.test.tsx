@@ -9,35 +9,8 @@ import type { AstrometryCalibration } from "../../../lib/astrometry/types";
 import type { CanvasTransform } from "../../fits/FitsCanvas";
 
 jest.mock("@shopify/react-native-skia", () => {
-  const ReactLocal = require("react");
-  const { View: RNView, Text: RNText } = require("react-native");
-
-  const Canvas = (props: { children?: React.ReactNode; [k: string]: unknown }) =>
-    ReactLocal.createElement(RNView, { testID: "skia-canvas", ...props }, props.children);
-  const Group = (props: { children?: React.ReactNode }) =>
-    ReactLocal.createElement(RNView, { testID: "skia-group" }, props.children);
-  const SkiaPath = (props: Record<string, unknown>) =>
-    ReactLocal.createElement(RNView, { testID: "skia-path", ...props });
-  const SkiaText = (props: { text?: string; [k: string]: unknown }) =>
-    ReactLocal.createElement(RNText, { testID: "skia-text" }, props.text);
-
-  const mockPath = {
-    moveTo: jest.fn(),
-    lineTo: jest.fn(),
-  };
-
-  return {
-    Canvas,
-    Group,
-    Path: SkiaPath,
-    Text: SkiaText,
-    Skia: {
-      Path: {
-        Make: () => ({ ...mockPath }),
-      },
-    },
-    useFont: () => ({ measureText: () => ({ width: 30 }) }),
-  };
+  const { createSkiaMock } = require("./helpers/mockSkia");
+  return createSkiaMock();
 });
 
 const mockGridLines = [
@@ -74,10 +47,10 @@ jest.mock("../../../lib/astrometry/coordinateGrid", () => ({
   generateGridLines: jest.fn(() => mockGridLines),
 }));
 
-jest.mock("../../../lib/viewer/transform", () => ({
-  imageToScreenPoint: jest.fn((pt: { x: number; y: number }) => pt),
-  remapPointBetweenSpaces: jest.fn((pt: { x: number; y: number }) => pt),
-}));
+jest.mock("../../../lib/viewer/transform", () => {
+  const { createTransformMock } = require("./helpers/mockTransform");
+  return createTransformMock();
+});
 
 const baseCalibration: AstrometryCalibration = {
   ra: 83.633,

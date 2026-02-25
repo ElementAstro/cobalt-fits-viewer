@@ -186,6 +186,26 @@ describe("SmartAlbumModal", () => {
     expect(onConfirm).toHaveBeenCalledWith("Ha Only", suggestions[0].rules);
   });
 
+  it("resets form state when dialog re-opens", () => {
+    const { rerender } = render(
+      <SmartAlbumModal visible onClose={onClose} onConfirm={onConfirm} />,
+    );
+
+    // Fill in some data
+    fireEvent.changeText(screen.getByPlaceholderText("Album name"), "Stale Name");
+    fireEvent.changeText(screen.getByPlaceholderText("Value..."), "StaleValue");
+
+    // Close
+    rerender(<SmartAlbumModal visible={false} onClose={onClose} onConfirm={onConfirm} />);
+
+    // Re-open
+    rerender(<SmartAlbumModal visible onClose={onClose} onConfirm={onConfirm} />);
+
+    // Form should be reset
+    expect(screen.getByPlaceholderText("Album name").props.value).toBe("");
+    expect(screen.getByPlaceholderText("Value...").props.value).toBe("");
+  });
+
   it("renders frameType options when field is frameType", () => {
     const frameTypeOptions = [
       { key: "light", label: "Light" },

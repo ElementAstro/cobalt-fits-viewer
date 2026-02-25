@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { View, Text } from "react-native";
 import { useI18n } from "../../i18n/useI18n";
 
@@ -6,7 +7,10 @@ interface MonthlyActivityChartProps {
   visible: boolean;
 }
 
-export function MonthlyActivityChart({ data, visible }: MonthlyActivityChartProps) {
+export const MonthlyActivityChart = memo(function MonthlyActivityChart({
+  data,
+  visible,
+}: MonthlyActivityChartProps) {
   const { t } = useI18n();
   if (!visible || data.length === 0) return null;
 
@@ -50,4 +54,4 @@ export function MonthlyActivityChart({ data, visible }: MonthlyActivityChartProp
       </View>
     </View>
   );
-}
+});

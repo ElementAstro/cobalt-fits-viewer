@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { Target, TargetChangeLogEntry } from "../../lib/fits/types";
 import { formatRelativeTime } from "../../lib/targets/changeLogger";
+import { ACTION_ICONS, ACTION_COLORS } from "../../lib/targets/targetConstants";
 
 interface ChangeHistorySheetProps {
   visible: boolean;
@@ -16,34 +17,6 @@ interface ChangeHistorySheetProps {
   onClose: () => void;
   onClearHistory?: () => void;
 }
-
-const ACTION_ICONS: Record<TargetChangeLogEntry["action"], string> = {
-  created: "add-circle-outline",
-  updated: "create-outline",
-  status_changed: "swap-horizontal-outline",
-  image_added: "images-outline",
-  image_removed: "trash-outline",
-  favorited: "heart",
-  unfavorited: "heart-outline",
-  pinned: "pin",
-  unpinned: "pin-outline",
-  tagged: "pricetag-outline",
-  untagged: "pricetag-outline",
-};
-
-const ACTION_COLORS: Record<TargetChangeLogEntry["action"], string> = {
-  created: "#22c55e",
-  updated: "#3b82f6",
-  status_changed: "#f59e0b",
-  image_added: "#22c55e",
-  image_removed: "#ef4444",
-  favorited: "#ef4444",
-  unfavorited: "#6b7280",
-  pinned: "#f59e0b",
-  unpinned: "#6b7280",
-  tagged: "#8b5cf6",
-  untagged: "#6b7280",
-};
 
 export function ChangeHistorySheet({
   visible,
@@ -186,7 +159,7 @@ export function ChangeHistorySheet({
                 <View className="flex-row justify-between">
                   {onClearHistory && (
                     <Button variant="ghost" onPress={onClearHistory}>
-                      <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                      <Ionicons name="trash-outline" size={14} color={mutedColor} />
                       <Button.Label className="text-destructive">
                         {t("targets.changeLog.clearHistory")}
                       </Button.Label>

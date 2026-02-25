@@ -80,4 +80,66 @@ describe("SelectionActionsSheet", () => {
     expect(defaultProps.onBatchExport).toHaveBeenCalled();
     expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("calls onInvertSelection and closes sheet when invert is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("files.invertSelection"));
+    expect(defaultProps.onInvertSelection).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("calls onAlbumPicker and closes sheet when add to album is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("gallery.addToAlbum"));
+    expect(defaultProps.onAlbumPicker).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("calls onBatchTag and closes sheet when tag is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("files.batchTag"));
+    expect(defaultProps.onBatchTag).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("calls onBatchRename and closes sheet when rename is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("files.batchRename"));
+    expect(defaultProps.onBatchRename).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("calls onGroupSheet and closes sheet when file group is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("files.fileGroup"));
+    expect(defaultProps.onGroupSheet).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("calls onBatchConvert and closes sheet when convert is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("files.batchConvert"));
+    expect(defaultProps.onBatchConvert).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("calls onStacking and closes sheet when stacking is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("files.stacking"));
+    expect(defaultProps.onStacking).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it("renders stacking as disabled when selectedCount < 2", () => {
+    render(<SelectionActionsSheet {...defaultProps} selectedCount={1} />);
+    // Stacking renders but in disabled state
+    expect(screen.getByText("files.stacking")).toBeTruthy();
+  });
+
+  it("renders action items as disabled when selectedCount is 0", () => {
+    render(<SelectionActionsSheet {...defaultProps} selectedCount={0} />);
+    // Actions render but in disabled state
+    expect(screen.getByText("files.toggleFavorite")).toBeTruthy();
+    expect(screen.getByText("files.export")).toBeTruthy();
+  });
 });

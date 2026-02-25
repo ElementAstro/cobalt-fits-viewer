@@ -5,7 +5,7 @@
 
 import { useState, useCallback } from "react";
 import { View, Text, Pressable } from "react-native";
-import { Button, Chip, Dialog, Separator } from "heroui-native";
+import { Button, Chip, Dialog, Separator, useThemeColor } from "heroui-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { FlashList } from "@shopify/flash-list";
@@ -28,6 +28,8 @@ export function FilePickerSheet({
   onClose,
 }: FilePickerSheetProps) {
   const { t } = useI18n();
+  const mutedColor = useThemeColor("muted");
+  const accentColor = useThemeColor("accent");
   const [multiMode, setMultiMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -73,7 +75,7 @@ export function FilePickerSheet({
                   <Ionicons
                     name={multiMode ? "checkbox" : "checkbox-outline"}
                     size={18}
-                    color={multiMode ? "#3b82f6" : "#888"}
+                    color={multiMode ? accentColor : mutedColor}
                   />
                 </Pressable>
               )}
@@ -84,17 +86,19 @@ export function FilePickerSheet({
           {multiMode && (
             <View className="flex-row items-center justify-between mb-2">
               <Text className="text-[10px] text-muted">
-                {selected.size} / {files.length} selected
+                {t("astrometry.selectedCount", { count: selected.size, total: files.length })}
               </Text>
               <Pressable onPress={selectAll}>
-                <Text className="text-[10px] text-accent font-medium">Select All</Text>
+                <Text className="text-[10px] text-accent font-medium">
+                  {t("astrometry.selectAll")}
+                </Text>
               </Pressable>
             </View>
           )}
 
           {files.length === 0 ? (
             <View className="items-center py-8">
-              <Ionicons name="document-outline" size={40} color="#666" />
+              <Ionicons name="document-outline" size={40} color={mutedColor} />
               <Text className="mt-2 text-sm text-muted">{t("files.emptyState")}</Text>
             </View>
           ) : (
@@ -109,6 +113,8 @@ export function FilePickerSheet({
                     multiMode={multiMode}
                     isSelected={selected.has(item.id)}
                     onPress={() => (multiMode ? toggleSelect(item.id) : onSelect(item))}
+                    accentColor={accentColor}
+                    mutedColor={mutedColor}
                   />
                 )}
               />
@@ -139,11 +145,15 @@ function FileRow({
   multiMode,
   isSelected,
   onPress,
+  accentColor,
+  mutedColor,
 }: {
   file: FitsMetadata;
   multiMode: boolean;
   isSelected: boolean;
   onPress: () => void;
+  accentColor: string;
+  mutedColor: string;
 }) {
   return (
     <Pressable
@@ -154,7 +164,7 @@ function FileRow({
         <Ionicons
           name={isSelected ? "checkbox" : "square-outline"}
           size={18}
-          color={isSelected ? "#3b82f6" : "#888"}
+          color={isSelected ? accentColor : mutedColor}
         />
       )}
       {file.thumbnailUri ? (
@@ -165,7 +175,7 @@ function FileRow({
         />
       ) : (
         <View className="w-9 h-9 rounded bg-surface-secondary items-center justify-center">
-          <Ionicons name="image-outline" size={16} color="#666" />
+          <Ionicons name="image-outline" size={16} color={mutedColor} />
         </View>
       )}
       <View className="flex-1">
@@ -186,7 +196,7 @@ function FileRow({
           {file.exptime != null && <Text className="text-[9px] text-muted">{file.exptime}s</Text>}
         </View>
       </View>
-      {!multiMode && <Ionicons name="chevron-forward" size={14} color="#666" />}
+      {!multiMode && <Ionicons name="chevron-forward" size={14} color={mutedColor} />}
     </Pressable>
   );
 }

@@ -1,16 +1,28 @@
+import React from "react";
 import { View, Text, TextInput } from "react-native";
-import { Button } from "heroui-native";
+import { Button, useThemeColor } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
-import type { EditorToolParams } from "../../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolParams } from "../../../hooks/useEditorToolState";
+
+const MORPH_OP_KEYS: Record<string, string> = {
+  erode: "editor.paramMorphErode",
+  dilate: "editor.paramMorphDilate",
+  open: "editor.paramMorphOpen",
+  close: "editor.paramMorphClose",
+};
 
 interface ToolParamsProcessProps {
-  activeTool: string;
+  activeTool: EditorTool & string;
   params: EditorToolParams;
 }
 
-export function ToolParamsProcess({ activeTool, params }: ToolParamsProcessProps) {
+export const ToolParamsProcess = React.memo(function ToolParamsProcess({
+  activeTool,
+  params,
+}: ToolParamsProcessProps) {
   const { t } = useI18n();
+  const [mutedColor] = useThemeColor(["muted"]);
 
   switch (activeTool) {
     case "clahe":
@@ -72,7 +84,7 @@ export function ToolParamsProcess({ activeTool, params }: ToolParamsProcessProps
                 variant={params.morphOp === op ? "primary" : "outline"}
                 onPress={() => params.setMorphOp(op)}
               >
-                <Button.Label className="text-[9px] capitalize">{op}</Button.Label>
+                <Button.Label className="text-[9px]">{t(MORPH_OP_KEYS[op])}</Button.Label>
               </Button>
             ))}
           </View>
@@ -349,7 +361,7 @@ export function ToolParamsProcess({ activeTool, params }: ToolParamsProcessProps
             value={params.pixelMathExpr}
             onChangeText={params.setPixelMathExpr}
             placeholder="($T - $min) / ($max - $min)"
-            placeholderTextColor="#666"
+            placeholderTextColor={mutedColor}
             autoCapitalize="none"
             autoCorrect={false}
           />
@@ -359,4 +371,4 @@ export function ToolParamsProcess({ activeTool, params }: ToolParamsProcessProps
     default:
       return null;
   }
-}
+});

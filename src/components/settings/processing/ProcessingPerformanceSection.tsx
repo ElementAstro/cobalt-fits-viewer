@@ -1,4 +1,5 @@
 import { Separator } from "heroui-native";
+import { useShallow } from "zustand/react/shallow";
 import { SettingsToggleRow } from "../../common/SettingsToggleRow";
 import { useI18n } from "../../../i18n/useI18n";
 import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
@@ -26,20 +27,36 @@ export function ProcessingPerformanceSection() {
   const haptics = useHapticFeedback();
   const { activePicker, openPicker, closePicker } = useSettingsPicker();
 
-  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
-  const viewerApplyEditorRecipe = useSettingsStore((s) => s.viewerApplyEditorRecipe);
-  const imageProcessingDebounce = useSettingsStore((s) => s.imageProcessingDebounce);
-  const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
-  const setImageProcessingProfile = useSettingsStore((s) => s.setImageProcessingProfile);
-  const setViewerApplyEditorRecipe = useSettingsStore((s) => s.setViewerApplyEditorRecipe);
-  const setImageProcessingDebounce = useSettingsStore((s) => s.setImageProcessingDebounce);
-  const setUseHighQualityPreview = useSettingsStore((s) => s.setUseHighQualityPreview);
-  const resetSection = useSettingsStore((s) => s.resetSection);
+  const {
+    imageProcessingProfile,
+    viewerApplyEditorRecipe,
+    imageProcessingDebounce,
+    useHighQualityPreview,
+    setImageProcessingProfile,
+    setViewerApplyEditorRecipe,
+    setImageProcessingDebounce,
+    setUseHighQualityPreview,
+    resetSection,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      imageProcessingProfile: s.imageProcessingProfile,
+      viewerApplyEditorRecipe: s.viewerApplyEditorRecipe,
+      imageProcessingDebounce: s.imageProcessingDebounce,
+      useHighQualityPreview: s.useHighQualityPreview,
+      setImageProcessingProfile: s.setImageProcessingProfile,
+      setViewerApplyEditorRecipe: s.setViewerApplyEditorRecipe,
+      setImageProcessingDebounce: s.setImageProcessingDebounce,
+      setUseHighQualityPreview: s.setUseHighQualityPreview,
+      resetSection: s.resetSection,
+    })),
+  );
 
+  const IMAGE_PROCESSING_PROFILE_I18N: Record<string, string> = {
+    standard: "settings.imageProcessingProfileStandard",
+    legacy: "settings.imageProcessingProfileLegacy",
+  };
   const imageProcessingProfileLabel = (value: "standard" | "legacy") =>
-    value === "legacy"
-      ? t("settings.imageProcessingProfileLegacy")
-      : t("settings.imageProcessingProfileStandard");
+    t(IMAGE_PROCESSING_PROFILE_I18N[value] ?? value);
 
   const imageProcessingProfileOptions = IMAGE_PROCESSING_PROFILE_OPTIONS.map((option) => ({
     label: imageProcessingProfileLabel(option.value),

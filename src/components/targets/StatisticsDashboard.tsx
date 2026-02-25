@@ -9,11 +9,38 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { formatExposureHours } from "../../lib/targets/targetStatistics";
 import type { TargetStatistics, MonthlyStats } from "../../lib/targets/targetStatistics";
-import { STATUS_COLORS, TARGET_STATUSES } from "../../lib/targets/targetConstants";
+import type { TargetType } from "../../lib/fits/types";
+import {
+  STATUS_COLORS,
+  TARGET_STATUSES,
+  targetTypeI18nKey,
+  targetStatusI18nKey,
+} from "../../lib/targets/targetConstants";
 
 interface StatisticsDashboardProps {
   statistics: TargetStatistics;
   monthlyStats: MonthlyStats[];
+}
+
+function MonthlyChart({ monthlyStats }: { monthlyStats: MonthlyStats[] }) {
+  const maxTargets = Math.max(...monthlyStats.map((m) => m.targetsCount), 1);
+
+  return (
+    <View className="flex-row items-end gap-1 h-20">
+      {monthlyStats.map((month) => {
+        const height = (month.targetsCount / maxTargets) * 100;
+        return (
+          <View key={month.month} className="flex-1 items-center">
+            <View
+              className="w-full bg-primary/60 rounded-t"
+              style={{ height: `${Math.max(height, 4)}%` }}
+            />
+            <Text className="text-[8px] text-muted mt-1">{month.month.slice(5)}</Text>
+          </View>
+        );
+      })}
+    </View>
+  );
 }
 
 export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDashboardProps) {
@@ -84,13 +111,7 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
                     </Text>
                   </View>
                   <Text className="text-[9px] text-muted text-center">
-                    {t(
-                      `targets.${status}` as
-                        | "targets.planned"
-                        | "targets.acquiring"
-                        | "targets.completed"
-                        | "targets.processed",
-                    )}
+                    {t(targetStatusI18nKey(status))}
                   </Text>
                   <Text className="text-[8px] text-muted">{percent}%</Text>
                 </View>
@@ -138,21 +159,7 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
           <Card.Title>{t("targets.statistics.monthlyActivity")}</Card.Title>
         </Card.Header>
         <Card.Body className="p-3 pt-0">
-          <View className="flex-row items-end gap-1 h-20">
-            {monthlyStats.map((month) => {
-              const maxTargets = Math.max(...monthlyStats.map((m) => m.targetsCount), 1);
-              const height = (month.targetsCount / maxTargets) * 100;
-              return (
-                <View key={month.month} className="flex-1 items-center">
-                  <View
-                    className="w-full bg-primary/60 rounded-t"
-                    style={{ height: `${Math.max(height, 4)}%` }}
-                  />
-                  <Text className="text-[8px] text-muted mt-1">{month.month.slice(5)}</Text>
-                </View>
-              );
-            })}
-          </View>
+          <MonthlyChart monthlyStats={monthlyStats} />
         </Card.Body>
       </Card>
 
@@ -166,18 +173,7 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
             {Object.entries(statistics.byType).map(([type, count]) => (
               <Chip key={type} size="sm" variant="secondary">
                 <Chip.Label className="text-[10px]">
-                  {t(
-                    `targets.types.${type}` as
-                      | "targets.types.galaxy"
-                      | "targets.types.nebula"
-                      | "targets.types.cluster"
-                      | "targets.types.planet"
-                      | "targets.types.moon"
-                      | "targets.types.sun"
-                      | "targets.types.comet"
-                      | "targets.types.other",
-                  )}
-                  : {count}
+                  {t(targetTypeI18nKey(type as TargetType))}: {count}
                 </Chip.Label>
               </Chip>
             ))}

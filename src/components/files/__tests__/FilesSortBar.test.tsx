@@ -9,10 +9,10 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 const defaultProps = {
-  sortBy: "name",
-  sortOrder: "asc",
-  fileListStyle: "list",
-  fileListGridColumns: 3,
+  sortBy: "name" as const,
+  sortOrder: "asc" as const,
+  fileListStyle: "list" as const,
+  fileListGridColumns: 3 as const,
   onSortToggle: jest.fn(),
   onStyleChange: jest.fn(),
   onGridColumnsChange: jest.fn(),

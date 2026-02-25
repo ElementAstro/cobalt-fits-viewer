@@ -164,8 +164,7 @@ describe("SystemInfoCard", () => {
     render(<SystemInfoCard />);
 
     expect(screen.getByText("systemInfo.collecting")).toBeTruthy();
-    // Uses RN ActivityIndicator, not heroui Spinner
-    expect(screen.toJSON()).toBeTruthy();
+    expect(screen.getByTestId("spinner")).toBeTruthy();
   });
 
   it("returns null when not collecting and no systemInfo", () => {

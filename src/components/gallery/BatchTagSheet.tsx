@@ -37,8 +37,10 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
     return [...tags].sort();
   }, [files]);
 
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
   const currentTags = useMemo(() => {
-    const selected = files.filter((f) => selectedIds.includes(f.id));
+    const selected = files.filter((f) => selectedIdSet.has(f.id));
     const tagCounts = new Map<string, number>();
     for (const f of selected) {
       for (const tag of f.tags) {
@@ -46,7 +48,7 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
       }
     }
     return tagCounts;
-  }, [files, selectedIds]);
+  }, [files, selectedIdSet]);
 
   const toggleTag = (tag: string) => {
     setSelectedTags((prev) => {
