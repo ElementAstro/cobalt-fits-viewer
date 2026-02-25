@@ -1,13 +1,24 @@
 ---
+# astrometry__result__param_id: Plate solve result with calibration data, annotations, and WCS export.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://astrometry/result/astro-001
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-astrometry__result__param_id
+
+# 2. Assert seed file and result data
 - assertVisible: M42_Light_001.fits
+
+# 3. Assert WCS copy action
 - assertVisible:
     id: e2e-action-astrometry__result__param_id-copy-wcs
+
+# 4. Copy WCS keywords
 - tapOn:
     id: e2e-action-astrometry__result__param_id-copy-wcs
+
+# 5. Navigate to viewer and back
 - tapOn:
     id: e2e-action-astrometry__result__param_id-open-viewer
 - assertVisible:

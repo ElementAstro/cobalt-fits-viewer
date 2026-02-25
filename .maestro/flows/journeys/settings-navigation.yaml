@@ -1,74 +1,88 @@
 appId: com.maxqian888sorganization.cobaltfitsviewer
 ---
-# Journey: Settings hub → Sub-pages → Back
-# Verifies settings navigation across all category pages
+# Journey: Settings hub → All 7 sub-pages → Back
+# Verifies settings navigation across all category pages and deep navigation.
 
 - runFlow: ../common/bootstrap.yaml
 
-# Start at settings
+# 1. Start at settings hub
 - openLink: cobalt://settings
 - assertVisible:
     id: e2e-screen-settings__index
 
-# Navigate to Viewer settings and back
+# 2. Navigate to Viewer settings and back
 - tapOn:
     id: e2e-action-settings__index-open-viewer
 - assertVisible:
     id: e2e-screen-settings__viewer
+- assertVisible:
+    id: e2e-action-settings__viewer-open-stretch
 - back
 - assertVisible:
     id: e2e-screen-settings__index
 
-# Navigate to Gallery settings and back
+# 3. Navigate to Gallery settings and back
 - tapOn:
     id: e2e-action-settings__index-open-gallery
 - assertVisible:
     id: e2e-screen-settings__gallery
+- assertVisible:
+    id: e2e-action-settings__gallery-open-grid-columns
 - back
 - assertVisible:
     id: e2e-screen-settings__index
 
-# Navigate to Processing settings and back
+# 4. Navigate to Processing settings and back
 - tapOn:
     id: e2e-action-settings__index-open-processing
 - assertVisible:
     id: e2e-screen-settings__processing
+- assertVisible:
+    id: e2e-action-settings__processing-open-stack-method
 - back
 - assertVisible:
     id: e2e-screen-settings__index
 
-# Navigate to Observation settings and back
+# 5. Navigate to Observation settings and back
 - tapOn:
     id: e2e-action-settings__index-open-observation
 - assertVisible:
     id: e2e-screen-settings__observation
+- assertVisible:
+    id: e2e-action-settings__observation-open-target-sort-by
 - back
 - assertVisible:
     id: e2e-screen-settings__index
 
-# Navigate to Appearance settings and back
+# 6. Navigate to Appearance settings and back
 - tapOn:
     id: e2e-action-settings__index-open-appearance
 - assertVisible:
     id: e2e-screen-settings__appearance
+- assertVisible:
+    id: e2e-action-settings__appearance-open-language
 - back
 - assertVisible:
     id: e2e-screen-settings__index
 
-# Navigate to Storage settings and back
+# 7. Navigate to Storage settings and back
 - tapOn:
     id: e2e-action-settings__index-open-storage
 - assertVisible:
     id: e2e-screen-settings__storage
+- assertVisible:
+    id: e2e-action-settings__storage-open-backup
 - back
 - assertVisible:
     id: e2e-screen-settings__index
 
-# Navigate to About and back
+# 8. Navigate to About → Licenses → Back → Back
 - tapOn:
     id: e2e-action-settings__index-open-about
 - assertVisible:
     id: e2e-screen-settings__about
+- assertVisible:
+    id: e2e-action-settings__about-restart-guide
 - back
 - assertVisible:
     id: e2e-screen-settings__index

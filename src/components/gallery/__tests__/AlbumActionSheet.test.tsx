@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AlbumActionSheet } from "../AlbumActionSheet";
 
@@ -26,7 +25,7 @@ jest.mock("heroui-native", () => {
   const React = require("react");
   const { Pressable, Text, View } = require("react-native");
 
-  const BottomSheet = ({ isOpen, children, onOpenChange }: any) =>
+  const BottomSheet = ({ isOpen, children, onOpenChange: _onOpenChange }: any) =>
     isOpen ? <View>{children}</View> : null;
   BottomSheet.Portal = ({ children }: any) => <View>{children}</View>;
   BottomSheet.Overlay = () => null;

@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { AlbumCard } from "../AlbumCard";
 import type { Album } from "../../../lib/fits/types";

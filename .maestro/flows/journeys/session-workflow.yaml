@@ -1,28 +1,36 @@
 appId: com.maxqian888sorganization.cobaltfitsviewer
 ---
-# Journey: Sessions list → Session detail → Edit → Back
-# Verifies the session browsing and editing workflow
+# Journey: Sessions list → Session detail → Edit → Share → Back
+# Verifies the session browsing, editing, and sharing workflow.
 
 - runFlow: ../common/bootstrap.yaml
 
-# Start at sessions tab
+# 1. Start at sessions tab
 - openLink: cobalt://sessions
 - assertVisible:
     id: e2e-screen-tabs__sessions
 - assertVisible: E2E seeded session
 
-# Open session detail
+# 2. Open session detail by tapping on the seeded session
 - tapOn: E2E seeded session
 - assertVisible:
     id: e2e-screen-session__param_id
 - assertVisible: E2E seeded session
 
-# Open edit sheet and dismiss
+# 3. Verify equipment data from seed
+- assertVisible: E2E Telescope
+- assertVisible: E2E Camera
+
+# 4. Open edit sheet and dismiss
 - tapOn:
     id: e2e-action-session__param_id-open-edit
 - back
 
-# Go back to sessions list
+# 5. Verify share button is present
+- assertVisible:
+    id: e2e-action-session__param_id-share
+
+# 6. Go back to sessions list
 - tapOn:
     id: e2e-action-session__param_id-back
 - assertVisible:

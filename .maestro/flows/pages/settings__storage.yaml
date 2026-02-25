@@ -1,12 +1,19 @@
 ---
+# settings__storage: Storage settings with cache, backup, and astrometry entry points.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings/storage
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__storage
+
+# 2. Assert navigation entries
 - assertVisible:
     id: e2e-action-settings__storage-open-backup
 - assertVisible:
     id: e2e-action-settings__storage-open-astrometry
+
+# 3. Navigate to backup page and back
 - tapOn:
     id: e2e-action-settings__storage-open-backup
 - assertVisible:
@@ -14,6 +21,8 @@
 - back
 - assertVisible:
     id: e2e-screen-settings__storage
+
+# 4. Navigate to astrometry page and back
 - tapOn:
     id: e2e-action-settings__storage-open-astrometry
 - assertVisible:

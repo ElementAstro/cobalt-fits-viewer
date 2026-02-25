@@ -1,4 +1,3 @@
-import React from "react";
 import { render, screen } from "@testing-library/react-native";
 import { ThumbnailLoadingBanner } from "../ThumbnailLoadingBanner";
 import type { ThumbnailLoadingSummary } from "../thumbnailLoading";

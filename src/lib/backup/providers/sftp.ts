@@ -35,7 +35,9 @@ interface SFTPFile {
 }
 
 function loadSSHModule(): { default: new () => SSHClient } {
-  return require("@dylankenneally/react-native-ssh-sftp") as {
+  // Use indirect require via global so Metro cannot statically resolve this optional dependency
+  const dynamicRequire = globalThis.require ?? require;
+  return dynamicRequire("@dylankenneally/react-native-ssh-sftp") as {
     default: new () => SSHClient;
   };
 }

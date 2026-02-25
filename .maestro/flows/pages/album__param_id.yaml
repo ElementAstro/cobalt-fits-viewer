@@ -1,14 +1,30 @@
 ---
+# album__param_id: Album detail screen with photos, info tabs, and album actions.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://album/album-001
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-album__param_id
+
+# 2. Assert seed album name
 - assertVisible: E2E Album
+
+# 3. Assert seed images are listed (album contains fits-001 and fits-002)
+- assertVisible: M42_Light_001.fits
+- assertVisible: M31_Light_002.fits
+
+# 4. Open album stats sheet and dismiss
 - tapOn:
     id: e2e-action-album__param_id-open-stats
 - back
+
+# 5. Open rename dialog and dismiss
 - tapOn:
     id: e2e-action-album__param_id-open-rename
 - back
+
+# 6. Verify screen intact
 - assertVisible:
     id: e2e-screen-album__param_id
+- assertVisible: E2E Album

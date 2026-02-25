@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { GalleryHeader } from "../GalleryHeader";
 
@@ -39,7 +38,6 @@ jest.mock("../../common/SearchBar", () => {
 });
 
 jest.mock("heroui-native", () => {
-  const React = require("react");
   const { Pressable, Text, View } = require("react-native");
 
   const Button = ({ onPress, children, testID, isDisabled }: any) => (

@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AlbumsTabContent } from "../AlbumsTabContent";
 import type { Album } from "../../../lib/fits/types";
@@ -43,7 +42,6 @@ jest.mock("@shopify/flash-list", () => {
 });
 
 jest.mock("../AlbumCard", () => {
-  const React = require("react");
   const { Pressable, Text } = require("react-native");
   return {
     AlbumCard: ({ album, onPress, onLongPress }: any) => (
@@ -63,8 +61,7 @@ jest.mock("../../common/SearchBar", () => ({
 }));
 
 jest.mock("heroui-native", () => {
-  const React = require("react");
-  const { Pressable, Text, View } = require("react-native");
+  const { Pressable, Text } = require("react-native");
 
   const Button = ({ onPress, children, testID }: any) => (
     <Pressable onPress={onPress} testID={testID}>

@@ -1,19 +1,34 @@
 ---
+# target__param_id: Target detail screen with info, images, planning, and favorite toggle.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://target/target-001
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-target__param_id
+
+# 2. Assert seed target data
 - assertVisible: M42
+- assertVisible: nebula
+
+# 3. Assert action controls
 - assertVisible:
     id: e2e-action-target__param_id-toggle-favorite
 - assertVisible:
     id: e2e-action-target__param_id-open-plan
+
+# 4. Toggle favorite twice (on → off → on)
 - tapOn:
     id: e2e-action-target__param_id-toggle-favorite
 - tapOn:
     id: e2e-action-target__param_id-toggle-favorite
+
+# 5. Open planning sheet and dismiss
 - tapOn:
     id: e2e-action-target__param_id-open-plan
 - back
+
+# 6. Verify screen intact after interactions
 - assertVisible:
     id: e2e-screen-target__param_id
+- assertVisible: M42

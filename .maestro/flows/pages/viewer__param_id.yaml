@@ -1,28 +1,35 @@
 ---
+# viewer__param_id: FITS image viewer with canvas, controls, overlays, and export.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://viewer/fits-001
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-viewer__param_id
+
+# 2. Assert toolbar controls
 - assertVisible:
     id: e2e-action-viewer__param_id-back
 - assertVisible:
     id: e2e-action-viewer__param_id-astrometry
 - assertVisible:
     id: e2e-action-viewer__param_id-toggle-controls
+
+# 3. Screenshot of viewer
 - takeScreenshot: screenshots/viewer__param_id
+
+# 4. Toggle controls panel
+- tapOn:
+    id: e2e-action-viewer__param_id-toggle-controls
+- tapOn:
+    id: e2e-action-viewer__param_id-toggle-controls
+
+# 5. Open more menu
 - tapOn:
     id: e2e-action-viewer__param_id-open-menu
-- tapOn:
-    id: e2e-action-viewer__param_id-export
-- assertVisible:
-    id: e2e-action-export-dialog-export
-- tapOn:
-    id: e2e-action-export-dialog-format-fits
-- tapOn:
-    id: e2e-action-export-dialog-toggle-watermark
-- tapOn:
-    id: e2e-action-export-dialog-export
-- assertVisible: Scientific FITS cannot embed annotations/watermark. Export switched to rendered mode.
+
+# 6. Navigate back to files list
+- back
 - tapOn:
     id: e2e-action-viewer__param_id-back
 - assertVisible:

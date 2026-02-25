@@ -1,15 +1,26 @@
 ---
+# compose__advanced: Advanced multi-layer composition with registration and framing.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://compose/advanced
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-compose__advanced
+
+# 2. Assert action controls
 - assertVisible:
     id: e2e-action-compose__advanced-render
 - assertVisible:
     id: e2e-action-compose__advanced-save
+
+# 3. Add a layer
 - tapOn:
     id: e2e-action-compose__advanced-add-layer
+
+# 4. Trigger render
 - tapOn:
     id: e2e-action-compose__advanced-render
+
+# 5. Verify screen intact
 - assertVisible:
     id: e2e-screen-compose__advanced

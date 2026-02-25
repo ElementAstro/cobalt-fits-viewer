@@ -1,54 +1,70 @@
 appId: com.maxqian888sorganization.cobaltfitsviewer
 ---
-# Journey: Files list → Editor → Edit → Export → Back
-# Verifies the core editing and export workflow
+# Journey: Files list → Editor → Edit tools → Export → Header → Back
+# Verifies the core editing, export, and header workflow end-to-end.
 
 - runFlow: ../common/bootstrap.yaml
 
-# Start at files list
+# 1. Start at files list
 - openLink: cobalt://
 - assertVisible:
     id: e2e-screen-tabs__index
 - assertVisible: M42_Light_001.fits
 
-# Open editor for first file
+# 2. Open editor for M42 file
 - openLink: cobalt://editor/fits-001
 - assertVisible:
     id: e2e-screen-editor__param_id
 - assertVisible: M42_Light_001.fits
 
-# Verify toolbar controls
+# 3. Verify toolbar controls
 - assertVisible:
     id: e2e-action-editor__param_id-undo
 - assertVisible:
     id: e2e-action-editor__param_id-redo
 - assertVisible:
     id: e2e-action-editor__param_id-toggle-original
+- assertVisible:
+    id: e2e-action-editor__param_id-open-export
 
-# Toggle original view
+# 4. Toggle original view twice
 - tapOn:
     id: e2e-action-editor__param_id-toggle-original
 - tapOn:
     id: e2e-action-editor__param_id-toggle-original
 
-# Open export dialog
+# 5. Apply rotation and undo
+- tapOn:
+    id: e2e-action-editor__param_id-tool-rotate
+- tapOn:
+    id: e2e-action-editor__param_id-rotate90cw
+- tapOn:
+    id: e2e-action-editor__param_id-undo
+
+# 6. Open export dialog and verify
 - tapOn:
     id: e2e-action-editor__param_id-open-export
 - assertVisible:
     id: e2e-action-export-dialog-export
+- assertVisible:
+    id: e2e-action-export-dialog-toggle-annotations
+- assertVisible:
+    id: e2e-action-export-dialog-toggle-watermark
 
-# Go back to files list
+# 7. Dismiss export and go back to files list
 - back
 - tapOn:
     id: e2e-action-editor__param_id-back
 - assertVisible:
     id: e2e-screen-tabs__index
 
-# Verify we can also access header view
+# 8. Open header view for same file
 - openLink: cobalt://header/fits-001
 - assertVisible:
     id: e2e-screen-header__param_id
 - assertVisible: M42_Light_001.fits
+
+# 9. Go back to files list
 - tapOn:
     id: e2e-action-header__param_id-back
 - assertVisible:

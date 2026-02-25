@@ -33,6 +33,32 @@ describe("StatsOverlay", () => {
     expect(queryByText(/Std:/)).toBeNull();
   });
 
+  it("renders median when provided", () => {
+    const { getByText } = render(
+      <StatsOverlay width={100} height={100} min={0} max={255} mean={128} median={64} />,
+    );
+    expect(getByText(/Med:/)).toBeTruthy();
+  });
+
+  it("renders BITPIX, HDU, and frame info when provided", () => {
+    const { getByText } = render(
+      <StatsOverlay
+        width={100}
+        height={100}
+        min={0}
+        max={255}
+        mean={128}
+        bitpix={-32}
+        currentHDU={0}
+        currentFrame={2}
+        totalFrames={10}
+      />,
+    );
+    expect(getByText(/BITPIX:-32/)).toBeTruthy();
+    expect(getByText(/HDU:1/)).toBeTruthy();
+    expect(getByText(/F:3\/10/)).toBeTruthy();
+  });
+
   it("renders depth for data cubes", () => {
     const { getByText } = render(
       <StatsOverlay width={100} height={100} min={0} max={255} mean={128} isDataCube depth={10} />,

@@ -1,17 +1,30 @@
 ---
+# compare__index: Side-by-side image comparison with linked/unlinked controls.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://compare?ids=fits-001,fits-002
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-compare__index
+
+# 2. Assert comparison controls
 - assertVisible:
     id: e2e-action-compare__index-open-picker-a
 - assertVisible:
     id: e2e-action-compare__index-open-picker-b
 - assertVisible:
     id: e2e-action-compare__index-toggle-linked
+
+# 3. Toggle linked mode off and on
 - tapOn:
     id: e2e-action-compare__index-toggle-linked
+- tapOn:
+    id: e2e-action-compare__index-toggle-linked
+
+# 4. Apply auto stretch
 - tapOn:
     id: e2e-action-compare__index-auto-stretch
-- tapOn:
-    id: e2e-action-compare__index-toggle-linked
+
+# 5. Verify screen still intact
+- assertVisible:
+    id: e2e-screen-compare__index

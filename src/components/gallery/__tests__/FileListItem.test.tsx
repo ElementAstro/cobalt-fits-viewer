@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { FileListItem } from "../FileListItem";
 import type { FitsMetadata } from "../../../lib/fits/types";

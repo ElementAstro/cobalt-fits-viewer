@@ -1,15 +1,26 @@
 ---
+# astrometry__index: Plate solving hub with job list, file picker, and URL submission.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://astrometry
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-astrometry__index
+
+# 2. Assert seed astrometry job data (M42 file had a successful solve)
 - assertVisible: M42_Light_001.fits
+
+# 3. Assert action controls
 - assertVisible:
     id: e2e-action-astrometry__index-open-file
 - assertVisible:
     id: e2e-action-astrometry__index-open-url
+
+# 4. Open URL submission dialog and dismiss
 - tapOn:
     id: e2e-action-astrometry__index-open-url
 - back
-- tapOn:
-    id: e2e-action-astrometry__index-open-file
+
+# 5. Verify screen intact
+- assertVisible:
+    id: e2e-screen-astrometry__index

@@ -1,16 +1,16 @@
 appId: com.maxqian888sorganization.cobaltfitsviewer
 ---
-# Journey: Gallery → Album → Viewer → Back
-# Verifies the core browsing workflow from gallery to viewing images
+# Journey: Gallery → Album → Viewer → Editor → Back
+# Verifies the core browsing workflow from gallery through viewing and editing images.
 
 - runFlow: ../common/bootstrap.yaml
 
-# Start at gallery
+# 1. Start at gallery
 - openLink: cobalt://gallery
 - assertVisible:
     id: e2e-screen-tabs__gallery
 
-# Switch to albums tab and open seeded album
+# 2. Switch to albums tab and open seeded album
 - tapOn:
     id: e2e-action-tabs__gallery-tab-albums
 - assertVisible: E2E Album
@@ -18,26 +18,42 @@ appId: com.maxqian888sorganization.cobaltfitsviewer
 - assertVisible:
     id: e2e-screen-album__param_id
 - assertVisible: E2E Album
+- assertVisible: M42_Light_001.fits
 
-# Navigate back to gallery
+# 3. Navigate back to gallery
 - back
 - assertVisible:
     id: e2e-screen-tabs__gallery
 
-# Switch to images tab and verify files
+# 4. Switch to images tab and verify files
 - tapOn:
     id: e2e-action-tabs__gallery-tab-images
 - assertVisible: M42_Light_001.fits
 
-# Open viewer via deep link (simulating file tap)
+# 5. Open viewer for M42 file
 - openLink: cobalt://viewer/fits-001
 - assertVisible:
     id: e2e-screen-viewer__param_id
 - assertVisible:
     id: e2e-action-viewer__param_id-astrometry
 
-# Go back to gallery
+# 6. Screenshot the viewer
+- takeScreenshot: screenshots/journey-gallery-to-viewer
+
+# 7. Go back to files list
 - tapOn:
     id: e2e-action-viewer__param_id-back
+- assertVisible:
+    id: e2e-screen-tabs__index
+
+# 8. Open editor for same file
+- openLink: cobalt://editor/fits-001
+- assertVisible:
+    id: e2e-screen-editor__param_id
+- assertVisible: M42_Light_001.fits
+
+# 9. Go back to files list
+- tapOn:
+    id: e2e-action-editor__param_id-back
 - assertVisible:
     id: e2e-screen-tabs__index

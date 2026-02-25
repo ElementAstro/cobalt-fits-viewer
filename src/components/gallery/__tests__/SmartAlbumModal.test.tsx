@@ -1,7 +1,5 @@
-import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { SmartAlbumModal } from "../SmartAlbumModal";
-import type { SmartAlbumRule } from "../../../lib/fits/types";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({

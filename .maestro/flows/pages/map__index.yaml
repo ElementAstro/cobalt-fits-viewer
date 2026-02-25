@@ -1,24 +1,39 @@
 ---
+# map__index: Observation map with location markers, filters, and presets.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://map
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-map__index
-- tapOn:
+
+# 2. Assert filter and preset toggle buttons
+- assertVisible:
     id: e2e-action-map__index-toggle-filters
 - assertVisible:
-    id: e2e-action-map__index-filter-date-all
+    id: e2e-action-map__index-toggle-presets
+
+# 3. Open filter panel
+- tapOn:
+    id: e2e-action-map__index-toggle-filters
+
+# 4. Assert filter "all" chips visible
+- assertVisible:
+    id: e2e-action-map__index-filter-object-all
+- assertVisible:
+    id: e2e-action-map__index-filter-band-all
+- assertVisible:
+    id: e2e-action-map__index-filter-target-all
+- assertVisible:
+    id: e2e-action-map__index-filter-session-all
+
+# 5. Screenshot with filters visible
 - takeScreenshot: screenshots/map__index
-- tapOn:
-    id: e2e-action-map__index-filter-date-all
-- tapOn:
-    id: e2e-action-map__index-filter-object-m42
-- tapOn:
-    id: e2e-action-map__index-filter-band-ha
-- tapOn:
-    id: e2e-action-map__index-filter-target-target-001
-- tapOn:
-    id: e2e-action-map__index-filter-session-session-001
+
+# 6. Clear all filters
 - tapOn:
     id: e2e-action-map__index-filter-clear-all
+
+# 7. Verify "all" filters are selected (cleared state)
 - assertVisible:
     id: e2e-action-map__index-filter-object-all

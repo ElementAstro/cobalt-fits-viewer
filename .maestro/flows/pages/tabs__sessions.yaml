@@ -1,14 +1,29 @@
 ---
+# tabs__sessions: Observation sessions list with create, plan, and calendar.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://sessions
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-tabs__sessions
+
+# 2. Assert seed session data
 - assertVisible: E2E seeded session
+
+# 3. Open create session sheet and dismiss
 - tapOn:
     id: e2e-action-tabs__sessions-open-create
 - back
+
+# 4. Open plan observation sheet and dismiss
 - tapOn:
     id: e2e-action-tabs__sessions-open-plan
 - back
+
+# 5. Verify screen intact after sheet dismissals
 - assertVisible:
     id: e2e-screen-tabs__sessions
+- assertVisible: E2E seeded session
+
+# 6. Screenshot
+- takeScreenshot: screenshots/tabs__sessions

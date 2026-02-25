@@ -1,4 +1,3 @@
-import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { AlbumSortControl } from "../AlbumSortControl";
 
@@ -17,7 +16,7 @@ jest.mock("../../../i18n/useI18n", () => ({
 
 jest.mock("heroui-native", () => {
   const React = require("react");
-  const { Pressable, Text, View } = require("react-native");
+  const { Pressable, Text } = require("react-native");
 
   const Button = ({ onPress, children, ...rest }: any) => (
     <Pressable onPress={onPress} testID={rest.testID}>

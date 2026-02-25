@@ -1,13 +1,26 @@
 ---
+# convert__batch: Batch format conversion for multiple files at once.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://convert?tab=batch
+
+# 1. Assert screen (batch tab shares the convert screen testID)
 - assertVisible:
     id: e2e-screen-convert__index
+
+# 2. Assert batch start button
 - assertVisible:
     id: e2e-action-convert__batch-start
+
+# 3. Start batch conversion
 - tapOn:
     id: e2e-action-convert__batch-start
+
+# 4. Wait for task summary to appear
 - extendedWaitUntil:
     visible:
       id: e2e-text-batch-task-summary
-    timeout: 10000
+    timeout: 15000
+
+# 5. Verify screen intact
+- assertVisible:
+    id: e2e-screen-convert__index

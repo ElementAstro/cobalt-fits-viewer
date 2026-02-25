@@ -1,42 +1,50 @@
 appId: com.maxqian888sorganization.cobaltfitsviewer
 ---
-# Journey: Targets list → Target detail → Stats → Back
-# Verifies the target management workflow
+# Journey: Targets list → Target detail → Stats → Scan → Back
+# Verifies the target management workflow end-to-end.
 
 - runFlow: ../common/bootstrap.yaml
 
-# Start at targets tab
+# 1. Start at targets tab
 - openLink: cobalt://targets
 - assertVisible:
     id: e2e-screen-tabs__targets
 - assertVisible: M42
 
-# Open target detail
+# 2. Open target detail by tapping M42
 - tapOn: M42
 - assertVisible:
     id: e2e-screen-target__param_id
 - assertVisible: M42
+- assertVisible: nebula
 
-# Toggle favorite and verify it stays on screen
+# 3. Toggle favorite twice and verify screen remains stable
 - tapOn:
     id: e2e-action-target__param_id-toggle-favorite
 - assertVisible:
     id: e2e-screen-target__param_id
+- tapOn:
+    id: e2e-action-target__param_id-toggle-favorite
 
-# Go back to targets list
+# 4. Go back to targets list
 - back
 - assertVisible:
     id: e2e-screen-tabs__targets
 
-# Navigate to stats
+# 5. Navigate to statistics dashboard
 - tapOn:
     id: e2e-action-tabs__targets-open-stats
 - assertVisible:
     id: e2e-screen-target__stats
+- takeScreenshot: screenshots/journey-target-stats
 
-# Go back to targets list
+# 6. Go back to targets list
 - tapOn:
     id: e2e-action-target__stats-back
 - assertVisible:
     id: e2e-screen-tabs__targets
+
+# 7. Trigger scan and verify data persists
+- tapOn:
+    id: e2e-action-tabs__targets-scan
 - assertVisible: M42

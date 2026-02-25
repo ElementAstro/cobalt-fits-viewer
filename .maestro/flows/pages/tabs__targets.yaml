@@ -1,9 +1,16 @@
 ---
+# tabs__targets: Target management list with search, filters, stats, and add.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://targets
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-tabs__targets
+
+# 2. Assert seed target is visible
 - assertVisible: M42
+
+# 3. Navigate to stats page and back
 - tapOn:
     id: e2e-action-tabs__targets-open-stats
 - assertVisible:
@@ -11,5 +18,17 @@
 - back
 - assertVisible:
     id: e2e-screen-tabs__targets
+
+# 4. Open add target sheet and dismiss
 - tapOn:
     id: e2e-action-tabs__targets-open-add
+- back
+
+# 5. Trigger scan targets
+- tapOn:
+    id: e2e-action-tabs__targets-scan
+- assertVisible:
+    id: e2e-screen-tabs__targets
+
+# 6. Verify target still visible after scan
+- assertVisible: M42

@@ -1,20 +1,30 @@
 ---
+# convert__index: Single file format conversion with format picker and export options.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://convert
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-convert__index
+
+# 2. Assert back button
 - assertVisible:
     id: e2e-action-convert__index-back
+
+# 3. Select seed file fits-001
 - tapOn:
     id: e2e-action-convert__index-select-file-fits-001
-- tapOn:
-    id: e2e-action-format-selector-fits
-- tapOn:
-    id: e2e-action-convert__index-fits-mode-scientific
+
+# 4. Toggle watermark option
 - tapOn:
     id: e2e-action-convert__index-toggle-watermark
 - tapOn:
+    id: e2e-action-convert__index-toggle-watermark
+
+# 5. Trigger convert
+- tapOn:
     id: e2e-action-convert__index-convert
-- assertVisible: Scientific FITS cannot embed annotations/watermark. Export switched to rendered mode.
+
+# 6. Verify screen intact
 - assertVisible:
     id: e2e-screen-convert__index

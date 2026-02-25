@@ -1,17 +1,32 @@
 ---
+# settings__observation: Observation settings with target sort, session gap, and action control modes.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings/observation
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__observation
+
+# 2. Assert option rows
 - assertVisible:
     id: e2e-action-settings__observation-open-target-sort-by
 - assertVisible:
+    id: e2e-action-settings__observation-open-target-action-control-mode
+- assertVisible:
+    id: e2e-action-settings__observation-open-target-action-size-preset
+- assertVisible:
     id: e2e-action-settings__observation-open-session-gap
+
+# 3. Open target sort picker and dismiss
 - tapOn:
     id: e2e-action-settings__observation-open-target-sort-by
 - back
+
+# 4. Open session gap picker and dismiss
 - tapOn:
     id: e2e-action-settings__observation-open-session-gap
 - back
+
+# 5. Verify screen intact
 - assertVisible:
     id: e2e-screen-settings__observation

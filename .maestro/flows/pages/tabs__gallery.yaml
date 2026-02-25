@@ -1,22 +1,40 @@
 ---
+# tabs__gallery: Gallery screen with images/albums tabs, filters, and map access.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://gallery
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-tabs__gallery
+
+# 2. Assert tab controls
 - assertVisible:
     id: e2e-action-tabs__gallery-tab-images
 - assertVisible:
     id: e2e-action-tabs__gallery-tab-albums
+
+# 3. Verify images tab shows seed data thumbnails
+- assertVisible: M42_Light_001.fits
+
+# 4. Switch to albums tab
 - tapOn:
     id: e2e-action-tabs__gallery-tab-albums
 - assertVisible: E2E Album
+
+# 5. Open create album modal and dismiss
 - tapOn:
     id: e2e-action-tabs__gallery-open-create-album
 - back
+
+# 6. Switch back to images tab
 - tapOn:
     id: e2e-action-tabs__gallery-tab-images
 - assertVisible: M42_Light_001.fits
+
+# 7. Screenshot
 - takeScreenshot: screenshots/tabs__gallery
+
+# 8. Navigate to map and back
 - tapOn:
     id: e2e-action-tabs__gallery-open-map
 - assertVisible:

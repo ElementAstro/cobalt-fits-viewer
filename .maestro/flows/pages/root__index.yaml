@@ -1,11 +1,30 @@
 ---
+# root__index: The root "/" redirects to /(tabs), landing on the Files screen.
 - runFlow: ../common/bootstrap.yaml
+
+# 1. Assert redirect landed on Files screen
 - assertVisible:
     id: e2e-screen-tabs__index
+
+# 2. Assert seed data files are visible
 - assertVisible: M42_Light_001.fits
-- tapOn:
+- assertVisible: M31_Light_002.fits
+- assertVisible: Flat_003.fits
+- assertVisible: Jupiter_001.mp4
+
+# 3. Assert toolbar controls exist
+- assertVisible:
     id: e2e-action-tabs__index-enter-selection
-- tapOn:
-    id: e2e-action-tabs__index-select-all
 - assertVisible:
     id: e2e-action-tabs__index-open-trash
+
+# 4. Enter selection mode and verify select-all appears
+- tapOn:
+    id: e2e-action-tabs__index-enter-selection
+- assertVisible:
+    id: e2e-action-tabs__index-select-all
+
+# 5. Exit selection mode by tapping select-all then clearing
+- tapOn:
+    id: e2e-action-tabs__index-select-all
+- back

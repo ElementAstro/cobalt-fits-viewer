@@ -1,8 +1,13 @@
 ---
+# tabs__settings: Settings hub screen with search and category navigation.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__index
+
+# 2. Assert all category navigation entries
 - assertVisible:
     id: e2e-action-settings__index-open-viewer
 - assertVisible:
@@ -10,14 +15,32 @@
 - assertVisible:
     id: e2e-action-settings__index-open-processing
 - assertVisible:
+    id: e2e-action-settings__index-open-observation
+- assertVisible:
+    id: e2e-action-settings__index-open-appearance
+- assertVisible:
+    id: e2e-action-settings__index-open-storage
+- assertVisible:
     id: e2e-action-settings__index-open-about
+
+# 3. Assert search input
+- assertVisible:
+    id: e2e-action-settings__index-search
+
+# 4. Navigate to Viewer settings and back
 - tapOn:
     id: e2e-action-settings__index-open-viewer
 - assertVisible:
     id: e2e-screen-settings__viewer
-- tapOn:
-    id: e2e-action-settings__viewer-open-colormap
 - back
+- assertVisible:
+    id: e2e-screen-settings__index
+
+# 5. Navigate to About settings and back
+- tapOn:
+    id: e2e-action-settings__index-open-about
+- assertVisible:
+    id: e2e-screen-settings__about
 - back
 - assertVisible:
     id: e2e-screen-settings__index

@@ -3,6 +3,7 @@
  */
 
 import { applyStretch, fitsToRGBA, fitsToRGBAChunked, estimateFileSize } from "../formatConverter";
+import * as pixelMath from "../../utils/pixelMath";
 import { MATPLOTLIB_LISTED_COLORMAPS } from "../mplListedColormaps";
 import {
   DEFAULT_FITS_TARGET_OPTIONS,
@@ -11,6 +12,15 @@ import {
   DEFAULT_SER_TARGET_OPTIONS,
   type ConvertOptions,
 } from "../../fits/types";
+
+jest.mock("../../utils/pixelMath", () => {
+  const actual = jest.requireActual("../../utils/pixelMath");
+  return {
+    ...actual,
+    computeZScale: jest.fn(),
+    computePercentile: jest.fn(),
+  };
+});
 
 // ===== Helpers =====
 
@@ -94,6 +104,34 @@ describe("applyStretch", () => {
     const pixels = new Float32Array([0, 0.25, 0.5, 0.75, 1.0]);
     const result = applyStretch(pixels, "linear", 0, 0.7, 1);
     expect(result[4]).toBeCloseTo(1, 2); // Above white point → 1
+  });
+
+  it("zscale stretch applies black/white points within computed zscale range", () => {
+    const computeZScaleMock = pixelMath.computeZScale as jest.Mock;
+    computeZScaleMock.mockReturnValue({ z1: 0, z2: 100 });
+
+    const pixels = new Float32Array([0, 10, 50, 90, 100]);
+    const result = applyStretch(pixels, "zscale", 0.1, 0.9, 1);
+
+    expect(result[0]).toBeCloseTo(0, 5);
+    expect(result[1]).toBeCloseTo(0, 5); // at bp
+    expect(result[2]).toBeCloseTo(0.5, 5);
+    expect(result[3]).toBeCloseTo(1, 5); // at wp
+    expect(result[4]).toBeCloseTo(1, 5);
+  });
+
+  it("percentile stretch applies black/white points within computed percentile range", () => {
+    const computePercentileMock = pixelMath.computePercentile as jest.Mock;
+    computePercentileMock.mockReturnValue({ z1: 0, z2: 100 });
+
+    const pixels = new Float32Array([0, 10, 50, 90, 100]);
+    const result = applyStretch(pixels, "percentile", 0.1, 0.9, 1);
+
+    expect(result[0]).toBeCloseTo(0, 5);
+    expect(result[1]).toBeCloseTo(0, 5); // at bp
+    expect(result[2]).toBeCloseTo(0.5, 5);
+    expect(result[3]).toBeCloseTo(1, 5); // at wp
+    expect(result[4]).toBeCloseTo(1, 5);
   });
 });
 

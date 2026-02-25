@@ -1,17 +1,28 @@
 ---
+# settings__viewer: Viewer defaults with stretch, colormap, and overlay options.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings/viewer
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__viewer
+
+# 2. Assert option rows
 - assertVisible:
     id: e2e-action-settings__viewer-open-stretch
 - assertVisible:
     id: e2e-action-settings__viewer-open-colormap
+
+# 3. Open stretch picker and dismiss
 - tapOn:
     id: e2e-action-settings__viewer-open-stretch
 - back
+
+# 4. Open colormap picker and dismiss
 - tapOn:
     id: e2e-action-settings__viewer-open-colormap
 - back
+
+# 5. Verify screen intact
 - assertVisible:
     id: e2e-screen-settings__viewer

@@ -1,13 +1,38 @@
 ---
+# settings__index: Settings hub with search and category entry points.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__index
+
+# 2. Assert search input
 - assertVisible:
     id: e2e-action-settings__index-search
+
+# 3. Assert all 7 category entries are visible
+- assertVisible:
+    id: e2e-action-settings__index-open-viewer
+- assertVisible:
+    id: e2e-action-settings__index-open-gallery
+- assertVisible:
+    id: e2e-action-settings__index-open-processing
+- assertVisible:
+    id: e2e-action-settings__index-open-observation
+- assertVisible:
+    id: e2e-action-settings__index-open-appearance
+- assertVisible:
+    id: e2e-action-settings__index-open-storage
+- assertVisible:
+    id: e2e-action-settings__index-open-about
+
+# 4. Use search to filter
 - tapOn:
     id: e2e-action-settings__index-search
 - inputText: compose
+
+# 5. Navigate to processing settings and back
 - tapOn:
     id: e2e-action-settings__index-open-processing
 - assertVisible:

@@ -1,13 +1,22 @@
 ---
+# settings__about: About page with version info, guide restart, log viewer, and reset.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings/about
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__about
+
+# 2. Assert action controls
 - assertVisible:
     id: e2e-action-settings__about-restart-guide
 - assertVisible:
     id: e2e-action-settings__about-reset-all
+
+# 3. Restart guide (non-destructive action)
 - tapOn:
     id: e2e-action-settings__about-restart-guide
+
+# 4. Verify screen intact after action
 - assertVisible:
     id: e2e-screen-settings__about

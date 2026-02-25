@@ -104,8 +104,6 @@ const cancelledJob: AstrometryJob = {
 };
 
 describe("AstrometryJobCard", () => {
-  const noop = jest.fn();
-
   beforeEach(() => {
     jest.clearAllMocks();
   });

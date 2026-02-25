@@ -1,19 +1,43 @@
 ---
+# backup__index: Backup management with cloud, LAN, local export/import, and auto-backup settings.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://backup
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-backup__index
+
+# 2. Assert seed connection data (Google Drive is connected per seed)
+- assertVisible: E2E User
+
+# 3. Assert local backup controls
 - assertVisible:
     id: e2e-action-backup__index-local-export
 - assertVisible:
     id: e2e-action-backup__index-local-import
-- assertVisible:
-    id: e2e-action-backup__index-network-wifi
-- assertVisible:
-    id: e2e-action-backup__index-network-any
-- tapOn:
-    id: e2e-action-backup__index-network-any
-- tapOn:
-    id: e2e-action-backup__index-network-wifi
+
+# 4. Assert auto-backup toggle
 - assertVisible:
     id: e2e-action-backup__index-toggle-auto-backup
+
+# 5. Assert network preference chips
+- assertVisible:
+    id: e2e-action-backup__index-network-wifi
+- assertVisible:
+    id: e2e-action-backup__index-network-any
+
+# 6. Toggle network preference
+- tapOn:
+    id: e2e-action-backup__index-network-any
+- tapOn:
+    id: e2e-action-backup__index-network-wifi
+
+# 7. Assert quick backup controls
+- assertVisible:
+    id: e2e-action-backup__index-quick-cloud
+- assertVisible:
+    id: e2e-action-backup__index-quick-local
+
+# 8. Verify screen intact
+- assertVisible:
+    id: e2e-screen-backup__index

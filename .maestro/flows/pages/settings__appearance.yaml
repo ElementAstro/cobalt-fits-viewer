@@ -1,17 +1,28 @@
 ---
+# settings__appearance: Appearance settings with language, theme, and orientation lock.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings/appearance
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__appearance
+
+# 2. Assert option rows
 - assertVisible:
     id: e2e-action-settings__appearance-open-language
 - assertVisible:
     id: e2e-action-settings__appearance-open-theme
+
+# 3. Open language picker and dismiss
 - tapOn:
     id: e2e-action-settings__appearance-open-language
 - back
+
+# 4. Open theme picker and dismiss
 - tapOn:
     id: e2e-action-settings__appearance-open-theme
 - back
+
+# 5. Verify screen intact
 - assertVisible:
     id: e2e-screen-settings__appearance

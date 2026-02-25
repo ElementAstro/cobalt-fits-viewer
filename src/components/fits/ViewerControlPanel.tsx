@@ -27,6 +27,7 @@ interface ViewerControlPanelProps {
   histogram: HistogramData | null;
   rgbHistogram: ChannelHistogramData | null;
   regionHistogram: HistogramData | null;
+  histogramInputRange?: { min: number; max: number } | null;
   blackPoint: number;
   whitePoint: number;
   midtone: number;
@@ -100,6 +101,7 @@ export function ViewerControlPanel({
   histogram,
   rgbHistogram,
   regionHistogram,
+  histogramInputRange,
   blackPoint,
   whitePoint,
   midtone,
@@ -208,6 +210,7 @@ export function ViewerControlPanel({
             edges={histogram.edges}
             regionCounts={regionHistogram?.counts}
             rgbHistogram={rgbHistogram}
+            inputRange={histogramInputRange}
             blackPoint={blackPoint}
             whitePoint={whitePoint}
             midtone={midtone}

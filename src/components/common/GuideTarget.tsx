@@ -23,7 +23,7 @@ interface GuideTargetProps {
   placement?: "top" | "bottom" | "left" | "right";
 }
 
-export function GuideTarget({ name, page, order, children, placement }: GuideTargetProps) {
+export function GuideTarget({ name: _name, page, order, children, placement }: GuideTargetProps) {
   const { t } = useI18n();
   const { isActive, stepConfig, currentStep, totalSteps, isLastStep, next, skipAll } = useGuideStep(
     page,

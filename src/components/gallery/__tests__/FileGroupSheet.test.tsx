@@ -1,4 +1,3 @@
-import React from "react";
 import { Alert } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { FileGroupSheet } from "../FileGroupSheet";

@@ -35,6 +35,52 @@ function getStretchFn(type: StretchType): StretchFn {
   }
 }
 
+function resolveBlackWhitePoints(
+  pixels: Float32Array,
+  type: StretchType,
+  rawMin: number,
+  rawMax: number,
+  blackPoint: number,
+  whitePoint: number,
+): { bp: number; wp: number } {
+  let baseMin = rawMin;
+  let baseMax = rawMax;
+
+  if (type === "zscale") {
+    const { z1, z2 } = computeZScale(pixels);
+    baseMin = z1;
+    baseMax = z2;
+  } else if (type === "percentile") {
+    const { z1, z2 } = computePercentile(pixels, 1, 99);
+    baseMin = z1;
+    baseMax = z2;
+  }
+
+  if (!Number.isFinite(baseMin) || !Number.isFinite(baseMax)) {
+    baseMin = rawMin;
+    baseMax = rawMax;
+  }
+
+  if (baseMin > baseMax) {
+    const tmp = baseMin;
+    baseMin = baseMax;
+    baseMax = tmp;
+  }
+
+  const baseSpan = baseMax - baseMin;
+  if (!Number.isFinite(baseSpan) || Math.abs(baseSpan) < 1e-12) {
+    return { bp: baseMin, wp: baseMax };
+  }
+
+  const bp = baseMin + clamp01(blackPoint) * baseSpan;
+  const wp = baseMin + clamp01(whitePoint) * baseSpan;
+  if (!Number.isFinite(bp) || !Number.isFinite(wp) || wp - bp <= 1e-12) {
+    return { bp: baseMin, wp: baseMax };
+  }
+
+  return { bp, wp };
+}
+
 /**
  * 对像素数据应用拉伸算法，输出 0-1 范围的归一化数据
  */
@@ -58,21 +104,11 @@ export function applyStretch(
 
   const result = new Float32Array(pixels.length);
 
-  // For zscale/percentile, override black/white points from data
-  let bp: number, wp: number;
-  if (type === "zscale") {
-    const { z1, z2 } = computeZScale(pixels);
-    bp = z1;
-    wp = z2;
-  } else if (type === "percentile") {
-    const { z1, z2 } = computePercentile(pixels, 1, 99);
-    bp = z1;
-    wp = z2;
-  } else {
-    bp = rawMin + blackPoint * range;
-    wp = rawMin + whitePoint * range;
-  }
+  const { bp, wp } = resolveBlackWhitePoints(pixels, type, rawMin, rawMax, blackPoint, whitePoint);
   const span = wp - bp;
+  if (!Number.isFinite(span) || Math.abs(span) < 1e-12) {
+    return new Float32Array(pixels.length).fill(0.5);
+  }
 
   for (let i = 0; i < pixels.length; i++) {
     let v = (pixels[i] - bp) / span;
@@ -509,20 +545,27 @@ export function fitsToRGBA(
   }
 
   const stretchType = options.stretch;
-  let bp: number, wp: number;
-  if (stretchType === "zscale") {
-    const { z1, z2 } = computeZScale(pixels);
-    bp = z1;
-    wp = z2;
-  } else if (stretchType === "percentile") {
-    const { z1, z2 } = computePercentile(pixels, 1, 99);
-    bp = z1;
-    wp = z2;
-  } else {
-    bp = rawMin + (options.blackPoint ?? 0) * range;
-    wp = rawMin + (options.whitePoint ?? 1) * range;
-  }
+  const { bp, wp } = resolveBlackWhitePoints(
+    pixels,
+    stretchType,
+    rawMin,
+    rawMax,
+    options.blackPoint ?? 0,
+    options.whitePoint ?? 1,
+  );
   const span = wp - bp;
+  if (!Number.isFinite(span) || Math.abs(span) < 1e-12) {
+    const rgba = new Uint8ClampedArray(n * 4);
+    const mid = Math.floor(lutMax / 2) * 3;
+    for (let i = 0; i < n; i++) {
+      const off = i * 4;
+      rgba[off] = lut[mid];
+      rgba[off + 1] = lut[mid + 1];
+      rgba[off + 2] = lut[mid + 2];
+      rgba[off + 3] = 255;
+    }
+    return rgba;
+  }
   const gamma = options.gamma ?? 1;
   const invGamma = gamma !== 1 && gamma > 0 ? 1 / gamma : 1;
   const applyGamma = gamma !== 1 && gamma > 0;
@@ -661,20 +704,28 @@ export async function fitsToRGBAChunked(
   }
 
   // --- Phase 2: Compute black/white points ---
-  let bp: number, wp: number;
-  if (options.stretch === "zscale") {
-    const { z1, z2 } = computeZScale(pixels);
-    bp = z1;
-    wp = z2;
-  } else if (options.stretch === "percentile") {
-    const { z1, z2 } = computePercentile(pixels, 1, 99);
-    bp = z1;
-    wp = z2;
-  } else {
-    bp = rawMin + (options.blackPoint ?? 0) * range;
-    wp = rawMin + (options.whitePoint ?? 1) * range;
-  }
+  const { bp, wp } = resolveBlackWhitePoints(
+    pixels,
+    options.stretch,
+    rawMin,
+    rawMax,
+    options.blackPoint ?? 0,
+    options.whitePoint ?? 1,
+  );
   const span = wp - bp;
+  if (!Number.isFinite(span) || Math.abs(span) < 1e-12) {
+    const rgba = new Uint8ClampedArray(n * 4);
+    const lut = getColormapLUT(options.colormap, options.profile ?? "standard");
+    const mid = Math.floor((LUT_SIZE - 1) / 2) * 3;
+    for (let i = 0; i < n; i++) {
+      const off = i * 4;
+      rgba[off] = lut[mid];
+      rgba[off + 1] = lut[mid + 1];
+      rgba[off + 2] = lut[mid + 2];
+      rgba[off + 3] = 255;
+    }
+    return rgba;
+  }
   const stretchType = options.stretch;
   const gamma = options.gamma ?? 1;
   const invGamma = gamma !== 1 && gamma > 0 ? 1 / gamma : 1;

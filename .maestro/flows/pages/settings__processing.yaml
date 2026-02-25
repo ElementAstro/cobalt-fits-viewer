@@ -1,23 +1,37 @@
 ---
+# settings__processing: Processing settings with stacking, editor, export, compose, video, and performance sections.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings/processing
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__processing
+
+# 2. Assert stacking section controls
 - assertVisible:
     id: e2e-action-settings__processing-toggle-use-annotated
 - assertVisible:
     id: e2e-action-settings__processing-open-stack-method
-- assertVisible:
-    id: e2e-action-settings__processing-open-converter-format
+
+# 3. Toggle annotated alignment setting twice
 - tapOn:
     id: e2e-action-settings__processing-toggle-use-annotated
 - tapOn:
     id: e2e-action-settings__processing-toggle-use-annotated
+
+# 4. Open stack method picker and dismiss
 - tapOn:
     id: e2e-action-settings__processing-open-stack-method
 - back
-- tapOn:
-    id: e2e-action-settings__processing-open-converter-format
-- back
+
+# 5. Assert editor section controls
+- assertVisible:
+    id: e2e-action-settings__processing-open-blur-sigma
+
+# 6. Assert performance section controls
+- assertVisible:
+    id: e2e-action-settings__processing-open-image-profile
+
+# 7. Verify screen intact
 - assertVisible:
     id: e2e-screen-settings__processing

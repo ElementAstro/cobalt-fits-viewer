@@ -125,8 +125,24 @@ describe("HistogramLevels", () => {
         onWhitePointChange={jest.fn()}
       />,
     );
-    expect(getAllByText("0.15").length).toBeGreaterThanOrEqual(1);
-    expect(getAllByText("0.85").length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText(/0\.15/).length).toBeGreaterThanOrEqual(1);
+    expect(getAllByText(/0\.85/).length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("renders inputRange pixel value labels alongside normalized values", () => {
+    const { getByText } = render(
+      <HistogramLevels
+        {...baseProps}
+        inputRange={{ min: 100, max: 200 }}
+        blackPoint={0.15}
+        whitePoint={0.85}
+        onBlackPointChange={jest.fn()}
+        onWhitePointChange={jest.fn()}
+      />,
+    );
+
+    expect(getByText(/0\.15\s*\(115/)).toBeTruthy();
+    expect(getByText(/0\.85\s*\(185/)).toBeTruthy();
   });
 
   it("renders gamma value when midtone handler provided", () => {
@@ -139,7 +155,7 @@ describe("HistogramLevels", () => {
         onMidtoneChange={jest.fn()}
       />,
     );
-    // gamma = -ln(2) / ln(0.5) = 1.00
+    // gamma = ln(0.5) / ln(0.5) = 1.00
     expect(getByText("γ1.00")).toBeTruthy();
   });
 

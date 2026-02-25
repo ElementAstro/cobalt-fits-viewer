@@ -37,7 +37,7 @@ import { Minimap } from "../../components/fits/Minimap";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { ExportDialog } from "../../components/common/ExportDialog";
 import type { ExportFormat, ViewerPreset } from "../../lib/fits/types";
-import { computeAutoStretch } from "../../lib/utils/pixelMath";
+import { computeAutoStretch, computePercentile, computeZScale } from "../../lib/utils/pixelMath";
 import { useAstrometry } from "../../hooks/useAstrometry";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { AstrometryAnnotationOverlay } from "../../components/astrometry/AstrometryAnnotationOverlay";
@@ -241,6 +241,50 @@ export default function ViewerDetailScreen() {
     if (!rgbaData || isProcessing) return 2;
     return 2;
   }, [isFitsLoading, metadata, pixels, rgbaData, isProcessing]);
+
+  const histogramInputRange = useMemo(() => {
+    if (!pixels) return null;
+
+    if (stretch === "zscale") {
+      const { z1, z2 } = computeZScale(pixels);
+      if (Number.isFinite(z1) && Number.isFinite(z2) && z1 !== z2) {
+        return z1 < z2 ? { min: z1, max: z2 } : { min: z2, max: z1 };
+      }
+    }
+
+    if (stretch === "percentile") {
+      const { z1, z2 } = computePercentile(pixels, 1, 99);
+      if (Number.isFinite(z1) && Number.isFinite(z2) && z1 !== z2) {
+        return z1 < z2 ? { min: z1, max: z2 } : { min: z2, max: z1 };
+      }
+    }
+
+    if (
+      stats &&
+      Number.isFinite(stats.min) &&
+      Number.isFinite(stats.max) &&
+      stats.min !== stats.max
+    ) {
+      return stats.min < stats.max
+        ? { min: stats.min, max: stats.max }
+        : { min: stats.max, max: stats.min };
+    }
+
+    const edges = histogram?.edges;
+    const edgeMin = edges?.[0];
+    const edgeMax = edges && edges.length > 0 ? edges[edges.length - 1] : undefined;
+    if (
+      typeof edgeMin === "number" &&
+      typeof edgeMax === "number" &&
+      Number.isFinite(edgeMin) &&
+      Number.isFinite(edgeMax) &&
+      edgeMin !== edgeMax
+    ) {
+      return edgeMin < edgeMax ? { min: edgeMin, max: edgeMax } : { min: edgeMax, max: edgeMin };
+    }
+
+    return null;
+  }, [pixels, stretch, stats, histogram?.edges]);
 
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -621,9 +665,9 @@ export default function ViewerDetailScreen() {
   const handleMidtoneChange = useCallback(
     (value: number) => {
       setMidtone(value);
-      // Convert midtone slider position to gamma: gamma = -log(2) / log(midtonePos)
+      // Convert midtone slider position to gamma: gamma = log(m) / log(0.5)
       if (value > 0.001 && value < 0.999) {
-        const newGamma = -Math.log(2) / Math.log(value);
+        const newGamma = Math.log(value) / Math.log(0.5);
         setGamma(Math.max(0.1, Math.min(5, newGamma)));
       }
     },
@@ -919,6 +963,7 @@ export default function ViewerDetailScreen() {
       histogram,
       rgbHistogram,
       regionHistogram,
+      histogramInputRange,
       blackPoint,
       whitePoint,
       midtone,
@@ -985,6 +1030,7 @@ export default function ViewerDetailScreen() {
       histogram,
       rgbHistogram,
       regionHistogram,
+      histogramInputRange,
       blackPoint,
       whitePoint,
       midtone,
@@ -1208,7 +1254,12 @@ export default function ViewerDetailScreen() {
               min={stats.min}
               max={stats.max}
               mean={stats.mean}
+              median={stats.median}
               stddev={stats.stddev}
+              bitpix={metadata?.bitpix ?? file.bitpix}
+              currentHDU={currentHDU}
+              currentFrame={currentFrame}
+              totalFrames={totalFrames}
             />
           )}
 

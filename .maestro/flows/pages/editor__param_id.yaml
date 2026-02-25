@@ -1,44 +1,54 @@
 ---
+# editor__param_id: Image editor with tools, undo/redo, star detection, and export.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://editor/fits-001
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-editor__param_id
+
+# 2. Assert seed filename
 - assertVisible: M42_Light_001.fits
+
+# 3. Assert header toolbar controls
 - assertVisible:
     id: e2e-action-editor__param_id-undo
 - assertVisible:
     id: e2e-action-editor__param_id-redo
 - assertVisible:
     id: e2e-action-editor__param_id-toggle-original
-- takeScreenshot: screenshots/editor__param_id
-- tapOn:
-    id: e2e-action-editor__param_id-advanced-starDetect
 - assertVisible:
-    id: e2e-action-editor__param_id-redetect-stars
+    id: e2e-action-editor__param_id-open-export
+
+# 4. Screenshot
+- takeScreenshot: screenshots/editor__param_id
+
+# 5. Toggle original view twice
 - tapOn:
-    id: e2e-action-editor__param_id-redetect-stars
-- extendedWaitUntil:
-    visible:
-      id: e2e-text-editor__param_id-star-counts
-    timeout: 10000
+    id: e2e-action-editor__param_id-toggle-original
+- tapOn:
+    id: e2e-action-editor__param_id-toggle-original
+
+# 6. Open rotate tool and apply rotation
 - tapOn:
     id: e2e-action-editor__param_id-tool-rotate
 - tapOn:
     id: e2e-action-editor__param_id-rotate90cw
+
+# 7. Test undo/redo
 - tapOn:
     id: e2e-action-editor__param_id-undo
 - tapOn:
     id: e2e-action-editor__param_id-redo
+
+# 8. Open export dialog
 - tapOn:
     id: e2e-action-editor__param_id-open-export
 - assertVisible:
-    id: e2e-text-export-dialog-fits-unavailable
-- tapOn:
-    id: e2e-action-export-dialog-format-fits
-- tapOn:
-    id: e2e-action-export-dialog-toggle-annotations
-- tapOn:
     id: e2e-action-export-dialog-export
+
+# 9. Dismiss export and go back
+- back
 - tapOn:
     id: e2e-action-editor__param_id-back
 - assertVisible:

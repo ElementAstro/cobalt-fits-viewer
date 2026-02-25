@@ -1,15 +1,43 @@
 ---
+# tabs__index: Files management screen — the primary file list tab.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-tabs__index
+
+# 2. Assert all seed data files are visible
 - assertVisible: M42_Light_001.fits
 - assertVisible: M31_Light_002.fits
+- assertVisible: Flat_003.fits
+- assertVisible: Jupiter_001.mp4
+
+# 3. Assert toolbar controls
+- assertVisible:
+    id: e2e-action-tabs__index-enter-selection
+- assertVisible:
+    id: e2e-action-tabs__index-open-trash
+
+# 4. Open trash sheet and dismiss
+- tapOn:
+    id: e2e-action-tabs__index-open-trash
+- back
+
+# 5. Enter selection mode
 - tapOn:
     id: e2e-action-tabs__index-enter-selection
 - assertVisible:
     id: e2e-action-tabs__index-select-all
-- assertVisible:
-    id: e2e-action-tabs__index-open-trash
+
+# 6. Select all and verify batch actions become available
 - tapOn:
-    id: e2e-action-tabs__index-open-trash
+    id: e2e-action-tabs__index-select-all
+
+# 7. Exit selection mode
+- back
+- assertVisible:
+    id: e2e-screen-tabs__index
+
+# 8. Screenshot
+- takeScreenshot: screenshots/tabs__index

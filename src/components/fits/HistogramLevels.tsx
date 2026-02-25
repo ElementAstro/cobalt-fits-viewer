@@ -18,6 +18,7 @@ interface HistogramLevelsProps {
   edges: number[];
   regionCounts?: number[];
   rgbHistogram?: ChannelHistogramData | null;
+  inputRange?: { min: number; max: number } | null;
   blackPoint?: number;
   whitePoint?: number;
   midtone?: number;
@@ -40,6 +41,10 @@ const HANDLE_SIZE = 10;
 const OUTPUT_BAR_H = 20;
 const GRADIENT_BAR_H = 12;
 const SNAP_DISTANCE = 0.04;
+
+function clamp01(v: number) {
+  return Math.max(0, Math.min(1, v));
+}
 
 function makeTrianglePath(centerX: number, topY: number, size: number) {
   const path = Skia.Path.Make();
@@ -66,6 +71,7 @@ export function HistogramLevels({
   edges,
   regionCounts,
   rgbHistogram,
+  inputRange,
   blackPoint = 0,
   whitePoint = 1,
   midtone = 0.5,
@@ -91,6 +97,30 @@ export function HistogramLevels({
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [mode, setMode] = useState<HistogramMode>(initialMode);
   const [channelDisplay, setChannelDisplay] = useState<ChannelDisplay>("luminance");
+
+  const edge0 = edges[0];
+  const edgeLast = edges.length > 0 ? edges[edges.length - 1] : edge0;
+  const globalMin = Math.min(edge0 ?? 0, edgeLast ?? 0);
+  const globalMax = Math.max(edge0 ?? 0, edgeLast ?? 0);
+  const globalSpan = globalMax - globalMin;
+  const hasGlobalSpan = Number.isFinite(globalSpan) && globalSpan > 0;
+
+  const hasInputRange =
+    inputRange != null &&
+    Number.isFinite(inputRange.min) &&
+    Number.isFinite(inputRange.max) &&
+    inputRange.min !== inputRange.max;
+  const inputMin = hasInputRange ? Math.min(inputRange!.min, inputRange!.max) : globalMin;
+  const inputMax = hasInputRange ? Math.max(inputRange!.min, inputRange!.max) : globalMax;
+  const inputSpan = inputMax - inputMin;
+  const hasInputSpan = Number.isFinite(inputSpan) && inputSpan > 0;
+
+  const bpVal = inputMin + clamp01(blackPoint) * (hasInputSpan ? inputSpan : 1);
+  const wpVal = inputMin + clamp01(whitePoint) * (hasInputSpan ? inputSpan : 1);
+
+  const bpPos = hasGlobalSpan ? clamp01((bpVal - globalMin) / globalSpan) : clamp01(blackPoint);
+  const wpPos = hasGlobalSpan ? clamp01((wpVal - globalMin) / globalSpan) : clamp01(whitePoint);
+  const mtPos = bpPos + midtone * (wpPos - bpPos);
 
   const hasRgb = !!rgbHistogram;
 
@@ -216,8 +246,8 @@ export function HistogramLevels({
     const path = Skia.Path.Make();
     const binCount = processedCounts.length;
     const barW = canvasWidth / binCount;
-    const bpBin = Math.floor(blackPoint * binCount);
-    const wpBin = Math.ceil(whitePoint * binCount);
+    const bpBin = Math.floor(bpPos * binCount);
+    const wpBin = Math.ceil(wpPos * binCount);
     const startBin = Math.max(0, Math.min(bpBin, binCount));
     const endBin = Math.max(0, Math.min(wpBin, binCount));
     if (startBin >= endBin) return null;
@@ -233,7 +263,7 @@ export function HistogramLevels({
     path.lineTo(endBin * barW, height);
     path.close();
     return path;
-  }, [processedCounts, maxCount, canvasWidth, height, blackPoint, whitePoint]);
+  }, [processedCounts, maxCount, canvasWidth, height, bpPos, wpPos]);
 
   // Paints
   const bgPaint = useMemo(() => {
@@ -291,11 +321,11 @@ export function HistogramLevels({
 
   // Compute midtone X position (between BP and WP)
   const midtoneX = useMemo(() => {
-    return (blackPoint + midtone * (whitePoint - blackPoint)) * canvasWidth;
-  }, [blackPoint, whitePoint, midtone, canvasWidth]);
+    return mtPos * canvasWidth;
+  }, [mtPos, canvasWidth]);
 
-  const blackX = blackPoint * canvasWidth;
-  const whiteX = whitePoint * canvasWidth;
+  const blackX = bpPos * canvasWidth;
+  const whiteX = wpPos * canvasWidth;
 
   // Input levels pan gesture (handles BP, midtone, WP)
   const inputPanGesture = useMemo(() => {
@@ -305,9 +335,9 @@ export function HistogramLevels({
       .onBegin((e) => {
         "worklet";
         const relX = e.x / canvasWidth;
-        const bpX = blackPoint;
-        const wpX = whitePoint;
-        const mtX = blackPoint + midtone * (whitePoint - blackPoint);
+        const bpX = bpPos;
+        const wpX = wpPos;
+        const mtX = mtPos;
 
         const distB = Math.abs(relX - bpX);
         const distW = Math.abs(relX - wpX);
@@ -330,19 +360,23 @@ export function HistogramLevels({
       .onUpdate((e) => {
         "worklet";
         const relX = Math.min(Math.max(e.x / canvasWidth, 0), 1);
+        if (!hasGlobalSpan || !hasInputSpan) return;
+
+        const targetVal = globalMin + relX * globalSpan;
+        const targetFrac = Math.min(Math.max((targetVal - inputMin) / inputSpan, 0), 1);
 
         if (draggingTarget.value === "black") {
-          const clamped = Math.min(relX, whitePoint - 0.02);
+          const clamped = Math.min(targetFrac, whitePoint - 0.02);
           runOnJS(updateBlackPoint)(Math.max(0, clamped));
         } else if (draggingTarget.value === "white") {
-          const clamped = Math.max(relX, blackPoint + 0.02);
+          const clamped = Math.max(targetFrac, blackPoint + 0.02);
           runOnJS(updateWhitePoint)(Math.min(1, clamped));
         } else if (draggingTarget.value === "midtone") {
           // Midtone is relative position between BP and WP
           const range = whitePoint - blackPoint;
           if (range > 0.02) {
-            const mtPos = (relX - blackPoint) / range;
-            const clamped = Math.min(Math.max(mtPos, 0.01), 0.99);
+            const mtFrac = (targetFrac - blackPoint) / range;
+            const clamped = Math.min(Math.max(mtFrac, 0.01), 0.99);
             runOnJS(updateMidtone)(clamped);
           }
         }
@@ -357,7 +391,15 @@ export function HistogramLevels({
     canvasWidth,
     blackPoint,
     whitePoint,
-    midtone,
+    hasGlobalSpan,
+    hasInputSpan,
+    globalMin,
+    globalSpan,
+    inputMin,
+    inputSpan,
+    bpPos,
+    wpPos,
+    mtPos,
     draggingTarget,
     updateBlackPoint,
     updateWhitePoint,
@@ -371,25 +413,30 @@ export function HistogramLevels({
     return Gesture.Tap().onEnd((e) => {
       "worklet";
       const relX = Math.min(Math.max(e.x / canvasWidth, 0), 1);
-      const mtX = blackPoint + midtone * (whitePoint - blackPoint);
+      if (!hasGlobalSpan || !hasInputSpan) return;
 
-      const distB = Math.abs(relX - blackPoint);
-      const distW = Math.abs(relX - whitePoint);
+      const mtX = mtPos;
+
+      const distB = Math.abs(relX - bpPos);
+      const distW = Math.abs(relX - wpPos);
       const distM = Math.abs(relX - mtX);
 
       const minDist = Math.min(distB, distW, distM);
 
+      const targetVal = globalMin + relX * globalSpan;
+      const targetFrac = Math.min(Math.max((targetVal - inputMin) / inputSpan, 0), 1);
+
       if (minDist === distB) {
-        const clamped = Math.min(relX, whitePoint - 0.02);
+        const clamped = Math.min(targetFrac, whitePoint - 0.02);
         runOnJS(updateBlackPoint)(Math.max(0, clamped));
       } else if (minDist === distW) {
-        const clamped = Math.max(relX, blackPoint + 0.02);
+        const clamped = Math.max(targetFrac, blackPoint + 0.02);
         runOnJS(updateWhitePoint)(Math.min(1, clamped));
       } else {
         const range = whitePoint - blackPoint;
         if (range > 0.02) {
-          const mtPos = (relX - blackPoint) / range;
-          const clamped = Math.min(Math.max(mtPos, 0.01), 0.99);
+          const mtFrac = (targetFrac - blackPoint) / range;
+          const clamped = Math.min(Math.max(mtFrac, 0.01), 0.99);
           runOnJS(updateMidtone)(clamped);
         }
       }
@@ -399,7 +446,15 @@ export function HistogramLevels({
     canvasWidth,
     blackPoint,
     whitePoint,
-    midtone,
+    hasGlobalSpan,
+    hasInputSpan,
+    globalMin,
+    globalSpan,
+    inputMin,
+    inputSpan,
+    bpPos,
+    wpPos,
+    mtPos,
     updateBlackPoint,
     updateWhitePoint,
     updateMidtone,
@@ -506,10 +561,17 @@ export function HistogramLevels({
   const showG = channelDisplay === "g" || showAllRgb;
   const showB = channelDisplay === "b" || showAllRgb;
 
+  const inputLabelRange =
+    Math.abs(inputSpan) > 0
+      ? Math.abs(inputSpan)
+      : Math.abs(globalSpan) > 0
+        ? Math.abs(globalSpan)
+        : 1;
+
   // Midtone → gamma display value
   const gammaFromMidtone = useMemo(() => {
     if (midtone <= 0.001 || midtone >= 0.999) return 1;
-    return -Math.log(2) / Math.log(midtone);
+    return Math.log(midtone) / Math.log(0.5);
   }, [midtone]);
 
   // Output level positions
@@ -670,7 +732,9 @@ export function HistogramLevels({
       <View className="flex-row justify-between mt-0.5">
         <View className="flex-row items-center gap-0.5">
           <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#f97316" }} />
-          <Text className="text-[8px] text-muted">{blackPoint.toFixed(2)}</Text>
+          <Text className="text-[8px] text-muted">
+            {blackPoint.toFixed(2)} ({formatEdgeLabel(bpVal, inputLabelRange)})
+          </Text>
         </View>
         {onMidtoneChange && (
           <View className="flex-row items-center gap-0.5">
@@ -680,7 +744,9 @@ export function HistogramLevels({
         )}
         <View className="flex-row items-center gap-0.5">
           <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#60a5fa" }} />
-          <Text className="text-[8px] text-muted">{whitePoint.toFixed(2)}</Text>
+          <Text className="text-[8px] text-muted">
+            {whitePoint.toFixed(2)} ({formatEdgeLabel(wpVal, inputLabelRange)})
+          </Text>
         </View>
       </View>
 

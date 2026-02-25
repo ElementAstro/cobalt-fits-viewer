@@ -1,15 +1,26 @@
 ---
+# compose__index: RGB/Narrowband image composition with channel assignment.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://compose
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-compose__index
+
+# 2. Assert action controls
 - assertVisible:
     id: e2e-action-compose__index-compose
 - assertVisible:
     id: e2e-action-compose__index-reset
+
+# 3. Reset channels
 - tapOn:
     id: e2e-action-compose__index-reset
+
+# 4. Attempt compose (may show error without channels assigned)
 - tapOn:
     id: e2e-action-compose__index-compose
+
+# 5. Verify screen intact
 - assertVisible:
     id: e2e-screen-compose__index

@@ -1,5 +1,4 @@
-import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, screen, waitFor } from "@testing-library/react-native";
 import { AlbumExportSheet } from "../AlbumExportSheet";
 import type { Album, FitsMetadata } from "../../../lib/fits/types";
 

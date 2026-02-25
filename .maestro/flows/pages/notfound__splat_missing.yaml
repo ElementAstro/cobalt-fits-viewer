@@ -1,12 +1,21 @@
 ---
+# notfound__splat_missing: 404 screen for unmatched routes.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://this-route-does-not-exist
+
+# 1. Assert 404 screen visible
 - assertVisible:
     id: e2e-screen-notfound__splat_missing
+
+# 2. Assert go-home button
 - assertVisible:
     id: e2e-action-notfound__splat_missing-go-home
+
+# 3. Tap go home and verify redirect to files screen
 - tapOn:
     id: e2e-action-notfound__splat_missing-go-home
 - assertVisible:
     id: e2e-screen-tabs__index
+
+# 4. Verify seed data visible after redirect
 - assertVisible: M42_Light_001.fits

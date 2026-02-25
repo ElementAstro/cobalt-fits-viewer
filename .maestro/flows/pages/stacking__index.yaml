@@ -1,19 +1,28 @@
 ---
+# stacking__index: Image stacking with alignment, calibration, and quality evaluation.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://stacking
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-stacking__index
+
+# 2. Assert controls
 - assertVisible:
     id: e2e-action-stacking__index-toggle-use-annotated
 - assertVisible:
     id: e2e-action-stacking__index-start
+
+# 3. Toggle annotated alignment setting twice
 - tapOn:
     id: e2e-action-stacking__index-toggle-use-annotated
 - tapOn:
     id: e2e-action-stacking__index-toggle-use-annotated
-- tapOn:
-    id: e2e-action-stacking__index-reset
+
+# 4. Start stacking (may fail without enough files, but UI should remain stable)
 - tapOn:
     id: e2e-action-stacking__index-start
+
+# 5. Verify screen intact
 - assertVisible:
     id: e2e-screen-stacking__index

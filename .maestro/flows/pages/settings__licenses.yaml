@@ -1,12 +1,24 @@
 ---
+# settings__licenses: Open source licenses viewer with scrollable list.
 - runFlow: ../common/bootstrap.yaml
 - openLink: cobalt://settings/licenses
+
+# 1. Assert screen
 - assertVisible:
     id: e2e-screen-settings__licenses
+
+# 2. Assert controls
 - assertVisible:
     id: e2e-action-settings__licenses-back
 - assertVisible:
     id: e2e-action-settings__licenses-open-app-license
+
+# 3. Open app license and dismiss
+- tapOn:
+    id: e2e-action-settings__licenses-open-app-license
+- back
+
+# 4. Navigate back to about page
 - tapOn:
     id: e2e-action-settings__licenses-back
 - assertVisible:
