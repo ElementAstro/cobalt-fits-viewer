@@ -88,10 +88,7 @@ export function BatchTagSheet({ visible, selectedIds, onClose }: BatchTagSheetPr
       batchRemoveTag(selectedIds, tag);
     }
 
-    Alert.alert(
-      t("common.success"),
-      t("gallery.batchTagApplied").replace("{count}", String(selectedIds.length)),
-    );
+    Alert.alert(t("common.success"), t("gallery.batchTagApplied", { count: selectedIds.length }));
     handleClose();
   };
 

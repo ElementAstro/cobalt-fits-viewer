@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { View, Text, ScrollView } from "react-native";
-import { Button, Chip, useThemeColor } from "heroui-native";
+import { Button, Chip } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
@@ -141,18 +141,17 @@ export function ViewerControls({
   onApplyQuickPreset,
 }: ViewerControlsProps) {
   const { t } = useI18n();
-  const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
   const haptics = useHapticFeedback();
 
   return (
-    <ScrollView className="border-t border-separator bg-background max-h-72">
+    <View className="border-t border-separator bg-background">
       <View className="px-3 py-2">
         <View className="flex-row items-center justify-between mb-1">
           <Text className="text-[9px] font-semibold uppercase text-muted">{t("viewer.view")}</Text>
           <View className="flex-row gap-1">
             {onAutoStretch && (
               <Button size="sm" variant="ghost" onPress={onAutoStretch} className="px-1.5 py-0.5">
-                <Ionicons name="flash-outline" size={10} color={successColor} />
+                <Ionicons name="flash-outline" size={10} className="text-success" />
               </Button>
             )}
             {onResetView && (
@@ -163,7 +162,7 @@ export function ViewerControls({
                 onPress={onResetView}
                 className="h-6 w-6"
               >
-                <Ionicons name="scan-outline" size={11} color={mutedColor} />
+                <Ionicons name="scan-outline" size={11} className="text-muted" />
               </Button>
             )}
             {onResetToSaved && (
@@ -174,7 +173,7 @@ export function ViewerControls({
                 onPress={onResetToSaved}
                 className="h-6 w-6"
               >
-                <Ionicons name="refresh-outline" size={11} color={mutedColor} />
+                <Ionicons name="refresh-outline" size={11} className="text-muted" />
               </Button>
             )}
             {onSavePreset && (
@@ -185,7 +184,7 @@ export function ViewerControls({
                 onPress={onSavePreset}
                 className="h-6 w-6"
               >
-                <Ionicons name="save-outline" size={11} color={mutedColor} />
+                <Ionicons name="save-outline" size={11} className="text-muted" />
               </Button>
             )}
           </View>
@@ -336,8 +335,6 @@ export function ViewerControls({
             currentFrame={currentFrame}
             totalFrames={totalFrames}
             onFrameChange={onFrameChange}
-            mutedColor={mutedColor}
-            successColor={successColor}
           />
         )}
 
@@ -352,7 +349,11 @@ export function ViewerControls({
             }}
             className="h-7 w-7"
           >
-            <Ionicons name="grid-outline" size={14} color={showGrid ? successColor : mutedColor} />
+            <Ionicons
+              name="grid-outline"
+              size={14}
+              className={showGrid ? "text-success" : "text-muted"}
+            />
           </Button>
           <Button
             size="sm"
@@ -367,7 +368,7 @@ export function ViewerControls({
             <Ionicons
               name="add-outline"
               size={14}
-              color={showCrosshair ? successColor : mutedColor}
+              className={showCrosshair ? "text-success" : "text-muted"}
             />
           </Button>
           <Button
@@ -383,7 +384,7 @@ export function ViewerControls({
             <Ionicons
               name="information-circle-outline"
               size={14}
-              color={showPixelInfo ? successColor : mutedColor}
+              className={showPixelInfo ? "text-success" : "text-muted"}
             />
           </Button>
           <Button
@@ -399,12 +400,12 @@ export function ViewerControls({
             <Ionicons
               name="map-outline"
               size={14}
-              color={showMinimap ? successColor : mutedColor}
+              className={showMinimap ? "text-success" : "text-muted"}
             />
           </Button>
         </View>
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -412,17 +413,9 @@ interface FrameNavigationProps {
   currentFrame: number;
   totalFrames: number;
   onFrameChange: (frame: number) => void;
-  mutedColor: string;
-  successColor: string;
 }
 
-function FrameNavigation({
-  currentFrame,
-  totalFrames,
-  onFrameChange,
-  mutedColor,
-  successColor,
-}: FrameNavigationProps) {
+function FrameNavigation({ currentFrame, totalFrames, onFrameChange }: FrameNavigationProps) {
   const { t } = useI18n();
   const haptics = useHapticFeedback();
   const [isPlaying, setIsPlaying] = useState(false);
@@ -479,7 +472,7 @@ function FrameNavigation({
         <Ionicons
           name={isPlaying ? "pause" : "play"}
           size={12}
-          color={isPlaying ? successColor : mutedColor}
+          className={isPlaying ? "text-success" : "text-muted"}
         />
       </Button>
       <Button
@@ -488,7 +481,7 @@ function FrameNavigation({
         isDisabled={currentFrame <= 0 || isPlaying}
         onPress={() => onFrameChange(currentFrame - 1)}
       >
-        <Ionicons name="chevron-back" size={12} color={mutedColor} />
+        <Ionicons name="chevron-back" size={12} className="text-muted" />
       </Button>
       <Text className="text-[10px] text-foreground min-w-[40px] text-center">
         {currentFrame + 1} / {totalFrames}
@@ -499,7 +492,7 @@ function FrameNavigation({
         isDisabled={currentFrame >= totalFrames - 1 || isPlaying}
         onPress={() => onFrameChange(currentFrame + 1)}
       >
-        <Ionicons name="chevron-forward" size={12} color={mutedColor} />
+        <Ionicons name="chevron-forward" size={12} className="text-muted" />
       </Button>
     </View>
   );

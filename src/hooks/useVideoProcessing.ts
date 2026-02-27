@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppState, Platform } from "react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
-import * as Notifications from "expo-notifications";
+import { isRunningInExpoGo } from "expo";
 import { File } from "expo-file-system";
 import { useVideoTaskStore } from "../stores/useVideoTaskStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
@@ -16,6 +16,8 @@ import { detectSupportedMediaFormat, toImageSourceFormat } from "../lib/import/f
 import { generateFileId, importFile } from "../lib/utils/fileManager";
 import { copyThumbnailToCache, generateAndSaveThumbnail } from "../lib/gallery/thumbnailCache";
 import { classifyWithDetail } from "../lib/gallery/frameClassifier";
+import { getFreeDiskBytes } from "../lib/utils/diskSpace";
+import { estimateOutputSizeBytes } from "../lib/video/format";
 import { parseRasterFromBufferAsync, extractRasterMetadata } from "../lib/image/rasterParser";
 import type { FitsMetadata } from "../lib/fits/types";
 import { useI18n } from "../i18n/useI18n";
@@ -27,7 +29,9 @@ function deriveOutputEntries(taskOutput: string, extraOutputs?: string[]): strin
 async function notifyTaskResult(title: string, body: string): Promise<void> {
   if (Platform.OS === "web") return;
   if (AppState.currentState === "active") return;
+  if (__DEV__ && Platform.OS === "android" && isRunningInExpoGo()) return;
   try {
+    const Notifications = await import("expo-notifications");
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== "granted") return;
     await Notifications.scheduleNotificationAsync({
@@ -73,7 +77,6 @@ export function useVideoProcessing() {
   const clearFinished = useVideoTaskStore((s) => s.clearFinished);
 
   const addFile = useFitsStore((s) => s.addFile);
-  const sourceFiles = useFitsStore((s) => s.files);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
   const concurrency = useSettingsStore((s) => s.videoProcessingConcurrency);
   const videoProcessingEnabled = useSettingsStore((s) => s.videoProcessingEnabled);
@@ -114,7 +117,7 @@ export function useVideoProcessing() {
   const importOutputUri = useCallback(
     async (request: VideoProcessingRequest, outputUri: string): Promise<string> => {
       const outputFile = new File(outputUri);
-      const source = sourceFiles.find((file) => file.id === request.sourceId);
+      const source = useFitsStore.getState().files.find((file) => file.id === request.sourceId);
       const filename = outputFile.name || `${request.sourceFilename}_processed`;
       const imported = importFile(outputUri, filename);
       const importedFile = new File(imported.uri);
@@ -250,8 +253,17 @@ export function useVideoProcessing() {
         parsed.rgba.byteOffset,
         parsed.rgba.byteLength,
       );
+      const { thumbnailSize: thumbSize, thumbnailQuality: thumbQuality } =
+        useSettingsStore.getState();
       thumbnailUri =
-        generateAndSaveThumbnail(fileId, rgba, parsed.width, parsed.height, 256, 80) ?? undefined;
+        generateAndSaveThumbnail(
+          fileId,
+          rgba,
+          parsed.width,
+          parsed.height,
+          thumbSize,
+          thumbQuality,
+        ) ?? undefined;
 
       const partial = extractRasterMetadata(
         {
@@ -284,7 +296,7 @@ export function useVideoProcessing() {
       addFile(next);
       return fileId;
     },
-    [addFile, frameClassificationConfig, sourceFiles],
+    [addFile, frameClassificationConfig],
   );
 
   const runTask = useCallback(
@@ -394,11 +406,29 @@ export function useVideoProcessing() {
     [markCancelled],
   );
 
+  const checkDiskSpaceForTask = useCallback(
+    async (request: VideoProcessingRequest): Promise<string | null> => {
+      const est = estimateOutputSizeBytes(
+        request.sourceDurationMs,
+        request.compress?.targetBitrateKbps ?? request.transcode?.targetBitrateKbps,
+      );
+      if (!est || est <= 0) return null;
+      const free = await getFreeDiskBytes();
+      if (free === null) return null;
+      if (free < est * 2) {
+        return "insufficient_disk_space";
+      }
+      return null;
+    },
+    [],
+  );
+
   return {
     tasks,
     isEngineAvailable,
     engineCapabilities,
     enqueueProcessingTask,
+    checkDiskSpaceForTask,
     retryTask,
     removeTask,
     clearFinished,

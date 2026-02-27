@@ -83,8 +83,10 @@ export async function extractVideoMetadata(
 
     const tracks = payload.availableVideoTracks ?? [];
     const primaryTrack = tracks.find((track) => track.isSupported) ?? tracks[0];
+    const audioTracks = payload.availableAudioTracks ?? [];
+    const _primaryAudio = audioTracks[0];
     const duration = Number.isFinite(payload.duration) ? payload.duration : player.duration;
-    const hasAudioTrack = (payload.availableAudioTracks?.length ?? 0) > 0;
+    const hasAudioTrack = audioTracks.length > 0;
 
     return {
       durationMs: Number.isFinite(duration) ? Math.max(0, Math.round(duration * 1000)) : undefined,
@@ -92,6 +94,9 @@ export async function extractVideoMetadata(
       videoWidth: primaryTrack?.size?.width ?? undefined,
       videoHeight: primaryTrack?.size?.height ?? undefined,
       videoCodec: primaryTrack?.mimeType ?? undefined,
+      // expo-video AudioTrack doesn't expose codec/mimeType; leave undefined for now
+      // audioCodec can be populated via FFmpeg probe in a future enhancement
+      audioCodec: undefined,
       bitrateKbps:
         typeof primaryTrack?.bitrate === "number" && Number.isFinite(primaryTrack.bitrate)
           ? Math.max(1, Math.round(primaryTrack.bitrate / 1000))

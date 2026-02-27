@@ -646,9 +646,7 @@ export default function BackupScreen() {
                           variant={autoBackupIntervalHours === hours ? "primary" : "secondary"}
                           onPress={() => setAutoBackupIntervalHours(hours)}
                         >
-                          <Chip.Label>
-                            {t("backup.everyHours").replace("{hours}", String(hours))}
-                          </Chip.Label>
+                          <Chip.Label>{t("backup.everyHours", { hours })}</Chip.Label>
                         </Chip>
                       ))}
                     </View>

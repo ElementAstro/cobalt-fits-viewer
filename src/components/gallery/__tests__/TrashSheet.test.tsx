@@ -4,18 +4,24 @@ import type { TrashedFitsRecord } from "../../../lib/fits/types";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "files.trashTitle": "Trash",
-          "files.filesCount": "{count} files",
-          "files.trashEmpty": "Trash is empty",
-          "files.trashExpires": "Expires in",
-          "files.restore": "Restore",
-          "files.restoreAll": "Restore All",
-          "files.emptyTrash": "Empty Trash",
-        }) as Record<string, string>
-      )[key] ?? key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        "files.trashTitle": "Trash",
+        "files.filesCount": "{count} files",
+        "files.trashEmpty": "Trash is empty",
+        "files.trashExpires": "Expires in",
+        "files.restore": "Restore",
+        "files.restoreAll": "Restore All",
+        "files.emptyTrash": "Empty Trash",
+      };
+      let result = map[key] ?? key;
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          result = result.replace(`{${k}}`, String(v));
+        });
+      }
+      return result;
+    },
   }),
 }));
 
@@ -32,6 +38,7 @@ jest.mock("heroui-native", () => {
   BottomSheet.Overlay = () => null;
   BottomSheet.Content = ({ children }: any) => <View>{children}</View>;
   BottomSheet.Title = ({ children }: any) => <Text>{children}</Text>;
+  BottomSheet.Close = () => null;
 
   const Button = ({ onPress, children, isDisabled }: any) => (
     <Pressable onPress={isDisabled ? undefined : onPress}>{children}</Pressable>

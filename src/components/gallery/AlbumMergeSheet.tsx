@@ -50,9 +50,7 @@ export function AlbumMergeSheet({
   const handleMerge = (target: Album) => {
     Alert.alert(
       t("album.mergeTitle"),
-      t("album.mergeConfirm")
-        .replace("{source}", sourceAlbum.name)
-        .replace("{target}", target.name),
+      t("album.mergeConfirm", { source: sourceAlbum.name, target: target.name }),
       [
         { text: t("common.cancel"), style: "cancel" },
         {
@@ -78,9 +76,7 @@ export function AlbumMergeSheet({
                 <Ionicons name="git-merge" size={20} color={successColor} />
                 <BottomSheet.Title>{t("album.mergeAlbum")}</BottomSheet.Title>
               </View>
-              <Button size="sm" variant="ghost" isIconOnly onPress={onClose}>
-                <Ionicons name="close" size={20} color={mutedColor} />
-              </Button>
+              <BottomSheet.Close />
             </View>
 
             {/* Source Album Info */}
@@ -178,11 +174,11 @@ export function AlbumMergeSheet({
                         </View>
                       </View>
                       <Text className="mt-1 text-xs text-muted text-left w-full">
-                        {t("album.mergeWillContain").replace("{count}", String(mergedCount))}
+                        {t("album.mergeWillContain", { count: mergedCount })}
                       </Text>
                       <Text className="mt-0.5 text-xs text-muted text-left w-full">
                         {addedCount > 0
-                          ? t("album.mergeWillAdd").replace("{count}", String(addedCount))
+                          ? t("album.mergeWillAdd", { count: addedCount })
                           : t("album.mergeNoNewImages")}
                       </Text>
                     </Button>

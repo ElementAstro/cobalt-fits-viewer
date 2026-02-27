@@ -4,7 +4,7 @@
 
 import { useMemo } from "react";
 import { View, Text, ScrollView } from "react-native";
-import { BottomSheet, Button, Chip, Separator, useThemeColor } from "heroui-native";
+import { BottomSheet, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useSettingsStore } from "../../stores/useSettingsStore";
@@ -69,9 +69,7 @@ export function AlbumStatisticsSheet({
                 <Ionicons name="stats-chart" size={20} color={successColor} />
                 <BottomSheet.Title>{t("album.statistics")}</BottomSheet.Title>
               </View>
-              <Button size="sm" variant="ghost" isIconOnly onPress={onClose}>
-                <Ionicons name="close" size={20} color={mutedColor} />
-              </Button>
+              <BottomSheet.Close />
             </View>
 
             <Separator className="my-2" />

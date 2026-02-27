@@ -1,9 +1,11 @@
 import React from "react";
 import { Alert } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import * as Clipboard from "expo-clipboard";
 import FilesScreen from "../index";
 import { useFitsStore } from "../../../stores/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
+import type { ImportResult } from "../../../hooks/useFileManager";
 
 const mockPush = jest.fn();
 
@@ -15,11 +17,15 @@ jest.mock("expo-router", () => ({
   }),
 }));
 
+jest.mock("expo-clipboard", () => ({
+  setStringAsync: jest.fn().mockResolvedValue(true),
+}));
+
 const mockFileManager = {
   isImporting: false,
   importProgress: { phase: "picking", percent: 0, current: 0, total: 0 },
   importError: null,
-  lastImportResult: null,
+  lastImportResult: null as ImportResult | null,
   isZipImportAvailable: true,
   pickAndImportFile: jest.fn(),
   pickAndImportFromMediaLibrary: jest.fn(),
@@ -238,6 +244,35 @@ jest.mock("../../../components/files/FilesContent", () => ({
   },
 }));
 
+jest.mock("../../../components/files/ImportResultSheet", () => ({
+  ImportResultSheet: (props: {
+    visible: boolean;
+    failedEntries: Array<{ name: string; reason: string }>;
+    onCopy: () => void;
+  }) => {
+    const React = require("react");
+    const { View, Pressable, Text } = require("react-native");
+    if (!props.visible) return null;
+    return React.createElement(
+      View,
+      { testID: "import-result-sheet" },
+      React.createElement(Text, null, "Import Result Sheet"),
+      props.failedEntries.map((entry, index) =>
+        React.createElement(
+          Text,
+          { key: `${entry.name}-${index}` },
+          `${entry.name}:${entry.reason}`,
+        ),
+      ),
+      React.createElement(
+        Pressable,
+        { testID: "import-result-sheet-copy-button", onPress: props.onCopy },
+        React.createElement(Text, null, "Copy Import Result"),
+      ),
+    );
+  },
+}));
+
 // Mock react-native-gesture-handler Swipeable (already in jest.setup but FileListItem uses Swipeable directly)
 jest.mock("react-native-gesture-handler", () => {
   const { View } = require("react-native");
@@ -275,6 +310,9 @@ describe("FilesScreen", () => {
     mockSettingsStore.fileListStyle = "list";
     mockSettingsStore.fileListGridColumns = 3;
     mockTrashStore.items = [];
+    mockFileManager.lastImportResult = null;
+    mockFileManager.importError = null;
+    mockFileManager.isImporting = false;
 
     useFitsStore.setState({
       files: [],
@@ -309,6 +347,78 @@ describe("FilesScreen", () => {
   it("should render the import button", () => {
     render(<FilesScreen />);
     expect(screen.getAllByText("Import Options").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows import result sheet when import is completed", () => {
+    mockFileManager.lastImportResult = {
+      success: 2,
+      failed: 1,
+      total: 3,
+      skippedDuplicate: 0,
+      skippedUnsupported: 0,
+      failedEntries: [{ name: "bad.fit", reason: "unsupported_format" }],
+    };
+
+    render(<FilesScreen />);
+
+    expect(screen.getByTestId("import-result-sheet")).toBeTruthy();
+    expect(screen.getByText("bad.fit:Unsupported file format")).toBeTruthy();
+  });
+
+  it("maps unknown import failure reason to fallback text", () => {
+    mockFileManager.lastImportResult = {
+      success: 0,
+      failed: 1,
+      total: 1,
+      skippedDuplicate: 0,
+      skippedUnsupported: 0,
+      failedEntries: [{ name: "mystery.fit", reason: "" }],
+    };
+
+    render(<FilesScreen />);
+
+    expect(screen.getByText("mystery.fit:Unknown import error")).toBeTruthy();
+  });
+
+  it("copies import result report and shows success alert", async () => {
+    mockFileManager.lastImportResult = {
+      success: 1,
+      failed: 0,
+      total: 1,
+      skippedDuplicate: 0,
+      skippedUnsupported: 0,
+      failedEntries: [],
+    };
+    (Clipboard.setStringAsync as jest.Mock).mockResolvedValueOnce(true);
+
+    render(<FilesScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("import-result-sheet-copy-button"));
+    });
+
+    expect(Clipboard.setStringAsync).toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith("Success", "Import summary copied to clipboard");
+  });
+
+  it("shows error alert when import result copy fails", async () => {
+    mockFileManager.lastImportResult = {
+      success: 0,
+      failed: 1,
+      total: 1,
+      skippedDuplicate: 0,
+      skippedUnsupported: 0,
+      failedEntries: [{ name: "bad.fit", reason: "unsupported_format" }],
+    };
+    (Clipboard.setStringAsync as jest.Mock).mockResolvedValueOnce(false);
+
+    render(<FilesScreen />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("import-result-sheet-copy-button"));
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith("Error", "Failed to copy import summary");
   });
 
   it("should pass files to FilesContent when files are present", () => {

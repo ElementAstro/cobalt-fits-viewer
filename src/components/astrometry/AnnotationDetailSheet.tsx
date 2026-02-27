@@ -5,7 +5,7 @@
 
 import { View, Text, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { Surface, useThemeColor } from "heroui-native";
+import { Surface } from "heroui-native";
 import type { AstrometryAnnotation } from "../../lib/astrometry/types";
 import {
   ANNOTATION_TYPE_COLORS,
@@ -29,7 +29,6 @@ export function AnnotationDetailSheet({
   calibration,
   onClose,
 }: AnnotationDetailSheetProps) {
-  const mutedColor = useThemeColor("muted");
   const typeColor = ANNOTATION_TYPE_COLORS[annotation.type] ?? ANNOTATION_TYPE_COLORS.other;
   const typeLabel = ANNOTATION_TYPE_LABELS[annotation.type] ?? "Unknown";
   const radec = pixelToRaDec(annotation.pixelx, annotation.pixely, calibration);
@@ -51,7 +50,7 @@ export function AnnotationDetailSheet({
           </Text>
         </View>
         <TouchableOpacity onPress={onClose} hitSlop={12}>
-          <Ionicons name="close-circle" size={20} color={mutedColor} />
+          <Ionicons name="close-circle" size={20} className="text-muted" />
         </TouchableOpacity>
       </View>
 

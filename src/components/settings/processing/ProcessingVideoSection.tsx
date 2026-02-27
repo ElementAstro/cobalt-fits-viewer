@@ -21,6 +21,7 @@ export function ProcessingVideoSection() {
   const {
     videoCoreEnabled,
     videoProcessingEnabled,
+    videoResumePlayback,
     videoAutoplay,
     videoLoopByDefault,
     videoMutedByDefault,
@@ -30,6 +31,7 @@ export function ProcessingVideoSection() {
     defaultVideoTargetPreset,
     setVideoCoreEnabled,
     setVideoProcessingEnabled,
+    setVideoResumePlayback,
     setVideoAutoplay,
     setVideoLoopByDefault,
     setVideoMutedByDefault,
@@ -42,6 +44,7 @@ export function ProcessingVideoSection() {
     useShallow((s) => ({
       videoCoreEnabled: s.videoCoreEnabled,
       videoProcessingEnabled: s.videoProcessingEnabled,
+      videoResumePlayback: s.videoResumePlayback,
       videoAutoplay: s.videoAutoplay,
       videoLoopByDefault: s.videoLoopByDefault,
       videoMutedByDefault: s.videoMutedByDefault,
@@ -51,6 +54,7 @@ export function ProcessingVideoSection() {
       defaultVideoTargetPreset: s.defaultVideoTargetPreset,
       setVideoCoreEnabled: s.setVideoCoreEnabled,
       setVideoProcessingEnabled: s.setVideoProcessingEnabled,
+      setVideoResumePlayback: s.setVideoResumePlayback,
       setVideoAutoplay: s.setVideoAutoplay,
       setVideoLoopByDefault: s.setVideoLoopByDefault,
       setVideoMutedByDefault: s.setVideoMutedByDefault,
@@ -111,6 +115,14 @@ export function ProcessingVideoSection() {
           label={t("settings.videoProcessingEnabled")}
           isSelected={videoProcessingEnabled}
           onSelectedChange={setVideoProcessingEnabled}
+        />
+        <Separator />
+        <SettingsToggleRow
+          testID="e2e-action-settings__processing-toggle-video-resume"
+          icon="play-skip-forward-outline"
+          label={t("settings.videoResumePlayback")}
+          isSelected={videoResumePlayback}
+          onSelectedChange={setVideoResumePlayback}
         />
         <Separator />
         <SettingsToggleRow

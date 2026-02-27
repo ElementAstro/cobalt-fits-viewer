@@ -46,6 +46,7 @@ jest.mock("heroui-native", () => {
   BottomSheet.Overlay = () => null;
   BottomSheet.Content = ({ children }: any) => <View>{children}</View>;
   BottomSheet.Title = ({ children }: any) => <Text>{children}</Text>;
+  BottomSheet.Close = () => null;
 
   const Button = ({ onPress, children, isDisabled }: any) => (
     <Pressable onPress={isDisabled ? undefined : onPress}>{children}</Pressable>

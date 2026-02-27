@@ -6,7 +6,9 @@ import {
   CloseButton,
   Dialog,
   Input,
+  Label,
   Separator,
+  Surface,
   TextField,
   useThemeColor,
 } from "heroui-native";
@@ -149,6 +151,7 @@ export function SmartAlbumModal({
 
             {/* Album Name */}
             <TextField>
+              <Label>{t("gallery.albumName")}</Label>
               <Input
                 placeholder={t("gallery.albumName")}
                 value={name}
@@ -160,10 +163,7 @@ export function SmartAlbumModal({
             {/* Rules */}
             <Text className="mt-4 mb-2 text-xs font-semibold text-muted">{t("album.rules")}</Text>
             {rules.map((rule, index) => (
-              <View
-                key={index}
-                className="mb-2 rounded-xl border border-separator bg-background p-2"
-              >
+              <Surface key={index} variant="secondary" className="mb-2 p-2">
                 {/* Field picker + remove button */}
                 <View className="flex-row items-center gap-1.5">
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
@@ -171,7 +171,7 @@ export function SmartAlbumModal({
                       {FIELDS.map((field) => (
                         <Pressable key={field} onPress={() => updateRule(index, { field })}>
                           <Chip size="sm" variant={rule.field === field ? "primary" : "secondary"}>
-                            <Chip.Label className="text-[9px]">{field}</Chip.Label>
+                            <Chip.Label>{field}</Chip.Label>
                           </Chip>
                         </Pressable>
                       ))}
@@ -188,7 +188,7 @@ export function SmartAlbumModal({
                       {OPERATORS.map((op) => (
                         <Pressable key={op} onPress={() => updateRule(index, { operator: op })}>
                           <Chip size="sm" variant={rule.operator === op ? "primary" : "secondary"}>
-                            <Chip.Label className="text-[9px]">{op}</Chip.Label>
+                            <Chip.Label>{op}</Chip.Label>
                           </Chip>
                         </Pressable>
                       ))}
@@ -208,7 +208,7 @@ export function SmartAlbumModal({
                             size="sm"
                             variant={String(rule.value) === option.key ? "primary" : "secondary"}
                           >
-                            <Chip.Label className="text-[9px]">{option.label}</Chip.Label>
+                            <Chip.Label>{option.label}</Chip.Label>
                           </Chip>
                         </Pressable>
                       ))}
@@ -225,7 +225,7 @@ export function SmartAlbumModal({
                     autoCorrect={false}
                   />
                 </TextField>
-              </View>
+              </Surface>
             ))}
 
             <Pressable onPress={addRule} className="flex-row items-center gap-1 mt-1">

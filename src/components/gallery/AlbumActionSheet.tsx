@@ -1,7 +1,8 @@
-import { View, Text, Pressable } from "react-native";
+import { View } from "react-native";
 import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
+import { SheetActionItem } from "../files/SheetActionItem";
 
 interface AlbumActionSheetProps {
   visible: boolean;
@@ -107,41 +108,30 @@ export function AlbumActionSheet({
       <BottomSheet.Portal>
         <BottomSheet.Overlay />
         <BottomSheet.Content>
-          <View className="flex-row items-center justify-center gap-2">
+          <View className="flex-row items-center justify-center gap-2 mb-2">
             <BottomSheet.Title className="text-center">{albumName}</BottomSheet.Title>
             {isPinned && <Ionicons name="pin" size={14} color={successColor} />}
           </View>
-          <Separator className="my-1" />
-          {actions.map((action, i) => (
-            <Pressable
-              key={i}
-              onPress={() => {
-                onClose();
-                action.onPress();
-              }}
-              className="flex-row items-center gap-3 px-4 py-3.5"
-            >
-              <Ionicons
-                name={action.icon as keyof typeof Ionicons.glyphMap}
-                size={18}
-                color={
-                  action.destructive ? dangerColor : action.highlight ? successColor : mutedColor
-                }
+          <Separator className="mb-2" />
+          <View className="gap-1.5 px-2">
+            {actions.map((action, i) => (
+              <SheetActionItem
+                key={i}
+                icon={action.icon as keyof typeof Ionicons.glyphMap}
+                title={action.label}
+                onPress={() => {
+                  onClose();
+                  action.onPress();
+                }}
+                destructive={action.destructive}
+                compact
+                successColor={action.highlight ? successColor : successColor}
+                mutedColor={mutedColor}
+                dangerColor={dangerColor}
               />
-              <Text
-                className={`text-sm ${
-                  action.destructive
-                    ? "text-red-500"
-                    : action.highlight
-                      ? "text-success"
-                      : "text-foreground"
-                }`}
-              >
-                {action.label}
-              </Text>
-            </Pressable>
-          ))}
-          <Separator className="my-1" />
+            ))}
+          </View>
+          <Separator className="mt-2 mb-1" />
           <View className="px-4 py-2">
             <Button variant="outline" onPress={onClose} className="w-full">
               <Button.Label>{t("common.cancel")}</Button.Label>

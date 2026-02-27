@@ -148,4 +148,26 @@ describe("ViewerToolbar", () => {
     const filenames = getAllByText("ngc7000.fits");
     expect(filenames.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("renders prev/next icons even when disabled (uses theme muted color)", () => {
+    const { getByText } = render(<ViewerToolbar {...baseProps} prevId={null} nextId={null} />);
+    expect(getByText("chevron-back")).toBeTruthy();
+    expect(getByText("chevron-forward")).toBeTruthy();
+  });
+
+  it("renders success-colored controls icon when controls are shown", () => {
+    const { getByText } = render(<ViewerToolbar {...baseProps} showControls={true} />);
+    expect(getByText("options")).toBeTruthy();
+  });
+
+  it("renders success-colored checkmark when astrometry result exists", () => {
+    const { getByText } = render(<ViewerToolbar {...baseProps} hasAstrometryResult={true} />);
+    expect(getByText("checkmark-circle")).toBeTruthy();
+  });
+
+  it("uses danger color for favorite heart in more menu", () => {
+    const { getByText } = render(<ViewerToolbar {...baseProps} isFavorite={true} />);
+    fireEvent.press(getByText("ellipsis-horizontal"));
+    expect(getByText("heart")).toBeTruthy();
+  });
 });

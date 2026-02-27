@@ -1,5 +1,6 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { Alert } from "react-native";
 import Screen from "../sessions";
 
 const mockPush = jest.fn();
@@ -22,6 +23,17 @@ const mockUnsyncSessionsBatch = jest.fn(async () => ({
   success: 1,
   skipped: 0,
   failed: 0,
+}));
+const mockReconcileSessionsFromLinkedFiles = jest.fn(() => ({
+  requested: 2,
+  processed: 2,
+  updated: 0,
+  cleared: 0,
+  unchanged: 2,
+  logsAdded: 0,
+  logsRemoved: 0,
+  changed: false,
+  sessionIds: ["s1", "s2"],
 }));
 
 jest.mock("expo-router", () => ({
@@ -78,6 +90,7 @@ jest.mock("../../../hooks/useSessions", () => ({
       mergedCount: 0,
       skippedCount: 0,
     })),
+    reconcileSessionsFromLinkedFiles: mockReconcileSessionsFromLinkedFiles,
     getObservationDates: jest.fn(() => []),
     getSessionStats: jest.fn(() => ({})),
     getMonthlyData: jest.fn(() => []),
@@ -249,16 +262,34 @@ jest.mock("../../../components/sessions/SessionDateSummary", () => ({
   SessionDateSummary: () => null,
 }));
 
+const mockSummaryDialogProps = jest.fn();
+jest.mock("../../../components/common/OperationSummaryDialog", () => ({
+  OperationSummaryDialog: (props: Record<string, unknown>) => {
+    mockSummaryDialogProps(props);
+    if (!props.visible) return null;
+    const ReactLocal = require("react");
+    const { View, Text } = require("react-native");
+    return ReactLocal.createElement(
+      View,
+      { testID: "operation-summary-dialog" },
+      ReactLocal.createElement(Text, { testID: "summary-dialog-title" }, props.title),
+    );
+  },
+}));
+
 describe("(tabs)/sessions.tsx", () => {
   let consoleErrorSpy: jest.SpyInstance;
+  let alertSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
+    alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     consoleErrorSpy.mockRestore();
+    alertSpy.mockRestore();
   });
 
   it("renders selection-mode batch calendar actions and triggers handlers with selected sessions", async () => {
@@ -278,5 +309,24 @@ describe("(tabs)/sessions.tsx", () => {
       ]);
       expect(mockUnsyncSessionsBatch).toHaveBeenCalledWith([expect.objectContaining({ id: "s1" })]);
     });
+  });
+
+  it("runs manual reconcile action and shows summary dialog", () => {
+    render(<Screen />);
+
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__sessions-reconcile"));
+
+    expect(mockReconcileSessionsFromLinkedFiles).toHaveBeenCalledWith();
+    expect(screen.getByTestId("operation-summary-dialog")).toBeTruthy();
+    expect(screen.getByTestId("summary-dialog-title").props.children).toBe(
+      "sessions.reconcileSummaryTitle",
+    );
+    const lastCall = mockSummaryDialogProps.mock.calls.at(-1)?.[0];
+    expect(lastCall?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "sessions.reconcileSummaryProcessed", value: 2 }),
+      ]),
+    );
+    expect(lastCall?.footnote).toBe("sessions.reconcileNoChanges");
   });
 });

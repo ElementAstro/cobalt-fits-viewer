@@ -257,6 +257,7 @@ export interface FitsMetadata {
   rotationDeg?: number;
   hasAudioTrack?: boolean;
   thumbnailAtMs?: number;
+  lastPlaybackPositionMs?: number;
   derivedFromId?: string;
   processingTag?:
     | "trim"
@@ -350,7 +351,9 @@ export type ProcessingOperationId =
   | "waveletSharpen"
   | "integerBin"
   | "resample"
-  | "edgeMask";
+  | "edgeMask"
+  | "mlt"
+  | "ghs";
 
 export type ProcessingParamPrimitive = number | string | boolean;
 
@@ -360,11 +363,18 @@ export type ProcessingParamValue =
   | number[]
   | string[];
 
+export interface ProcessingMaskConfig {
+  sourceNodeId: string;
+  invert: boolean;
+  blendStrength: number;
+}
+
 export interface ProcessingNode {
   id: string;
   operationId: ProcessingOperationId;
   enabled: boolean;
   params: Record<string, ProcessingParamValue>;
+  maskConfig?: ProcessingMaskConfig;
 }
 
 export interface ProcessingPipelineSnapshot {
@@ -695,6 +705,16 @@ export interface HistogramData {
   edges: number[];
 }
 
+export interface HistogramDiagnostics {
+  p1: number | null;
+  p50: number | null;
+  p99: number | null;
+  peakValue: number | null;
+  clipLowPercent: number;
+  clipHighPercent: number;
+  isApproximate: boolean;
+}
+
 export interface ChannelHistogramData {
   r: HistogramData;
   g: HistogramData;
@@ -777,6 +797,12 @@ export interface SerMetadataInfo {
   dateTime?: string;
 }
 
+export interface ExportOutputSize {
+  maxWidth?: number;
+  maxHeight?: number;
+  scale?: number; // 0.1-1.0, lower priority than maxWidth/maxHeight
+}
+
 export interface ConvertOptions {
   format: ExportFormat;
   quality: number; // 1-100 for JPEG/WebP
@@ -801,6 +827,10 @@ export interface ConvertOptions {
   includeAnnotations: boolean;
   includeWatermark: boolean;
   watermarkText?: string;
+  outputSize?: ExportOutputSize;
+  targetFileSize?: number; // bytes, 0 or undefined = disabled
+  compressionMode?: "quality" | "targetSize"; // default "quality"
+  webpLossless?: boolean;
 }
 
 export interface ConvertPreset {
@@ -893,6 +923,122 @@ export const DEFAULT_CONVERT_PRESETS: ConvertPreset[] = [
       outputWhite: 1,
       includeAnnotations: false,
       includeWatermark: false,
+    },
+  },
+  {
+    id: "social",
+    name: "社交媒体",
+    description: "适合微信/微博/Instagram 分享",
+    options: {
+      format: "jpeg",
+      quality: 85,
+      bitDepth: 8,
+      dpi: 72,
+      tiff: DEFAULT_TIFF_TARGET_OPTIONS,
+      fits: DEFAULT_FITS_TARGET_OPTIONS,
+      xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      ser: DEFAULT_SER_TARGET_OPTIONS,
+      stretch: "asinh",
+      colormap: "grayscale",
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
+      outputBlack: 0,
+      outputWhite: 1,
+      includeAnnotations: false,
+      includeWatermark: false,
+      outputSize: { maxWidth: 1920, maxHeight: 1920 },
+    },
+  },
+  {
+    id: "email",
+    name: "邮件附件",
+    description: "控制文件大小，适合邮件发送",
+    options: {
+      format: "jpeg",
+      quality: 75,
+      bitDepth: 8,
+      dpi: 72,
+      tiff: DEFAULT_TIFF_TARGET_OPTIONS,
+      fits: DEFAULT_FITS_TARGET_OPTIONS,
+      xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      ser: DEFAULT_SER_TARGET_OPTIONS,
+      stretch: "asinh",
+      colormap: "grayscale",
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
+      outputBlack: 0,
+      outputWhite: 1,
+      includeAnnotations: false,
+      includeWatermark: false,
+      outputSize: { maxWidth: 1280, maxHeight: 1280 },
+    },
+  },
+  {
+    id: "webOptimized",
+    name: "Web 优化",
+    description: "现代 WebP 格式，高压缩比",
+    options: {
+      format: "webp",
+      quality: 80,
+      bitDepth: 8,
+      dpi: 72,
+      tiff: DEFAULT_TIFF_TARGET_OPTIONS,
+      fits: DEFAULT_FITS_TARGET_OPTIONS,
+      xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      ser: DEFAULT_SER_TARGET_OPTIONS,
+      stretch: "asinh",
+      colormap: "grayscale",
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
+      outputBlack: 0,
+      outputWhite: 1,
+      includeAnnotations: false,
+      includeWatermark: false,
+      outputSize: { maxWidth: 2048, maxHeight: 2048 },
+    },
+  },
+  {
+    id: "thumbnailExport",
+    name: "缩略图导出",
+    description: "小图预览，适合索引",
+    options: {
+      format: "jpeg",
+      quality: 70,
+      bitDepth: 8,
+      dpi: 72,
+      tiff: DEFAULT_TIFF_TARGET_OPTIONS,
+      fits: DEFAULT_FITS_TARGET_OPTIONS,
+      xisf: DEFAULT_XISF_TARGET_OPTIONS,
+      ser: DEFAULT_SER_TARGET_OPTIONS,
+      stretch: "asinh",
+      colormap: "grayscale",
+      blackPoint: 0,
+      whitePoint: 1,
+      gamma: 1,
+      brightness: 0,
+      contrast: 1,
+      mtfMidtone: 0.25,
+      curvePreset: "linear",
+      outputBlack: 0,
+      outputWhite: 1,
+      includeAnnotations: false,
+      includeWatermark: false,
+      outputSize: { maxWidth: 512, maxHeight: 512 },
     },
   },
 ];

@@ -10,6 +10,8 @@ import {
   remapPointBetweenSpaces,
   remapRegionBetweenSpaces,
   screenToImagePoint,
+  screenToSourcePixel,
+  zoomAroundCenter,
   zoomAroundPoint,
 } from "../transform";
 
@@ -98,5 +100,119 @@ describe("viewer transform helpers", () => {
     expect(region.y).toBeCloseTo(750, 6);
     expect(region.w).toBeCloseTo(3000, 6);
     expect(region.h).toBeCloseTo(1500, 6);
+  });
+
+  it("returns non-finite fitScale for zero-size image", () => {
+    const fit = computeFitGeometry(0, 0, 500, 500);
+    expect(Number.isFinite(fit.fitScale)).toBe(false);
+  });
+
+  it("returns zero fitScale for zero-size canvas", () => {
+    const fit = computeFitGeometry(100, 100, 0, 0);
+    expect(fit.fitScale).toBe(0);
+  });
+
+  it("guards against currentScale=0 in zoomAroundPoint", () => {
+    const next = zoomAroundPoint(100, 100, 0, 2, 0, 0);
+    expect(Number.isFinite(next.x)).toBe(true);
+    expect(Number.isFinite(next.y)).toBe(true);
+  });
+
+  it("clamps translation when scale < 1 (image smaller than canvas)", () => {
+    const clamped = clampTranslation(100, 100, 0.5, 100, 100, 200, 200);
+    expect(clamped.x).toBe(0);
+    expect(clamped.y).toBe(0);
+  });
+
+  it("zooms around canvas center with zoomAroundCenter", () => {
+    const result = zoomAroundCenter(1, 2, 0, 0, 800, 600);
+    expect(result.x).toBeCloseTo(-400, 6);
+    expect(result.y).toBeCloseTo(-300, 6);
+  });
+
+  it("converts screen tap to source pixel via screenToSourcePixel", () => {
+    const transform = {
+      scale: 1,
+      translateX: 0,
+      translateY: 0,
+      canvasWidth: 200,
+      canvasHeight: 100,
+    };
+    const pixel = screenToSourcePixel(40, 20, transform, 100, 50, 1000, 500);
+    expect(pixel).not.toBeNull();
+    expect(pixel!.x).toBe(205);
+    expect(pixel!.y).toBe(105);
+  });
+
+  it("returns null from screenToSourcePixel for out-of-bounds tap", () => {
+    const transform = {
+      scale: 1,
+      translateX: 0,
+      translateY: 0,
+      canvasWidth: 200,
+      canvasHeight: 100,
+    };
+    expect(screenToSourcePixel(-10, -10, transform, 100, 50, 100, 50)).toBeNull();
+  });
+
+  it("returns null from screenToSourcePixel when fitScale is zero", () => {
+    const transform = { scale: 1, translateX: 0, translateY: 0, canvasWidth: 0, canvasHeight: 0 };
+    expect(screenToSourcePixel(50, 50, transform, 100, 100, 100, 100)).toBeNull();
+  });
+
+  it("zoomAroundCenter preserves viewport center stability", () => {
+    const tx = -60;
+    const ty = 30;
+    const cw = 800;
+    const ch = 600;
+    const centerX = cw / 2;
+    const centerY = ch / 2;
+
+    const localBeforeX = (centerX - tx) / 2;
+    const localBeforeY = (centerY - ty) / 2;
+
+    const result = zoomAroundCenter(2, 4, tx, ty, cw, ch);
+
+    const localAfterX = (centerX - result.x) / 4;
+    const localAfterY = (centerY - result.y) / 4;
+
+    expect(localAfterX).toBeCloseTo(localBeforeX, 6);
+    expect(localAfterY).toBeCloseTo(localBeforeY, 6);
+  });
+
+  it("screenToSourcePixel identity remap when source == image dimensions", () => {
+    const transform = {
+      scale: 1,
+      translateX: 0,
+      translateY: 0,
+      canvasWidth: 200,
+      canvasHeight: 100,
+    };
+    const pixel = screenToSourcePixel(40, 20, transform, 100, 50, 100, 50);
+    expect(pixel).not.toBeNull();
+    expect(pixel!.x).toBe(20);
+    expect(pixel!.y).toBe(10);
+  });
+
+  it("screenToSourcePixel works with non-unit scale and translate", () => {
+    const transform = {
+      scale: 2,
+      translateX: -50,
+      translateY: -25,
+      canvasWidth: 400,
+      canvasHeight: 200,
+    };
+    const pixel = screenToSourcePixel(150, 75, transform, 200, 100, 200, 100);
+    expect(pixel).not.toBeNull();
+    expect(pixel!.x).toBeGreaterThanOrEqual(0);
+    expect(pixel!.x).toBeLessThan(200);
+    expect(pixel!.y).toBeGreaterThanOrEqual(0);
+    expect(pixel!.y).toBeLessThan(100);
+  });
+
+  it("zoomAroundCenter with zoom out returns translate closer to zero", () => {
+    const result = zoomAroundCenter(3, 1, -800, -600, 800, 600);
+    expect(Math.abs(result.x)).toBeLessThan(800);
+    expect(Math.abs(result.y)).toBeLessThan(600);
   });
 });

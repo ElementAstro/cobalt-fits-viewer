@@ -77,6 +77,128 @@ describe("theme presets", () => {
     expect(variables.dark["--surface-foreground"]).toBe("#111827");
   });
 
+  it("generates overlay, muted, default, border, separator, link from background", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_THEME_COLORS,
+      linked: false,
+      light: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.light,
+        background: "#F0F0F0",
+        surface: "#FFFFFF",
+      },
+      dark: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.dark,
+        background: "#111111",
+        surface: "#222222",
+      },
+    };
+
+    const variables = buildCustomThemeVariables(custom);
+
+    // Light mode derived tokens
+    expect(variables.light["--overlay"]).toBeDefined();
+    expect(variables.light["--overlay-foreground"]).toBeDefined();
+    expect(variables.light["--muted"]).toBeDefined();
+    expect(variables.light["--default"]).toBeDefined();
+    expect(variables.light["--default-foreground"]).toBeDefined();
+    expect(variables.light["--border"]).toBeDefined();
+    expect(variables.light["--separator"]).toBeDefined();
+    expect(variables.light["--link"]).toBe(variables.light["--foreground"]);
+
+    // Dark mode derived tokens
+    expect(variables.dark["--overlay"]).toBeDefined();
+    expect(variables.dark["--muted"]).toBeDefined();
+    expect(variables.dark["--default"]).toBeDefined();
+    expect(variables.dark["--border"]).toBeDefined();
+    expect(variables.dark["--separator"]).toBeDefined();
+    expect(variables.dark["--link"]).toBe(variables.dark["--foreground"]);
+  });
+
+  it("generates segment, field-placeholder, field-border, and shadow tokens", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_THEME_COLORS,
+      linked: true,
+      light: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.light,
+        background: "#FAFAFA",
+        surface: "#FFFFFF",
+      },
+      dark: { ...DEFAULT_CUSTOM_THEME_COLORS.dark },
+    };
+
+    const variables = buildCustomThemeVariables(custom);
+    expect(variables.light["--segment"]).toBe("#FFFFFF");
+    expect(variables.light["--segment-foreground"]).toBeDefined();
+    expect(variables.light["--field-placeholder"]).toBeDefined();
+    expect(variables.light["--field-border"]).toBe("transparent");
+    expect(variables.light["--surface-shadow"]).toContain("rgba");
+    expect(variables.light["--overlay-shadow"]).toContain("rgba");
+    expect(variables.light["--field-shadow"]).toContain("rgba");
+  });
+
+  it("generates dark mode shadow tokens as transparent/inset", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_THEME_COLORS,
+      linked: false,
+      light: { ...DEFAULT_CUSTOM_THEME_COLORS.light },
+      dark: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.dark,
+        background: "#0A0A0A",
+        surface: "#1A1A1A",
+      },
+    };
+
+    const variables = buildCustomThemeVariables(custom);
+    expect(variables.dark["--surface-shadow"]).toContain("transparent");
+    expect(variables.dark["--overlay-shadow"]).toContain("inset");
+    expect(variables.dark["--field-shadow"]).toContain("transparent");
+  });
+
+  it("generates surface-secondary and surface-tertiary with different lightness", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_THEME_COLORS,
+      linked: false,
+      light: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.light,
+        background: "#F5F5F5",
+        surface: "#FFFFFF",
+      },
+      dark: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.dark,
+        background: "#111111",
+        surface: "#1E1E1E",
+      },
+    };
+
+    const variables = buildCustomThemeVariables(custom);
+
+    // Light: secondary/tertiary should be darker than surface
+    expect(variables.light["--surface-secondary"]).not.toBe("#FFFFFF");
+    expect(variables.light["--surface-tertiary"]).not.toBe("#FFFFFF");
+    expect(variables.light["--surface-tertiary"]).not.toBe(variables.light["--surface-secondary"]);
+
+    // Dark: secondary/tertiary should be lighter than surface
+    expect(variables.dark["--surface-secondary"]).not.toBe("#1E1E1E");
+    expect(variables.dark["--surface-tertiary"]).not.toBe("#1E1E1E");
+    expect(variables.dark["--surface-tertiary"]).not.toBe(variables.dark["--surface-secondary"]);
+  });
+
+  it("sets --focus to accent color", () => {
+    const custom = {
+      ...DEFAULT_CUSTOM_THEME_COLORS,
+      linked: true,
+      light: {
+        ...DEFAULT_CUSTOM_THEME_COLORS.light,
+        accent: "#FF0000",
+      },
+      dark: { ...DEFAULT_CUSTOM_THEME_COLORS.dark },
+    };
+
+    const variables = buildCustomThemeVariables(custom);
+    expect(variables.light["--focus"]).toBe("#FF0000");
+    expect(variables.dark["--focus"]).toBe("#FF0000");
+  });
+
   it("falls back surface to background when surface override is empty", () => {
     const custom = {
       ...DEFAULT_CUSTOM_THEME_COLORS,
@@ -125,8 +247,21 @@ describe("theme presets", () => {
       dark: { "--accent": "#654321" },
     });
     expect(Uniwind.updateCSSVariables).toHaveBeenCalledTimes(2);
-    expect(Uniwind.updateCSSVariables).toHaveBeenCalledWith("light", { "--accent": "#123456" });
-    expect(Uniwind.updateCSSVariables).toHaveBeenCalledWith("dark", { "--accent": "#654321" });
+    // expandToTailwindColorVars adds --color-* duplicates for Tailwind theme resolution
+    expect(Uniwind.updateCSSVariables).toHaveBeenCalledWith(
+      "light",
+      expect.objectContaining({
+        "--accent": "#123456",
+        "--color-accent": "#123456",
+      }),
+    );
+    expect(Uniwind.updateCSSVariables).toHaveBeenCalledWith(
+      "dark",
+      expect.objectContaining({
+        "--accent": "#654321",
+        "--color-accent": "#654321",
+      }),
+    );
   });
 
   it("legacy wrappers still update variables", () => {

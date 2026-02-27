@@ -13,6 +13,7 @@ jest.mock("../../lib/converter/formatConverter", () => ({
 jest.mock("../../lib/utils/pixelMath", () => ({
   calculateStats: jest.fn(),
   calculateHistogram: jest.fn(),
+  calculateRegionStats: jest.fn(),
   calculateRegionHistogram: jest.fn(),
 }));
 jest.mock("../../lib/processing/executor", () => ({
@@ -30,6 +31,7 @@ const converterLib = jest.requireMock("../../lib/converter/formatConverter") as 
 const pixelMathLib = jest.requireMock("../../lib/utils/pixelMath") as {
   calculateStats: jest.Mock;
   calculateHistogram: jest.Mock;
+  calculateRegionStats: jest.Mock;
   calculateRegionHistogram: jest.Mock;
 };
 const executorLib = jest.requireMock("../../lib/processing/executor") as {
@@ -72,6 +74,7 @@ describe("useImageProcessing", () => {
     });
     pixelMathLib.calculateStats.mockReturnValue({ min: 0, max: 10, mean: 5 });
     pixelMathLib.calculateHistogram.mockReturnValue({ bins: [1, 2] });
+    pixelMathLib.calculateRegionStats.mockReturnValue({ min: 1, max: 2, mean: 1.5, snr: 3 });
     pixelMathLib.calculateRegionHistogram.mockReturnValue({ bins: [9, 9] });
     recipeLib.normalizeProcessingPipelineSnapshot.mockImplementation((recipe, profile) => ({
       version: 2,
@@ -213,11 +216,14 @@ describe("useImageProcessing", () => {
     act(() => {
       result.current.getRegionHistogram(pixels, 2, { x: 0, y: 0, w: 1, h: 1 }, 8);
     });
+    expect(pixelMathLib.calculateRegionStats).toHaveBeenCalledWith(pixels, 2, 0, 0, 1, 1);
     expect(pixelMathLib.calculateRegionHistogram).toHaveBeenCalled();
+    expect(result.current.regionStats).toEqual({ min: 1, max: 2, mean: 1.5, snr: 3 });
 
     act(() => {
       result.current.clearRegionHistogram();
     });
     expect(result.current.regionHistogram).toBeNull();
+    expect(result.current.regionStats).toBeNull();
   });
 });

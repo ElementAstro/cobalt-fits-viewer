@@ -16,7 +16,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { Button, Card, Separator, useThemeColor } from "heroui-native";
+import { Button, Card, Separator } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useScreenOrientation } from "../../hooks/useScreenOrientation";
@@ -94,7 +94,6 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const { isLandscape } = useScreenOrientation();
   const haptics = useHapticFeedback();
   const insets = useSafeAreaInsets();
-  const [accentColor, mutedColor, bgColor] = useThemeColor(["success", "muted", "background"]);
 
   const currentStep = useOnboardingStore((s) => s.currentStep);
   const setCurrentStep = useOnboardingStore((s) => s.setCurrentStep);
@@ -222,13 +221,13 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       style={[
         styles.container,
         {
-          backgroundColor: bgColor,
           paddingTop: insets.top + (isLandscape ? 8 : 16),
           paddingBottom: insets.bottom + (isLandscape ? 8 : 24),
           paddingLeft: insets.left + 24,
           paddingRight: insets.right + 24,
         },
       ]}
+      className="bg-background"
     >
       {/* Skip button */}
       {!isLast && (
@@ -255,13 +254,12 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                   width: iconSize,
                   height: iconSize,
                   borderRadius: iconSize / 2,
-                  borderColor: accentColor,
-                  backgroundColor: `${accentColor}10`,
                   marginBottom: isLandscape ? 12 : 24,
                 },
               ]}
+              className="border-success bg-success/10"
             >
-              <Ionicons name={step.icon} size={iconFontSize} color={accentColor} />
+              <Ionicons name={step.icon} size={iconFontSize} className="text-success" />
             </View>
 
             {/* Step indicator */}
@@ -272,7 +270,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                   style={[
                     styles.dot,
                     {
-                      backgroundColor: index === currentStep ? accentColor : `${mutedColor}40`,
+                      backgroundColor: index === currentStep ? "#17c964" : "#71717a66",
                       width: index === currentStep ? 24 : 8,
                     },
                   ]}
@@ -297,7 +295,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                 {step.features.map((featureKey, index) => (
                   <View key={index}>
                     <View style={styles.featureRow}>
-                      <Ionicons name="checkmark-circle" size={18} color={accentColor} />
+                      <Ionicons name="checkmark-circle" size={18} className="text-success" />
                       <Text className="ml-3 flex-1 text-sm text-foreground">
                         {t(featureKey as Parameters<typeof t>[0])}
                       </Text>
@@ -315,7 +313,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
       <View style={styles.bottomNav}>
         {!isFirst ? (
           <Button variant="outline" onPress={handlePrev}>
-            <Ionicons name="arrow-back" size={16} color={mutedColor} />
+            <Ionicons name="arrow-back" size={16} className="text-muted" />
             <Button.Label>{t("onboarding.prev")}</Button.Label>
           </Button>
         ) : (

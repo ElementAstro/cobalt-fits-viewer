@@ -405,12 +405,46 @@ describe("useSessionStore", () => {
       expect(active!.totalPausedMs).toBe(0);
     });
 
+    it("startLiveSession is no-op when active session already exists", () => {
+      useSessionStore.setState({
+        activeSession: {
+          id: "live-existing",
+          startedAt: 1000,
+          totalPausedMs: 0,
+          notes: [],
+          status: "running",
+        },
+      });
+
+      useSessionStore.getState().startLiveSession();
+      expect(useSessionStore.getState().activeSession?.id).toBe("live-existing");
+      expect(useSessionStore.getState().activeSession?.startedAt).toBe(1000);
+    });
+
     it("pauses a live session", () => {
       useSessionStore.getState().startLiveSession();
       useSessionStore.getState().pauseLiveSession();
       const active = useSessionStore.getState().activeSession;
       expect(active!.status).toBe("paused");
       expect(active!.pausedAt).toBeDefined();
+    });
+
+    it("pauseLiveSession is no-op when already paused", () => {
+      useSessionStore.setState({
+        activeSession: {
+          id: "live-paused",
+          startedAt: 1000,
+          pausedAt: 2000,
+          totalPausedMs: 100,
+          notes: [],
+          status: "paused",
+        },
+      });
+
+      useSessionStore.getState().pauseLiveSession();
+      const active = useSessionStore.getState().activeSession;
+      expect(active?.status).toBe("paused");
+      expect(active?.pausedAt).toBe(2000);
     });
 
     it("pause when no active session is safe (null)", () => {
@@ -458,6 +492,52 @@ describe("useSessionStore", () => {
     it("addActiveNote when no session is safe (null)", () => {
       useSessionStore.getState().addActiveNote("test");
       expect(useSessionStore.getState().activeSession).toBeNull();
+    });
+
+    it("updates and clears active session draft metadata", () => {
+      useSessionStore.setState({
+        activeSession: {
+          id: "live-draft",
+          startedAt: 1000,
+          totalPausedMs: 0,
+          notes: [],
+          status: "running",
+        },
+      });
+
+      useSessionStore.getState().updateActiveSessionDraft({
+        draftTargets: [" M42 ", "M42", "M31"],
+        draftEquipment: {
+          telescope: " RC8 ",
+          camera: "ASI2600MM",
+          mount: "AM5",
+          filters: ["Ha", "Ha", "OIII"],
+        },
+        draftLocation: {
+          placeName: " Backyard ",
+          latitude: 39.9,
+          longitude: 116.4,
+        },
+      });
+
+      const updated = useSessionStore.getState().activeSession;
+      expect(updated?.draftTargets).toEqual(["M42", "M31"]);
+      expect(updated?.draftEquipment).toEqual({
+        telescope: "RC8",
+        camera: "ASI2600MM",
+        mount: "AM5",
+        filters: ["Ha", "OIII"],
+      });
+      expect(updated?.draftLocation).toEqual({
+        placeName: "Backyard",
+        latitude: 39.9,
+        longitude: 116.4,
+      });
+
+      useSessionStore.getState().clearActiveSessionDraft();
+      expect(useSessionStore.getState().activeSession?.draftTargets).toBeUndefined();
+      expect(useSessionStore.getState().activeSession?.draftEquipment).toBeUndefined();
+      expect(useSessionStore.getState().activeSession?.draftLocation).toBeUndefined();
     });
 
     it("ends a live session and creates an ObservationSession", () => {
@@ -714,6 +794,50 @@ describe("useSessionStore", () => {
       const localDate = new Date(startTime);
       const expectedDate = `${localDate.getFullYear()}-${String(localDate.getMonth() + 1).padStart(2, "0")}-${String(localDate.getDate()).padStart(2, "0")}`;
       expect(migrated.sessions[0].date).toBe(expectedDate);
+    });
+
+    it("v4 migration keeps legacy activeSession compatible", () => {
+      const migrate = (
+        useSessionStore as unknown as {
+          persist: {
+            getOptions: () => {
+              migrate: (state: unknown, version: number) => unknown;
+            };
+          };
+        }
+      ).persist.getOptions().migrate;
+
+      const migrated = migrate(
+        {
+          sessions: [],
+          plans: [],
+          logEntries: [],
+          activeSession: {
+            id: "legacy-live",
+            startedAt: 1234,
+            totalPausedMs: 99,
+            notes: [{ timestamp: 1235, text: "  note  " }],
+            status: "running",
+          },
+        },
+        3,
+      ) as { activeSession: Record<string, unknown> | null };
+
+      expect(migrated.activeSession).toEqual(
+        expect.objectContaining({
+          id: "legacy-live",
+          startedAt: 1234,
+          totalPausedMs: 99,
+          status: "running",
+        }),
+      );
+      expect(migrated.activeSession).toEqual(
+        expect.not.objectContaining({
+          draftTargets: expect.anything(),
+          draftEquipment: expect.anything(),
+          draftLocation: expect.anything(),
+        }),
+      );
     });
   });
 

@@ -28,9 +28,24 @@ jest.mock("heroui-native", () => {
   const Chip = ({ onPress, children }: any) => <Pressable onPress={onPress}>{children}</Pressable>;
   Chip.Label = ({ children }: any) => <Text>{children}</Text>;
 
+  const Popover = ({ children }: any) => <>{children}</>;
+  Popover.Trigger = ({ children }: any) => <>{children}</>;
+  Popover.Portal = ({ children }: any) => <>{children}</>;
+  Popover.Overlay = () => null;
+  Popover.Content = ({ children }: any) => <>{children}</>;
+  Popover.Title = ({ children }: any) => <Text>{children}</Text>;
+
+  const PressableFeedback = ({ onPress, children }: any) => (
+    <Pressable onPress={onPress}>{children}</Pressable>
+  );
+  PressableFeedback.Highlight = () => null;
+
   return {
     Button,
     Chip,
+    Popover,
+    PressableFeedback,
+    Separator: () => null,
     useThemeColor: () => ["#999", "#0f0"],
   };
 });
@@ -53,9 +68,9 @@ describe("AlbumSortControl", () => {
       />,
     );
 
-    expect(screen.getByText("Date")).toBeTruthy();
-    expect(screen.getByText("Name")).toBeTruthy();
-    expect(screen.getByText("Count")).toBeTruthy();
+    expect(screen.getAllByText("Date").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Name").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("Count").length).toBeGreaterThanOrEqual(1);
   });
 
   it("calls onSortByChange when a sort option is pressed", () => {
@@ -82,7 +97,8 @@ describe("AlbumSortControl", () => {
       />,
     );
 
-    fireEvent.press(screen.getByText("arrow-down-outline"));
+    const icons = screen.getAllByText("arrow-down-outline");
+    fireEvent.press(icons[icons.length - 1]);
     expect(onSortOrderChange).toHaveBeenCalledWith("asc");
   });
 
@@ -96,7 +112,8 @@ describe("AlbumSortControl", () => {
       />,
     );
 
-    fireEvent.press(screen.getByText("arrow-up-outline"));
+    const icons = screen.getAllByText("arrow-up-outline");
+    fireEvent.press(icons[icons.length - 1]);
     expect(onSortOrderChange).toHaveBeenCalledWith("desc");
   });
 

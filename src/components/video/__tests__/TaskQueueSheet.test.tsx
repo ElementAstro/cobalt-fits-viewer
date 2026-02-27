@@ -3,6 +3,15 @@ import { fireEvent, render, screen } from "@testing-library/react-native";
 import { TaskQueueSheet } from "../TaskQueueSheet";
 import type { VideoTaskRecord } from "../../../stores/useVideoTaskStore";
 
+jest.mock("../../common/AnimatedProgressBar", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    AnimatedProgressBar: (props: Record<string, unknown>) =>
+      React.createElement(View, { testID: "progress-bar", ...props }),
+  };
+});
+
 const baseRequest = {
   sourceId: "video-1",
   sourceFilename: "capture.mp4",
@@ -147,5 +156,48 @@ describe("TaskQueueSheet", () => {
 
     fireEvent.press(screen.getByText("Retry"));
     expect(onRetryTask).toHaveBeenCalledWith("task-retriable");
+  });
+
+  it("passes theme success color to completed task progress bar", () => {
+    const tasks: VideoTaskRecord[] = [
+      makeTask({ id: "task-done", status: "completed", progress: 1 }),
+    ];
+
+    render(
+      <TaskQueueSheet
+        visible
+        tasks={tasks}
+        onClose={jest.fn()}
+        onCancelTask={jest.fn()}
+        onRetryTask={jest.fn()}
+        onRemoveTask={jest.fn()}
+        onClearFinished={jest.fn()}
+      />,
+    );
+
+    const progressBar = screen.getByTestId("progress-bar");
+    // useThemeColor mock returns "#000000" for all tokens
+    expect(progressBar.props.color).toBe("#000000");
+  });
+
+  it("passes undefined color for running task progress bar", () => {
+    const tasks: VideoTaskRecord[] = [
+      makeTask({ id: "task-run", status: "running", progress: 0.5 }),
+    ];
+
+    render(
+      <TaskQueueSheet
+        visible
+        tasks={tasks}
+        onClose={jest.fn()}
+        onCancelTask={jest.fn()}
+        onRetryTask={jest.fn()}
+        onRemoveTask={jest.fn()}
+        onClearFinished={jest.fn()}
+      />,
+    );
+
+    const progressBar = screen.getByTestId("progress-bar");
+    expect(progressBar.props.color).toBeUndefined();
   });
 });

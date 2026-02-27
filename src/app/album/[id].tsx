@@ -1,6 +1,15 @@
 import { View, Text, Alert, ScrollView } from "react-native";
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Button, Card, Chip, Separator, Tabs, useThemeColor } from "heroui-native";
+import {
+  Button,
+  Card,
+  Chip,
+  Popover,
+  Separator,
+  Tabs,
+  useThemeColor,
+  useToast,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -28,6 +37,7 @@ export default function AlbumDetailScreen() {
   const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
     useResponsiveLayout();
   const haptics = useHapticFeedback();
+  const { toast } = useToast();
 
   const album = useAlbumStore((s) => s.getAlbumById(id ?? ""));
   const updateAlbum = useAlbumStore((s) => s.updateAlbum);
@@ -115,17 +125,19 @@ export default function AlbumDetailScreen() {
               removeImageFromAlbum(album.id, imgId);
             }
             exitSelectionMode();
+            toast.show({ variant: "success", label: t("gallery.removeFromAlbum") });
           },
         },
       ],
     );
-  }, [album, selectedIds, t, removeImageFromAlbum, exitSelectionMode]);
+  }, [album, selectedIds, t, removeImageFromAlbum, exitSelectionMode, toast]);
 
   const handleSetCover = useCallback(() => {
     if (!album || selectedIds.length !== 1) return;
     setCoverImage(album.id, selectedIds[0]);
     exitSelectionMode();
-  }, [album, selectedIds, setCoverImage, exitSelectionMode]);
+    toast.show({ variant: "success", label: t("gallery.setCover") });
+  }, [album, selectedIds, setCoverImage, exitSelectionMode, toast, t]);
 
   const handleSelectAllToggle = useCallback(() => {
     if (albumFiles.length === 0) return;
@@ -145,11 +157,12 @@ export default function AlbumDetailScreen() {
         style: "destructive",
         onPress: () => {
           removeAlbum(album.id);
+          toast.show({ variant: "success", label: t("album.deleted") });
           router.back();
         },
       },
     ]);
-  }, [album, t, removeAlbum, router]);
+  }, [album, t, removeAlbum, router, toast]);
 
   const handleRename = useCallback(() => {
     if (!album) return;
@@ -185,41 +198,66 @@ export default function AlbumDetailScreen() {
               {album.name}
             </Text>
             {album.isSmart && (
-              <View className="rounded bg-success/20 px-1.5 py-0.5">
-                <Ionicons name="sparkles" size={10} color={successColor} />
-              </View>
+              <Chip size="sm" color="success" variant="primary" className="h-5 px-1">
+                <Ionicons name="sparkles" size={10} color="#fff" />
+              </Chip>
             )}
             <Text className="text-xs text-muted">
               {albumFiles.length} {t("album.images")}
             </Text>
           </View>
         </View>
-        <View className="flex-row gap-1">
-          {statistics && (
+        <Popover presentation="bottom-sheet">
+          <Popover.Trigger asChild>
             <Button
               testID="e2e-action-album__param_id-open-stats"
               size="sm"
               variant="outline"
-              onPress={() => setShowStatistics(true)}
+              isIconOnly
             >
-              <Ionicons name="stats-chart-outline" size={14} color={successColor} />
+              <Ionicons name="ellipsis-horizontal" size={16} color={mutedColor} />
             </Button>
-          )}
-          <Button size="sm" variant="outline" onPress={handleEditNotes}>
-            <Ionicons name="document-text-outline" size={14} color={mutedColor} />
-          </Button>
-          <Button
-            testID="e2e-action-album__param_id-open-rename"
-            size="sm"
-            variant="outline"
-            onPress={handleRename}
-          >
-            <Ionicons name="pencil-outline" size={14} color={mutedColor} />
-          </Button>
-          <Button size="sm" variant="outline" onPress={handleDeleteAlbum}>
-            <Ionicons name="trash-outline" size={14} color="#ef4444" />
-          </Button>
-        </View>
+          </Popover.Trigger>
+          <Popover.Portal>
+            <Popover.Overlay />
+            <Popover.Content presentation="bottom-sheet">
+              <View className="gap-2 px-2 py-3">
+                {statistics && (
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start"
+                    onPress={() => setShowStatistics(true)}
+                  >
+                    <Ionicons name="stats-chart-outline" size={18} color={successColor} />
+                    <Button.Label>{t("album.statistics")}</Button.Label>
+                  </Button>
+                )}
+                <Button variant="ghost" className="w-full justify-start" onPress={handleEditNotes}>
+                  <Ionicons name="document-text-outline" size={18} color={mutedColor} />
+                  <Button.Label>{t("album.editNotes")}</Button.Label>
+                </Button>
+                <Button
+                  testID="e2e-action-album__param_id-open-rename"
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onPress={handleRename}
+                >
+                  <Ionicons name="pencil-outline" size={18} color={mutedColor} />
+                  <Button.Label>{t("album.rename")}</Button.Label>
+                </Button>
+                <Separator />
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onPress={handleDeleteAlbum}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#ef4444" />
+                  <Button.Label className="text-danger">{t("album.deleteAlbum")}</Button.Label>
+                </Button>
+              </View>
+            </Popover.Content>
+          </Popover.Portal>
+        </Popover>
       </View>
     );
   }, [

@@ -147,6 +147,9 @@ export function useVideoProcessingForm(
     setTimelapseWidth("");
     setTimelapseHeight("");
     setSubmitError(null);
+    if (file.bitrateKbps && file.bitrateKbps > 0) {
+      setTargetBitrateKbps(String(Math.round(file.bitrateKbps * 0.7)));
+    }
   }, [file]);
 
   useEffect(() => {

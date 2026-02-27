@@ -470,7 +470,7 @@ export function ProcessingFrameClassSection() {
           <Dialog.Content>
             <Dialog.Title>{t("settings.deleteTypeTitle")}</Dialog.Title>
             <Dialog.Description>
-              {t("settings.deleteTypeDescription").replace("{type}", deleteTypeDialogKey ?? "")}
+              {t("settings.deleteTypeDescription", { type: deleteTypeDialogKey ?? "" })}
             </Dialog.Description>
             <Text className="mt-3 mb-2 text-xs text-muted">{t("settings.migrateTargetType")}</Text>
             <View className="flex-row flex-wrap gap-1.5">

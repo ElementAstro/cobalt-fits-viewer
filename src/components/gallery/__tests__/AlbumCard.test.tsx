@@ -45,16 +45,25 @@ jest.mock("heroui-native", () => {
 
   const Card = ({ children, ...rest }: any) => <View {...rest}>{children}</View>;
   Card.Body = ({ children, ...rest }: any) => <View {...rest}>{children}</View>;
+  Card.Header = ({ children, ...rest }: any) => <View {...rest}>{children}</View>;
+  Card.Footer = ({ children, ...rest }: any) => <View {...rest}>{children}</View>;
+
+  const Chip = ({ children }: any) => <View>{children}</View>;
+  Chip.Label = ({ children }: any) => <Text>{children}</Text>;
 
   const PressableFeedback = ({ onPress, children }: any) => (
     <Pressable onPress={onPress}>{children}</Pressable>
   );
   PressableFeedback.Highlight = () => null;
 
+  const Surface = ({ children, ...rest }: any) => <View {...rest}>{children}</View>;
+
   return {
     Button,
     Card,
+    Chip,
     PressableFeedback,
+    Surface,
     useThemeColor: () => ["#999"],
   };
 });

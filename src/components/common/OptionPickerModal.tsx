@@ -1,4 +1,5 @@
 import { Button, Dialog, Label, Radio, RadioGroup } from "heroui-native";
+import { View } from "react-native";
 import { coerceOptionValue } from "./optionPickerValue";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useI18n } from "../../i18n/useI18n";
@@ -27,8 +28,11 @@ export function OptionPickerModal<T extends string | number>({
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay />
-        <Dialog.Content className="mx-6 w-full max-w-sm rounded-2xl bg-background p-5">
-          <Dialog.Title className="mb-3">{title}</Dialog.Title>
+        <Dialog.Content>
+          <Dialog.Close />
+          <View className="mb-4 gap-1.5">
+            <Dialog.Title>{title}</Dialog.Title>
+          </View>
 
           <RadioGroup
             value={String(selectedValue)}
@@ -39,13 +43,9 @@ export function OptionPickerModal<T extends string | number>({
             }}
           >
             {options.map((opt) => (
-              <RadioGroup.Item
-                key={String(opt.value)}
-                value={String(opt.value)}
-                className="flex-row items-center gap-3 rounded-xl px-3 py-3"
-              >
+              <RadioGroup.Item key={String(opt.value)} value={String(opt.value)}>
+                <Label>{opt.label}</Label>
                 <Radio />
-                <Label className="text-sm text-foreground">{opt.label}</Label>
               </RadioGroup.Item>
             ))}
           </RadioGroup>

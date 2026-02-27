@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Button, BottomSheet, Separator, useThemeColor } from "heroui-native";
+import { Button, BottomSheet, Separator } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
@@ -52,7 +52,6 @@ export function ViewerToolbar({
   onToggleControls,
 }: ViewerToolbarProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
   const haptics = useHapticFeedback();
   const insets = useSafeAreaInsets();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -61,13 +60,13 @@ export function ViewerToolbar({
     label: string;
     icon: keyof typeof Ionicons.glyphMap;
     onPress: () => void;
-    color?: string;
+    colorClass?: string;
   }[] = [
     {
       label: isFavorite ? t("common.unfavorite") : t("common.favorite"),
       icon: isFavorite ? "heart" : "heart-outline",
       onPress: onToggleFavorite,
-      color: isFavorite ? "#ef4444" : undefined,
+      colorClass: isFavorite ? "text-danger" : undefined,
     },
     {
       label: t("header.title"),
@@ -111,7 +110,7 @@ export function ViewerToolbar({
             onPress={onBack}
             className="h-8 w-8"
           >
-            <Ionicons name="arrow-back" size={18} color={mutedColor} />
+            <Ionicons name="arrow-back" size={18} className="text-muted" />
           </Button>
           <Button
             size="sm"
@@ -121,7 +120,7 @@ export function ViewerToolbar({
             onPress={onPrev}
             className="h-8 w-8"
           >
-            <Ionicons name="chevron-back" size={16} color={prevId ? mutedColor : "#444"} />
+            <Ionicons name="chevron-back" size={16} className="text-muted" />
           </Button>
           <Button
             size="sm"
@@ -131,7 +130,7 @@ export function ViewerToolbar({
             onPress={onNext}
             className="h-8 w-8"
           >
-            <Ionicons name="chevron-forward" size={16} color={nextId ? mutedColor : "#444"} />
+            <Ionicons name="chevron-forward" size={16} className="text-muted" />
           </Button>
         </View>
 
@@ -166,7 +165,13 @@ export function ViewerToolbar({
                     : "planet-outline"
               }
               size={16}
-              color={isAstrometryActive ? "#fff" : hasAstrometryResult ? "#22c55e" : mutedColor}
+              className={
+                isAstrometryActive
+                  ? "text-white"
+                  : hasAstrometryResult
+                    ? "text-success"
+                    : "text-muted"
+              }
             />
           </Button>
 
@@ -185,7 +190,7 @@ export function ViewerToolbar({
             <Ionicons
               name={showControls ? "options" : "options-outline"}
               size={16}
-              color={showControls ? "#22c55e" : mutedColor}
+              className={showControls ? "text-success" : "text-muted"}
             />
           </Button>
 
@@ -201,7 +206,7 @@ export function ViewerToolbar({
             }}
             className="h-8 w-8"
           >
-            <Ionicons name="expand-outline" size={16} color={mutedColor} />
+            <Ionicons name="expand-outline" size={16} className="text-muted" />
           </Button>
 
           {/* More menu */}
@@ -213,7 +218,7 @@ export function ViewerToolbar({
             onPress={() => setShowMoreMenu(true)}
             className="h-8 w-8"
           >
-            <Ionicons name="ellipsis-horizontal" size={16} color={mutedColor} />
+            <Ionicons name="ellipsis-horizontal" size={16} className="text-muted" />
           </Button>
         </View>
       </View>
@@ -245,7 +250,11 @@ export function ViewerToolbar({
                 }}
                 className="flex-row items-center gap-3 px-4 py-3.5"
               >
-                <Ionicons name={action.icon} size={18} color={action.color ?? mutedColor} />
+                <Ionicons
+                  name={action.icon}
+                  size={18}
+                  className={action.colorClass ?? "text-muted"}
+                />
                 <Text className="text-sm text-foreground">{action.label}</Text>
               </Pressable>
             ))}

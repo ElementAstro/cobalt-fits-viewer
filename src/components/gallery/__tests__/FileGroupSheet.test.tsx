@@ -5,23 +5,29 @@ import { useFileGroupStore } from "../../../stores/useFileGroupStore";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "files.groupFiles": "Group Files",
-          "files.createGroup": "Create Group",
-          "files.groupNamePlaceholder": "Group name...",
-          "files.groupList": "Groups",
-          "files.noGroups": "No groups yet",
-          "files.applyGroup": "Apply",
-          "files.groupPartial": "Grouped {success} file(s), {failed} failed",
-          "common.selected": "selected",
-          "common.cancel": "Cancel",
-          "common.save": "Save",
-          "common.success": "Success",
-          "common.error": "Error",
-        }) as Record<string, string>
-      )[key] ?? key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        "files.groupFiles": "Group Files",
+        "files.createGroup": "Create Group",
+        "files.groupNamePlaceholder": "Group name...",
+        "files.groupList": "Groups",
+        "files.noGroups": "No groups yet",
+        "files.applyGroup": "Apply",
+        "files.groupPartial": "Grouped {success} file(s), {failed} failed",
+        "common.selected": "selected",
+        "common.cancel": "Cancel",
+        "common.save": "Save",
+        "common.success": "Success",
+        "common.error": "Error",
+      };
+      let result = map[key] ?? key;
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          result = result.replace(`{${k}}`, String(v));
+        });
+      }
+      return result;
+    },
   }),
 }));
 

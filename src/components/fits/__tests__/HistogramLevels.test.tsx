@@ -91,6 +91,16 @@ describe("HistogramLevels", () => {
     outputWhite: 1,
   };
 
+  const diagnostics = {
+    p1: 101,
+    p50: 250,
+    p99: 790,
+    peakValue: 300,
+    clipLowPercent: 1.23,
+    clipHighPercent: 4.56,
+    isApproximate: false,
+  };
+
   it("renders levels title", () => {
     const { getByText } = render(<HistogramLevels {...baseProps} />);
     expect(getByText("viewer.levels")).toBeTruthy();
@@ -236,5 +246,22 @@ describe("HistogramLevels", () => {
     expect(getByText("B")).toBeTruthy();
     fireEvent.press(getByText("B"));
     expect(getByText("L")).toBeTruthy();
+  });
+
+  it("renders diagnostics row when provided", () => {
+    const { getByText } = render(<HistogramLevels {...baseProps} diagnostics={diagnostics} />);
+    expect(getByText(/viewer\.histP1/)).toBeTruthy();
+    expect(getByText(/viewer\.histP50/)).toBeTruthy();
+    expect(getByText(/viewer\.histP99/)).toBeTruthy();
+    expect(getByText(/viewer\.histPeak/)).toBeTruthy();
+    expect(getByText(/viewer\.clipLow/)).toBeTruthy();
+    expect(getByText(/viewer\.clipHigh/)).toBeTruthy();
+  });
+
+  it("renders approximate marker in diagnostics row", () => {
+    const { getByText } = render(
+      <HistogramLevels {...baseProps} diagnostics={{ ...diagnostics, isApproximate: true }} />,
+    );
+    expect(getByText(/~ viewer\.approximate/)).toBeTruthy();
   });
 });

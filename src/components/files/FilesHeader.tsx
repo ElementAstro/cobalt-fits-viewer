@@ -47,7 +47,7 @@ export function FilesHeader({
           <Ionicons name="server-outline" size={14} color={mutedColor} />
           <Text className="text-xs text-muted">
             {t("files.storageUsed")}: {formatFileSize(storageSize)} ·{" "}
-            {t("files.filesCount").replace("{count}", String(totalCount))}
+            {t("files.filesCount", { count: totalCount })}
           </Text>
         </View>
       )}

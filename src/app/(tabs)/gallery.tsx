@@ -4,7 +4,7 @@ import { useState, useMemo, useCallback, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { Tabs, useThemeColor } from "heroui-native";
+import { Tabs, useThemeColor, useToast } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
@@ -58,6 +58,7 @@ export default function GalleryScreen() {
   const haptics = useHapticFeedback();
 
   const [, mutedColor] = useThemeColor(["success", "muted"]);
+  const { toast } = useToast();
 
   const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
     useResponsiveLayout();
@@ -205,6 +206,7 @@ export default function GalleryScreen() {
   const handleCreateAlbum = (name: string, description?: string) => {
     createNewAlbum(name, description);
     setShowCreateAlbum(false);
+    toast.show({ variant: "success", label: t("album.created") });
   };
 
   const handleFilePress = useCallback(
@@ -298,7 +300,10 @@ export default function GalleryScreen() {
       {
         text: t("common.delete"),
         style: "destructive",
-        onPress: () => removeAlbum(album.id),
+        onPress: () => {
+          removeAlbum(album.id);
+          toast.show({ variant: "success", label: t("album.deleted") });
+        },
       },
     ]);
   };
@@ -553,7 +558,15 @@ export default function GalleryScreen() {
         onViewDetail={() => actionAlbum && router.push(`/album/${actionAlbum.id}`)}
         onRename={handleAlbumRename}
         onDelete={handleAlbumDelete}
-        onTogglePin={() => actionAlbum && toggleAlbumPin(actionAlbum.id)}
+        onTogglePin={() => {
+          if (actionAlbum) {
+            toggleAlbumPin(actionAlbum.id);
+            toast.show({
+              variant: "success",
+              label: actionAlbum.isPinned ? t("album.unpinned") : t("album.pinned"),
+            });
+          }
+        }}
         onEditNotes={handleAlbumEditNotes}
         onViewStats={handleAlbumViewStats}
         onExport={handleAlbumExport}
@@ -589,10 +602,10 @@ export default function GalleryScreen() {
         onMerge={(targetId) => {
           if (!selectedAlbum) return;
           const merged = mergeAlbums(selectedAlbum.id, targetId);
-          Alert.alert(
-            merged ? t("common.success") : t("common.error"),
-            merged ? t("album.mergeSuccess") : t("album.mergeFailed"),
-          );
+          toast.show({
+            variant: merged ? "success" : "danger",
+            label: merged ? t("album.mergeSuccess") : t("album.mergeFailed"),
+          });
         }}
       />
       <AlbumExportSheet

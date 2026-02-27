@@ -51,19 +51,9 @@ src/utils/
 `-- cn.ts    # ClassName utility
 ```
 
-## Recommendations
+## Gotchas
 
-Consider enhancing `cn` with `tailwind-merge` for class deduplication:
-
-```typescript
-import { twMerge } from "tailwind-merge";
-
-export function cn(...classes: (string | undefined | null | false)[]): string {
-  return twMerge(classes.filter(Boolean).join(" "));
-}
-
-// Then: cn("px-2", "px-4") -> "px-4" (merged)
-```
+- **`tailwind-merge` is available**: The package `tailwind-merge` is already in `package.json` dependencies, but `cn()` doesn't use it yet. This means duplicate Tailwind classes (e.g., `cn("px-2", "px-4")`) are NOT deduplicated. Consider integrating `twMerge` if class conflicts become an issue.
 
 ## Changelog
 

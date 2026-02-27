@@ -7,6 +7,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Alert } from "react-native";
 import { useI18n } from "../i18n/useI18n";
 import { useSettingsStore } from "../stores/useSettingsStore";
+import { useShallow } from "zustand/shallow";
 import { detectStarsAsync, type DetectedStar } from "../lib/stacking/starDetection";
 import {
   createManualStarAnnotationPoint,
@@ -125,28 +126,30 @@ export function useEditorStarAnnotation({
   const { t } = useI18n();
 
   // Detection settings from store (consolidated selector)
-  const detectionSettings = useSettingsStore((s) => ({
-    profile: s.stackingDetectionProfile,
-    sigmaThreshold: s.stackingDetectSigmaThreshold,
-    maxStars: s.stackingDetectMaxStars,
-    minArea: s.stackingDetectMinArea,
-    maxArea: s.stackingDetectMaxArea,
-    borderMargin: s.stackingDetectBorderMargin,
-    sigmaClipIters: s.stackingDetectSigmaClipIters,
-    applyMatchedFilter: s.stackingDetectApplyMatchedFilter,
-    connectivity: s.stackingDetectConnectivity,
-    meshSize: s.stackingBackgroundMeshSize,
-    deblendNLevels: s.stackingDeblendNLevels,
-    deblendMinContrast: s.stackingDeblendMinContrast,
-    filterFwhm: s.stackingFilterFwhm,
-    minFwhm: s.stackingDetectMinFwhm,
-    maxFwhm: s.stackingMaxFwhm,
-    maxEllipticity: s.stackingMaxEllipticity,
-    minSharpness: s.stackingDetectMinSharpness,
-    maxSharpness: s.stackingDetectMaxSharpness,
-    peakMax: s.stackingDetectPeakMax,
-    snrMin: s.stackingDetectSnrMin,
-  }));
+  const detectionSettings = useSettingsStore(
+    useShallow((s) => ({
+      profile: s.stackingDetectionProfile,
+      sigmaThreshold: s.stackingDetectSigmaThreshold,
+      maxStars: s.stackingDetectMaxStars,
+      minArea: s.stackingDetectMinArea,
+      maxArea: s.stackingDetectMaxArea,
+      borderMargin: s.stackingDetectBorderMargin,
+      sigmaClipIters: s.stackingDetectSigmaClipIters,
+      applyMatchedFilter: s.stackingDetectApplyMatchedFilter,
+      connectivity: s.stackingDetectConnectivity,
+      meshSize: s.stackingBackgroundMeshSize,
+      deblendNLevels: s.stackingDeblendNLevels,
+      deblendMinContrast: s.stackingDeblendMinContrast,
+      filterFwhm: s.stackingFilterFwhm,
+      minFwhm: s.stackingDetectMinFwhm,
+      maxFwhm: s.stackingMaxFwhm,
+      maxEllipticity: s.stackingMaxEllipticity,
+      minSharpness: s.stackingDetectMinSharpness,
+      maxSharpness: s.stackingDetectMaxSharpness,
+      peakMax: s.stackingDetectPeakMax,
+      snrMin: s.stackingDetectSnrMin,
+    })),
+  );
 
   const currentDetectionSnapshot = useMemo(
     (): StarAnnotationDetectionSnapshot => ({

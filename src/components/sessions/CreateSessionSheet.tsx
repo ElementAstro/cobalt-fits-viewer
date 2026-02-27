@@ -17,6 +17,7 @@ import { useTargetStore } from "../../stores/useTargetStore";
 import type { ObservationSession } from "../../lib/fits/types";
 import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
 import { toLocalDateKey } from "../../lib/sessions/planUtils";
+import { resolveManualSessionTimeRange } from "../../lib/sessions/sessionTimeRange";
 import { useChipInput } from "../../hooks/useChipInput";
 import { ChipInputField } from "./ChipInputField";
 import { EquipmentFields } from "./EquipmentFields";
@@ -96,21 +97,18 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
   };
 
   const handleCreate = () => {
-    const parts = dateStr.split("-").map(Number);
-    if (parts.length !== 3 || parts.some(isNaN)) {
+    const timeRange = resolveManualSessionTimeRange(
+      dateStr,
+      startHour,
+      startMinute,
+      endHour,
+      endMinute,
+    );
+    if (!timeRange) {
       Alert.alert(t("common.error"), t("sessions.invalidDate"));
       return;
     }
-    const [year, month, day] = parts;
-    const startTime = new Date(year, month - 1, day, startHour, startMinute).getTime();
-    const endTime = new Date(year, month - 1, day, endHour, endMinute).getTime();
-
-    if (endTime <= startTime) {
-      Alert.alert(t("common.error"), t("sessions.invalidTimeRange"));
-      return;
-    }
-
-    const duration = Math.floor((endTime - startTime) / 1000);
+    const { startTime, endTime, duration } = timeRange;
 
     const session: ObservationSession = {
       id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`,
@@ -265,6 +263,9 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
                 </View>
               </View>
             </View>
+            <Text className="mt-2 text-[10px] text-muted">
+              {t("sessions.crossMidnightAutoHint")}
+            </Text>
 
             {/* Targets */}
             <ChipInputField

@@ -6,6 +6,7 @@ import { useSessionStore } from "../../stores/useSessionStore";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
 import { useSessions } from "../../hooks/useSessions";
+import { LiveSessionMetaSheet } from "./LiveSessionMetaSheet";
 
 export function ActiveSessionBanner() {
   const { t } = useI18n();
@@ -21,6 +22,7 @@ export function ActiveSessionBanner() {
   const [elapsed, setElapsed] = useState(0);
   const [noteText, setNoteText] = useState("");
   const [showAllNotes, setShowAllNotes] = useState(false);
+  const [showMetaSheet, setShowMetaSheet] = useState(false);
 
   const linkedFileCount = useFitsStore(
     (s) => s.files.filter((f) => f.sessionId === activeSession?.id).length,
@@ -50,6 +52,12 @@ export function ActiveSessionBanner() {
     activeSession?.startedAt,
     activeSession?.totalPausedMs,
   ]);
+
+  useEffect(() => {
+    if (!activeSession) {
+      setShowMetaSheet(false);
+    }
+  }, [activeSession]);
 
   const formatElapsed = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -94,97 +102,116 @@ export function ActiveSessionBanner() {
   }
 
   return (
-    <Card variant="secondary" className="mx-4 mb-3 border border-primary/30">
-      <Card.Body className="gap-2 p-3">
-        <View className="flex-row items-center justify-between">
-          <View className="flex-row items-center gap-2">
-            <View
-              className={`h-2.5 w-2.5 rounded-full ${activeSession.status === "running" ? "bg-success" : "bg-warning"}`}
-            />
-            <Text className="text-sm font-bold text-foreground">
-              {activeSession.status === "running" ? t("sessions.observing") : t("sessions.paused")}
-            </Text>
-          </View>
-          <Text className="font-mono text-lg font-bold text-primary">{formatElapsed(elapsed)}</Text>
-        </View>
-
-        <View className="flex-row items-center gap-2">
-          {activeSession.status === "running" ? (
-            <Button size="sm" variant="outline" onPress={pauseLiveSession} className="flex-1">
-              <Ionicons name="pause" size={14} color={mutedColor} />
-              <Button.Label>{t("sessions.pause")}</Button.Label>
-            </Button>
-          ) : (
-            <Button size="sm" variant="outline" onPress={resumeLiveSession} className="flex-1">
-              <Ionicons name="play" size={14} color={mutedColor} />
-              <Button.Label>{t("sessions.resume")}</Button.Label>
-            </Button>
-          )}
-          <Button size="sm" variant="outline" onPress={handleEnd} className="flex-1">
-            <Ionicons name="stop" size={14} color={dangerColor} />
-            <Button.Label className="text-red-500">{t("sessions.endSession")}</Button.Label>
-          </Button>
-        </View>
-
-        <View className="flex-row items-center gap-2">
-          <TextField className="flex-1">
-            <Input
-              value={noteText}
-              onChangeText={setNoteText}
-              placeholder={t("sessions.addNote")}
-              className="text-xs"
-              onSubmitEditing={handleAddNote}
-            />
-          </TextField>
-          <Button
-            size="sm"
-            variant="ghost"
-            isIconOnly
-            onPress={handleAddNote}
-            isDisabled={!noteText.trim()}
-          >
-            <Ionicons name="send" size={14} color={mutedColor} />
-          </Button>
-        </View>
-
-        {linkedFileCount > 0 && (
-          <View className="flex-row items-center gap-1 mt-1">
-            <Ionicons name="images-outline" size={11} color={mutedColor} />
-            <Text className="text-[10px] text-muted">
-              {linkedFileCount} {t("sessions.filesLinked")}
-            </Text>
-          </View>
-        )}
-
-        {activeSession.notes.length > 0 && (
-          <View className="mt-1 gap-0.5">
-            {(showAllNotes ? activeSession.notes : activeSession.notes.slice(-3)).map((n, i) => (
-              <Text key={i} className="text-[9px] text-muted" numberOfLines={1}>
-                [
-                {new Date(n.timestamp).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-                ] {n.text}
+    <>
+      <Card variant="secondary" className="mx-4 mb-3 border border-primary/30">
+        <Card.Body className="gap-2 p-3">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-2">
+              <View
+                className={`h-2.5 w-2.5 rounded-full ${activeSession.status === "running" ? "bg-success" : "bg-warning"}`}
+              />
+              <Text className="text-sm font-bold text-foreground">
+                {activeSession.status === "running"
+                  ? t("sessions.observing")
+                  : t("sessions.paused")}
               </Text>
-            ))}
-            {activeSession.notes.length > 3 && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onPress={() => setShowAllNotes((v) => !v)}
-                className="self-start mt-0.5"
-              >
-                <Button.Label className="text-[9px]">
-                  {showAllNotes
-                    ? t("common.collapse")
-                    : `${t("common.showAll")} (${activeSession.notes.length})`}
-                </Button.Label>
+            </View>
+            <Text className="font-mono text-lg font-bold text-primary">
+              {formatElapsed(elapsed)}
+            </Text>
+          </View>
+
+          <View className="flex-row items-center gap-2">
+            {activeSession.status === "running" ? (
+              <Button size="sm" variant="outline" onPress={pauseLiveSession} className="flex-1">
+                <Ionicons name="pause" size={14} color={mutedColor} />
+                <Button.Label>{t("sessions.pause")}</Button.Label>
+              </Button>
+            ) : (
+              <Button size="sm" variant="outline" onPress={resumeLiveSession} className="flex-1">
+                <Ionicons name="play" size={14} color={mutedColor} />
+                <Button.Label>{t("sessions.resume")}</Button.Label>
               </Button>
             )}
+            <Button size="sm" variant="outline" onPress={handleEnd} className="flex-1">
+              <Ionicons name="stop" size={14} color={dangerColor} />
+              <Button.Label className="text-red-500">{t("sessions.endSession")}</Button.Label>
+            </Button>
           </View>
-        )}
-      </Card.Body>
-    </Card>
+
+          <View className="flex-row items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onPress={() => setShowMetaSheet(true)}
+              className="flex-1"
+            >
+              <Ionicons name="create-outline" size={14} color={mutedColor} />
+              <Button.Label>{t("sessions.liveMeta")}</Button.Label>
+            </Button>
+          </View>
+
+          <View className="flex-row items-center gap-2">
+            <TextField className="flex-1">
+              <Input
+                value={noteText}
+                onChangeText={setNoteText}
+                placeholder={t("sessions.addNote")}
+                className="text-xs"
+                onSubmitEditing={handleAddNote}
+              />
+            </TextField>
+            <Button
+              size="sm"
+              variant="ghost"
+              isIconOnly
+              onPress={handleAddNote}
+              isDisabled={!noteText.trim()}
+            >
+              <Ionicons name="send" size={14} color={mutedColor} />
+            </Button>
+          </View>
+
+          {linkedFileCount > 0 && (
+            <View className="flex-row items-center gap-1 mt-1">
+              <Ionicons name="images-outline" size={11} color={mutedColor} />
+              <Text className="text-[10px] text-muted">
+                {linkedFileCount} {t("sessions.filesLinked")}
+              </Text>
+            </View>
+          )}
+
+          {activeSession.notes.length > 0 && (
+            <View className="mt-1 gap-0.5">
+              {(showAllNotes ? activeSession.notes : activeSession.notes.slice(-3)).map((n, i) => (
+                <Text key={i} className="text-[9px] text-muted" numberOfLines={1}>
+                  [
+                  {new Date(n.timestamp).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  ] {n.text}
+                </Text>
+              ))}
+              {activeSession.notes.length > 3 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => setShowAllNotes((v) => !v)}
+                  className="self-start mt-0.5"
+                >
+                  <Button.Label className="text-[9px]">
+                    {showAllNotes
+                      ? t("common.collapse")
+                      : `${t("common.showAll")} (${activeSession.notes.length})`}
+                  </Button.Label>
+                </Button>
+              )}
+            </View>
+          )}
+        </Card.Body>
+      </Card>
+      <LiveSessionMetaSheet visible={showMetaSheet} onClose={() => setShowMetaSheet(false)} />
+    </>
   );
 }

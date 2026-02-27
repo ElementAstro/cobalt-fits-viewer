@@ -4,7 +4,7 @@ import { Canvas, Path, Line, Skia, vec } from "@shopify/react-native-skia";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { Chip, useThemeColor } from "heroui-native";
+import { Chip } from "heroui-native";
 import { transformHistogramCounts } from "../../lib/utils/pixelMath";
 import type { HistogramMode } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
@@ -44,8 +44,6 @@ export function FitsHistogram({
   initialMode = "linear",
 }: FitsHistogramProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
-  const accentColor = useThemeColor("accent");
 
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [mode, setMode] = useState<HistogramMode>(initialMode);
@@ -125,17 +123,17 @@ export function FitsHistogram({
   // Skia paints
   const bgPaint = useMemo(() => {
     const p = Skia.Paint();
-    p.setColor(Skia.Color(mutedColor || "#555"));
+    p.setColor(Skia.Color("#71717a"));
     p.setAlphaf(0.3);
     return p;
-  }, [mutedColor]);
+  }, []);
 
   const rangePaint = useMemo(() => {
     const p = Skia.Paint();
-    p.setColor(Skia.Color(accentColor || "#22c55e"));
+    p.setColor(Skia.Color("#006fee"));
     p.setAlphaf(0.8);
     return p;
-  }, [accentColor]);
+  }, []);
 
   // Gesture handling (runs on JS thread via runOnJS)
   const updateBlackPoint = useCallback(

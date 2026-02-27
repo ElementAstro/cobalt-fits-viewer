@@ -22,19 +22,25 @@ import {
 } from "../lib/gallery/frameClassifier";
 import {
   ACCENT_PRESETS,
+  BORDER_WIDTH_PRESETS,
   DEFAULT_CUSTOM_THEME_COLORS,
+  RADIUS_PRESETS,
   STYLE_PRESETS,
   THEME_COLOR_MODES,
   applyThemeVariables,
   getThemeVariables,
   normalizeHexColor,
   type AccentColorKey,
+  type BorderWidthPresetKey,
+  type DisabledOpacityPresetKey,
+  type RadiusPresetKey,
   type ThemeColorMode,
   type ThemeCustomColors,
+  type ThemeAdvancedToken,
   type ThemeEditableToken,
   type StylePresetKey,
 } from "../lib/theme/presets";
-import type { FontFamilyKey, MonoFontKey } from "../lib/theme/fonts";
+import { getFontCSSVariables, type FontFamilyKey, type MonoFontKey } from "../lib/theme/fonts";
 import type {
   TargetActionControlMode,
   TargetActionSizePreset,
@@ -108,6 +114,10 @@ export interface SettingsStoreState {
   accentColor: AccentColorKey | null;
   activePreset: StylePresetKey;
   customThemeColors: ThemeCustomColors;
+  radiusPreset: RadiusPresetKey;
+  borderWidthPreset: BorderWidthPresetKey;
+  fieldBorderWidthPreset: BorderWidthPresetKey;
+  disabledOpacityPreset: DisabledOpacityPresetKey;
 
   // 字体设置
   fontFamily: FontFamilyKey;
@@ -246,6 +256,7 @@ export interface SettingsStoreState {
   defaultVideoTargetPreset: "1080p" | "720p" | "custom";
   videoCoreEnabled: boolean;
   videoProcessingEnabled: boolean;
+  videoResumePlayback: boolean;
 
   // 帧分类规则
   frameClassificationConfig: FrameClassificationConfig;
@@ -283,8 +294,16 @@ export interface SettingsStoreState {
   setAccentColor: (color: AccentColorKey | null) => void;
   setActivePreset: (preset: StylePresetKey) => void;
   setCustomThemeLinked: (linked: boolean) => void;
-  setCustomThemeToken: (token: ThemeEditableToken, value: string, mode?: "light" | "dark") => void;
+  setCustomThemeToken: (
+    token: ThemeEditableToken | ThemeAdvancedToken,
+    value: string,
+    mode?: "light" | "dark",
+  ) => void;
   resetStyle: () => void;
+  setRadiusPreset: (key: RadiusPresetKey) => void;
+  setBorderWidthPreset: (key: BorderWidthPresetKey) => void;
+  setFieldBorderWidthPreset: (key: BorderWidthPresetKey) => void;
+  setDisabledOpacityPreset: (key: DisabledOpacityPresetKey) => void;
   setFontFamily: (font: FontFamilyKey) => void;
   setMonoFontFamily: (font: MonoFontKey) => void;
 
@@ -342,6 +361,7 @@ export interface SettingsStoreState {
   setDefaultVideoTargetPreset: (value: "1080p" | "720p" | "custom") => void;
   setVideoCoreEnabled: (value: boolean) => void;
   setVideoProcessingEnabled: (value: boolean) => void;
+  setVideoResumePlayback: (value: boolean) => void;
   setFrameClassificationConfig: (config: FrameClassificationConfig) => void;
   setReportFrameTypes: (values: string[]) => void;
   resetFrameClassificationConfig: () => void;
@@ -398,16 +418,67 @@ export interface SettingsStoreState {
 /**
  * 同步主题与自定义风格到 Uniwind 运行时
  */
+interface ThemeSyncExtras {
+  fontFamily?: FontFamilyKey;
+  borderWidthPreset?: BorderWidthPresetKey;
+  fieldBorderWidthPreset?: BorderWidthPresetKey;
+  disabledOpacityPreset?: DisabledOpacityPresetKey;
+}
+
 function syncThemeToRuntime(
   theme: "light" | "dark" | "system",
   themeColorMode: ThemeColorMode,
   accentColor: AccentColorKey | null,
   activePreset: StylePresetKey,
   customThemeColors: ThemeCustomColors,
+  radiusPreset: RadiusPresetKey = "default",
+  fontFamily: FontFamilyKey = "system",
+  extras: ThemeSyncExtras = {},
 ) {
   Uniwind.setTheme(theme);
-  const variables = getThemeVariables(themeColorMode, accentColor, activePreset, customThemeColors);
-  applyThemeVariables(variables);
+
+  // Apply color variables (accent / preset / custom) to Uniwind runtime
+  const colorVars = getThemeVariables(themeColorMode, accentColor, activePreset, customThemeColors);
+  applyThemeVariables(colorVars);
+
+  const radiusValue = RADIUS_PRESETS[radiusPreset]?.value ?? "0.5rem";
+  const bwValue = BORDER_WIDTH_PRESETS[extras.borderWidthPreset ?? "thin"]?.value ?? "1px";
+  const fbwValue = BORDER_WIDTH_PRESETS[extras.fieldBorderWidthPreset ?? "none"]?.value ?? "0px";
+  const frValue = `calc(${radiusValue} * 1.5)`;
+
+  // NOTE: --opacity-disabled is intentionally NOT overridden here.
+  // Uniwind.updateCSSVariables passes string values ("0.5") directly to
+  // React Native's opacity style prop without converting to number, which
+  // crashes Android Fabric ("java.lang.String cannot be cast to java.lang.Double").
+  // HeroUI's CSS-defined --opacity-disabled: 0.5 (in variables.css) works
+  // because Uniwind's CSS parser correctly treats it as a numeric literal.
+  const sharedVars: Record<string, string> = {
+    "--radius": radiusValue,
+    "--border-width": bwValue,
+    "--field-border-width": fbwValue,
+    "--field-radius": frValue,
+  };
+  Uniwind.updateCSSVariables("light", sharedVars);
+  Uniwind.updateCSSVariables("dark", sharedVars);
+
+  const fontVars = getFontCSSVariables(fontFamily);
+  if (Object.keys(fontVars).length > 0) {
+    Uniwind.updateCSSVariables("light", fontVars);
+    Uniwind.updateCSSVariables("dark", fontVars);
+  }
+}
+
+function pickThemeSyncExtras(
+  s: Pick<
+    SettingsStoreState,
+    "borderWidthPreset" | "fieldBorderWidthPreset" | "disabledOpacityPreset"
+  >,
+): ThemeSyncExtras {
+  return {
+    borderWidthPreset: s.borderWidthPreset,
+    fieldBorderWidthPreset: s.fieldBorderWidthPreset,
+    disabledOpacityPreset: s.disabledOpacityPreset,
+  };
 }
 
 function cloneCustomThemeColors(colors: ThemeCustomColors): ThemeCustomColors {
@@ -524,6 +595,7 @@ const SECTION_KEYS: Record<SettingsSection, Array<keyof SettingsDataState>> = {
   video: [
     "videoCoreEnabled",
     "videoProcessingEnabled",
+    "videoResumePlayback",
     "videoAutoplay",
     "videoLoopByDefault",
     "videoMutedByDefault",
@@ -591,6 +663,10 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   accentColor: null,
   activePreset: "default",
   customThemeColors: cloneCustomThemeColors(DEFAULT_CUSTOM_THEME_COLORS),
+  radiusPreset: "default",
+  borderWidthPreset: "thin",
+  fieldBorderWidthPreset: "none",
+  disabledOpacityPreset: "default",
   fontFamily: "system",
   monoFontFamily: "system-mono",
   defaultShowGrid: false,
@@ -693,6 +769,7 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   defaultVideoTargetPreset: "1080p",
   videoCoreEnabled: true,
   videoProcessingEnabled: true,
+  videoResumePlayback: true,
   frameClassificationConfig: sanitizeFrameClassificationConfig(
     DEFAULT_FRAME_CLASSIFICATION_CONFIG,
     DEFAULT_FRAME_CLASSIFICATION_CONFIG,
@@ -730,7 +807,17 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-const OPTIONAL_CUSTOM_THEME_TOKENS = new Set<ThemeEditableToken>(["background", "surface"]);
+const OPTIONAL_CUSTOM_THEME_TOKENS = new Set<ThemeEditableToken | ThemeAdvancedToken>([
+  "background",
+  "surface",
+  "secondary",
+  "info",
+  "foreground",
+  "card",
+  "border",
+  "focus",
+  "muted",
+]);
 
 function sanitizeCustomThemeColors(
   value: unknown,
@@ -911,6 +998,9 @@ function sanitizeSettingsPatch(
     defaultVideoProfile: ["compatibility", "balanced", "quality"],
     defaultVideoTargetPreset: ["1080p", "720p", "custom"],
     logMinLevel: ["debug", "info", "warn", "error"],
+    borderWidthPreset: ["none", "thin", "medium"],
+    fieldBorderWidthPreset: ["none", "thin", "medium"],
+    disabledOpacityPreset: ["subtle", "default", "visible"],
   };
 
   const rawTargetSortBy = (sanitized as Record<string, unknown>).targetSortBy;
@@ -1185,8 +1275,17 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setLogPersistEnabled: (value) => set({ logPersistEnabled: value }),
 
       setTheme: (theme) => {
-        const { themeColorMode, accentColor, activePreset, customThemeColors } = get();
-        syncThemeToRuntime(theme, themeColorMode, accentColor, activePreset, customThemeColors);
+        const s = get();
+        syncThemeToRuntime(
+          theme,
+          s.themeColorMode,
+          s.accentColor,
+          s.activePreset,
+          s.customThemeColors,
+          s.radiusPreset,
+          s.fontFamily,
+          pickThemeSyncExtras(s),
+        );
         set({ theme });
       },
 
@@ -1207,20 +1306,41 @@ export const useSettingsStore = create<SettingsStoreState>()(
           next.accentColor,
           next.activePreset,
           next.customThemeColors,
+          next.radiusPreset,
+          next.fontFamily,
+          pickThemeSyncExtras(next),
         );
       },
 
       setAccentColor: (color) => {
-        const { theme, customThemeColors } = get();
+        const s = get();
         const mode: ThemeColorMode = color ? "accent" : "preset";
         set({ accentColor: color, activePreset: "default", themeColorMode: mode });
-        syncThemeToRuntime(theme, mode, color, "default", customThemeColors);
+        syncThemeToRuntime(
+          s.theme,
+          mode,
+          color,
+          "default",
+          s.customThemeColors,
+          s.radiusPreset,
+          s.fontFamily,
+          pickThemeSyncExtras(s),
+        );
       },
 
       setActivePreset: (preset) => {
-        const { theme, customThemeColors } = get();
+        const s = get();
         set({ activePreset: preset, accentColor: null, themeColorMode: "preset" });
-        syncThemeToRuntime(theme, "preset", null, preset, customThemeColors);
+        syncThemeToRuntime(
+          s.theme,
+          "preset",
+          null,
+          preset,
+          s.customThemeColors,
+          s.radiusPreset,
+          s.fontFamily,
+          pickThemeSyncExtras(s),
+        );
       },
 
       setCustomThemeLinked: (linked) => {
@@ -1237,6 +1357,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
           current.accentColor,
           current.activePreset,
           nextCustomTheme,
+          current.radiusPreset,
+          current.fontFamily,
+          pickThemeSyncExtras(current),
         );
       },
 
@@ -1265,6 +1388,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
           current.accentColor,
           current.activePreset,
           nextCustomTheme,
+          current.radiusPreset,
+          current.fontFamily,
+          pickThemeSyncExtras(current),
         );
       },
 
@@ -1276,6 +1402,10 @@ export const useSettingsStore = create<SettingsStoreState>()(
           accentColor: DEFAULT_SETTINGS.accentColor,
           activePreset: DEFAULT_SETTINGS.activePreset,
           customThemeColors: nextCustomTheme,
+          radiusPreset: DEFAULT_SETTINGS.radiusPreset,
+          borderWidthPreset: DEFAULT_SETTINGS.borderWidthPreset,
+          fieldBorderWidthPreset: DEFAULT_SETTINGS.fieldBorderWidthPreset,
+          disabledOpacityPreset: DEFAULT_SETTINGS.disabledOpacityPreset,
         });
         syncThemeToRuntime(
           current.theme,
@@ -1283,10 +1413,86 @@ export const useSettingsStore = create<SettingsStoreState>()(
           DEFAULT_SETTINGS.accentColor,
           DEFAULT_SETTINGS.activePreset,
           nextCustomTheme,
+          DEFAULT_SETTINGS.radiusPreset,
+          DEFAULT_SETTINGS.fontFamily,
+          pickThemeSyncExtras(DEFAULT_SETTINGS),
         );
       },
 
-      setFontFamily: (font) => set({ fontFamily: font }),
+      setRadiusPreset: (key) => {
+        const current = get();
+        set({ radiusPreset: key });
+        syncThemeToRuntime(
+          current.theme,
+          current.themeColorMode,
+          current.accentColor,
+          current.activePreset,
+          current.customThemeColors,
+          key,
+          current.fontFamily,
+          pickThemeSyncExtras(current),
+        );
+      },
+
+      setBorderWidthPreset: (key) => {
+        set({ borderWidthPreset: key });
+        const s = get();
+        syncThemeToRuntime(
+          s.theme,
+          s.themeColorMode,
+          s.accentColor,
+          s.activePreset,
+          s.customThemeColors,
+          s.radiusPreset,
+          s.fontFamily,
+          pickThemeSyncExtras(s),
+        );
+      },
+
+      setFieldBorderWidthPreset: (key) => {
+        set({ fieldBorderWidthPreset: key });
+        const s = get();
+        syncThemeToRuntime(
+          s.theme,
+          s.themeColorMode,
+          s.accentColor,
+          s.activePreset,
+          s.customThemeColors,
+          s.radiusPreset,
+          s.fontFamily,
+          pickThemeSyncExtras(s),
+        );
+      },
+
+      setDisabledOpacityPreset: (key) => {
+        set({ disabledOpacityPreset: key });
+        const s = get();
+        syncThemeToRuntime(
+          s.theme,
+          s.themeColorMode,
+          s.accentColor,
+          s.activePreset,
+          s.customThemeColors,
+          s.radiusPreset,
+          s.fontFamily,
+          pickThemeSyncExtras(s),
+        );
+      },
+
+      setFontFamily: (font) => {
+        set({ fontFamily: font });
+        const s = get();
+        syncThemeToRuntime(
+          s.theme,
+          s.themeColorMode,
+          s.accentColor,
+          s.activePreset,
+          s.customThemeColors,
+          s.radiusPreset,
+          font,
+          pickThemeSyncExtras(s),
+        );
+      },
       setMonoFontFamily: (font) => set({ monoFontFamily: font }),
 
       setDefaultShowGrid: (value) => set({ defaultShowGrid: value }),
@@ -1361,6 +1567,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setDefaultVideoTargetPreset: (value) => set({ defaultVideoTargetPreset: value }),
       setVideoCoreEnabled: (value) => set({ videoCoreEnabled: value }),
       setVideoProcessingEnabled: (value) => set({ videoProcessingEnabled: value }),
+      setVideoResumePlayback: (value) => set({ videoResumePlayback: value }),
       setFrameClassificationConfig: (config) =>
         get().applySettingsPatch({ frameClassificationConfig: config }),
       setReportFrameTypes: (values) => get().applySettingsPatch({ reportFrameTypes: values }),
@@ -1429,8 +1636,17 @@ export const useSettingsStore = create<SettingsStoreState>()(
         }
         set(sanitized);
         if (THEME_SYNC_KEYS.some((key) => sanitized[key] !== undefined)) {
-          const { theme, themeColorMode, accentColor, activePreset, customThemeColors } = get();
-          syncThemeToRuntime(theme, themeColorMode, accentColor, activePreset, customThemeColors);
+          const s = get();
+          syncThemeToRuntime(
+            s.theme,
+            s.themeColorMode,
+            s.accentColor,
+            s.activePreset,
+            s.customThemeColors,
+            s.radiusPreset,
+            s.fontFamily,
+            pickThemeSyncExtras(s),
+          );
         }
       },
 
@@ -1444,8 +1660,17 @@ export const useSettingsStore = create<SettingsStoreState>()(
         set(patch);
         const THEME_RELATED: SettingsSection[] = ["viewer"];
         if (THEME_RELATED.includes(section)) {
-          const { theme, themeColorMode, accentColor, activePreset, customThemeColors } = get();
-          syncThemeToRuntime(theme, themeColorMode, accentColor, activePreset, customThemeColors);
+          const s = get();
+          syncThemeToRuntime(
+            s.theme,
+            s.themeColorMode,
+            s.accentColor,
+            s.activePreset,
+            s.customThemeColors,
+            s.radiusPreset,
+            s.fontFamily,
+            pickThemeSyncExtras(s),
+          );
         }
       },
 
@@ -1467,6 +1692,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
           nextDefaults.accentColor,
           nextDefaults.activePreset,
           nextDefaults.customThemeColors,
+          nextDefaults.radiusPreset,
+          nextDefaults.fontFamily,
+          pickThemeSyncExtras(nextDefaults),
         );
       },
     }),
@@ -1512,6 +1740,9 @@ export const useSettingsStore = create<SettingsStoreState>()(
             state.accentColor,
             state.activePreset,
             state.customThemeColors,
+            state.radiusPreset,
+            state.fontFamily,
+            pickThemeSyncExtras(state),
           );
         }
       },

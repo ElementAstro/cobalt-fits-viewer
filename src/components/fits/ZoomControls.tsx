@@ -3,7 +3,7 @@ import { View, Text, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { computeOneToOneScale } from "../../lib/viewer/transform";
+import { computeOneToOneScale, zoomAroundCenter } from "../../lib/viewer/transform";
 
 interface ZoomControlsProps {
   scale: number;
@@ -14,10 +14,11 @@ interface ZoomControlsProps {
   imageWidth?: number;
   imageHeight?: number;
   bottomOffset?: number;
+  zoomStep?: number;
   onSetTransform: (tx: number, ty: number, scale: number) => void;
 }
 
-const ZOOM_STEP = 1.5;
+const DEFAULT_ZOOM_STEP = 1.5;
 
 export const ZoomControls = memo(function ZoomControls({
   scale,
@@ -28,6 +29,7 @@ export const ZoomControls = memo(function ZoomControls({
   imageWidth,
   imageHeight,
   bottomOffset = 12,
+  zoomStep = DEFAULT_ZOOM_STEP,
   onSetTransform,
 }: ZoomControlsProps) {
   const insets = useSafeAreaInsets();
@@ -43,21 +45,53 @@ export const ZoomControls = memo(function ZoomControls({
 
   const handleOneToOne = useCallback(() => {
     if (imageWidth && imageHeight && canvasWidth > 0 && canvasHeight > 0) {
-      onSetTransform(
+      const target = computeOneToOneScale(imageWidth, imageHeight, canvasWidth, canvasHeight);
+      const { x, y } = zoomAroundCenter(
+        scale,
+        target,
         translateX,
         translateY,
-        computeOneToOneScale(imageWidth, imageHeight, canvasWidth, canvasHeight),
+        canvasWidth,
+        canvasHeight,
       );
+      onSetTransform(x, y, target);
     }
-  }, [imageWidth, imageHeight, canvasWidth, canvasHeight, translateX, translateY, onSetTransform]);
+  }, [
+    scale,
+    imageWidth,
+    imageHeight,
+    canvasWidth,
+    canvasHeight,
+    translateX,
+    translateY,
+    onSetTransform,
+  ]);
 
   const handleZoomIn = useCallback(() => {
-    onSetTransform(translateX, translateY, scale * ZOOM_STEP);
-  }, [scale, translateX, translateY, onSetTransform]);
+    const target = scale * zoomStep;
+    const { x, y } = zoomAroundCenter(
+      scale,
+      target,
+      translateX,
+      translateY,
+      canvasWidth,
+      canvasHeight,
+    );
+    onSetTransform(x, y, target);
+  }, [scale, translateX, translateY, canvasWidth, canvasHeight, zoomStep, onSetTransform]);
 
   const handleZoomOut = useCallback(() => {
-    onSetTransform(translateX, translateY, Math.max(0.1, scale / ZOOM_STEP));
-  }, [scale, translateX, translateY, onSetTransform]);
+    const target = Math.max(0.1, scale / zoomStep);
+    const { x, y } = zoomAroundCenter(
+      scale,
+      target,
+      translateX,
+      translateY,
+      canvasWidth,
+      canvasHeight,
+    );
+    onSetTransform(x, y, target);
+  }, [scale, translateX, translateY, canvasWidth, canvasHeight, zoomStep, onSetTransform]);
 
   return (
     <View

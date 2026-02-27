@@ -5,6 +5,7 @@ export { FilesSelectionBar } from "./FilesSelectionBar";
 export { FilesSortBar } from "./FilesSortBar";
 export { FilesFilterBar } from "./FilesFilterBar";
 export { ImportOptionsSheet } from "./ImportOptionsSheet";
+export { ImportResultSheet } from "./ImportResultSheet";
 export { SelectionActionsSheet } from "./SelectionActionsSheet";
 export { SheetActionItem } from "./SheetActionItem";
 export { UndoSnackbar } from "./UndoSnackbar";

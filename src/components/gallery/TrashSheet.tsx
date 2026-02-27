@@ -45,8 +45,7 @@ export function TrashSheet({
           <View className="px-4 py-1">
             <BottomSheet.Title>{t("files.trashTitle")}</BottomSheet.Title>
             <Text className="text-xs text-muted">
-              {t("files.filesCount").replace("{count}", String(items.length))} ·{" "}
-              {formatFileSize(totalSize)}
+              {t("files.filesCount", { count: items.length })} · {formatFileSize(totalSize)}
             </Text>
           </View>
 

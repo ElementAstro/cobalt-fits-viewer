@@ -146,30 +146,60 @@ const ORIENTATION_LOCK_MAP = {
   landscape: ScreenOrientation.OrientationLock.LANDSCAPE,
 } as const;
 
+// Fallback navigation colors in case useThemeColor returns empty strings.
+const NAV_COLORS_FALLBACK = {
+  dark: {
+    background: "#000000",
+    card: "#18181b",
+    text: "#ecedee",
+    border: "#27272a",
+    primary: "#006fee",
+    notification: "#f31260",
+  },
+  light: {
+    background: "#ffffff",
+    card: "#f4f4f5",
+    text: "#11181c",
+    border: "#e4e4e7",
+    primary: "#006fee",
+    notification: "#f31260",
+  },
+} as const;
+
 function ThemedRootStack() {
-  const backgroundColor = useThemeColor("background");
-  return <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor } }} />;
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
 
 function ThemedAppContainer({ children }: PropsWithChildren) {
-  const backgroundColor = useThemeColor("background");
-  return <View style={{ flex: 1, backgroundColor }}>{children}</View>;
+  return <View className="flex-1 bg-background">{children}</View>;
 }
 
 function NavigationThemeBridge({ isDark, children }: PropsWithChildren<{ isDark: boolean }>) {
-  const [backgroundColor, cardColor, textColor, borderColor, primaryColor, notificationColor] =
-    useThemeColor(["background", "surface", "foreground", "separator", "accent", "danger"]);
+  const [bg, surface, fg, borderColor, accent, danger] = useThemeColor([
+    "background",
+    "surface",
+    "foreground",
+    "separator",
+    "accent",
+    "danger",
+  ]);
+
+  const fallback = isDark ? NAV_COLORS_FALLBACK.dark : NAV_COLORS_FALLBACK.light;
+
+  const colors = {
+    background: bg || fallback.background,
+    card: surface || fallback.card,
+    text: fg || fallback.text,
+    border: borderColor || fallback.border,
+    primary: accent || fallback.primary,
+    notification: danger || fallback.notification,
+  };
 
   const theme: NavigationTheme = {
     ...(isDark ? DarkTheme : DefaultTheme),
     colors: {
       ...(isDark ? DarkTheme : DefaultTheme).colors,
-      background: backgroundColor,
-      card: cardColor,
-      text: textColor,
-      border: borderColor,
-      primary: primaryColor,
-      notification: notificationColor,
+      ...colors,
     },
   };
 

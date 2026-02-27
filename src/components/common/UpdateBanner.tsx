@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { View, Text } from "react-native";
 import ReAnimated, { useSharedValue, useAnimatedStyle, withSpring } from "react-native-reanimated";
-import { Button, CloseButton, useThemeColor } from "heroui-native";
+import { Button, CloseButton } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
@@ -18,8 +18,6 @@ export function UpdateBanner() {
   const { t } = useI18n();
   const haptics = useHapticFeedback();
   const autoCheckUpdates = useSettingsStore((s) => s.autoCheckUpdates);
-  const accentColor = useThemeColor("accent");
-  const successColor = useThemeColor("success");
 
   const { status, checkForUpdate, downloadUpdate, applyUpdate } = useAppUpdate();
 
@@ -73,7 +71,7 @@ export function UpdateBanner() {
         <Ionicons
           name={status === "ready" ? "checkmark-circle" : "cloud-download-outline"}
           size={20}
-          color={status === "ready" ? successColor : accentColor}
+          className={status === "ready" ? "text-success" : "text-accent"}
         />
         <View className="flex-1 min-w-0">
           <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
@@ -84,7 +82,7 @@ export function UpdateBanner() {
           </Text>
         </View>
         <Button size="sm" variant="ghost" onPress={handleAction}>
-          <Button.Label style={{ color: status === "ready" ? successColor : accentColor }}>
+          <Button.Label className={status === "ready" ? "text-success" : "text-accent"}>
             {status === "ready" ? t("settings.restart") : t("settings.updateAndRestart")}
           </Button.Label>
         </Button>

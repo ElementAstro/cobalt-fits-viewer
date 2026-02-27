@@ -11,8 +11,6 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-const mockAlert = jest.spyOn(require("react-native").Alert, "alert");
-
 describe("TargetBatchActionBar", () => {
   const defaultProps = {
     selectedCount: 3,
@@ -55,20 +53,19 @@ describe("TargetBatchActionBar", () => {
     expect(defaultProps.onDeselectAll).toHaveBeenCalledTimes(1);
   });
 
-  it("shows delete confirmation alert on trash press", () => {
+  it("renders delete confirmation dialog with title and description", () => {
     render(<TargetBatchActionBar {...defaultProps} />);
-    const buttons = screen.getAllByTestId("button");
-    // The last button is the trash button
-    const trashButton = buttons[buttons.length - 1];
-    fireEvent.press(trashButton);
-    expect(mockAlert).toHaveBeenCalledWith(
-      "targets.batch.deleteSelected",
-      expect.stringContaining("targets.batch.deleteConfirm"),
-      expect.arrayContaining([
-        expect.objectContaining({ style: "cancel" }),
-        expect.objectContaining({ style: "destructive" }),
-      ]),
-    );
+    // Dialog is always rendered in the global mock (isOpen ignored)
+    expect(screen.getByText("targets.batch.deleteSelected")).toBeTruthy();
+    expect(
+      screen.getByText(`targets.batch.deleteConfirm:${JSON.stringify({ count: 3 })}`),
+    ).toBeTruthy();
+  });
+
+  it("calls onBatchDelete when dialog confirm is pressed", () => {
+    render(<TargetBatchActionBar {...defaultProps} />);
+    fireEvent.press(screen.getByText("common.delete"));
+    expect(defaultProps.onBatchDelete).toHaveBeenCalledTimes(1);
   });
 
   it("calls onExitSelectionMode when close pressed", () => {

@@ -2,6 +2,7 @@ import { Skia, AlphaType, ColorType, ImageFormat } from "@shopify/react-native-s
 import type { AstrometryAnnotation } from "../astrometry/types";
 import type {
   ExportFormat,
+  ExportOutputSize,
   FitsExportMode,
   FitsMetadata,
   FitsTargetOptions,
@@ -31,6 +32,7 @@ import { encodeTiff, encodeTiffDocument, type TiffEncodePage } from "../image/en
 import { createTiffFrameProvider } from "../image/tiff/decoder";
 import { encodeBmp24 } from "../image/encoders/bmp";
 import { getExtension as getExtUtil } from "../utils/imageExport";
+import { downsampleRGBA } from "../gallery/thumbnailCache";
 import { LOG_TAGS, Logger } from "../logger";
 import {
   applyExportDecorations,
@@ -83,6 +85,9 @@ export interface ExportRequest {
   ser?: Partial<SerTargetOptions>;
   source?: ExportSourceContext;
   renderOptions?: ExportRenderOptions;
+  outputSize?: ExportOutputSize;
+  targetFileSize?: number;
+  webpLossless?: boolean;
 }
 
 export interface EncodedExportResult {
@@ -93,9 +98,58 @@ export interface EncodedExportResult {
 
 function toArrayBuffer(value: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (value instanceof ArrayBuffer) return value;
+  if (value.byteOffset === 0 && value.byteLength === value.buffer.byteLength) {
+    return value.buffer as ArrayBuffer;
+  }
   const copy = new Uint8Array(value.byteLength);
   copy.set(value);
   return copy.buffer;
+}
+
+function computeOutputDimensions(
+  srcWidth: number,
+  srcHeight: number,
+  outputSize?: ExportOutputSize,
+): { width: number; height: number } {
+  if (!outputSize) return { width: srcWidth, height: srcHeight };
+
+  const { maxWidth, maxHeight, scale } = outputSize;
+
+  if (maxWidth || maxHeight) {
+    const mw = maxWidth ?? Infinity;
+    const mh = maxHeight ?? Infinity;
+    const ratio = Math.min(mw / srcWidth, mh / srcHeight, 1);
+    return {
+      width: Math.max(1, Math.round(srcWidth * ratio)),
+      height: Math.max(1, Math.round(srcHeight * ratio)),
+    };
+  }
+
+  if (scale != null && scale > 0 && scale < 1) {
+    return {
+      width: Math.max(1, Math.round(srcWidth * scale)),
+      height: Math.max(1, Math.round(srcHeight * scale)),
+    };
+  }
+
+  return { width: srcWidth, height: srcHeight };
+}
+
+export { computeOutputDimensions };
+
+function applyOutputResize(
+  rgbaData: Uint8ClampedArray,
+  width: number,
+  height: number,
+  outputSize?: ExportOutputSize,
+): { rgbaData: Uint8ClampedArray; width: number; height: number } {
+  const target = computeOutputDimensions(width, height, outputSize);
+  if (target.width === width && target.height === height) {
+    return { rgbaData, width, height };
+  }
+  const maxDim = Math.max(target.width, target.height);
+  const downsampled = downsampleRGBA(rgbaData, width, height, maxDim);
+  return { rgbaData: downsampled.data, width: downsampled.width, height: downsampled.height };
 }
 
 function resolveSkiaFormat(format: ExportFormat): (typeof ImageFormat)[keyof typeof ImageFormat] {
@@ -605,6 +659,93 @@ function withFitsFallback(request: ExportRequest, diagnostics: ExportDiagnostics
   return request;
 }
 
+export async function compressToTargetSize(
+  request: ExportRequest,
+  targetBytes: number,
+  options?: { maxIterations?: number; minQuality?: number },
+): Promise<EncodedExportResult> {
+  const maxIter = options?.maxIterations ?? 6;
+  const minQ = options?.minQuality ?? 10;
+  const diagnostics: ExportDiagnostics = {
+    fallbackApplied: false,
+    warnings: [],
+    annotationsDrawn: 0,
+    watermarkApplied: false,
+  };
+
+  let { rgbaData, width, height } = applyOutputResize(
+    request.rgbaData,
+    request.width,
+    request.height,
+    request.outputSize,
+  );
+
+  if (hasDecorations(request)) {
+    const decorated = applyExportDecorations({
+      rgbaData,
+      width,
+      height,
+      filename: request.filename,
+      format: request.format,
+      options: request.renderOptions,
+      source: request.source,
+    });
+    rgbaData = decorated.rgbaData;
+    diagnostics.annotationsDrawn = decorated.annotationsDrawn;
+    diagnostics.watermarkApplied = decorated.watermarkApplied;
+    diagnostics.warnings.push(...decorated.warnings);
+  }
+
+  const format = request.format;
+  let lo = minQ;
+  let hi = 95;
+  let bestBytes: Uint8Array | null = null;
+  let bestQuality = hi;
+
+  for (let i = 0; i < maxIter; i++) {
+    const mid = Math.round((lo + hi) / 2);
+    const encoded = encodeSkiaImage(rgbaData, width, height, format, mid);
+    if (!encoded || encoded.length === 0) break;
+
+    if (encoded.length <= targetBytes) {
+      bestBytes = encoded;
+      bestQuality = mid;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+
+    if (lo > hi) break;
+  }
+
+  if (!bestBytes) {
+    const fallback = encodeSkiaImage(rgbaData, width, height, format, minQ);
+    bestBytes = fallback;
+    bestQuality = minQ;
+  }
+
+  if (bestBytes && bestBytes.length > targetBytes) {
+    const scaleFactor = 0.75;
+    const newW = Math.max(1, Math.round(width * scaleFactor));
+    const newH = Math.max(1, Math.round(height * scaleFactor));
+    const maxDim = Math.max(newW, newH);
+    const smaller = downsampleRGBA(rgbaData, width, height, maxDim);
+    const retry = encodeSkiaImage(smaller.data, smaller.width, smaller.height, format, bestQuality);
+    if (retry && retry.length > 0 && retry.length < (bestBytes?.length ?? Infinity)) {
+      bestBytes = retry;
+      width = smaller.width;
+      height = smaller.height;
+      diagnostics.warnings.push(`Image resized to ${width}×${height} to meet target file size`);
+    }
+  }
+
+  return {
+    bytes: bestBytes,
+    extension: bestBytes ? getOutputExtension(request) : null,
+    diagnostics,
+  };
+}
+
 export async function encodeExportRequest(request: ExportRequest): Promise<EncodedExportResult> {
   const diagnostics: ExportDiagnostics = {
     fallbackApplied: false,
@@ -614,6 +755,29 @@ export async function encodeExportRequest(request: ExportRequest): Promise<Encod
   };
 
   let effectiveRequest = withFitsFallback(request, diagnostics);
+
+  // Apply output resize before encoding
+  const resized = applyOutputResize(
+    effectiveRequest.rgbaData,
+    effectiveRequest.width,
+    effectiveRequest.height,
+    effectiveRequest.outputSize,
+  );
+  effectiveRequest = {
+    ...effectiveRequest,
+    rgbaData: resized.rgbaData,
+    width: resized.width,
+    height: resized.height,
+  };
+
+  // Target file size mode for JPEG/WebP — delegate early (compressToTargetSize handles decorations)
+  if (
+    effectiveRequest.targetFileSize &&
+    effectiveRequest.targetFileSize > 0 &&
+    (effectiveRequest.format === "jpeg" || effectiveRequest.format === "webp")
+  ) {
+    return compressToTargetSize(effectiveRequest, effectiveRequest.targetFileSize);
+  }
 
   if (hasDecorations(effectiveRequest)) {
     const decorated = applyExportDecorations({
@@ -638,12 +802,16 @@ export async function encodeExportRequest(request: ExportRequest): Promise<Encod
     case "png":
     case "jpeg":
     case "webp": {
+      const effectiveQuality =
+        effectiveRequest.format === "webp" && effectiveRequest.webpLossless
+          ? 100
+          : effectiveRequest.quality;
       const bytes = encodeSkiaImage(
         effectiveRequest.rgbaData,
         effectiveRequest.width,
         effectiveRequest.height,
         effectiveRequest.format,
-        effectiveRequest.quality,
+        effectiveQuality,
       );
       return {
         bytes,

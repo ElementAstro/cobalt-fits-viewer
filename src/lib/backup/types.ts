@@ -12,6 +12,8 @@ import type {
   ObservationLogEntry,
   FileGroup,
   TrashedFitsRecord,
+  GeoLocation,
+  SessionEquipment,
 } from "../fits/types";
 import type { AstrometryConfig, AstrometryJob } from "../astrometry/types";
 import type { Ionicons } from "@expo/vector-icons";
@@ -59,6 +61,9 @@ export interface BackupSessionRuntimeState {
     totalPausedMs: number;
     notes: { timestamp: number; text: string }[];
     status: "running" | "paused";
+    draftTargets?: string[];
+    draftEquipment?: SessionEquipment;
+    draftLocation?: GeoLocation;
   } | null;
 }
 

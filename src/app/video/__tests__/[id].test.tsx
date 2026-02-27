@@ -31,6 +31,7 @@ const mockVideoProcessing = {
   isEngineAvailable: true,
   engineCapabilities: null as { unavailableReason?: string } | null,
   enqueueProcessingTask: jest.fn(() => ({ taskId: "task-1" })),
+  checkDiskSpaceForTask: jest.fn().mockResolvedValue(null),
   retryTask: jest.fn(),
   removeTask: jest.fn(),
   clearFinished: jest.fn(),

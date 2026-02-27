@@ -7,21 +7,27 @@ import type { FitsMetadata } from "../../../lib/fits/types";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "common.cancel": "Cancel",
-          "common.confirm": "Confirm",
-          "common.success": "Success",
-          "common.error": "Error",
-          "album.selected": "selected",
-          "gallery.batchTag": "Batch Tag",
-          "gallery.newTag": "New tag...",
-          "gallery.noTags": "No tags yet",
-          "gallery.noImages": "No images found",
-          "gallery.batchTagApplied": "Applied tags to {count} file(s)",
-        }) as Record<string, string>
-      )[key] ?? key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        "common.cancel": "Cancel",
+        "common.confirm": "Confirm",
+        "common.success": "Success",
+        "common.error": "Error",
+        "album.selected": "selected",
+        "gallery.batchTag": "Batch Tag",
+        "gallery.newTag": "New tag...",
+        "gallery.noTags": "No tags yet",
+        "gallery.noImages": "No images found",
+        "gallery.batchTagApplied": "Applied tags to {count} file(s)",
+      };
+      let result = map[key] ?? key;
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          result = result.replace(`{${k}}`, String(v));
+        });
+      }
+      return result;
+    },
   }),
 }));
 

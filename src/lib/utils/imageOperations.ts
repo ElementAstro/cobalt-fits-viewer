@@ -672,6 +672,8 @@ export function generateStarMask(
   width: number,
   height: number,
   scale: number = 1.5,
+  growthIterations: number = 0,
+  softness: number = 0,
 ): Float32Array {
   let stars = detectStars(pixels, width, height).map((star) => ({
     cx: star.cx,
@@ -715,7 +717,7 @@ export function generateStarMask(
     peaks.sort((a, b) => b.value - a.value);
     stars = peaks.slice(0, 256).map(({ cx, cy, fwhm }) => ({ cx, cy, fwhm }));
   }
-  const mask = new Float32Array(width * height);
+  let mask: Float32Array = new Float32Array(width * height);
 
   for (const star of stars) {
     const sigma = (star.fwhm * scale) / 2.3548;
@@ -736,6 +738,17 @@ export function generateStarMask(
         if (val > mask[idx]) mask[idx] = val;
       }
     }
+  }
+
+  // Growth: morphological dilation iterations
+  const gi = Math.max(0, Math.min(5, Math.round(growthIterations)));
+  for (let i = 0; i < gi; i++) {
+    mask = morphDilate(mask, width, height, 1);
+  }
+
+  // Softness: post-processing Gaussian blur
+  if (softness > 0.1) {
+    mask = gaussianBlur(mask, width, height, Math.min(10, softness));
   }
 
   return mask;
@@ -772,8 +785,10 @@ export function applyStarMask(
   height: number,
   scale: number = 1.5,
   invert: boolean = false,
+  growth: number = 0,
+  softness: number = 0,
 ): Float32Array {
-  const mask = generateStarMask(pixels, width, height, scale);
+  const mask = generateStarMask(pixels, width, height, scale, growth, softness);
   const n = pixels.length;
   const result = new Float32Array(n);
 
@@ -876,6 +891,7 @@ export function clahe(
   height: number,
   tileSize: number = 8,
   clipLimit: number = 3.0,
+  amount: number = 1.0,
 ): Float32Array {
   const tileGrid = Math.max(2, Math.min(64, Math.round(tileSize)));
   const clip = Math.max(0.01, Math.min(100, clipLimit));
@@ -985,7 +1001,9 @@ export function clahe(
       const mapped =
         v00 * (1 - fx) * (1 - fy) + v10 * fx * (1 - fy) + v01 * (1 - fx) * fy + v11 * fx * fy;
 
-      result[y * width + x] = min + mapped * range;
+      const blendAmount = Math.max(0, Math.min(1, amount));
+      const original = (pixels[y * width + x] - min) / range;
+      result[y * width + x] = min + (original * (1 - blendAmount) + mapped * blendAmount) * range;
     }
   }
 
@@ -1461,9 +1479,13 @@ export function adjustColorBalance(
 /**
  * 简易 PixelMath 表达式解析器
  * 支持: +, -, *, /, ^, min, max, abs, sqrt, log, exp, clamp
- * 变量: $T (当前像素值), $mean, $median, $min, $max
+ * 变量: $T (当前像素值), $mean, $median, $min, $max, $I0/$I1/... (额外图像)
  */
-export function evaluatePixelExpression(pixels: Float32Array, expression: string): Float32Array {
+export function evaluatePixelExpression(
+  pixels: Float32Array,
+  expression: string,
+  additionalImages?: Float32Array[],
+): Float32Array {
   const n = pixels.length;
 
   // 预计算统计量
@@ -1505,7 +1527,7 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
       } else if (expr[i] === "$") {
         let varName = "$";
         i++;
-        while (i < expr.length && /[a-zA-Z]/.test(expr[i])) varName += expr[i++];
+        while (i < expr.length && /[a-zA-Z0-9]/.test(expr[i])) varName += expr[i++];
         tokens.push(varName);
       } else if (/[a-z]/i.test(expr[i])) {
         let fn = "";
@@ -1517,6 +1539,9 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
     }
     return tokens;
   };
+
+  // 当前像素索引 (用于 $I0/$I1/... 多图引用)
+  let currentPixelIndex = 0;
 
   // 递归下降解析器
   const createEvaluator = (tokens: string[]) => {
@@ -1599,6 +1624,16 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
         return pMax;
       }
 
+      // 额外图像变量 $I0, $I1, ...
+      if (tok.startsWith("$I") && tok.length > 2) {
+        consume();
+        const imgIdx = parseInt(tok.slice(2), 10);
+        if (additionalImages && imgIdx >= 0 && imgIdx < additionalImages.length) {
+          return additionalImages[imgIdx][currentPixelIndex] ?? 0;
+        }
+        return 0;
+      }
+
       // 括号
       if (tok === "(") {
         consume("(");
@@ -1612,9 +1647,14 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
       consume("(");
       const arg1 = parseExpr(pixelVal);
       let arg2: number | undefined;
+      let arg3: number | undefined;
       if (peek() === ",") {
         consume(",");
         arg2 = parseExpr(pixelVal);
+      }
+      if (peek() === ",") {
+        consume(",");
+        arg3 = parseExpr(pixelVal);
       }
       consume(")");
 
@@ -1642,6 +1682,8 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
         case "atan2":
           return Math.atan2(arg1, arg2 ?? 0);
         case "clamp":
+          // clamp($T) → [0,1]; clamp($T, max) → [0,max]; clamp($T, min, max) → [min,max]
+          if (arg3 !== undefined) return Math.max(arg2 ?? 0, Math.min(arg3, arg1));
           return Math.max(0, Math.min(arg2 ?? 1, arg1));
         case "pow":
           return Math.pow(Math.max(0, arg1), arg2 ?? 1);
@@ -1654,8 +1696,8 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
         case "ceil":
           return Math.ceil(arg1);
         case "iif": {
-          // iif(condition, trueVal) — condition > 0 returns trueVal, else 0
-          return arg1 > 0 ? (arg2 ?? 1) : 0;
+          // iif(condition, trueVal, falseVal) — condition > 0 returns trueVal, else falseVal
+          return arg1 > 0 ? (arg2 ?? 1) : (arg3 ?? 0);
         }
         default:
           throw new Error(`Unknown function: ${fnName}`);
@@ -1674,6 +1716,7 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
   const result = new Float32Array(n);
   for (let i = 0; i < n; i++) {
     try {
+      currentPixelIndex = i;
       result[i] = evaluate(pixels[i]);
     } catch {
       result[i] = pixels[i];
@@ -1691,6 +1734,9 @@ export function evaluatePixelExpression(pixels: Float32Array, expression: string
  * iterations: 迭代次数（num_iter）
  * regularization: 兼容参数，映射为 filter_epsilon（避免除零）
  * options.clip: 对输出做 [-1, 1] 裁剪（与 scikit-image 一致）
+ * options.waveletRegularization: 启用小波正则化抑制振铃 (PixInsight 风格)
+ * options.deringing: 启用 deringing (局部极值抑制)
+ * options.protectionMask: 外部保护掩膜 (低值区域不做去卷积)
  */
 export function richardsonLucy(
   pixels: Float32Array,
@@ -1699,12 +1745,29 @@ export function richardsonLucy(
   psfSigma: number = 2.0,
   iterations: number = 20,
   regularization: number = 0.1,
-  options?: { filterEpsilon?: number; clip?: boolean },
+  options?: {
+    filterEpsilon?: number;
+    clip?: boolean;
+    waveletRegularization?: boolean;
+    waveletLayers?: number;
+    waveletThreshold?: number;
+    deringing?: boolean;
+    deringingDark?: number;
+    deringingBright?: number;
+    protectionMask?: Float32Array;
+  },
 ): Float32Array {
   psfSigma = Math.max(0.3, Math.min(10, psfSigma));
   iterations = Math.max(0, Math.min(200, Math.round(iterations)));
   const filterEpsilon = Math.max(0, options?.filterEpsilon ?? regularization);
   const clip = options?.clip ?? false;
+  const useWaveletReg = options?.waveletRegularization ?? false;
+  const waveletLayers = Math.max(1, Math.min(6, options?.waveletLayers ?? 3));
+  const waveletThreshold = Math.max(0, options?.waveletThreshold ?? 3);
+  const useDeringing = options?.deringing ?? false;
+  const deringingDark = Math.max(0, Math.min(1, options?.deringingDark ?? 0.1));
+  const deringingBright = Math.max(0, Math.min(1, options?.deringingBright ?? 0));
+  const protectionMask = options?.protectionMask;
   const n = width * height;
 
   if (iterations === 0) return new Float32Array(pixels);
@@ -1721,9 +1784,17 @@ export function richardsonLucy(
     observed[i] = Math.max(0, pixels[i] + offset);
   }
 
+  // 计算背景中值 (用于 deringing 参考)
+  let bgMedian = 0;
+  if (useDeringing) {
+    const { median } = computeMAD(observed);
+    bgMedian = median;
+  }
+
   // 初始估计
   const estimate = new Float32Array(observed);
   const tiny = 1e-12;
+  const regInterval = 5; // 每 5 次迭代做一次小波正则化
 
   for (let iter = 0; iter < iterations; iter++) {
     // 正向卷积: conv(estimate, psf)
@@ -1738,6 +1809,67 @@ export function richardsonLucy(
     const correction = gaussianBlur(ratio, width, height, psfSigma);
     for (let i = 0; i < n; i++) {
       estimate[i] = Math.max(0, estimate[i] * correction[i]);
+    }
+
+    // 掩膜保护: 掩膜值低的区域恢复为原始值
+    if (protectionMask) {
+      for (let i = 0; i < n; i++) {
+        const m = protectionMask[i];
+        estimate[i] = estimate[i] * m + observed[i] * (1 - m);
+      }
+    }
+
+    // 小波正则化: 抑制小尺度振铃伪影
+    if (useWaveletReg && iter > 0 && iter % regInterval === 0) {
+      let current = estimate as Float32Array;
+      const details: Float32Array[] = [];
+      for (let s = 0; s < waveletLayers; s++) {
+        const smoothed = atrousSmooth(current, width, height, s);
+        const detail = new Float32Array(n);
+        for (let i = 0; i < n; i++) detail[i] = current[i] - smoothed[i];
+        details.push(detail);
+        current = smoothed;
+      }
+      // 软阈值小波系数
+      const { mad } = computeMAD(details[0]);
+      const sigma = mad > 0 ? mad / 0.6745 : 0;
+      const th = waveletThreshold * sigma;
+      // 重建: residual + 软阈值后的细节
+      for (let i = 0; i < n; i++) estimate[i] = current[i];
+      for (let s = 0; s < waveletLayers; s++) {
+        const d = details[s];
+        for (let i = 0; i < n; i++) {
+          const v = d[i];
+          const a = Math.abs(v);
+          estimate[i] += a <= th ? 0 : Math.sign(v) * (a - th);
+        }
+      }
+      for (let i = 0; i < n; i++) estimate[i] = Math.max(0, estimate[i]);
+    }
+
+    // Deringing: 抑制局部极值伪影
+    if (useDeringing && (deringingDark > 0 || deringingBright > 0)) {
+      for (let y = 1; y < height - 1; y++) {
+        for (let x = 1; x < width - 1; x++) {
+          const idx = y * width + x;
+          const v = estimate[idx];
+          const avg =
+            (estimate[idx - 1] +
+              estimate[idx + 1] +
+              estimate[idx - width] +
+              estimate[idx + width]) *
+            0.25;
+          const diff = v - avg;
+          // Dark ringing: 值低于邻域均值且低于背景
+          if (diff < 0 && v < bgMedian && deringingDark > 0) {
+            estimate[idx] = v + Math.abs(diff) * deringingDark;
+          }
+          // Bright ringing: 值高于邻域均值且高于背景
+          if (diff > 0 && v > bgMedian && deringingBright > 0) {
+            estimate[idx] = v - diff * deringingBright;
+          }
+        }
+      }
     }
   }
 
@@ -2027,10 +2159,10 @@ export type ScientificImageOperation =
   | { type: "rotateArbitrary"; angle: number }
   | { type: "backgroundExtract"; gridSize: number }
   | { type: "mtf"; midtone: number; shadowsClip: number; highlightsClip: number }
-  | { type: "starMask"; scale: number; invert: boolean }
+  | { type: "starMask"; scale: number; invert: boolean; growth?: number; softness?: number }
   | { type: "binarize"; threshold: number }
   | { type: "rescale" }
-  | { type: "clahe"; tileSize: number; clipLimit: number }
+  | { type: "clahe"; tileSize: number; clipLimit: number; amount?: number }
   | { type: "curves"; points: { x: number; y: number }[] }
   | { type: "morphology"; operation: "erode" | "dilate" | "open" | "close"; radius: number }
   | { type: "hdr"; layers: number; amount: number }
@@ -2056,7 +2188,24 @@ export type ScientificImageOperation =
   | { type: "wienerDeconvolution"; psfSigma: number; noiseRatio: number }
   | { type: "integerBin"; factor: number; mode: "average" | "sum" | "median" }
   | { type: "resample"; targetScale: number; method: "bilinear" | "bicubic" | "lanczos3" }
-  | { type: "edgeMask"; preBlurSigma: number; threshold: number; postBlurSigma: number };
+  | { type: "edgeMask"; preBlurSigma: number; threshold: number; postBlurSigma: number }
+  | {
+      type: "mlt";
+      layers: number;
+      noiseThreshold: number;
+      noiseReduction: number;
+      bias: number;
+      useLinearMask: boolean;
+      linearMaskAmplification: number;
+    }
+  | {
+      type: "ghs";
+      D: number;
+      b: number;
+      SP: number;
+      HP: number;
+      LP: number;
+    };
 
 export type ColorImageOperation =
   | { type: "scnr"; method: "averageNeutral" | "maximumNeutral"; amount: number }
@@ -2128,13 +2277,29 @@ export function applyOperation(
         height,
       };
     case "starMask":
-      return { pixels: applyStarMask(pixels, width, height, op.scale, op.invert), width, height };
+      return {
+        pixels: applyStarMask(
+          pixels,
+          width,
+          height,
+          op.scale,
+          op.invert,
+          op.growth ?? 0,
+          op.softness ?? 0,
+        ),
+        width,
+        height,
+      };
     case "binarize":
       return { pixels: binarize(pixels, op.threshold), width, height };
     case "rescale":
       return { pixels: rescalePixels(pixels), width, height };
     case "clahe":
-      return { pixels: clahe(pixels, width, height, op.tileSize, op.clipLimit), width, height };
+      return {
+        pixels: clahe(pixels, width, height, op.tileSize, op.clipLimit, op.amount ?? 1),
+        width,
+        height,
+      };
     case "curves":
       return { pixels: applyCurves(pixels, op.points), width, height };
     case "morphology":
@@ -2273,5 +2438,27 @@ export function applyOperation(
         width,
         height,
       };
+    case "mlt": {
+      const {
+        multiscaleLinearTransform: mltFn,
+      } = require("../processing/multiscaleLinearTransform");
+      const mltLayerConfigs = Array.from({ length: op.layers }, () => ({
+        noiseThreshold: op.noiseThreshold,
+        noiseReduction: op.noiseReduction,
+        bias: op.bias,
+      }));
+      return {
+        pixels: mltFn(pixels, width, height, mltLayerConfigs, {
+          useLinearMask: op.useLinearMask,
+          linearMaskAmplification: op.linearMaskAmplification,
+        }),
+        width,
+        height,
+      };
+    }
+    case "ghs": {
+      const { generalizedHyperbolicStretch: ghsFn } = require("../converter/stretchAlgorithms");
+      return { pixels: ghsFn(pixels, op.D, op.b, op.SP, op.HP, op.LP), width, height };
+    }
   }
 }

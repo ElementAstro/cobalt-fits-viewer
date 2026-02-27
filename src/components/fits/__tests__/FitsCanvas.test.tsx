@@ -414,6 +414,87 @@ describe("FitsCanvas", () => {
     expect(after?.translateY).toBeCloseTo(before?.translateY ?? 0, 6);
   });
 
+  it("does not fire onPixelTap for out-of-bounds single tap", () => {
+    const onPixelTap = jest.fn();
+    const view = render(
+      <FitsCanvas
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+        onPixelTap={onPixelTap}
+      />,
+    );
+    triggerLayout(view, 200, 100);
+
+    const singleTap = gestureMock.__getTapGesture(1);
+    act(() => {
+      singleTap?.handlers.onEnd?.({ x: -10, y: -10 });
+    });
+
+    expect(onPixelTap).not.toHaveBeenCalled();
+  });
+
+  it("does not fire onPixelLongPress when long press fails", () => {
+    const onPixelLongPress = jest.fn();
+    const view = render(
+      <FitsCanvas
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+        onPixelLongPress={onPixelLongPress}
+      />,
+    );
+    triggerLayout(view, 200, 100);
+
+    const longPress = gestureMock.__getLongPressGesture();
+    act(() => {
+      longPress?.handlers.onEnd?.({ x: 40, y: 20 }, false);
+    });
+
+    expect(onPixelLongPress).not.toHaveBeenCalled();
+  });
+
+  it("resets transform via resetView imperative handle", () => {
+    const ref = React.createRef<FitsCanvasHandle>();
+    const view = render(
+      <FitsCanvas
+        ref={ref}
+        rgbaData={new Uint8ClampedArray(100 * 50 * 4)}
+        width={100}
+        height={50}
+        showGrid={false}
+        showCrosshair={false}
+        cursorX={-1}
+        cursorY={-1}
+      />,
+    );
+    triggerLayout(view, 200, 100);
+
+    act(() => {
+      ref.current?.setTransform(50, 25, 3, { animated: false });
+    });
+
+    const before = ref.current?.getTransform();
+    expect(before?.scale).toBe(3);
+
+    act(() => {
+      ref.current?.resetView();
+    });
+
+    const after = ref.current?.getTransform();
+    expect(after?.scale).toBe(1);
+    expect(after?.translateX).toBe(0);
+    expect(after?.translateY).toBe(0);
+  });
+
   it("applies pinch sensitivity from gesture config", () => {
     const ref = React.createRef<FitsCanvasHandle>();
     const view = render(

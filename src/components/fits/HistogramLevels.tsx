@@ -4,9 +4,13 @@ import { Canvas, Path, Line, Skia, vec, LinearGradient, Rect } from "@shopify/re
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
-import { Button, Chip, useThemeColor } from "heroui-native";
+import { Button, Chip } from "heroui-native";
 import { transformHistogramCounts } from "../../lib/utils/pixelMath";
-import type { HistogramMode, ChannelHistogramData } from "../../lib/fits/types";
+import type {
+  HistogramMode,
+  ChannelHistogramData,
+  HistogramDiagnostics,
+} from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
 
 type DragTarget = "black" | "white" | "midtone" | "outBlack" | "outWhite" | null;
@@ -18,6 +22,7 @@ interface HistogramLevelsProps {
   edges: number[];
   regionCounts?: number[];
   rgbHistogram?: ChannelHistogramData | null;
+  diagnostics?: HistogramDiagnostics | null;
   inputRange?: { min: number; max: number } | null;
   blackPoint?: number;
   whitePoint?: number;
@@ -66,11 +71,17 @@ function formatEdgeLabel(value: number | undefined, range: number): string {
   return value.toFixed(4);
 }
 
+function formatClipPercent(value: number) {
+  if (!Number.isFinite(value)) return "0.00%";
+  return `${value.toFixed(value >= 10 ? 1 : 2)}%`;
+}
+
 export function HistogramLevels({
   counts,
   edges,
   regionCounts,
   rgbHistogram,
+  diagnostics,
   inputRange,
   blackPoint = 0,
   whitePoint = 1,
@@ -90,9 +101,6 @@ export function HistogramLevels({
   initialMode = "linear",
 }: HistogramLevelsProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
-  const accentColor = useThemeColor("accent");
-  const successColor = useThemeColor("success");
 
   const [canvasWidth, setCanvasWidth] = useState(0);
   const [mode, setMode] = useState<HistogramMode>(initialMode);
@@ -268,17 +276,17 @@ export function HistogramLevels({
   // Paints
   const bgPaint = useMemo(() => {
     const p = Skia.Paint();
-    p.setColor(Skia.Color(mutedColor || "#555"));
+    p.setColor(Skia.Color("#71717a"));
     p.setAlphaf(0.25);
     return p;
-  }, [mutedColor]);
+  }, []);
 
   const rangePaint = useMemo(() => {
     const p = Skia.Paint();
-    p.setColor(Skia.Color(accentColor || "#22c55e"));
+    p.setColor(Skia.Color("#006fee"));
     p.setAlphaf(0.5);
     return p;
-  }, [accentColor]);
+  }, []);
 
   const regionPaint = useMemo(() => {
     const p = Skia.Paint();
@@ -595,7 +603,7 @@ export function HistogramLevels({
               <Ionicons
                 name="scan-outline"
                 size={11}
-                color={isRegionSelectActive ? "#fff" : mutedColor}
+                className={isRegionSelectActive ? "text-white" : "text-muted"}
               />
             </Button>
           )}
@@ -606,7 +614,7 @@ export function HistogramLevels({
               onPress={onAutoStretch}
               className="flex-row items-center bg-primary/20 rounded-md px-1.5 py-0.5"
             >
-              <Ionicons name="flash-outline" size={10} color={successColor} />
+              <Ionicons name="flash-outline" size={10} className="text-success" />
               <Button.Label className="text-[8px] font-semibold text-primary ml-0.5">
                 {t("viewer.autoStretch")}
               </Button.Label>
@@ -620,7 +628,7 @@ export function HistogramLevels({
               onPress={onResetLevels}
               className="h-6 w-6"
             >
-              <Ionicons name="refresh-outline" size={11} color={mutedColor} />
+              <Ionicons name="refresh-outline" size={11} className="text-muted" />
             </Button>
           )}
           {hasRgb && (
@@ -749,6 +757,23 @@ export function HistogramLevels({
           </Text>
         </View>
       </View>
+
+      {diagnostics && (
+        <View className="mt-1">
+          <Text className="text-[8px] text-muted">
+            {t("viewer.histP1")} {formatEdgeLabel(diagnostics.p1 ?? undefined, inputLabelRange)} ·{" "}
+            {t("viewer.histP50")} {formatEdgeLabel(diagnostics.p50 ?? undefined, inputLabelRange)} ·{" "}
+            {t("viewer.histP99")} {formatEdgeLabel(diagnostics.p99 ?? undefined, inputLabelRange)} ·{" "}
+            {t("viewer.histPeak")}{" "}
+            {formatEdgeLabel(diagnostics.peakValue ?? undefined, inputLabelRange)}
+          </Text>
+          <Text className="text-[8px] text-muted">
+            {t("viewer.clipLow")} {formatClipPercent(diagnostics.clipLowPercent)} ·{" "}
+            {t("viewer.clipHigh")} {formatClipPercent(diagnostics.clipHighPercent)}
+            {diagnostics.isApproximate && ` · ~ ${t("viewer.approximate")}`}
+          </Text>
+        </View>
+      )}
 
       {/* Output Levels */}
       {hasOutputControls && (

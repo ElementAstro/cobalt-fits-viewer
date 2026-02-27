@@ -10,6 +10,9 @@ interface UseViewerHotkeysOptions {
   onToggleCrosshair: () => void;
   onToggleMinimap: () => void;
   onTogglePixelInfo: () => void;
+  onOneToOne?: () => void;
+  onFit?: () => void;
+  onPan?: (dx: number, dy: number) => void;
 }
 
 function isEditableTarget(target: EventTarget | null) {
@@ -27,6 +30,9 @@ export function useViewerHotkeys({
   onToggleCrosshair,
   onToggleMinimap,
   onTogglePixelInfo,
+  onOneToOne,
+  onFit,
+  onPan,
 }: UseViewerHotkeysOptions) {
   useEffect(() => {
     if (!enabled || Platform.OS !== "web") return;
@@ -54,6 +60,24 @@ export function useViewerHotkeys({
       } else if (key === "p") {
         event.preventDefault();
         onTogglePixelInfo();
+      } else if (key === "1" && onOneToOne) {
+        event.preventDefault();
+        onOneToOne();
+      } else if (key === "f" && onFit) {
+        event.preventDefault();
+        onFit();
+      } else if (key === "arrowleft" && onPan) {
+        event.preventDefault();
+        onPan(-50, 0);
+      } else if (key === "arrowright" && onPan) {
+        event.preventDefault();
+        onPan(50, 0);
+      } else if (key === "arrowup" && onPan) {
+        event.preventDefault();
+        onPan(0, -50);
+      } else if (key === "arrowdown" && onPan) {
+        event.preventDefault();
+        onPan(0, 50);
       }
     };
     window.addEventListener("keydown", handler);
@@ -67,5 +91,8 @@ export function useViewerHotkeys({
     onToggleCrosshair,
     onToggleMinimap,
     onTogglePixelInfo,
+    onOneToOne,
+    onFit,
+    onPan,
   ]);
 }

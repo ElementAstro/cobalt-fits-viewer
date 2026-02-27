@@ -30,7 +30,8 @@ import {
   reconcileSessionsFromLinkedFilesGraph,
   type SessionReconcileSummary,
 } from "../lib/sessions/sessionReconciliation";
-import type { ObservationSession } from "../lib/fits/types";
+import { dedupeTargetRefs, toTargetRef } from "../lib/targets/targetRefs";
+import type { ObservationSession, SessionEquipment } from "../lib/fits/types";
 
 interface EndLiveSessionWithIntegrationResult {
   session: ObservationSession | null;
@@ -48,6 +49,75 @@ interface AutoDetectSessionsResult {
 
 function stableEquals(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function dedupeStringValues(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+  for (const value of values) {
+    if (!value) continue;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    next.push(trimmed);
+  }
+  return next;
+}
+
+function normalizeDraftEquipment(
+  equipment: SessionEquipment | undefined,
+): SessionEquipment | undefined {
+  if (!equipment) return undefined;
+  const filters = dedupeStringValues(equipment.filters ?? []);
+  const normalized = {
+    ...(equipment.telescope?.trim() ? { telescope: equipment.telescope.trim() } : {}),
+    ...(equipment.camera?.trim() ? { camera: equipment.camera.trim() } : {}),
+    ...(equipment.mount?.trim() ? { mount: equipment.mount.trim() } : {}),
+    ...(filters.length > 0 ? { filters } : {}),
+  };
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function mergeSessionEquipment(
+  derived: SessionEquipment,
+  draft: SessionEquipment | undefined,
+): SessionEquipment {
+  const normalizedDraft = normalizeDraftEquipment(draft);
+  const filters = dedupeStringValues([
+    ...(derived.filters ?? []),
+    ...(normalizedDraft?.filters ?? []),
+  ]);
+  return {
+    ...derived,
+    ...(normalizedDraft?.telescope ? { telescope: normalizedDraft.telescope } : {}),
+    ...(normalizedDraft?.camera ? { camera: normalizedDraft.camera } : {}),
+    ...(normalizedDraft?.mount ? { mount: normalizedDraft.mount } : {}),
+    ...(filters.length > 0 ? { filters } : {}),
+  };
+}
+
+function applySessionReconciliation(sessionIds?: string[]): SessionReconcileSummary {
+  const state = useSessionStore.getState();
+  const {
+    sessions: nextSessions,
+    logEntries: nextLogEntries,
+    summary,
+  } = reconcileSessionsFromLinkedFilesGraph({
+    sessionIds,
+    sessions: state.sessions,
+    files: useFitsStore.getState().files,
+    logEntries: state.logEntries,
+    targetCatalog: useTargetStore.getState().targets,
+  });
+
+  if (summary.changed) {
+    useSessionStore.setState({
+      sessions: nextSessions,
+      logEntries: nextLogEntries,
+    });
+  }
+
+  return summary;
 }
 
 export function useSessions() {
@@ -77,6 +147,7 @@ export function useSessions() {
     let updatedCount = 0;
     let mergedCount = 0;
     let skippedCount = 0;
+    const affectedSessionIds = new Set<string>();
 
     for (const detectedSession of detected) {
       const sessionFiles = files.filter((f) => detectedSession.imageIds.includes(f.id));
@@ -105,6 +176,7 @@ export function useSessions() {
         if (entries.length > 0) {
           addLogEntries(entries);
         }
+        affectedSessionIds.add(integratedSession.id);
         newCount++;
         continue;
       }
@@ -164,6 +236,7 @@ export function useSessions() {
         addLogEntries(missingLogs);
       }
 
+      affectedSessionIds.add(matchedSession.id);
       updatedCount++;
       if (
         nextSessionData.imageIds.length > matchedSession.imageIds.length ||
@@ -171,6 +244,10 @@ export function useSessions() {
       ) {
         mergedCount++;
       }
+    }
+
+    if (affectedSessionIds.size > 0) {
+      applySessionReconciliation([...affectedSessionIds]);
     }
 
     return {
@@ -191,33 +268,16 @@ export function useSessions() {
   ]);
 
   const reconcileSessionsFromLinkedFiles = useCallback(
-    (sessionIds?: string[]): SessionReconcileSummary => {
-      const state = useSessionStore.getState();
-      const {
-        sessions: nextSessions,
-        logEntries: nextLogEntries,
-        summary,
-      } = reconcileSessionsFromLinkedFilesGraph({
-        sessionIds,
-        sessions: state.sessions,
-        files: useFitsStore.getState().files,
-        logEntries: state.logEntries,
-        targetCatalog: useTargetStore.getState().targets,
-      });
-
-      if (summary.changed) {
-        useSessionStore.setState({
-          sessions: nextSessions,
-          logEntries: nextLogEntries,
-        });
-      }
-
-      return summary;
-    },
+    (sessionIds?: string[]): SessionReconcileSummary => applySessionReconciliation(sessionIds),
     [],
   );
 
   const endLiveSessionWithIntegration = useCallback((): EndLiveSessionWithIntegrationResult => {
+    const activeSnapshot = useSessionStore.getState().activeSession;
+    const draftTargets = dedupeStringValues(activeSnapshot?.draftTargets ?? []);
+    const draftEquipment = normalizeDraftEquipment(activeSnapshot?.draftEquipment);
+    const draftLocation = activeSnapshot?.draftLocation;
+
     const endedSession = endLiveSession();
     if (!endedSession) {
       return {
@@ -227,13 +287,23 @@ export function useSessions() {
       };
     }
 
-    const linkedFiles = files.filter((file) => file.sessionId === endedSession.id);
+    const linkedFiles = useFitsStore
+      .getState()
+      .files.filter((file) => file.sessionId === endedSession.id);
     const derived = deriveSessionMetadataFromFiles(linkedFiles, targetCatalog);
+    const mergedTargetRefs = dedupeTargetRefs(
+      [
+        ...derived.targetRefs,
+        ...draftTargets.map((targetName) => toTargetRef(targetName, targetCatalog)),
+      ],
+      targetCatalog,
+    );
+    const mergedEquipment = mergeSessionEquipment(derived.equipment, draftEquipment);
     const integrated = mergeSessionLike(endedSession, {
-      targetRefs: derived.targetRefs,
+      targetRefs: mergedTargetRefs,
       imageIds: derived.imageIds,
-      equipment: derived.equipment,
-      location: derived.location,
+      equipment: mergedEquipment,
+      location: draftLocation ?? derived.location,
     }) as ObservationSession;
 
     updateSession(endedSession.id, {
@@ -243,7 +313,11 @@ export function useSessions() {
       location: integrated.location,
     });
 
-    const missingLogs = buildMissingLogEntries(linkedFiles, endedSession.id, logEntries);
+    const missingLogs = buildMissingLogEntries(
+      linkedFiles,
+      endedSession.id,
+      useSessionStore.getState().logEntries,
+    );
     if (missingLogs.length > 0) {
       addLogEntries(missingLogs);
     }
@@ -253,7 +327,7 @@ export function useSessions() {
       linkedFileCount: linkedFiles.length,
       linkedLogCount: missingLogs.length,
     };
-  }, [addLogEntries, endLiveSession, files, logEntries, targetCatalog, updateSession]);
+  }, [addLogEntries, endLiveSession, targetCatalog, updateSession]);
 
   const getSessionStats = useCallback(() => {
     return calculateObservationStats(sessions, files);

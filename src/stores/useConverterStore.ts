@@ -59,6 +59,10 @@ const DEFAULT_OPTIONS: ConvertOptions = {
   outputWhite: 1,
   includeAnnotations: false,
   includeWatermark: false,
+  outputSize: undefined,
+  targetFileSize: undefined,
+  compressionMode: "quality",
+  webpLossless: false,
 };
 
 export const useConverterStore = create<ConverterStoreState>((set, get) => ({

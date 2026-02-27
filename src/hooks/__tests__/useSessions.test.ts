@@ -99,6 +99,7 @@ describe("useSessions", () => {
   let sessionState: {
     sessions: Array<Record<string, unknown>>;
     logEntries: Array<Record<string, unknown>>;
+    activeSession: Record<string, unknown> | null;
     addSession: jest.Mock;
     addLogEntries: jest.Mock;
     updateSession: jest.Mock;
@@ -131,6 +132,7 @@ describe("useSessions", () => {
         },
       ],
       logEntries: [{ id: "log_f1", sessionId: "s-old", imageId: "f1" }],
+      activeSession: null,
       addSession,
       addLogEntries,
       updateSession,
@@ -243,6 +245,20 @@ describe("useSessions", () => {
     expect(addLogEntries).toHaveBeenCalledWith([{ id: "log_f2", sessionId: "s-new" }]);
   });
 
+  it("autoDetectSessions triggers incremental reconciliation for affected sessions", () => {
+    const { result } = renderHook(() => useSessions());
+
+    act(() => {
+      result.current.autoDetectSessions();
+    });
+
+    expect(reconciliationLib.reconcileSessionsFromLinkedFilesGraph).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sessionIds: ["s-new"],
+      }),
+    );
+  });
+
   it("updates matched duplicate sessions instead of skipping", () => {
     const matched = {
       id: "s-old",
@@ -347,6 +363,80 @@ describe("useSessions", () => {
         updated: 1,
       }),
     );
+  });
+
+  it("endLiveSessionWithIntegration merges draft metadata with derived metadata", () => {
+    sessionState.activeSession = {
+      id: "live-1",
+      startedAt: 10,
+      totalPausedMs: 0,
+      notes: [],
+      status: "running",
+      draftTargets: ["M31", "NGC 7000"],
+      draftEquipment: {
+        telescope: "Draft Scope",
+        mount: "Draft Mount",
+        filters: ["OIII", "SII"],
+      },
+      draftLocation: {
+        placeName: "Draft Site",
+        latitude: 39.9,
+        longitude: 116.4,
+      },
+    };
+    endLiveSession.mockReturnValue({
+      id: "live-1",
+      date: "2025-01-01",
+      startTime: 1,
+      endTime: 2,
+      duration: 1,
+      targetRefs: [],
+      imageIds: [],
+      equipment: {},
+      notes: "kept-note",
+      createdAt: 1,
+    });
+    linkingLib.deriveSessionMetadataFromFiles.mockReturnValue({
+      targetRefs: [{ name: "M42", targetId: "t1" }],
+      imageIds: ["f1", "f2"],
+      equipment: {
+        telescope: "Derived Scope",
+        camera: "Derived Camera",
+        filters: ["Ha", "OIII"],
+      },
+      location: { placeName: "Derived Site", latitude: 1, longitude: 2 },
+    });
+    linkingLib.buildMissingLogEntries.mockReturnValue([{ id: "log_f2", sessionId: "live-1" }]);
+
+    const { result } = renderHook(() => useSessions());
+
+    act(() => {
+      result.current.endLiveSessionWithIntegration();
+    });
+
+    expect(updateSession).toHaveBeenCalledWith(
+      "live-1",
+      expect.objectContaining({
+        imageIds: ["f1", "f2"],
+        targetRefs: expect.arrayContaining([
+          expect.objectContaining({ name: "M42" }),
+          expect.objectContaining({ name: "M31" }),
+          expect.objectContaining({ name: "NGC 7000" }),
+        ]),
+        equipment: expect.objectContaining({
+          telescope: "Draft Scope",
+          camera: "Derived Camera",
+          mount: "Draft Mount",
+          filters: ["Ha", "OIII", "SII"],
+        }),
+        location: expect.objectContaining({
+          placeName: "Draft Site",
+          latitude: 39.9,
+          longitude: 116.4,
+        }),
+      }),
+    );
+    expect(addLogEntries).toHaveBeenCalledWith([{ id: "log_f2", sessionId: "live-1" }]);
   });
 
   it("exports stats and date helpers", () => {

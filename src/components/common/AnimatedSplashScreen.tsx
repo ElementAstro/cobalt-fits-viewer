@@ -139,12 +139,13 @@ export function AnimatedSplashScreen({ children }: PropsWithChildren) {
       {!isSplashDone && (
         <Animated.View
           style={[StyleSheet.absoluteFill, styles.overlay, overlayStyle]}
+          className="bg-background"
           pointerEvents={isAppReady ? "none" : "auto"}
         >
           {/* Logo icon */}
           <Animated.View style={[styles.logoContainer, logoStyle]}>
-            <View style={styles.logoCircle}>
-              <Ionicons name="telescope" size={48} color="#22c55e" />
+            <View style={styles.logoCircle} className="border-accent bg-accent/10">
+              <Ionicons name="telescope" size={48} className="text-accent" />
             </View>
           </Animated.View>
 
@@ -155,6 +156,7 @@ export function AnimatedSplashScreen({ children }: PropsWithChildren) {
               titleStyle,
               getFontFamily("bold") ? { fontFamily: getFontFamily("bold") } : undefined,
             ]}
+            className="text-foreground"
           >
             {t("splash.appName")}
           </Animated.Text>
@@ -166,6 +168,7 @@ export function AnimatedSplashScreen({ children }: PropsWithChildren) {
               subtitleStyle,
               getFontFamily("regular") ? { fontFamily: getFontFamily("regular") } : undefined,
             ]}
+            className="text-muted"
           >
             {t("splash.tagline")}
           </Animated.Text>
@@ -175,13 +178,11 @@ export function AnimatedSplashScreen({ children }: PropsWithChildren) {
   );
 }
 
-// Colors are hardcoded because AnimatedSplashScreen renders before the theme provider is available
 const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
   overlay: {
-    backgroundColor: "#000000",
     alignItems: "center",
     justifyContent: "center",
   },
@@ -193,21 +194,17 @@ const styles = StyleSheet.create({
     height: 96,
     borderRadius: 48,
     borderWidth: 2.5,
-    borderColor: "#22c55e",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(34, 197, 94, 0.08)",
   },
   title: {
     fontSize: 28,
     fontWeight: "700",
-    color: "#ffffff",
     letterSpacing: 2,
   },
   subtitle: {
     marginTop: 8,
     fontSize: 14,
-    color: "#9ca3af",
     letterSpacing: 0.5,
   },
 });

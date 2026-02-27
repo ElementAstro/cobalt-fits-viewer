@@ -219,6 +219,17 @@ jest.mock("heroui-native", () => {
   PressableFeedback.Ripple = c("pressable-feedback-ripple");
   const Skeleton = c("skeleton");
 
+  const Popover = c("popover");
+  Popover.Trigger = (props) => {
+    const child = props.children;
+    return React.createElement(View, { testID: "popover-trigger", ...props }, child);
+  };
+  Popover.Portal = c("popover-portal");
+  Popover.Overlay = c("popover-overlay");
+  Popover.Content = c("popover-content");
+  Popover.Title = (props) => React.createElement(Text, props, props.children);
+  Popover.Close = c("popover-close");
+
   const TextField = c("textfield");
   const TextArea = (props) => React.createElement(TextInput, { testID: "text-area", ...props });
   const FieldError = (props) =>
@@ -231,12 +242,15 @@ jest.mock("heroui-native", () => {
   Alert.Description = (props) =>
     React.createElement(Text, { testID: "alert-description", ...props }, props.children);
 
+  const mockToast = { show: jest.fn(), close: jest.fn(), closeAll: jest.fn() };
+
   return {
     BottomSheet,
     Button,
     Card,
     Chip,
     Dialog,
+    Popover,
     Tabs,
     Accordion,
     Alert,
@@ -262,6 +276,7 @@ jest.mock("heroui-native", () => {
     CloseButton: c("close-button"),
     HeroUINativeProvider: (props) => React.createElement(View, null, props.children),
     useThemeColor: (keys) => (Array.isArray(keys) ? keys.map(() => "#000000") : "#000000"),
+    useToast: () => ({ toast: mockToast }),
   };
 });
 

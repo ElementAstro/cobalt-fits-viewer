@@ -8,6 +8,7 @@ import { useI18n, type TranslationKey } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useShallow } from "zustand/shallow";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageEditor } from "../../hooks/useImageEditor";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
@@ -44,20 +45,22 @@ export default function EditorDetailScreen() {
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
   const updateFile = useFitsStore((s) => s.updateFile);
   const isVideoFile = file?.mediaKind === "video" || file?.sourceType === "video";
-  const editorSettings = useSettingsStore((s) => ({
-    defaultBlurSigma: s.defaultBlurSigma,
-    defaultSharpenAmount: s.defaultSharpenAmount,
-    defaultDenoiseRadius: s.defaultDenoiseRadius,
-    editorMaxUndo: s.editorMaxUndo,
-    imageProcessingProfile: s.imageProcessingProfile,
-    canvasMinScale: s.canvasMinScale,
-    canvasMaxScale: s.canvasMaxScale,
-    canvasDoubleTapScale: s.canvasDoubleTapScale,
-    canvasPinchSensitivity: s.canvasPinchSensitivity,
-    canvasPinchOverzoomFactor: s.canvasPinchOverzoomFactor,
-    canvasPanRubberBandFactor: s.canvasPanRubberBandFactor,
-    canvasWheelZoomSensitivity: s.canvasWheelZoomSensitivity,
-  }));
+  const editorSettings = useSettingsStore(
+    useShallow((s) => ({
+      defaultBlurSigma: s.defaultBlurSigma,
+      defaultSharpenAmount: s.defaultSharpenAmount,
+      defaultDenoiseRadius: s.defaultDenoiseRadius,
+      editorMaxUndo: s.editorMaxUndo,
+      imageProcessingProfile: s.imageProcessingProfile,
+      canvasMinScale: s.canvasMinScale,
+      canvasMaxScale: s.canvasMaxScale,
+      canvasDoubleTapScale: s.canvasDoubleTapScale,
+      canvasPinchSensitivity: s.canvasPinchSensitivity,
+      canvasPinchOverzoomFactor: s.canvasPinchOverzoomFactor,
+      canvasPanRubberBandFactor: s.canvasPanRubberBandFactor,
+      canvasWheelZoomSensitivity: s.canvasWheelZoomSensitivity,
+    })),
+  );
   const {
     pixels,
     dimensions,

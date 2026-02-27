@@ -3,6 +3,10 @@ jest.mock("expo-notifications", () => ({
   scheduleNotificationAsync: jest.fn(async () => "notif-id"),
 }));
 
+jest.mock("expo", () => ({
+  isRunningInExpoGo: jest.fn(() => false),
+}));
+
 jest.mock("../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
@@ -54,6 +58,23 @@ jest.mock("../../lib/utils/fileManager", () => ({
   importFile: (_uri: string, _name: string) => ({ uri: `file:///managed/out_${mockIdSeq}.mp4` }),
   generateFileId: () => `generated_${mockIdSeq++}`,
 }));
+
+const mockGetFreeDiskBytes = jest.fn() as jest.Mock<Promise<number | null>>;
+jest.mock("../../lib/utils/diskSpace", () => ({
+  getFreeDiskBytes: () => mockGetFreeDiskBytes(),
+}));
+
+const mockEstimateOutputSizeBytes = jest.fn() as jest.Mock<
+  number | null,
+  [number | undefined, number | undefined]
+>;
+jest.mock("../../lib/video/format", () => {
+  const actual = jest.requireActual("../../lib/video/format");
+  return {
+    ...actual,
+    estimateOutputSizeBytes: (d?: number, b?: number) => mockEstimateOutputSizeBytes(d, b),
+  };
+});
 
 jest.mock("../../lib/video/metadata", () => ({
   extractVideoMetadata: jest.fn(async () => ({
@@ -311,6 +332,37 @@ describe("useVideoProcessing", () => {
       .files.find((file) => file.derivedFromId === "source-video");
     expect(derived?.mediaKind).toBe("audio");
     expect(derived?.sourceType).toBe("audio");
+  });
+
+  it("checkDiskSpaceForTask returns null when estimate is unavailable", async () => {
+    mockEstimateOutputSizeBytes.mockReturnValue(null);
+    const { result } = await renderReadyHook();
+    const err = await result.current.checkDiskSpaceForTask(baseRequest);
+    expect(err).toBeNull();
+  });
+
+  it("checkDiskSpaceForTask returns null when enough disk space", async () => {
+    mockEstimateOutputSizeBytes.mockReturnValue(100_000);
+    mockGetFreeDiskBytes.mockResolvedValue(500_000);
+    const { result } = await renderReadyHook();
+    const err = await result.current.checkDiskSpaceForTask(baseRequest);
+    expect(err).toBeNull();
+  });
+
+  it("checkDiskSpaceForTask returns error when disk space insufficient", async () => {
+    mockEstimateOutputSizeBytes.mockReturnValue(500_000);
+    mockGetFreeDiskBytes.mockResolvedValue(100_000);
+    const { result } = await renderReadyHook();
+    const err = await result.current.checkDiskSpaceForTask(baseRequest);
+    expect(err).toBe("insufficient_disk_space");
+  });
+
+  it("checkDiskSpaceForTask returns null when free disk check fails", async () => {
+    mockEstimateOutputSizeBytes.mockReturnValue(100_000);
+    mockGetFreeDiskBytes.mockResolvedValue(null);
+    const { result } = await renderReadyHook();
+    const err = await result.current.checkDiskSpaceForTask(baseRequest);
+    expect(err).toBeNull();
   });
 
   it("returns explicit error when engine is unavailable", async () => {

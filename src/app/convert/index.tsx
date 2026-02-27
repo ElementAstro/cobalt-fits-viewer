@@ -170,7 +170,7 @@ export default function ConvertScreen() {
     reset: resetFits,
   } = useFitsFile();
   const { rgbaData, processImage } = useImageProcessing();
-  const { isExporting, exportImageDetailed } = useExport();
+  const { isExporting, exportProgress, exportImageDetailed } = useExport();
   const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
   const effectiveProcessingProfile = currentOptions.profile ?? imageProcessingProfile;
 
@@ -318,6 +318,10 @@ export default function ConvertScreen() {
         watermarkText: currentOptions.watermarkText,
       },
       source: exportSource,
+      outputSize: currentOptions.outputSize,
+      targetFileSize:
+        currentOptions.compressionMode === "targetSize" ? currentOptions.targetFileSize : undefined,
+      webpLossless: currentOptions.webpLossless || undefined,
     });
     if (detailed.path) {
       const fallbackMessage =
@@ -332,7 +336,11 @@ export default function ConvertScreen() {
 
   return (
     <View testID="e2e-screen-convert__index" className="flex-1 bg-background">
-      <LoadingOverlay visible={isFitsLoading || isExporting} message={t("common.loading")} />
+      <LoadingOverlay
+        visible={isFitsLoading || isExporting}
+        message={t("common.loading")}
+        percent={isExporting ? exportProgress : undefined}
+      />
 
       <ScrollView
         className="flex-1"
@@ -574,6 +582,124 @@ export default function ConvertScreen() {
                           ))}
                         </View>
                       </View>
+
+                      {/* Output Size */}
+                      <View>
+                        <Text className="mb-2 text-xs font-semibold text-muted">
+                          {t("converter.outputSize")}
+                        </Text>
+                        <View className="flex-row flex-wrap gap-1.5">
+                          {[undefined, 2048, 1920, 1080, 720].map((dim) => (
+                            <Chip
+                              key={dim ?? "original"}
+                              size="sm"
+                              variant={
+                                (currentOptions.outputSize?.maxWidth ?? undefined) === dim
+                                  ? "primary"
+                                  : "secondary"
+                              }
+                              onPress={() =>
+                                setOptions({
+                                  outputSize: dim ? { maxWidth: dim, maxHeight: dim } : undefined,
+                                })
+                              }
+                            >
+                              <Chip.Label className="text-[9px]">
+                                {dim ? `${dim}px` : t("converter.outputSizeOriginal")}
+                              </Chip.Label>
+                            </Chip>
+                          ))}
+                        </View>
+                      </View>
+
+                      {/* Compression Mode (JPEG/WebP) */}
+                      {(currentOptions.format === "jpeg" || currentOptions.format === "webp") && (
+                        <View>
+                          <Text className="mb-2 text-xs font-semibold text-muted">
+                            {t("converter.compressionMode")}
+                          </Text>
+                          <View className="flex-row gap-2">
+                            <Chip
+                              size="sm"
+                              variant={
+                                (currentOptions.compressionMode ?? "quality") === "quality"
+                                  ? "primary"
+                                  : "secondary"
+                              }
+                              onPress={() =>
+                                setOptions({
+                                  compressionMode: "quality",
+                                  targetFileSize: undefined,
+                                })
+                              }
+                            >
+                              <Chip.Label className="text-[9px]">
+                                {t("converter.qualityMode")}
+                              </Chip.Label>
+                            </Chip>
+                            <Chip
+                              size="sm"
+                              variant={
+                                currentOptions.compressionMode === "targetSize"
+                                  ? "primary"
+                                  : "secondary"
+                              }
+                              onPress={() =>
+                                setOptions({
+                                  compressionMode: "targetSize",
+                                  targetFileSize:
+                                    (currentOptions.targetFileSize ?? 500) * 1024 || 500 * 1024,
+                                })
+                              }
+                            >
+                              <Chip.Label className="text-[9px]">
+                                {t("converter.targetSizeMode")}
+                              </Chip.Label>
+                            </Chip>
+                          </View>
+                          {currentOptions.compressionMode === "targetSize" && (
+                            <View className="mt-2">
+                              <TextField>
+                                <Input
+                                  value={String(
+                                    Math.round(
+                                      (currentOptions.targetFileSize ?? 500 * 1024) / 1024,
+                                    ),
+                                  )}
+                                  onChangeText={(v) => {
+                                    const num = parseInt(v, 10);
+                                    if (!isNaN(num) && num >= 50 && num <= 10000) {
+                                      setOptions({ targetFileSize: num * 1024 });
+                                    }
+                                  }}
+                                  keyboardType="numeric"
+                                  placeholder={t("converter.targetFileSizeKB")}
+                                  className="text-xs"
+                                />
+                              </TextField>
+                            </View>
+                          )}
+                        </View>
+                      )}
+
+                      {/* WebP Lossless */}
+                      {currentOptions.format === "webp" && (
+                        <View>
+                          <View className="flex-row gap-2">
+                            <Chip
+                              size="sm"
+                              variant={currentOptions.webpLossless ? "primary" : "secondary"}
+                              onPress={() =>
+                                setOptions({ webpLossless: !currentOptions.webpLossless })
+                              }
+                            >
+                              <Chip.Label className="text-[9px]">
+                                {t("converter.webpLossless")}
+                              </Chip.Label>
+                            </Chip>
+                          </View>
+                        </View>
+                      )}
 
                       {currentOptions.format === "fits" && (
                         <FitsExportOptions

@@ -3,9 +3,9 @@
  * 在选择模式下显示，提供批量删除、收藏、设置状态等操作
  */
 
-import React from "react";
-import { Alert, View, Text } from "react-native";
-import { Button, useThemeColor } from "heroui-native";
+import React, { useState } from "react";
+import { View, Text } from "react-native";
+import { Button, Dialog, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 
@@ -31,21 +31,7 @@ export const TargetBatchActionBar = React.memo(function TargetBatchActionBar({
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const dangerColor = useThemeColor("danger");
-
-  const handleBatchDelete = () => {
-    Alert.alert(
-      t("targets.batch.deleteSelected"),
-      t("targets.batch.deleteConfirm", { count: selectedCount }),
-      [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("common.delete"),
-          style: "destructive",
-          onPress: onBatchDelete,
-        },
-      ],
-    );
-  };
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const allSelected = selectedCount === totalCount;
 
@@ -69,21 +55,53 @@ export const TargetBatchActionBar = React.memo(function TargetBatchActionBar({
           size="sm"
           isIconOnly
           variant="ghost"
-          onPress={onBatchFavorite}
+          onPress={() => setShowDeleteDialog(true)}
           isDisabled={selectedCount === 0}
         >
-          <Ionicons name="star-outline" size={18} color={mutedColor} />
+          <Ionicons name="trash-outline" size={18} color={dangerColor} />
         </Button>
         <Button
           size="sm"
           isIconOnly
           variant="ghost"
-          onPress={handleBatchDelete}
+          onPress={onBatchFavorite}
           isDisabled={selectedCount === 0}
         >
-          <Ionicons name="trash-outline" size={18} color={dangerColor} />
+          <Ionicons name="star-outline" size={18} color={mutedColor} />
         </Button>
       </View>
+
+      <Dialog
+        isOpen={showDeleteDialog}
+        onOpenChange={(open) => {
+          if (!open) setShowDeleteDialog(false);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content>
+            <Dialog.Title>{t("targets.batch.deleteSelected")}</Dialog.Title>
+            <Dialog.Description>
+              {t("targets.batch.deleteConfirm", { count: selectedCount })}
+            </Dialog.Description>
+            <View className="mt-4 flex-row justify-end gap-2">
+              <Button variant="outline" size="sm" onPress={() => setShowDeleteDialog(false)}>
+                <Button.Label>{t("common.cancel")}</Button.Label>
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onPress={() => {
+                  setShowDeleteDialog(false);
+                  onBatchDelete();
+                }}
+              >
+                <Button.Label>{t("common.delete")}</Button.Label>
+              </Button>
+            </View>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
     </View>
   );
 });

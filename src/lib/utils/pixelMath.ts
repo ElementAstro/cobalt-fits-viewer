@@ -12,9 +12,12 @@ export function calculateStats(pixels: Float32Array): {
   min: number;
   max: number;
   snr: number;
+  noiseSigma: number;
+  snrEstimate: number;
 } {
   const n = pixels.length;
-  if (n === 0) return { mean: 0, median: 0, stddev: 0, min: 0, max: 0, snr: 0 };
+  if (n === 0)
+    return { mean: 0, median: 0, stddev: 0, min: 0, max: 0, snr: 0, noiseSigma: 0, snrEstimate: 0 };
 
   let sum = 0;
   let min = Infinity;
@@ -31,7 +34,7 @@ export function calculateStats(pixels: Float32Array): {
   }
 
   if (validCount === 0) {
-    return { mean: 0, median: 0, stddev: 0, min: 0, max: 0, snr: 0 };
+    return { mean: 0, median: 0, stddev: 0, min: 0, max: 0, snr: 0, noiseSigma: 0, snrEstimate: 0 };
   }
 
   const mean = sum / validCount;
@@ -54,13 +57,19 @@ export function calculateStats(pixels: Float32Array): {
     if (seen % step === 0) samples.push(v);
     seen++;
   }
-  if (samples.length === 0) return { mean, median: mean, stddev, min, max, snr: 0 };
+  if (samples.length === 0)
+    return { mean, median: mean, stddev, min, max, snr: 0, noiseSigma: 0, snrEstimate: 0 };
   samples.sort((a, b) => a - b);
   const median = samples[Math.floor(samples.length / 2)];
 
   const snr = stddev > 0 ? mean / stddev : 0;
 
-  return { mean, median, stddev, min, max, snr };
+  // MAD-based robust noise estimate
+  const { mad } = computeMAD(pixels);
+  const noiseSigma = mad > 0 ? mad / 0.6745 : 0;
+  const snrEstimate = noiseSigma > 0 ? mean / noiseSigma : 0;
+
+  return { mean, median, stddev, min, max, snr, noiseSigma, snrEstimate };
 }
 
 /**
@@ -192,6 +201,128 @@ export function calculateRegionHistogram(
 }
 
 /**
+ * 从 histogram 的 CDF 中估算百分位对应像素值
+ * p 范围为 [0, 100]
+ */
+export function getHistogramPercentile(
+  counts: number[],
+  edges: number[],
+  p: number,
+): number | null {
+  const binCount = Math.min(counts.length, Math.max(0, edges.length - 1));
+  if (binCount <= 0 || !Number.isFinite(p)) return null;
+
+  const percentile = Math.max(0, Math.min(100, p));
+  let total = 0;
+  for (let i = 0; i < binCount; i++) {
+    const c = counts[i];
+    if (Number.isFinite(c) && c > 0) total += c;
+  }
+  if (total <= 0) return null;
+
+  const target = (percentile / 100) * total;
+  let cumulative = 0;
+
+  for (let i = 0; i < binCount; i++) {
+    const c = counts[i];
+    const count = Number.isFinite(c) && c > 0 ? c : 0;
+    cumulative += count;
+    if (cumulative < target) continue;
+
+    const left = edges[i];
+    const right = edges[i + 1];
+    if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
+
+    const prev = cumulative - count;
+    const ratio = count > 0 ? (target - prev) / count : 0;
+    const clamped = Math.max(0, Math.min(1, ratio));
+    return left + (right - left) * clamped;
+  }
+
+  const last = edges[binCount];
+  return Number.isFinite(last) ? last : null;
+}
+
+/**
+ * 获取 histogram 峰值所在 bin 的中心值
+ */
+export function getHistogramPeakValue(counts: number[], edges: number[]): number | null {
+  const binCount = Math.min(counts.length, Math.max(0, edges.length - 1));
+  if (binCount <= 0) return null;
+
+  let peakIndex = -1;
+  let peakCount = 0;
+  for (let i = 0; i < binCount; i++) {
+    const c = counts[i];
+    const count = Number.isFinite(c) && c > 0 ? c : 0;
+    if (count > peakCount) {
+      peakCount = count;
+      peakIndex = i;
+    }
+  }
+
+  if (peakIndex < 0) return null;
+
+  const left = edges[peakIndex];
+  const right = edges[peakIndex + 1];
+  if (!Number.isFinite(left) || !Number.isFinite(right)) return null;
+  return (left + right) / 2;
+}
+
+/**
+ * 计算给定阈值下的低端/高端裁切比例（百分比）
+ */
+export function getHistogramClipPercents(
+  counts: number[],
+  edges: number[],
+  lowValue: number,
+  highValue: number,
+): { lowPercent: number; highPercent: number } {
+  const binCount = Math.min(counts.length, Math.max(0, edges.length - 1));
+  if (binCount <= 0) return { lowPercent: 0, highPercent: 0 };
+  if (!Number.isFinite(lowValue) || !Number.isFinite(highValue)) {
+    return { lowPercent: 0, highPercent: 0 };
+  }
+
+  const lowThreshold = Math.min(lowValue, highValue);
+  const highThreshold = Math.max(lowValue, highValue);
+
+  let total = 0;
+  let lowClipped = 0;
+  let highClipped = 0;
+
+  for (let i = 0; i < binCount; i++) {
+    const rawCount = counts[i];
+    const count = Number.isFinite(rawCount) && rawCount > 0 ? rawCount : 0;
+    if (count <= 0) continue;
+
+    const start = edges[i];
+    const end = edges[i + 1];
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start === end) continue;
+
+    total += count;
+
+    if (end <= lowThreshold) {
+      lowClipped += count;
+    } else if (start < lowThreshold && end > lowThreshold) {
+      lowClipped += count * ((lowThreshold - start) / (end - start));
+    }
+
+    if (start >= highThreshold) {
+      highClipped += count;
+    } else if (start < highThreshold && end > highThreshold) {
+      highClipped += count * ((end - highThreshold) / (end - start));
+    }
+  }
+
+  if (total <= 0) return { lowPercent: 0, highPercent: 0 };
+
+  const lowPercent = Math.max(0, Math.min(100, (lowClipped / total) * 100));
+  const highPercent = Math.max(0, Math.min(100, (highClipped / total) * 100));
+  return { lowPercent, highPercent };
+}
+
+/**
  * 将直方图 counts 按指定模式变换（linear / log / cdf）
  * 抽取为公共函数，供各直方图组件共享
  */
@@ -303,7 +434,7 @@ function dilateMask(mask: boolean[], kernelSize: number): boolean[] {
   return out;
 }
 
-const zscaleCache = new WeakMap<Float32Array, { z1: number; z2: number }>();
+const zscaleCache = new WeakMap<Float32Array, Map<string, { z1: number; z2: number }>>();
 
 export function computeZScale(
   pixels: Float32Array,
@@ -314,8 +445,9 @@ export function computeZScale(
   kRej: number = 2.5,
   maxIterations: number = 5,
 ): { z1: number; z2: number } {
-  const cached = zscaleCache.get(pixels);
-  if (cached) return cached;
+  const cacheKey = `${nSamples}_${contrast}_${maxReject}_${minNPixels}_${kRej}_${maxIterations}`;
+  const cachedMap = zscaleCache.get(pixels);
+  if (cachedMap?.has(cacheKey)) return cachedMap.get(cacheKey)!;
 
   const finite = collectFinitePixels(pixels);
   if (finite.length === 0) return { z1: 0, z2: 1 };
@@ -418,7 +550,9 @@ export function computeZScale(
   } else {
     result = { z1: Math.min(vmin, vmax), z2: Math.max(vmin, vmax) };
   }
-  zscaleCache.set(pixels, result);
+  const map = zscaleCache.get(pixels) ?? new Map();
+  map.set(cacheKey, result);
+  zscaleCache.set(pixels, map);
   return result;
 }
 
@@ -426,15 +560,16 @@ export function computeZScale(
  * Percentile clipping
  * 返回指定百分位对应的像素值作为 black/white point
  */
-const percentileCache = new WeakMap<Float32Array, { z1: number; z2: number }>();
+const percentileCache = new WeakMap<Float32Array, Map<string, { z1: number; z2: number }>>();
 
 export function computePercentile(
   pixels: Float32Array,
   lowPercentile: number = 1,
   highPercentile: number = 99,
 ): { z1: number; z2: number } {
-  const cached = percentileCache.get(pixels);
-  if (cached) return cached;
+  const cacheKey = `${lowPercentile}_${highPercentile}`;
+  const cachedMap = percentileCache.get(pixels);
+  if (cachedMap?.has(cacheKey)) return cachedMap.get(cacheKey)!;
 
   const finite = collectFinitePixels(pixels);
   if (finite.length === 0) return { z1: 0, z2: 1 };
@@ -456,7 +591,9 @@ export function computePercentile(
     z1: percentileFromSorted(values, p1),
     z2: percentileFromSorted(values, p2),
   };
-  percentileCache.set(pixels, result);
+  const map = percentileCache.get(pixels) ?? new Map();
+  map.set(cacheKey, result);
+  percentileCache.set(pixels, map);
   return result;
 }
 

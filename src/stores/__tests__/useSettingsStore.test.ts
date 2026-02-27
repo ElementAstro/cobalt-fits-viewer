@@ -1029,6 +1029,7 @@ describe("useSettingsStore — orientationLock", () => {
       expect(store.videoProcessingConcurrency).toBe(2);
       expect(store.defaultVideoProfile).toBe("compatibility");
       expect(store.defaultVideoTargetPreset).toBe("1080p");
+      expect(store.videoResumePlayback).toBe(true);
 
       store.setVideoAutoplay(true);
       store.setVideoLoopByDefault(true);
@@ -1039,6 +1040,7 @@ describe("useSettingsStore — orientationLock", () => {
       store.setDefaultVideoTargetPreset("720p");
       store.setVideoCoreEnabled(false);
       store.setVideoProcessingEnabled(false);
+      store.setVideoResumePlayback(false);
 
       const s = useSettingsStore.getState();
       expect(s.videoAutoplay).toBe(true);
@@ -1050,6 +1052,7 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.defaultVideoTargetPreset).toBe("720p");
       expect(s.videoCoreEnabled).toBe(false);
       expect(s.videoProcessingEnabled).toBe(false);
+      expect(s.videoResumePlayback).toBe(false);
     });
 
     it("sanitizes video numeric patch values and persists video fields", () => {
@@ -1067,6 +1070,7 @@ describe("useSettingsStore — orientationLock", () => {
         videoAutoplay?: boolean;
         videoLoopByDefault?: boolean;
         videoMutedByDefault?: boolean;
+        videoResumePlayback?: boolean;
         videoThumbnailTimeMs?: number;
         videoProcessingConcurrency?: number;
         defaultVideoProfile?: string;
@@ -1081,6 +1085,7 @@ describe("useSettingsStore — orientationLock", () => {
       expect(partial.defaultVideoTargetPreset).toBe(s.defaultVideoTargetPreset);
       expect(partial.videoCoreEnabled).toBe(s.videoCoreEnabled);
       expect(partial.videoProcessingEnabled).toBe(s.videoProcessingEnabled);
+      expect(partial.videoResumePlayback).toBe(s.videoResumePlayback);
     });
 
     it("onRehydrateStorage syncs runtime theme from hydrated state", () => {

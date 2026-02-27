@@ -7,6 +7,7 @@ export { CreateSessionSheet } from "./CreateSessionSheet";
 export { EditSessionSheet } from "./EditSessionSheet";
 export { EquipmentFields } from "./EquipmentFields";
 export { MonthlyActivityChart } from "./MonthlyActivityChart";
+export { LiveSessionMetaSheet } from "./LiveSessionMetaSheet";
 export { ObservationCalendar } from "./ObservationCalendar";
 export { PlanActionSheet } from "./PlanActionSheet";
 export { PlanCard } from "./PlanCard";

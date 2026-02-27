@@ -80,9 +80,7 @@ export function BatchRenameSheet({
     const result = onApplyRenames(
       changed.map((item) => ({ fileId: item.id, filename: item.newName })),
     );
-    const message = t("files.renamePartial")
-      .replace("{success}", String(result.success))
-      .replace("{failed}", String(result.failed));
+    const message = t("files.renamePartial", { success: result.success, failed: result.failed });
 
     if (result.failed > 0) {
       Alert.alert(t("common.error"), message);

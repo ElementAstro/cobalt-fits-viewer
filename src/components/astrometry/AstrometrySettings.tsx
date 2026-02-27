@@ -5,16 +5,7 @@
 
 import { useState, useCallback } from "react";
 import { View, Text, Alert } from "react-native";
-import {
-  Button,
-  Card,
-  Input,
-  Label,
-  Separator,
-  Switch,
-  TextField,
-  useThemeColor,
-} from "heroui-native";
+import { Button, Card, Input, Label, Separator, Switch, TextField } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useAstrometry } from "../../hooks/useAstrometry";
@@ -37,9 +28,6 @@ const SCALE_UNIT_OPTIONS = [
 export function AstrometrySettings() {
   const { t } = useI18n();
   const { config, setConfig, saveApiKey, testConnection } = useAstrometry();
-  const successColor = useThemeColor("success");
-  const dangerColor = useThemeColor("danger");
-  const mutedColor = useThemeColor("muted");
 
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [serverInput, setServerInput] = useState(config.serverUrl);
@@ -117,7 +105,7 @@ export function AstrometrySettings() {
               <Ionicons
                 name={connectionStatus === "success" ? "checkmark-circle" : "close-circle"}
                 size={14}
-                color={connectionStatus === "success" ? successColor : dangerColor}
+                className={connectionStatus === "success" ? "text-success" : "text-danger"}
               />
               <Text
                 className={`text-xs ${connectionStatus === "success" ? "text-success" : "text-danger"}`}
@@ -181,7 +169,7 @@ export function AstrometrySettings() {
           <Separator />
           <View className="flex-row items-center justify-between py-3">
             <View className="flex-row items-center gap-3">
-              <Ionicons name="flash-outline" size={18} color={mutedColor} />
+              <Ionicons name="flash-outline" size={18} className="text-muted" />
               <Text className="text-sm text-foreground">{t("astrometry.autoSolve")}</Text>
             </View>
             <Switch

@@ -24,6 +24,7 @@ interface TargetCardProps {
   frameCount: number;
   totalExposureMinutes: number;
   completionPercent?: number;
+  isSelected?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
   onToggleFavorite?: () => void;
@@ -42,6 +43,7 @@ export const TargetCard = React.memo(function TargetCard({
   frameCount,
   totalExposureMinutes,
   completionPercent,
+  isSelected = false,
   onPress,
   onLongPress,
   onToggleFavorite,
@@ -94,63 +96,78 @@ export const TargetCard = React.memo(function TargetCard({
   const statusDotSize = resolvedInteractionUi.effectivePreset === "accessible" ? 10 : 8;
   const showStatusInline = actionControlMode === "icon";
 
+  const progressColor =
+    completionPercent !== undefined
+      ? completionPercent < 30
+        ? "bg-warning"
+        : completionPercent < 70
+          ? "bg-accent"
+          : "bg-success"
+      : "bg-success";
+
+  const hasFooterContent = target.category || target.tags.length > 0 || target.aliases.length > 0;
+
   return (
     <PressableFeedback onPress={onPress} onLongPress={onLongPress}>
       <PressableFeedback.Highlight />
-      <Card variant="secondary">
-        <Card.Body className="gap-2 p-4">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2 flex-1">
-              <Ionicons
-                name={getTargetIcon(target.type).name as keyof typeof Ionicons.glyphMap}
-                size={resolvedInteractionUi.iconSize}
-                color={getTargetIcon(target.type).color}
-              />
-              <Card.Title className="flex-shrink" numberOfLines={1}>
-                {target.name}
-              </Card.Title>
-            </View>
-            <View
-              className={`flex-row items-center ${actionControlMode === "checkbox" ? "gap-1" : "gap-2"}`}
-            >
-              {showPinned && onTogglePinned && (
-                <PinButton
-                  isPinned={target.isPinned}
-                  onTogglePinned={onTogglePinned}
-                  mode={actionControlMode}
-                  interactionUi={resolvedInteractionUi}
-                  label={t("targets.pin")}
-                  testID="target-card-pin"
-                />
-              )}
-              {showFavorite && onToggleFavorite && (
-                <FavoriteButton
-                  isFavorite={target.isFavorite}
-                  onToggleFavorite={onToggleFavorite}
-                  mode={actionControlMode}
-                  interactionUi={resolvedInteractionUi}
-                  label={t("targets.favorites")}
-                  testID="target-card-favorite"
-                />
-              )}
-              {showStatusInline && (
-                <View className="flex-row items-center gap-1.5">
-                  <View
-                    className="rounded-full"
-                    style={{
-                      backgroundColor: statusColor,
-                      width: statusDotSize,
-                      height: statusDotSize,
-                    }}
-                  />
-                  <Card.Description className={statusTextClassName}>
-                    {t(targetStatusI18nKey(target.status))}
-                  </Card.Description>
-                </View>
-              )}
-            </View>
-          </View>
+      <Card variant="secondary" className={isSelected ? "border border-primary" : ""}>
+        {target.isPinned && (
+          <View className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-accent" />
+        )}
 
+        <Card.Header className="flex-row items-center justify-between px-4 pt-3 pb-0">
+          <View className="flex-row items-center gap-2 flex-1">
+            <Ionicons
+              name={getTargetIcon(target.type).name as keyof typeof Ionicons.glyphMap}
+              size={resolvedInteractionUi.iconSize}
+              color={getTargetIcon(target.type).color}
+            />
+            <Card.Title className="flex-shrink" numberOfLines={1}>
+              {target.name}
+            </Card.Title>
+          </View>
+          <View
+            className={`flex-row items-center ${actionControlMode === "checkbox" ? "gap-1" : "gap-2"}`}
+          >
+            {showPinned && onTogglePinned && (
+              <PinButton
+                isPinned={target.isPinned}
+                onTogglePinned={onTogglePinned}
+                mode={actionControlMode}
+                interactionUi={resolvedInteractionUi}
+                label={t("targets.pin")}
+                testID="target-card-pin"
+              />
+            )}
+            {showFavorite && onToggleFavorite && (
+              <FavoriteButton
+                isFavorite={target.isFavorite}
+                onToggleFavorite={onToggleFavorite}
+                mode={actionControlMode}
+                interactionUi={resolvedInteractionUi}
+                label={t("targets.favorites")}
+                testID="target-card-favorite"
+              />
+            )}
+            {showStatusInline && (
+              <View className="flex-row items-center gap-1.5">
+                <View
+                  className="rounded-full"
+                  style={{
+                    backgroundColor: statusColor,
+                    width: statusDotSize,
+                    height: statusDotSize,
+                  }}
+                />
+                <Card.Description className={statusTextClassName}>
+                  {t(targetStatusI18nKey(target.status))}
+                </Card.Description>
+              </View>
+            )}
+          </View>
+        </Card.Header>
+
+        <Card.Body className="gap-2 px-4 py-2">
           {!showStatusInline && (
             <View className="flex-row items-center gap-1.5">
               <View
@@ -204,53 +221,59 @@ export const TargetCard = React.memo(function TargetCard({
             <View className="mt-1">
               <View className="h-1.5 rounded-full bg-surface-secondary overflow-hidden">
                 <View
-                  className="h-full rounded-full bg-success"
+                  className={`h-full rounded-full ${progressColor}`}
                   style={{ width: `${completionPercent}%` }}
                 />
               </View>
               <Text className={completionTextClassName}>{completionPercent}%</Text>
             </View>
           )}
-
-          {(target.category || target.tags.length > 0) && (
-            <View className="flex-row flex-wrap gap-1 mt-1">
-              {target.category && (
-                <Chip size={resolvedInteractionUi.chipSize} variant="primary">
-                  <Chip.Label className={compactLabelClassName}>{target.category}</Chip.Label>
-                </Chip>
-              )}
-              {target.tags.slice(0, 3).map((tag) => (
-                <Chip key={tag} size={resolvedInteractionUi.chipSize} variant="secondary">
-                  <Chip.Label className={compactLabelClassName}>{tag}</Chip.Label>
-                </Chip>
-              ))}
-              {target.tags.length > 3 && (
-                <Chip size={resolvedInteractionUi.chipSize} variant="secondary">
-                  <Chip.Label className={compactLabelClassName}>
-                    +{target.tags.length - 3}
-                  </Chip.Label>
-                </Chip>
-              )}
-            </View>
-          )}
-
-          {target.aliases.length > 0 && (
-            <View className="flex-row flex-wrap gap-1 mt-1">
-              {target.aliases.slice(0, 3).map((alias) => (
-                <Chip key={alias} size={resolvedInteractionUi.chipSize} variant="secondary">
-                  <Chip.Label className={`${compactLabelClassName} text-muted`}>{alias}</Chip.Label>
-                </Chip>
-              ))}
-              {target.aliases.length > 3 && (
-                <Chip size={resolvedInteractionUi.chipSize} variant="secondary">
-                  <Chip.Label className={`${compactLabelClassName} text-muted`}>
-                    +{target.aliases.length - 3}
-                  </Chip.Label>
-                </Chip>
-              )}
-            </View>
-          )}
         </Card.Body>
+
+        {hasFooterContent && (
+          <Card.Footer className="px-4 pb-3 pt-0">
+            {(target.category || target.tags.length > 0) && (
+              <View className="flex-row flex-wrap gap-1">
+                {target.category && (
+                  <Chip size={resolvedInteractionUi.chipSize} variant="primary">
+                    <Chip.Label className={compactLabelClassName}>{target.category}</Chip.Label>
+                  </Chip>
+                )}
+                {target.tags.slice(0, 3).map((tag) => (
+                  <Chip key={tag} size={resolvedInteractionUi.chipSize} variant="secondary">
+                    <Chip.Label className={compactLabelClassName}>{tag}</Chip.Label>
+                  </Chip>
+                ))}
+                {target.tags.length > 3 && (
+                  <Chip size={resolvedInteractionUi.chipSize} variant="secondary">
+                    <Chip.Label className={compactLabelClassName}>
+                      +{target.tags.length - 3}
+                    </Chip.Label>
+                  </Chip>
+                )}
+              </View>
+            )}
+
+            {target.aliases.length > 0 && (
+              <View className="flex-row flex-wrap gap-1 mt-1">
+                {target.aliases.slice(0, 3).map((alias) => (
+                  <Chip key={alias} size={resolvedInteractionUi.chipSize} variant="secondary">
+                    <Chip.Label className={`${compactLabelClassName} text-muted`}>
+                      {alias}
+                    </Chip.Label>
+                  </Chip>
+                ))}
+                {target.aliases.length > 3 && (
+                  <Chip size={resolvedInteractionUi.chipSize} variant="secondary">
+                    <Chip.Label className={`${compactLabelClassName} text-muted`}>
+                      +{target.aliases.length - 3}
+                    </Chip.Label>
+                  </Chip>
+                )}
+              </View>
+            )}
+          </Card.Footer>
+        )}
       </Card>
     </PressableFeedback>
   );

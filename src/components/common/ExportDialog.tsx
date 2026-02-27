@@ -9,6 +9,7 @@ import {
   DEFAULT_XISF_TARGET_OPTIONS,
   DEFAULT_SER_TARGET_OPTIONS,
   type ExportFormat,
+  type ExportOutputSize,
   type FitsColorLayout,
   type FitsCompression,
   type FitsExportMode,
@@ -24,12 +25,16 @@ import type { ExportRenderOptions } from "../../lib/converter/exportDecorations"
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { FitsExportOptions } from "./FitsExportOptions";
 import { TiffExportOptions } from "./TiffExportOptions";
+import { SimpleSlider } from "./SimpleSlider";
 
 export interface ExportDialogActionOptions {
   fits?: Partial<FitsTargetOptions>;
   tiff?: Partial<TiffTargetOptions>;
   render?: ExportRenderOptions;
   customFilename?: string;
+  outputSize?: ExportOutputSize;
+  targetFileSize?: number;
+  webpLossless?: boolean;
 }
 
 interface ExportDialogProps {
@@ -100,6 +105,10 @@ export function ExportDialog({
   const [includeAnnotations, setIncludeAnnotations] = useState(savedAnnotations);
   const [includeWatermark, setIncludeWatermark] = useState(false);
   const [watermarkText, setWatermarkText] = useState("");
+  const [outputMaxDim, setOutputMaxDim] = useState<number | undefined>(undefined);
+  const [compressionMode, setCompressionMode] = useState<"quality" | "targetSize">("quality");
+  const [targetFileSizeKB, setTargetFileSizeKB] = useState(500);
+  const [webpLossless, setWebpLossless] = useState(false);
   const [customFilename, setCustomFilename] = useState(() => filename.replace(/\.[^.]+$/, ""));
 
   useEffect(() => {
@@ -149,6 +158,15 @@ export function ExportDialog({
         }
       : undefined;
 
+  const resolvedOutputSize: ExportOutputSize | undefined = outputMaxDim
+    ? { maxWidth: outputMaxDim, maxHeight: outputMaxDim }
+    : undefined;
+
+  const resolvedTargetFileSize =
+    compressionMode === "targetSize" && (format === "jpeg" || format === "webp")
+      ? targetFileSizeKB * 1024
+      : undefined;
+
   const estimatedSize =
     width && height
       ? estimateFileSize(width, height, {
@@ -175,6 +193,7 @@ export function ExportDialog({
           outputWhite: 1,
           includeAnnotations: false,
           includeWatermark: false,
+          outputSize: resolvedOutputSize,
         })
       : null;
 
@@ -221,7 +240,15 @@ export function ExportDialog({
               <Text className="text-xs font-semibold text-muted mb-2">
                 {t("converter.quality")}: {quality}%
               </Text>
-              <View className="flex-row gap-2">
+              <SimpleSlider
+                label={t("converter.quality")}
+                value={quality}
+                min={10}
+                max={100}
+                step={1}
+                onValueChange={setQuality}
+              />
+              <View className="flex-row gap-2 mt-2">
                 {QUALITY_PRESETS.map((q) => (
                   <Chip
                     key={q}
@@ -265,6 +292,83 @@ export function ExportDialog({
               onTiffBitDepthChange={setTiffBitDepth}
               onTiffDpiChange={setTiffDpi}
             />
+          )}
+
+          {/* Output Size */}
+          <View className="mb-4">
+            <Text className="text-xs font-semibold text-muted mb-2">
+              {t("converter.outputSize")}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {[undefined, 2048, 1920, 1080, 720].map((dim) => (
+                <Chip
+                  key={dim ?? "original"}
+                  size="sm"
+                  variant={outputMaxDim === dim ? "primary" : "secondary"}
+                  onPress={() => setOutputMaxDim(dim)}
+                >
+                  <Chip.Label className="text-[9px]">
+                    {dim ? `${dim}px` : t("converter.outputSizeOriginal")}
+                  </Chip.Label>
+                </Chip>
+              ))}
+            </View>
+          </View>
+
+          {/* Compression Mode (JPEG/WebP only) */}
+          {(format === "jpeg" || format === "webp") && (
+            <View className="mb-4">
+              <Text className="text-xs font-semibold text-muted mb-2">
+                {t("converter.compressionMode")}
+              </Text>
+              <View className="flex-row gap-2">
+                <Chip
+                  size="sm"
+                  variant={compressionMode === "quality" ? "primary" : "secondary"}
+                  onPress={() => setCompressionMode("quality")}
+                >
+                  <Chip.Label className="text-[9px]">{t("converter.qualityMode")}</Chip.Label>
+                </Chip>
+                <Chip
+                  size="sm"
+                  variant={compressionMode === "targetSize" ? "primary" : "secondary"}
+                  onPress={() => setCompressionMode("targetSize")}
+                >
+                  <Chip.Label className="text-[9px]">{t("converter.targetSizeMode")}</Chip.Label>
+                </Chip>
+              </View>
+              {compressionMode === "targetSize" && (
+                <View className="mt-2">
+                  <TextField>
+                    <Input
+                      value={String(targetFileSizeKB)}
+                      onChangeText={(v) => {
+                        const num = parseInt(v, 10);
+                        if (!isNaN(num) && num >= 50 && num <= 10000) setTargetFileSizeKB(num);
+                      }}
+                      keyboardType="numeric"
+                      placeholder={t("converter.targetFileSizeKB")}
+                      className="text-xs"
+                    />
+                  </TextField>
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* WebP Lossless */}
+          {format === "webp" && (
+            <View className="mb-4">
+              <View className="flex-row gap-2">
+                <Chip
+                  size="sm"
+                  variant={webpLossless ? "primary" : "secondary"}
+                  onPress={() => setWebpLossless((prev) => !prev)}
+                >
+                  <Chip.Label className="text-[9px]">{t("converter.webpLossless")}</Chip.Label>
+                </Chip>
+              </View>
+            </View>
           )}
 
           <View className="mb-4 gap-3">
@@ -326,6 +430,9 @@ export function ExportDialog({
                   tiff: tiffOptions,
                   render: renderOptions,
                   customFilename: customFilename.trim() || undefined,
+                  outputSize: resolvedOutputSize,
+                  targetFileSize: resolvedTargetFileSize,
+                  webpLossless: webpLossless || undefined,
                 })
               }
             >
@@ -340,6 +447,9 @@ export function ExportDialog({
                   tiff: tiffOptions,
                   render: renderOptions,
                   customFilename: customFilename.trim() || undefined,
+                  outputSize: resolvedOutputSize,
+                  targetFileSize: resolvedTargetFileSize,
+                  webpLossless: webpLossless || undefined,
                 })
               }
             >
@@ -354,6 +464,9 @@ export function ExportDialog({
                   tiff: tiffOptions,
                   render: renderOptions,
                   customFilename: customFilename.trim() || undefined,
+                  outputSize: resolvedOutputSize,
+                  targetFileSize: resolvedTargetFileSize,
+                  webpLossless: webpLossless || undefined,
                 })
               }
             >

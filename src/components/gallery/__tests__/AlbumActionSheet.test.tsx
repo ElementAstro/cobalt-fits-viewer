@@ -37,9 +37,15 @@ jest.mock("heroui-native", () => {
   );
   Button.Label = ({ children }: any) => <Text>{children}</Text>;
 
+  const PressableFeedback = ({ onPress, children }: any) => (
+    <Pressable onPress={onPress}>{children}</Pressable>
+  );
+  PressableFeedback.Highlight = () => null;
+
   return {
     BottomSheet,
     Button,
+    PressableFeedback,
     Separator: () => null,
     useThemeColor: () => ["#999", "#00ff00", "#f00"],
   };

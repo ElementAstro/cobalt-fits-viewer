@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { View, Text, Pressable, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
-import { Button, Card, PressableFeedback, useThemeColor } from "heroui-native";
+import { Button, Card, Chip, PressableFeedback, Surface, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
@@ -52,9 +52,9 @@ export const AlbumCard = memo(function AlbumCard({
       <PressableFeedback onPress={onPress}>
         <PressableFeedback.Highlight />
         <Card variant="secondary" style={cardWidth != null ? { width: cardWidth } : undefined}>
-          <Card.Body className="p-0">
+          <Card.Header className="p-0">
             <View
-              className="w-full items-center justify-center rounded-t-lg bg-surface-secondary overflow-hidden"
+              className="w-full items-center justify-center rounded-t-lg overflow-hidden"
               style={{ height: coverHeight }}
             >
               {coverUri ? (
@@ -66,18 +66,24 @@ export const AlbumCard = memo(function AlbumCard({
                   transition={200}
                 />
               ) : (
-                <Ionicons name="albums-outline" size={32} color={mutedColor} />
+                <Surface variant="tertiary" className="h-full w-full items-center justify-center">
+                  <Ionicons name="albums-outline" size={40} color={mutedColor} />
+                </Surface>
               )}
               {/* Smart album indicator */}
               {album.isSmart && (
-                <View className="absolute top-1 right-1 rounded bg-success/80 px-1">
-                  <Ionicons name="sparkles" size={10} color="#fff" />
+                <View className="absolute top-1.5 right-1.5">
+                  <Chip size="sm" color="success" variant="primary" className="h-5 px-1">
+                    <Ionicons name="sparkles" size={10} color="#fff" />
+                  </Chip>
                 </View>
               )}
               {/* Pinned indicator */}
               {album.isPinned && (
-                <View className="absolute top-1 left-1 rounded bg-primary/80 px-1">
-                  <Ionicons name="pin" size={10} color="#fff" />
+                <View className="absolute top-1.5 left-1.5">
+                  <Chip size="sm" color="accent" variant="primary" className="h-5 px-1">
+                    <Ionicons name="pin" size={10} color="#fff" />
+                  </Chip>
                 </View>
               )}
               {onActionPress && (
@@ -94,20 +100,20 @@ export const AlbumCard = memo(function AlbumCard({
                 </View>
               )}
             </View>
-            <View className={compact ? "p-1.5" : "p-2"}>
-              <View className="flex-row items-center gap-1">
-                <Text
-                  className={`${compact ? "text-[10px]" : "text-xs"} font-semibold text-foreground flex-1`}
-                  numberOfLines={1}
-                >
-                  {album.name}
-                </Text>
-              </View>
-              <Text className="text-[9px] text-muted">
-                {album.imageIds.length} {t("album.images")}
-              </Text>
-            </View>
+          </Card.Header>
+          <Card.Body className={compact ? "p-1.5" : "px-2.5 py-2"}>
+            <Text
+              className={`${compact ? "text-[10px]" : "text-xs"} font-semibold text-foreground`}
+              numberOfLines={1}
+            >
+              {album.name}
+            </Text>
           </Card.Body>
+          <Card.Footer className={compact ? "px-1.5 pb-1.5" : "px-2.5 pb-2"}>
+            <Text className={`${compact ? "text-[8px]" : "text-[10px]"} text-muted`}>
+              {album.imageIds.length} {t("album.images")}
+            </Text>
+          </Card.Footer>
         </Card>
       </PressableFeedback>
     </Pressable>

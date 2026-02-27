@@ -7,6 +7,9 @@ import {
   calculateRegionHistogram,
   calculateChannelHistograms,
   calculateStats,
+  getHistogramPercentile,
+  getHistogramPeakValue,
+  getHistogramClipPercents,
   computeAutoStretch,
   computePercentile,
   computeZScale,
@@ -363,6 +366,51 @@ describe("calculateChannelHistograms", () => {
     const result = calculateChannelHistograms(channels, 4);
     expect(result.r.counts.length).toBe(4);
     expect(result.r.counts[0]).toBe(1);
+  });
+});
+
+describe("histogram diagnostics helpers", () => {
+  const counts = [10, 20, 30, 20, 10];
+  const edges = [0, 10, 20, 30, 40, 50];
+
+  it("computes percentile values from histogram CDF", () => {
+    expect(getHistogramPercentile(counts, edges, 1)).toBeCloseTo(0.9, 3);
+    expect(getHistogramPercentile(counts, edges, 50)).toBeCloseTo(25, 3);
+    expect(getHistogramPercentile(counts, edges, 99)).toBeCloseTo(49.1, 3);
+  });
+
+  it("returns null percentile for invalid/empty histogram", () => {
+    expect(getHistogramPercentile([], [], 50)).toBeNull();
+    expect(getHistogramPercentile([0, 0], [0, 1, 2], 50)).toBeNull();
+    expect(getHistogramPercentile([1], [0], 50)).toBeNull();
+    expect(getHistogramPercentile([1], [0, 1], Number.NaN)).toBeNull();
+  });
+
+  it("returns peak bin center", () => {
+    expect(getHistogramPeakValue(counts, edges)).toBeCloseTo(25, 3);
+  });
+
+  it("returns null peak for empty/zero histogram", () => {
+    expect(getHistogramPeakValue([], [])).toBeNull();
+    expect(getHistogramPeakValue([0, 0, 0], [0, 1, 2, 3])).toBeNull();
+  });
+
+  it("computes low/high clip percentages", () => {
+    const clip = getHistogramClipPercents(counts, edges, 10, 40);
+    expect(clip.lowPercent).toBeCloseTo(11.111, 3);
+    expect(clip.highPercent).toBeCloseTo(11.111, 3);
+  });
+
+  it("returns safe clip defaults for degenerate data", () => {
+    expect(getHistogramClipPercents([], [], 0, 1)).toEqual({ lowPercent: 0, highPercent: 0 });
+    expect(getHistogramClipPercents([0, 0], [0, 1, 2], 0, 1)).toEqual({
+      lowPercent: 0,
+      highPercent: 0,
+    });
+    expect(getHistogramClipPercents([1, 2], [0, 1, 2], Number.NaN, 2)).toEqual({
+      lowPercent: 0,
+      highPercent: 0,
+    });
   });
 });
 

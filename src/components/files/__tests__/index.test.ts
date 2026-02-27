@@ -1,3 +1,7 @@
+jest.mock("../FilesContent", () => ({
+  FilesContent: () => null,
+}));
+
 import {
   FilesContent,
   FilesHeader,
@@ -6,6 +10,7 @@ import {
   FilesSortBar,
   FilesFilterBar,
   ImportOptionsSheet,
+  ImportResultSheet,
   SelectionActionsSheet,
   SheetActionItem,
   UndoSnackbar,
@@ -38,6 +43,10 @@ describe("files/index barrel exports", () => {
 
   it("exports ImportOptionsSheet", () => {
     expect(ImportOptionsSheet).toBeDefined();
+  });
+
+  it("exports ImportResultSheet", () => {
+    expect(ImportResultSheet).toBeDefined();
   });
 
   it("exports SelectionActionsSheet", () => {

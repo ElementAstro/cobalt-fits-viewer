@@ -67,7 +67,7 @@ export function BatchConvertContent() {
         <Ionicons name="layers-outline" size={14} color={mutedColor} />
         <Text className="text-xs text-muted">
           {batchTasks.length} {t("converter.queue").toLowerCase()} ·{" "}
-          {t("converter.filesAvailable").replace("{count}", String(files.length))}
+          {t("converter.filesAvailable", { count: files.length })}
         </Text>
       </View>
 

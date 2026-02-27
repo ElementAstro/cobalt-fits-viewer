@@ -41,9 +41,7 @@ export function DuplicateImagesSheet({
                 <Ionicons name="copy-outline" size={20} color={successColor} />
                 <BottomSheet.Title>{t("album.duplicateImages")}</BottomSheet.Title>
               </View>
-              <Button size="sm" variant="ghost" isIconOnly onPress={onClose}>
-                <Ionicons name="close" size={20} color={mutedColor} />
-              </Button>
+              <BottomSheet.Close />
             </View>
 
             {/* Summary */}

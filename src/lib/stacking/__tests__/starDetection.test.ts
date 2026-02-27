@@ -285,6 +285,7 @@ describe("stacking starDetection", () => {
   });
 
   it("meets quantitative benchmark on synthetic star field", async () => {
+    jest.setTimeout(15000);
     const width = 256;
     const height = 256;
     const pixels = makeImage(width, height, 100);

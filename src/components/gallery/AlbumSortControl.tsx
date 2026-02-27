@@ -2,8 +2,8 @@
  * 相簿排序控制组件
  */
 
-import { View, ScrollView } from "react-native";
-import { Button, Chip, useThemeColor } from "heroui-native";
+import { View, Text } from "react-native";
+import { Button, Chip, Popover, PressableFeedback, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { AlbumSortBy } from "../../stores/useAlbumStore";
@@ -32,62 +32,71 @@ export function AlbumSortControl({
     { key: "imageCount", label: t("album.sortByCount") ?? "Count", icon: "images-outline" },
   ];
 
-  if (compact) {
-    return (
-      <View className="flex-row items-center gap-1">
-        {sortOptions.map((opt) => (
-          <Button
-            key={opt.key}
-            size="sm"
-            variant={sortBy === opt.key ? "secondary" : "ghost"}
-            className={sortBy === opt.key ? "bg-success/20" : ""}
-            onPress={() => onSortByChange(opt.key)}
-          >
-            <Ionicons
-              name={opt.icon}
-              size={12}
-              color={sortBy === opt.key ? successColor : mutedColor}
-            />
-          </Button>
-        ))}
-        <View className="w-px h-4 bg-separator mx-1" />
-        <Button
-          size="sm"
-          variant="ghost"
-          isIconOnly
-          onPress={() => onSortOrderChange(sortOrder === "asc" ? "desc" : "asc")}
-        >
-          <Ionicons
-            name={sortOrder === "asc" ? "arrow-up-outline" : "arrow-down-outline"}
-            size={14}
-            color={mutedColor}
-          />
-        </Button>
-      </View>
-    );
-  }
+  const currentLabel = sortOptions.find((o) => o.key === sortBy)?.label ?? "";
 
   return (
-    <View className="flex-row items-center gap-2">
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-1">
-        <View className="flex-row gap-1">
-          {sortOptions.map((opt) => (
-            <Chip
-              key={opt.key}
-              size="sm"
-              variant={sortBy === opt.key ? "primary" : "secondary"}
-              onPress={() => onSortByChange(opt.key)}
+    <View className="flex-row items-center gap-1.5">
+      <Popover>
+        <Popover.Trigger asChild>
+          <Button size="sm" variant="outline">
+            <Ionicons name="swap-vertical-outline" size={14} color={mutedColor} />
+            {!compact && <Button.Label className="text-xs">{currentLabel}</Button.Label>}
+          </Button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Overlay />
+          <Popover.Content presentation="popover" width={200} className="p-2">
+            <Popover.Title className="text-xs mb-2">{t("album.sortBy")}</Popover.Title>
+            <View className="gap-1">
+              {sortOptions.map((opt) => (
+                <PressableFeedback key={opt.key} onPress={() => onSortByChange(opt.key)}>
+                  <View
+                    className={`flex-row items-center gap-2.5 rounded-lg px-3 py-2.5 ${
+                      sortBy === opt.key ? "bg-success/10" : ""
+                    }`}
+                  >
+                    <Ionicons
+                      name={opt.icon}
+                      size={16}
+                      color={sortBy === opt.key ? successColor : mutedColor}
+                    />
+                    <Text
+                      className={`text-sm flex-1 ${
+                        sortBy === opt.key ? "font-semibold text-foreground" : "text-muted"
+                      }`}
+                    >
+                      {opt.label}
+                    </Text>
+                    {sortBy === opt.key && (
+                      <Ionicons name="checkmark" size={16} color={successColor} />
+                    )}
+                  </View>
+                </PressableFeedback>
+              ))}
+            </View>
+            <Separator className="my-2" />
+            <PressableFeedback
+              onPress={() => onSortOrderChange(sortOrder === "asc" ? "desc" : "asc")}
             >
-              <Ionicons
-                name={opt.icon}
-                size={10}
-                color={sortBy === opt.key ? "#fff" : mutedColor}
-              />
-              <Chip.Label className="text-[10px]">{opt.label}</Chip.Label>
-            </Chip>
-          ))}
-        </View>
-      </ScrollView>
+              <View className="flex-row items-center gap-2.5 rounded-lg px-3 py-2.5">
+                <Ionicons
+                  name={sortOrder === "asc" ? "arrow-up-outline" : "arrow-down-outline"}
+                  size={16}
+                  color={mutedColor}
+                />
+                <Text className="text-sm text-muted flex-1">
+                  {sortOrder === "asc" ? t("album.sortAsc") : t("album.sortDesc")}
+                </Text>
+                <Chip size="sm" variant="secondary">
+                  <Chip.Label className="text-[10px]">
+                    {sortOrder === "asc" ? "A→Z" : "Z→A"}
+                  </Chip.Label>
+                </Chip>
+              </View>
+            </PressableFeedback>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover>
 
       <Button
         size="sm"

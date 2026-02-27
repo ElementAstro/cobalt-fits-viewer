@@ -8,6 +8,7 @@ import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { SearchBar } from "../common/SearchBar";
 import { AlbumCard } from "./AlbumCard";
 import { AlbumSortControl } from "./AlbumSortControl";
+import { EmptyState } from "../common/EmptyState";
 import type { Album } from "../../lib/fits/types";
 import type { AlbumSortBy } from "../../stores/useAlbumStore";
 
@@ -75,7 +76,7 @@ export const AlbumsTabContent = memo(function AlbumsTabContent({
         >
           {t("gallery.albums")} ({albums.length})
         </Text>
-        <View className="flex-row gap-1">
+        <View className="flex-row gap-1.5">
           <Button size="sm" variant="ghost" isIconOnly onPress={onFindDuplicates}>
             <Ionicons name="copy-outline" size={14} color={mutedColor} />
           </Button>
@@ -112,13 +113,13 @@ export const AlbumsTabContent = memo(function AlbumsTabContent({
   );
 
   const emptyComponent = (
-    <View
-      className={`rounded-xl border border-separator bg-surface-secondary items-center ${isLandscape ? "p-3" : "p-6"}`}
-    >
-      <Ionicons name="albums-outline" size={isLandscape ? 24 : 32} color={mutedColor} />
-      <Text className="mt-1 text-xs text-muted">{t("album.noAlbums")}</Text>
-      <Text className="mt-1 text-xs text-muted">{t("album.createFirst")}</Text>
-    </View>
+    <EmptyState
+      icon="albums-outline"
+      title={t("album.noAlbums")}
+      description={t("album.createFirst")}
+      actionLabel={t("gallery.createAlbum")}
+      onAction={onCreateAlbum}
+    />
   );
 
   return (

@@ -25,7 +25,7 @@ interface AlbumExportSheetProps {
 
 export function AlbumExportSheet({ visible, album, files, onClose }: AlbumExportSheetProps) {
   const { t } = useI18n();
-  const [mutedColor, successColor, dangerColor] = useThemeColor(["muted", "success", "danger"]);
+  const [, successColor, dangerColor] = useThemeColor(["muted", "success", "danger"]);
 
   const [progress, setProgress] = useState<ExportProgress | null>(null);
   const [exportPath, setExportPath] = useState<string | null>(null);
@@ -111,9 +111,7 @@ export function AlbumExportSheet({ visible, album, files, onClose }: AlbumExport
                 <Ionicons name="archive" size={20} color={successColor} />
                 <BottomSheet.Title>{t("album.exportZip")}</BottomSheet.Title>
               </View>
-              <Button size="sm" variant="ghost" isIconOnly onPress={handleClose}>
-                <Ionicons name="close" size={20} color={mutedColor} />
-              </Button>
+              <BottomSheet.Close />
             </View>
 
             {/* Album Info */}

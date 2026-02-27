@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import type { VideoTaskRecord } from "../../stores/useVideoTaskStore";
 import { MAX_VIDEO_RETRIES } from "../../stores/useVideoTaskStore";
 import { translateEngineError, taskStatusColor, translateTaskStatus } from "../../lib/video/format";
+import { formatEta } from "../../lib/utils/formatTime";
 import { AnimatedProgressBar } from "../common/AnimatedProgressBar";
 import { useI18n } from "../../i18n/useI18n";
 
@@ -21,7 +22,15 @@ interface TaskQueueSheetProps {
 
 function progressLabel(task: VideoTaskRecord): string {
   if (task.status === "running") {
-    return `${Math.round(task.progress * 100)}%`;
+    const pct = `${Math.round(task.progress * 100)}%`;
+    if (task.startedAt && task.progress > 0.01) {
+      const elapsed = Date.now() - task.startedAt;
+      const remaining = (elapsed / task.progress - elapsed) / 1000;
+      if (remaining > 0 && Number.isFinite(remaining)) {
+        return `${pct} · ~${formatEta(remaining)}`;
+      }
+    }
+    return pct;
   }
   if (task.status === "completed") return "100%";
   return "0%";
@@ -38,7 +47,7 @@ export function TaskQueueSheet({
   onOpenOutputFile,
 }: TaskQueueSheetProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
       <Dialog.Portal>
@@ -74,7 +83,7 @@ export function TaskQueueSheet({
                     {(task.status === "running" || task.status === "completed") && (
                       <AnimatedProgressBar
                         progress={task.progress * 100}
-                        color={task.status === "completed" ? "#22c55e" : undefined}
+                        color={task.status === "completed" ? successColor : undefined}
                       />
                     )}
                     {!!task.error && (

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { View } from "react-native";
-import { Button, Dialog, Input, TextArea, TextField } from "heroui-native";
+import { Button, Dialog, Input, Label, TextArea, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 
 interface CreateAlbumModalProps {
@@ -42,6 +42,7 @@ export function CreateAlbumModal({ visible, onClose, onConfirm }: CreateAlbumMod
 
           <View className="mt-4 gap-3">
             <TextField>
+              <Label>{t("gallery.albumName")}</Label>
               <Input
                 placeholder={t("gallery.albumName")}
                 value={name}
@@ -52,6 +53,7 @@ export function CreateAlbumModal({ visible, onClose, onConfirm }: CreateAlbumMod
             </TextField>
 
             <TextField>
+              <Label>{t("gallery.albumDescription")}</Label>
               <TextArea
                 placeholder={t("gallery.albumDescription")}
                 value={description}

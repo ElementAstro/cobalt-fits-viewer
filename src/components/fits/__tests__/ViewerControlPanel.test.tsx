@@ -8,6 +8,13 @@ jest.mock("../../../components/astrometry/AstrometryResultView", () => ({
 jest.mock("../HistogramLevels", () => ({
   HistogramLevels: () => null,
 }));
+jest.mock("../ImageInfoMetricsCard", () => {
+  const ReactLocal = require("react");
+  const { Text } = require("react-native");
+  return {
+    ImageInfoMetricsCard: () => ReactLocal.createElement(Text, null, "image-info-card"),
+  };
+});
 
 describe("ViewerControlPanel", () => {
   const baseProps = {
@@ -84,5 +91,10 @@ describe("ViewerControlPanel", () => {
     expect(screen.getByText("#1 Table")).toBeTruthy();
     fireEvent.press(screen.getByText("#0 Image"));
     expect(baseProps.onHDUChange).toHaveBeenCalledWith(0);
+  });
+
+  it("renders image info metrics card when controls are shown", () => {
+    render(<ViewerControlPanel {...baseProps} />);
+    expect(screen.getByText("image-info-card")).toBeTruthy();
   });
 });

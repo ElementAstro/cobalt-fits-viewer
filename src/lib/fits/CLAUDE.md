@@ -279,6 +279,13 @@ interface ConvertOptions {
 | ---------- | -------- | --------------------------------------------------------------------------------------- |
 | Unit Tests | Expanded | `__tests__/parser.test.ts`, `__tests__/writer.test.ts`, `__tests__/compression.test.ts` |
 
+## Gotchas
+
+- **fitsjs-ng patching**: `pnpm postinstall` runs `scripts/patch-fitsjs.mjs` to fix issues in the upstream fitsjs-ng package. If you update fitsjs-ng, verify the patch still applies correctly.
+- **Auto `.fits.gz`**: `loadFitsFromBufferAuto` transparently handles gzip-compressed FITS; always prefer it over `loadFitsFromBuffer`.
+- **BSCALE/BZERO**: Physical pixel values = `BZERO + BSCALE * raw_value`. The parser applies these automatically in `getImagePixels`.
+- **types.ts is shared**: This file defines types used across the entire app (not just fits module). Changes here can have wide impact.
+
 ## FAQ
 
 **Q: How do I load a FITS file?**

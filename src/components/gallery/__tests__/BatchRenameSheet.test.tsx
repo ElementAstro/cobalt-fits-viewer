@@ -7,21 +7,27 @@ import type { FitsMetadata } from "../../../lib/fits/types";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "common.cancel": "Cancel",
-          "common.confirm": "Confirm",
-          "common.success": "Success",
-          "common.error": "Error",
-          "album.selected": "selected",
-          "gallery.batchRename": "Batch Rename",
-          "gallery.renameTemplate": "Template",
-          "gallery.renamePreview": "Preview",
-          "files.renamePartial": "Renamed {success} file(s), {failed} failed",
-          "files.renameNoChanges": "No filename changes to apply",
-        }) as Record<string, string>
-      )[key] ?? key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        "common.cancel": "Cancel",
+        "common.confirm": "Confirm",
+        "common.success": "Success",
+        "common.error": "Error",
+        "album.selected": "selected",
+        "gallery.batchRename": "Batch Rename",
+        "gallery.renameTemplate": "Template",
+        "gallery.renamePreview": "Preview",
+        "files.renamePartial": "Renamed {success} file(s), {failed} failed",
+        "files.renameNoChanges": "No filename changes to apply",
+      };
+      let result = map[key] ?? key;
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          result = result.replace(`{${k}}`, String(v));
+        });
+      }
+      return result;
+    },
   }),
 }));
 

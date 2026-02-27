@@ -6,24 +6,30 @@ import type { Album } from "../../../lib/fits/types";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({
-    t: (key: string) =>
-      (
-        ({
-          "album.mergeAlbum": "Merge into Album",
-          "album.mergeTitle": "Merge Album",
-          "album.mergeConfirm": 'Merge "{source}" into "{target}"? Images will be combined.',
-          "album.mergeSearchPlaceholder": "Search target albums...",
-          "album.mergeNoTargets": "No matching target albums",
-          "album.mergeWillContain": "Will contain {count} images after merge",
-          "album.mergeWillAdd": "Adds {count} new images",
-          "album.mergeNoNewImages": "No new images will be added",
-          "album.images": "images",
-          "album.noAlbums": "No albums yet",
-          "album.cannotMergeSmart": "Cannot merge smart albums",
-          "common.cancel": "Cancel",
-          "common.confirm": "Confirm",
-        }) as Record<string, string>
-      )[key] ?? key,
+    t: (key: string, params?: Record<string, unknown>) => {
+      const map: Record<string, string> = {
+        "album.mergeAlbum": "Merge into Album",
+        "album.mergeTitle": "Merge Album",
+        "album.mergeConfirm": 'Merge "{source}" into "{target}"? Images will be combined.',
+        "album.mergeSearchPlaceholder": "Search target albums...",
+        "album.mergeNoTargets": "No matching target albums",
+        "album.mergeWillContain": "Will contain {count} images after merge",
+        "album.mergeWillAdd": "Adds {count} new images",
+        "album.mergeNoNewImages": "No new images will be added",
+        "album.images": "images",
+        "album.noAlbums": "No albums yet",
+        "album.cannotMergeSmart": "Cannot merge smart albums",
+        "common.cancel": "Cancel",
+        "common.confirm": "Confirm",
+      };
+      let result = map[key] ?? key;
+      if (params) {
+        Object.entries(params).forEach(([k, v]) => {
+          result = result.replace(`{${k}}`, String(v));
+        });
+      }
+      return result;
+    },
   }),
 }));
 

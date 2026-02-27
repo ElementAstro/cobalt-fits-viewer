@@ -16,6 +16,36 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
+jest.mock("../../../stores/useFitsStore", () => ({
+  useFitsStore: (selector: (s: any) => any) =>
+    selector({
+      getFileById: () => null,
+    }),
+}));
+
+jest.mock("../../../lib/gallery/thumbnailCache", () => ({
+  resolveThumbnailUri: () => null,
+}));
+
+jest.mock("expo-image", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    Image: (props: any) => React.createElement(View, { testID: "expo-image", ...props }),
+  };
+});
+
+jest.mock("../../common/SearchBar", () => ({
+  SearchBar: () => null,
+}));
+
+jest.mock("../../common/EmptyState", () => ({
+  EmptyState: ({ title }: any) => {
+    const { Text } = require("react-native");
+    return <Text>{title}</Text>;
+  },
+}));
+
 jest.mock("heroui-native", () => {
   const React = require("react");
   const { Pressable, Text, View } = require("react-native");
@@ -25,15 +55,22 @@ jest.mock("heroui-native", () => {
   BottomSheet.Overlay = () => null;
   BottomSheet.Content = ({ children }: any) => <View>{children}</View>;
   BottomSheet.Title = ({ children }: any) => <Text>{children}</Text>;
+  BottomSheet.Close = () => null;
 
   const Button = ({ onPress, children }: any) => (
     <Pressable onPress={onPress}>{children}</Pressable>
   );
   Button.Label = ({ children }: any) => <Text>{children}</Text>;
 
+  const PressableFeedback = ({ onPress, children }: any) => (
+    <Pressable onPress={onPress}>{children}</Pressable>
+  );
+  PressableFeedback.Highlight = () => null;
+
   return {
     BottomSheet,
     Button,
+    PressableFeedback,
     Separator: () => null,
     useThemeColor: () => ["#999", "#0f0"],
   };

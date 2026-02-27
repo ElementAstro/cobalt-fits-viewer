@@ -40,9 +40,7 @@ export function FileGroupSheet({
     if (result.success > 0) {
       Alert.alert(
         t("common.success"),
-        t("files.groupPartial")
-          .replace("{success}", String(result.success))
-          .replace("{failed}", String(result.failed)),
+        t("files.groupPartial", { success: result.success, failed: result.failed }),
       );
       handleClose();
       return;
@@ -50,9 +48,7 @@ export function FileGroupSheet({
 
     Alert.alert(
       t("common.error"),
-      t("files.groupPartial")
-        .replace("{success}", String(result.success))
-        .replace("{failed}", String(result.failed)),
+      t("files.groupPartial", { success: result.success, failed: result.failed }),
     );
   };
 

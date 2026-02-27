@@ -42,9 +42,7 @@ export function UndoSnackbar({ visible, count, onUndo }: UndoSnackbarProps) {
       style={{ bottom: bottomOffset }}
     >
       <View className="flex-row items-center justify-between gap-2 px-3 py-2">
-        <Text className="text-xs text-muted flex-1">
-          {t("files.undoDeleteHint").replace("{count}", String(count))}
-        </Text>
+        <Text className="text-xs text-muted flex-1">{t("files.undoDeleteHint", { count })}</Text>
         <Button size="sm" variant="ghost" onPress={onUndo}>
           <Button.Label>{t("common.undo")}</Button.Label>
         </Button>

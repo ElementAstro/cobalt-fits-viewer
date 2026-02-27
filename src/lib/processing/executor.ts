@@ -124,7 +124,26 @@ export function executeProcessingPipeline(params: {
     const schema = getProcessingOperation(node.operationId);
     if (!schema || schema.stage !== "scientific") continue;
     if (params.options.mode === "preview" && !schema.supportsPreview) continue;
+    const beforeMask = node.maskConfig ? scientificState : null;
     scientificState = schema.execute(scientificState, node.params) as ProcessingImageState;
+    // Mask blending: blend processed result with pre-operation state using mask
+    if (beforeMask && node.maskConfig) {
+      const maskSource = scientificIntermediates.find(
+        (_s, idx) => executedScientificNodeIds[idx] === node.maskConfig!.sourceNodeId,
+      );
+      if (maskSource) {
+        const n = scientificState.pixels.length;
+        const strength = Math.max(0, Math.min(1, node.maskConfig.blendStrength));
+        const blended = new Float32Array(n);
+        for (let j = 0; j < n; j++) {
+          let m = Math.max(0, Math.min(1, maskSource.pixels[j]));
+          if (node.maskConfig.invert) m = 1 - m;
+          m *= strength;
+          blended[j] = beforeMask.pixels[j] * (1 - m) + scientificState.pixels[j] * m;
+        }
+        scientificState = { ...scientificState, pixels: blended };
+      }
+    }
     scientificIntermediates.push(scientificState);
     executedScientificNodeIds.push(node.id);
   }

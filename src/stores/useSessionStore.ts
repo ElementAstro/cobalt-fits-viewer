@@ -7,7 +7,13 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import { useShallow } from "zustand/shallow";
 import { zustandMMKVStorage } from "../lib/storage";
 import { LOG_TAGS, Logger } from "../lib/logger";
-import type { ObservationSession, ObservationLogEntry, ObservationPlan } from "../lib/fits/types";
+import type {
+  GeoLocation,
+  ObservationSession,
+  ObservationLogEntry,
+  ObservationPlan,
+  SessionEquipment,
+} from "../lib/fits/types";
 import {
   mergeSessionLike,
   normalizeSessionLike,
@@ -23,6 +29,9 @@ interface ActiveSessionState {
   totalPausedMs: number;
   notes: { timestamp: number; text: string }[];
   status: "running" | "paused";
+  draftTargets?: string[];
+  draftEquipment?: SessionEquipment;
+  draftLocation?: GeoLocation;
 }
 
 interface SessionStoreState {
@@ -37,6 +46,10 @@ interface SessionStoreState {
   resumeLiveSession: () => void;
   endLiveSession: () => ObservationSession | null;
   addActiveNote: (text: string) => void;
+  updateActiveSessionDraft: (
+    updates: Partial<Pick<ActiveSessionState, "draftTargets" | "draftEquipment" | "draftLocation">>,
+  ) => void;
+  clearActiveSessionDraft: () => void;
 
   // Actions
   addSession: (session: ObservationSessionWriteInput) => void;
@@ -114,6 +127,146 @@ function migratePlan(plan: ObservationPlan): ObservationPlan {
   };
 }
 
+function dedupeStringValues(values: Array<string | null | undefined>): string[] {
+  const seen = new Set<string>();
+  const next: string[] = [];
+
+  for (const value of values) {
+    if (!value) continue;
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    next.push(trimmed);
+  }
+
+  return next;
+}
+
+function normalizeDraftEquipmentInput(equipment: unknown): SessionEquipment | undefined {
+  if (!equipment || typeof equipment !== "object") return undefined;
+  const raw = equipment as Record<string, unknown>;
+
+  const telescope = typeof raw.telescope === "string" ? raw.telescope.trim() : "";
+  const camera = typeof raw.camera === "string" ? raw.camera.trim() : "";
+  const mount = typeof raw.mount === "string" ? raw.mount.trim() : "";
+  const filters = Array.isArray(raw.filters)
+    ? dedupeStringValues(raw.filters.filter((item): item is string => typeof item === "string"))
+    : [];
+
+  const normalized: SessionEquipment = {
+    ...(telescope ? { telescope } : {}),
+    ...(camera ? { camera } : {}),
+    ...(mount ? { mount } : {}),
+    ...(filters.length > 0 ? { filters } : {}),
+  };
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeDraftLocationInput(location: unknown): GeoLocation | undefined {
+  if (!location || typeof location !== "object") return undefined;
+  const raw = location as Record<string, unknown>;
+
+  const latitude =
+    typeof raw.latitude === "number"
+      ? raw.latitude
+      : typeof raw.latitude === "string"
+        ? Number(raw.latitude)
+        : NaN;
+  const longitude =
+    typeof raw.longitude === "number"
+      ? raw.longitude
+      : typeof raw.longitude === "string"
+        ? Number(raw.longitude)
+        : NaN;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return undefined;
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return undefined;
+
+  const altitude =
+    typeof raw.altitude === "number"
+      ? raw.altitude
+      : typeof raw.altitude === "string"
+        ? Number(raw.altitude)
+        : undefined;
+
+  return {
+    latitude,
+    longitude,
+    ...(Number.isFinite(altitude) ? { altitude } : {}),
+    ...(typeof raw.placeName === "string" && raw.placeName.trim()
+      ? { placeName: raw.placeName.trim() }
+      : {}),
+    ...(typeof raw.city === "string" && raw.city.trim() ? { city: raw.city.trim() } : {}),
+    ...(typeof raw.region === "string" && raw.region.trim() ? { region: raw.region.trim() } : {}),
+    ...(typeof raw.country === "string" && raw.country.trim()
+      ? { country: raw.country.trim() }
+      : {}),
+  };
+}
+
+function normalizeActiveSessionInput(activeSession: unknown): ActiveSessionState | null {
+  if (!activeSession || typeof activeSession !== "object") return null;
+  const raw = activeSession as Record<string, unknown>;
+  const id = typeof raw.id === "string" ? raw.id : undefined;
+  const startedAt =
+    typeof raw.startedAt === "number"
+      ? raw.startedAt
+      : typeof raw.startedAt === "string"
+        ? Number(raw.startedAt)
+        : NaN;
+
+  if (!id || !Number.isFinite(startedAt)) return null;
+
+  const pausedAt =
+    typeof raw.pausedAt === "number"
+      ? raw.pausedAt
+      : typeof raw.pausedAt === "string"
+        ? Number(raw.pausedAt)
+        : NaN;
+  const totalPausedMs =
+    typeof raw.totalPausedMs === "number"
+      ? raw.totalPausedMs
+      : typeof raw.totalPausedMs === "string"
+        ? Number(raw.totalPausedMs)
+        : 0;
+  const rawNotes = Array.isArray(raw.notes) ? raw.notes : [];
+  const notes = rawNotes
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const note = entry as Record<string, unknown>;
+      const timestamp =
+        typeof note.timestamp === "number"
+          ? note.timestamp
+          : typeof note.timestamp === "string"
+            ? Number(note.timestamp)
+            : NaN;
+      const text = typeof note.text === "string" ? note.text.trim() : "";
+      if (!Number.isFinite(timestamp) || !text) return null;
+      return { timestamp, text };
+    })
+    .filter((entry): entry is { timestamp: number; text: string } => Boolean(entry));
+
+  const draftTargets = Array.isArray(raw.draftTargets)
+    ? dedupeStringValues(
+        raw.draftTargets.filter((item): item is string => typeof item === "string"),
+      )
+    : [];
+  const draftEquipment = normalizeDraftEquipmentInput(raw.draftEquipment);
+  const draftLocation = normalizeDraftLocationInput(raw.draftLocation);
+
+  return {
+    id,
+    startedAt,
+    ...(Number.isFinite(pausedAt) ? { pausedAt } : {}),
+    totalPausedMs: Number.isFinite(totalPausedMs) ? totalPausedMs : 0,
+    notes,
+    status: raw.status === "paused" ? "paused" : "running",
+    ...(draftTargets.length > 0 ? { draftTargets } : {}),
+    ...(draftEquipment ? { draftEquipment } : {}),
+    ...(draftLocation ? { draftLocation } : {}),
+  };
+}
+
 export const useSessionStore = create<SessionStoreState>()(
   persist(
     (set, get) => ({
@@ -122,25 +275,29 @@ export const useSessionStore = create<SessionStoreState>()(
       plans: [],
       activeSession: null,
 
-      startLiveSession: () => {
-        const now = Date.now();
-        set({
-          activeSession: {
-            id: `live-${now}`,
-            startedAt: now,
-            totalPausedMs: 0,
-            notes: [],
-            status: "running",
-          },
-        });
-      },
+      startLiveSession: () =>
+        set((state) => {
+          if (state.activeSession) return {};
+          const now = Date.now();
+          return {
+            activeSession: {
+              id: `live-${now}`,
+              startedAt: now,
+              totalPausedMs: 0,
+              notes: [],
+              status: "running",
+            },
+          };
+        }),
 
       pauseLiveSession: () =>
-        set((state) => ({
-          activeSession: state.activeSession
-            ? { ...state.activeSession, status: "paused", pausedAt: Date.now() }
-            : null,
-        })),
+        set((state) => {
+          if (!state.activeSession) return {};
+          if (state.activeSession.status === "paused") return {};
+          return {
+            activeSession: { ...state.activeSession, status: "paused", pausedAt: Date.now() },
+          };
+        }),
 
       resumeLiveSession: () =>
         set((state) => {
@@ -198,6 +355,50 @@ export const useSessionStore = create<SessionStoreState>()(
               }
             : null,
         })),
+
+      updateActiveSessionDraft: (updates) =>
+        set((state) => {
+          if (!state.activeSession) return {};
+
+          const hasDraftTargets = "draftTargets" in updates;
+          const hasDraftEquipment = "draftEquipment" in updates;
+          const hasDraftLocation = "draftLocation" in updates;
+
+          const nextDraftTargets =
+            hasDraftTargets && updates.draftTargets
+              ? dedupeStringValues(updates.draftTargets)
+              : updates.draftTargets === undefined
+                ? undefined
+                : state.activeSession.draftTargets;
+          const nextDraftEquipment = hasDraftEquipment
+            ? normalizeDraftEquipmentInput(updates.draftEquipment)
+            : state.activeSession.draftEquipment;
+          const nextDraftLocation = hasDraftLocation
+            ? normalizeDraftLocationInput(updates.draftLocation)
+            : state.activeSession.draftLocation;
+
+          return {
+            activeSession: {
+              ...state.activeSession,
+              ...(hasDraftTargets ? { draftTargets: nextDraftTargets } : {}),
+              ...(hasDraftEquipment ? { draftEquipment: nextDraftEquipment } : {}),
+              ...(hasDraftLocation ? { draftLocation: nextDraftLocation } : {}),
+            },
+          };
+        }),
+
+      clearActiveSessionDraft: () =>
+        set((state) => {
+          if (!state.activeSession) return {};
+          return {
+            activeSession: {
+              ...state.activeSession,
+              draftTargets: undefined,
+              draftEquipment: undefined,
+              draftLocation: undefined,
+            },
+          };
+        }),
 
       addSession: (session) =>
         set((state) => ({
@@ -370,12 +571,13 @@ export const useSessionStore = create<SessionStoreState>()(
         activeSession: state.activeSession,
         plans: state.plans,
       }),
-      version: 3,
+      version: 4,
       migrate: (persistedState, _version) => {
         const state = persistedState as Partial<SessionStoreState> & {
           sessions?: LegacyObservationSession[];
           plans?: ObservationPlan[];
           logEntries?: ObservationLogEntry[];
+          activeSession?: unknown;
         };
         const sessions = (state.sessions ?? []).map(migrateSession);
         const plans = (state.plans ?? []).map(migratePlan);
@@ -383,7 +585,7 @@ export const useSessionStore = create<SessionStoreState>()(
           sessions,
           plans,
           logEntries: state.logEntries ?? [],
-          activeSession: state.activeSession ?? null,
+          activeSession: normalizeActiveSessionInput(state.activeSession),
         };
       },
     },

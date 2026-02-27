@@ -12,6 +12,7 @@ function cloneNode(node: ProcessingNode): ProcessingNode {
     operationId: node.operationId,
     enabled: node.enabled !== false,
     params: { ...node.params },
+    ...(node.maskConfig ? { maskConfig: { ...node.maskConfig } } : {}),
   };
 }
 

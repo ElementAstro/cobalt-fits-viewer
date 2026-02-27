@@ -50,7 +50,9 @@ jest.mock("heroui-native", () => {
     />
   );
 
-  return { Dialog, Button, Input, TextArea, TextField };
+  const Label = ({ children }: any) => <Text>{children}</Text>;
+
+  return { Dialog, Button, Input, Label, TextArea, TextField };
 });
 
 describe("CreateAlbumModal", () => {

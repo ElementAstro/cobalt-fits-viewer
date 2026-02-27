@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo, useReducer } from "react";
 import { View, Alert, useWindowDimensions } from "react-native";
 import { Button, Dialog, Input, TextField } from "heroui-native";
 import { useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { filterAndSortFiles, useFitsStore } from "../../stores/useFitsStore";
@@ -26,6 +27,7 @@ import {
   FilesSortBar,
   FilesFilterBar,
   ImportOptionsSheet,
+  ImportResultSheet,
   SelectionActionsSheet,
   UndoSnackbar,
 } from "../../components/files";
@@ -146,6 +148,7 @@ export default function FilesScreen() {
   const [showTrashSheet, setShowTrashSheet] = useState(false);
   const [showGroupSheet, setShowGroupSheet] = useState(false);
   const [showSelectionActions, setShowSelectionActions] = useState(false);
+  const [showImportResultSheet, setShowImportResultSheet] = useState(false);
   const [pendingDeleteToken, setPendingDeleteToken] = useState<string | null>(null);
   const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
 
@@ -239,33 +242,91 @@ export default function FilesScreen() {
     : 1;
   const shouldStackTopActions = isSelectionMode || screenWidth < 420;
 
-  const showImportResult = useCallback(
-    (result: ImportResult) => {
-      const base = t("files.importPartialMsg")
-        .replace("{success}", String(result.success))
-        .replace("{total}", String(result.total))
-        .replace("{failed}", String(result.failed));
-      const details: string[] = [base];
-      if (result.skippedDuplicate > 0) {
-        details.push(
-          t("files.importSkippedDuplicates").replace("{count}", String(result.skippedDuplicate)),
-        );
+  const mapImportFailureReason = useCallback(
+    (reason: string | undefined): string => {
+      const normalized = reason?.trim() ?? "";
+      if (!normalized || normalized === "unknown_error") {
+        return t("files.importFailureUnknown");
       }
-      if (result.skippedUnsupported > 0) {
-        details.push(
-          t("files.importSkippedUnsupported").replace("{count}", String(result.skippedUnsupported)),
-        );
+      if (normalized === "unsupported_format") {
+        return t("files.importFailureUnsupportedFormat");
       }
-      Alert.alert(t("files.importSuccess"), details.join("\n"));
+      return normalized;
     },
     [t],
   );
 
-  useEffect(() => {
-    if (lastImportResult && !isImporting) {
-      showImportResult(lastImportResult);
+  const importFailedEntries = useMemo(() => {
+    if (!lastImportResult?.failedEntries?.length) return [];
+    return lastImportResult.failedEntries.map((entry) => ({
+      name: entry.name,
+      reason: mapImportFailureReason(entry.reason),
+    }));
+  }, [lastImportResult, mapImportFailureReason]);
+
+  const buildImportResultReport = useCallback(
+    (result: ImportResult): string => {
+      const lines = [
+        t("files.importPartialMsg", {
+          success: result.success,
+          total: result.total,
+          failed: result.failed,
+        }),
+      ];
+
+      if (result.skippedDuplicate > 0) {
+        lines.push(
+          t("files.importSkippedDuplicates", {
+            count: result.skippedDuplicate,
+          }),
+        );
+      }
+      if (result.skippedUnsupported > 0) {
+        lines.push(
+          t("files.importSkippedUnsupported", {
+            count: result.skippedUnsupported,
+          }),
+        );
+      }
+
+      if (importFailedEntries.length > 0) {
+        lines.push("", t("files.importResultFailedEntries"));
+        for (const [index, entry] of importFailedEntries.entries()) {
+          lines.push(`${index + 1}. ${entry.name} · ${entry.reason}`);
+        }
+      } else {
+        lines.push("", t("files.importResultNoFailures"));
+      }
+
+      return lines.join("\n");
+    },
+    [importFailedEntries, t],
+  );
+
+  const handleCopyImportResult = useCallback(async () => {
+    if (!lastImportResult) return;
+    try {
+      const report = buildImportResultReport(lastImportResult);
+      const copied = await Clipboard.setStringAsync(report);
+      if (copied) {
+        Alert.alert(t("common.success"), t("files.importResultCopySuccess"));
+        return;
+      }
+      Alert.alert(t("common.error"), t("files.importResultCopyFailed"));
+    } catch {
+      Alert.alert(t("common.error"), t("files.importResultCopyFailed"));
     }
-  }, [lastImportResult, isImporting, showImportResult]);
+  }, [buildImportResultReport, lastImportResult, t]);
+
+  useEffect(() => {
+    if (!lastImportResult || isImporting) return;
+    setShowImportResultSheet(true);
+  }, [lastImportResult, isImporting]);
+
+  useEffect(() => {
+    if (!isImporting) return;
+    setShowImportResultSheet(false);
+  }, [isImporting]);
 
   useEffect(() => {
     if (importError && !isImporting) {
@@ -469,10 +530,7 @@ export default function FilesScreen() {
     if (selectedIds.length === 0) return;
     const result = await exportFiles(selectedIds);
     if (result.success) {
-      Alert.alert(
-        t("common.success"),
-        t("files.exportSuccess").replace("{count}", String(result.exported)),
-      );
+      Alert.alert(t("common.success"), t("files.exportSuccess", { count: result.exported }));
       return;
     }
     Alert.alert(t("common.error"), t("files.exportFailed"));
@@ -493,15 +551,12 @@ export default function FilesScreen() {
     (trashIds: string[]) => {
       const result = restoreFromTrash(trashIds);
       if (result.success > 0 && result.failed === 0) {
-        Alert.alert(
-          t("common.success"),
-          t("files.restoreSuccess").replace("{count}", String(result.success)),
-        );
+        Alert.alert(t("common.success"), t("files.restoreSuccess", { count: result.success }));
         return;
       }
 
       if (result.success > 0 && result.failed > 0) {
-        const successMsg = t("files.restoreSuccess").replace("{count}", String(result.success));
+        const successMsg = t("files.restoreSuccess", { count: result.success });
         Alert.alert(t("common.error"), `${successMsg}\n${t("files.restoreFailed")}`);
         return;
       }
@@ -517,15 +572,12 @@ export default function FilesScreen() {
     (trashIds?: string[]) => {
       const result = emptyTrash(trashIds);
       if (result.deleted > 0 && result.failed === 0) {
-        Alert.alert(
-          t("common.success"),
-          t("files.emptyTrashSuccess").replace("{count}", String(result.deleted)),
-        );
+        Alert.alert(t("common.success"), t("files.emptyTrashSuccess", { count: result.deleted }));
         return;
       }
 
       if (result.deleted > 0 && result.failed > 0) {
-        const successMsg = t("files.emptyTrashSuccess").replace("{count}", String(result.deleted));
+        const successMsg = t("files.emptyTrashSuccess", { count: result.deleted });
         Alert.alert(t("common.error"), `${successMsg}\n${t("files.restoreFailed")}`);
         return;
       }
@@ -816,6 +868,15 @@ export default function FilesScreen() {
         visible={!!pendingDeleteToken}
         count={pendingDeleteCount}
         onUndo={handleUndoDelete}
+      />
+
+      <ImportResultSheet
+        visible={showImportResultSheet}
+        result={lastImportResult}
+        failedEntries={importFailedEntries}
+        isLandscape={isLandscape}
+        onOpenChange={setShowImportResultSheet}
+        onCopy={handleCopyImportResult}
       />
 
       <ImportOptionsSheet

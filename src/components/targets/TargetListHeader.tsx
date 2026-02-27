@@ -5,7 +5,18 @@
 
 import React from "react";
 import { View, Text, ScrollView } from "react-native";
-import { Button, Chip, Input, Separator, TextField, useThemeColor } from "heroui-native";
+import {
+  Accordion,
+  Alert,
+  Button,
+  Chip,
+  Input,
+  Popover,
+  PressableFeedback,
+  Separator,
+  TextField,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { EmptyState } from "../common/EmptyState";
@@ -71,15 +82,17 @@ interface TargetListHeaderProps {
 interface HeaderAction {
   testID?: string;
   icon: keyof typeof Ionicons.glyphMap;
+  label?: string;
   onPress: () => void;
   variant?: "outline" | "primary";
   iconColor?: string;
   showWhen?: boolean;
+  primary?: boolean;
 }
 
 const TargetHeaderActions = React.memo(function TargetHeaderActions({
   actions,
-  compact,
+  compact: _compact,
   gapClassName,
   buttonSize,
   iconSize,
@@ -95,35 +108,24 @@ const TargetHeaderActions = React.memo(function TargetHeaderActions({
   subtitle: string;
 }) {
   const mutedColor = useThemeColor("muted");
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
-  const buttons = actions
-    .filter((a) => a.showWhen !== false)
-    .map((action) => (
-      <Button
-        key={action.icon}
-        testID={action.testID}
-        size={buttonSize}
-        isIconOnly
-        variant={action.variant ?? "outline"}
-        onPress={action.onPress}
-      >
-        <Ionicons name={action.icon} size={iconSize} color={action.iconColor ?? mutedColor} />
-      </Button>
-    ));
+  const visible = actions.filter((a) => a.showWhen !== false);
+  const primaryActions = visible.filter((a) => a.primary);
+  const secondaryActions = visible.filter((a) => !a.primary);
 
-  if (compact) {
-    return (
-      <View className="gap-2">
-        <View>
-          <Text className="text-2xl font-bold text-foreground">{title}</Text>
-          <Text className="mt-1 text-sm text-muted">{subtitle}</Text>
-        </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View className={`flex-row items-center pr-1 ${gapClassName}`}>{buttons}</View>
-        </ScrollView>
-      </View>
-    );
-  }
+  const primaryButtons = primaryActions.map((action) => (
+    <Button
+      key={action.icon}
+      testID={action.testID}
+      size={buttonSize}
+      isIconOnly
+      variant={action.variant ?? "outline"}
+      onPress={action.onPress}
+    >
+      <Ionicons name={action.icon} size={iconSize} color={action.iconColor ?? mutedColor} />
+    </Button>
+  ));
 
   return (
     <View className="flex-row items-center justify-between">
@@ -131,7 +133,49 @@ const TargetHeaderActions = React.memo(function TargetHeaderActions({
         <Text className="text-2xl font-bold text-foreground">{title}</Text>
         <Text className="mt-1 text-sm text-muted">{subtitle}</Text>
       </View>
-      <View className={`flex-row ${gapClassName}`}>{buttons}</View>
+      <View className={`flex-row items-center ${gapClassName}`}>
+        {secondaryActions.length > 0 && (
+          <Popover isOpen={menuOpen} onOpenChange={setMenuOpen}>
+            <Popover.Trigger asChild>
+              <Button size={buttonSize} isIconOnly variant="outline">
+                <Ionicons name="ellipsis-horizontal" size={iconSize} color={mutedColor} />
+              </Button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Overlay />
+              <Popover.Content
+                presentation="popover"
+                placement="bottom"
+                width={220}
+                className="py-1"
+              >
+                {secondaryActions.map((action) => (
+                  <PressableFeedback
+                    key={action.icon}
+                    onPress={() => {
+                      setMenuOpen(false);
+                      action.onPress();
+                    }}
+                  >
+                    <PressableFeedback.Highlight />
+                    <View className="flex-row items-center gap-3 px-4 py-2.5">
+                      <Ionicons
+                        name={action.icon}
+                        size={16}
+                        color={action.iconColor ?? mutedColor}
+                      />
+                      {action.label && (
+                        <Text className="text-sm text-foreground">{action.label}</Text>
+                      )}
+                    </View>
+                  </PressableFeedback>
+                ))}
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover>
+        )}
+        {primaryButtons}
+      </View>
     </View>
   );
 });
@@ -416,15 +460,21 @@ const TargetSortBar = React.memo(function TargetSortBar({
 export const TargetSearchBar = React.memo(function TargetSearchBar({
   searchQuery,
   onSearchQueryChange,
+  suggestions = [],
+  onSelectSuggestion,
   interactionUi,
 }: {
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
+  suggestions?: string[];
+  onSelectSuggestion?: (suggestion: string) => void;
   interactionUi: ResolvedTargetInteractionUi;
 }) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const { buttonSize, compactIconSize } = interactionUi;
+
+  const showSuggestions = suggestions.length > 0 && searchQuery.length >= 2 && onSelectSuggestion;
 
   return (
     <View className="px-4 pb-3 bg-background">
@@ -456,12 +506,28 @@ export const TargetSearchBar = React.memo(function TargetSearchBar({
           )}
         </View>
       </TextField>
+      {showSuggestions && (
+        <View className="mt-1 rounded-lg bg-surface-secondary overflow-hidden">
+          {suggestions.slice(0, 5).map((item) => (
+            <PressableFeedback key={item} onPress={() => onSelectSuggestion(item)}>
+              <PressableFeedback.Highlight />
+              <View className="flex-row items-center gap-2 px-3 py-2">
+                <Ionicons name="search-outline" size={12} color={mutedColor} />
+                <Text className="text-sm text-foreground" numberOfLines={1}>
+                  {item}
+                </Text>
+              </View>
+            </PressableFeedback>
+          ))}
+        </View>
+      )}
     </View>
   );
 });
 
 export const TargetListHeader = React.memo(function TargetListHeader(props: TargetListHeaderProps) {
   const { t } = useI18n();
+  const mutedColor = useThemeColor("muted");
 
   const {
     targets,
@@ -512,16 +578,30 @@ export const TargetListHeader = React.memo(function TargetListHeader(props: Targ
     {
       testID: "e2e-action-tabs__targets-open-stats",
       icon: "stats-chart-outline",
+      label: t("targets.statistics.title"),
       onPress: onShowStats,
       showWhen: targets.length > 0,
     },
-    { icon: "options-outline", onPress: onShowAdvancedSearch },
-    { icon: "copy-outline", onPress: onShowDuplicateMerge },
-    { icon: "folder-open-outline", onPress: onShowGroupManager },
+    {
+      icon: "options-outline",
+      label: t("targets.search.title"),
+      onPress: onShowAdvancedSearch,
+    },
+    {
+      icon: "copy-outline",
+      label: t("targets.search.duplicates"),
+      onPress: onShowDuplicateMerge,
+    },
+    {
+      icon: "folder-open-outline",
+      label: t("targets.groups.title"),
+      onPress: onShowGroupManager,
+    },
     {
       testID: "e2e-action-tabs__targets-scan",
       icon: "scan-outline",
       onPress: onScanTargets,
+      primary: true,
     },
     {
       testID: "e2e-action-tabs__targets-open-add",
@@ -529,6 +609,7 @@ export const TargetListHeader = React.memo(function TargetListHeader(props: Targ
       onPress: onShowAddSheet,
       variant: "primary",
       iconColor: "#fff",
+      primary: true,
     },
   ];
 
@@ -554,42 +635,81 @@ export const TargetListHeader = React.memo(function TargetListHeader(props: Targ
 
       <Separator className="my-4" />
 
-      <TargetFilterChips
-        filterType={props.filterType}
-        filterStatus={props.filterStatus}
-        filterFavorite={props.filterFavorite}
-        filterCategory={props.filterCategory}
-        filterTag={props.filterTag}
-        filterGroupId={props.filterGroupId}
-        onFilterTypeChange={props.onFilterTypeChange}
-        onFilterStatusChange={props.onFilterStatusChange}
-        onFilterFavoriteChange={props.onFilterFavoriteChange}
-        onFilterCategoryChange={props.onFilterCategoryChange}
-        onFilterTagChange={props.onFilterTagChange}
-        onFilterGroupIdChange={props.onFilterGroupIdChange}
-        groups={props.groups}
-        allCategories={props.allCategories}
-        allTags={props.allTags}
-        chipSize={chipSize}
-        chipLabelClassName={chipLabelClassName}
-        miniIconSize={miniIconSize}
-        useCompactLayout={useCompactFilterLayout}
-      />
+      {props.hasActiveFilters && (
+        <Alert status="accent" className="mb-3 items-center">
+          <Alert.Indicator className="pt-0" />
+          <Alert.Content>
+            <Alert.Title>
+              {filteredTargets.length} / {targets.length} {t("targets.title")}
+            </Alert.Title>
+          </Alert.Content>
+          <Button size="sm" variant="ghost" onPress={props.onClearFilters}>
+            <Button.Label className={tinyActionLabelClassName}>
+              {t("targets.clearFilters")}
+            </Button.Label>
+          </Button>
+        </Alert>
+      )}
 
-      <TargetSortBar
-        sortBy={props.sortBy}
-        sortOrder={props.sortOrder}
-        onSortByChange={props.onSortByChange}
-        onSortOrderChange={props.onSortOrderChange}
-        hasActiveFilters={props.hasActiveFilters}
-        onClearFilters={props.onClearFilters}
-        isAdvancedMode={props.isAdvancedMode}
-        advancedConditions={props.advancedConditions}
-        chipSize={chipSize}
-        chipLabelClassName={chipLabelClassName}
-        miniIconSize={miniIconSize}
-        tinyActionLabelClassName={tinyActionLabelClassName}
-      />
+      <Accordion selectionMode="multiple" variant="surface" defaultValue={["filters"]}>
+        <Accordion.Item value="filters">
+          <Accordion.Trigger>
+            <View className="flex-row items-center flex-1 gap-2">
+              <Ionicons name="funnel-outline" size={miniIconSize} color={mutedColor} />
+              <Text className="text-xs font-semibold text-muted">{t("gallery.filterBy")}</Text>
+            </View>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+          <Accordion.Content>
+            <TargetFilterChips
+              filterType={props.filterType}
+              filterStatus={props.filterStatus}
+              filterFavorite={props.filterFavorite}
+              filterCategory={props.filterCategory}
+              filterTag={props.filterTag}
+              filterGroupId={props.filterGroupId}
+              onFilterTypeChange={props.onFilterTypeChange}
+              onFilterStatusChange={props.onFilterStatusChange}
+              onFilterFavoriteChange={props.onFilterFavoriteChange}
+              onFilterCategoryChange={props.onFilterCategoryChange}
+              onFilterTagChange={props.onFilterTagChange}
+              onFilterGroupIdChange={props.onFilterGroupIdChange}
+              groups={props.groups}
+              allCategories={props.allCategories}
+              allTags={props.allTags}
+              chipSize={chipSize}
+              chipLabelClassName={chipLabelClassName}
+              miniIconSize={miniIconSize}
+              useCompactLayout={useCompactFilterLayout}
+            />
+          </Accordion.Content>
+        </Accordion.Item>
+        <Accordion.Item value="sort">
+          <Accordion.Trigger>
+            <View className="flex-row items-center flex-1 gap-2">
+              <Ionicons name="swap-vertical-outline" size={miniIconSize} color={mutedColor} />
+              <Text className="text-xs font-semibold text-muted">{t("targets.sort.date")}</Text>
+            </View>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+          <Accordion.Content>
+            <TargetSortBar
+              sortBy={props.sortBy}
+              sortOrder={props.sortOrder}
+              onSortByChange={props.onSortByChange}
+              onSortOrderChange={props.onSortOrderChange}
+              hasActiveFilters={props.hasActiveFilters}
+              onClearFilters={props.onClearFilters}
+              isAdvancedMode={props.isAdvancedMode}
+              advancedConditions={props.advancedConditions}
+              chipSize={chipSize}
+              chipLabelClassName={chipLabelClassName}
+              miniIconSize={miniIconSize}
+              tinyActionLabelClassName={tinyActionLabelClassName}
+            />
+          </Accordion.Content>
+        </Accordion.Item>
+      </Accordion>
 
       {/* Empty states */}
       {filteredTargets.length === 0 && targets.length === 0 && (
@@ -602,7 +722,14 @@ export const TargetListHeader = React.memo(function TargetListHeader(props: Targ
         />
       )}
       {targets.length > 0 && filteredTargets.length === 0 && (
-        <EmptyState icon="search-outline" title={t("targets.noResults")} />
+        <EmptyState
+          icon="search-outline"
+          title={t("targets.noResults")}
+          actionLabel={props.hasActiveFilters ? t("targets.clearFilters") : undefined}
+          onAction={props.hasActiveFilters ? props.onClearFilters : undefined}
+          secondaryLabel={t("targets.search.title")}
+          onSecondaryAction={onShowAdvancedSearch}
+        />
       )}
     </View>
   );

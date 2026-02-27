@@ -13,7 +13,7 @@ This is a React Native application built with Expo SDK 54, featuring:
 - **File-based routing** via Expo Router 6
 - **FITS file parsing** via fitsjs-ng with pako decompression
 - **GPU rendering** via @shopify/react-native-skia for FITS image display
-- **State management** via Zustand (10 stores with MMKV persistence)
+- **State management** via Zustand (18 stores with MMKV persistence)
 - **Component library** via HeroUI Native
 - **Styling** via Uniwind + TailwindCSS 4 with dark mode support
 - **Animations** via React Native Reanimated
@@ -100,27 +100,27 @@ graph TD
 
 ## Module Index
 
-| Path                                        | Type      | Description                                                    | Entry/Key Files                               |
-| ------------------------------------------- | --------- | -------------------------------------------------------------- | --------------------------------------------- |
-| [src/app](./src/app/CLAUDE.md)              | Routing   | File-based routing, 5 tabs + detail screens                    | `_layout.tsx`, `(tabs)/_layout.tsx`           |
-| [src/components](./src/components/)         | UI        | Reusable components (common, fits, gallery, targets, sessions) | 10 subdirectories, 65+ components             |
-| [src/hooks](./src/hooks/)                   | Hooks     | 29 custom hooks (FITS, gallery, stacking, location, etc)       | `useFitsFile.ts`, `useGallery.ts`             |
-| [src/stores](./src/stores/)                 | State     | 10 Zustand stores with MMKV persistence                        | `useFitsStore.ts`, `useTargetStore.ts`        |
-| [src/lib/fits](./src/lib/fits/)             | Logic     | FITS file parsing, metadata extraction, header manipulation    | `parser.ts`, `types.ts`, `headerWriter.ts`    |
-| [src/lib/stacking](./src/lib/stacking/)     | Logic     | Image stacking (alignment, calibration, star detection)        | `alignment.ts`, `calibration.ts`              |
-| [src/lib/gallery](./src/lib/gallery/)       | Logic     | Gallery logic (albums, thumbnails, duplicates, classification) | `albumManager.ts`, `frameClassifier.ts`       |
-| [src/lib/targets](./src/lib/targets/)       | Logic     | Target management (coordinates, exposure stats, matching)      | `targetManager.ts`, `targetMatcher.ts`        |
-| [src/lib/sessions](./src/lib/sessions/)     | Logic     | Session management (detection, observation logs, stats)        | `sessionDetector.ts`, `observationLog.ts`     |
-| [src/lib/converter](./src/lib/converter/)   | Logic     | Format conversion (PNG, JPEG, TIFF, WebP, BMP)                 | `formatConverter.ts`, `batchProcessor.ts`     |
-| [src/lib/backup](./src/lib/backup/)         | Logic     | Cloud backup (Google Drive, OneDrive, Dropbox, WebDAV)         | `backupService.ts`, `cloudProvider.ts`        |
-| [src/lib/astrometry](./src/lib/astrometry/) | Logic     | Astrometry.net integration (plate solving, WCS export)         | `astrometryService.ts`, `astrometryClient.ts` |
-| [src/lib/calendar](./src/lib/calendar/)     | Logic     | Calendar integration for observation planning                  | `calendarService.ts`                          |
-| [src/lib/logger](./src/lib/logger/)         | Logic     | Logging system with export capabilities                        | `logger.ts`, `systemInfo.ts`                  |
-| [src/lib/map](./src/lib/map/)               | Logic     | Map overlays, styles, and clustering                           | `overlays.ts`, `clustering.ts`                |
-| [src/lib/theme](./src/lib/theme/)           | Logic     | Theme configuration and font presets                           | `fonts.ts`, `presets.ts`                      |
-| [src/lib/utils](./src/lib/utils/)           | Logic     | Utility functions (file manager, pixel math, image export)     | `fileManager.ts`, `pixelMath.ts`              |
-| [src/i18n](./src/i18n/CLAUDE.md)            | i18n      | Internationalization with i18n-js, supports en/zh locales      | `index.ts`, `useI18n.ts`                      |
-| [src/utils](./src/utils/)                   | Utilities | Utility functions including className helper                   | `cn.ts`                                       |
+| Path                                         | Type      | Description                                                    | Entry/Key Files                               |
+| -------------------------------------------- | --------- | -------------------------------------------------------------- | --------------------------------------------- |
+| [src/app](./src/app/CLAUDE.md)               | Routing   | File-based routing, 5 tabs + detail screens                    | `_layout.tsx`, `(tabs)/_layout.tsx`           |
+| [src/components](./src/components/CLAUDE.md) | UI        | Reusable components (common, fits, gallery, targets, sessions) | 13 subdirectories, 100+ components            |
+| [src/hooks](./src/hooks/)                    | Hooks     | 50 custom hooks (FITS, gallery, stacking, location, etc)       | `useFitsFile.ts`, `useGallery.ts`             |
+| [src/stores](./src/stores/)                  | State     | 18 Zustand stores with MMKV persistence                        | `useFitsStore.ts`, `useTargetStore.ts`        |
+| [src/lib/fits](./src/lib/fits/)              | Logic     | FITS file parsing, metadata extraction, header manipulation    | `parser.ts`, `types.ts`, `writer.ts`          |
+| [src/lib/stacking](./src/lib/stacking/)      | Logic     | Image stacking (alignment, calibration, star detection)        | `alignment.ts`, `calibration.ts`              |
+| [src/lib/gallery](./src/lib/gallery/)        | Logic     | Gallery logic (albums, thumbnails, duplicates, classification) | `albumManager.ts`, `frameClassifier.ts`       |
+| [src/lib/targets](./src/lib/targets/)        | Logic     | Target management (coordinates, exposure stats, matching)      | `targetManager.ts`, `targetMatcher.ts`        |
+| [src/lib/sessions](./src/lib/sessions/)      | Logic     | Session management (detection, observation logs, stats)        | `sessionDetector.ts`, `observationLog.ts`     |
+| [src/lib/converter](./src/lib/converter/)    | Logic     | Format conversion (PNG, JPEG, TIFF, WebP, BMP)                 | `formatConverter.ts`, `batchProcessor.ts`     |
+| [src/lib/backup](./src/lib/backup/)          | Logic     | Cloud backup (Google Drive, OneDrive, Dropbox, WebDAV)         | `backupService.ts`, `cloudProvider.ts`        |
+| [src/lib/astrometry](./src/lib/astrometry/)  | Logic     | Astrometry.net integration (plate solving, WCS export)         | `astrometryService.ts`, `astrometryClient.ts` |
+| [src/lib/calendar](./src/lib/calendar/)      | Logic     | Calendar integration for observation planning                  | `calendarService.ts`                          |
+| [src/lib/logger](./src/lib/logger/)          | Logic     | Logging system with export capabilities                        | `logger.ts`, `systemInfo.ts`                  |
+| [src/lib/map](./src/lib/map/)                | Logic     | Map overlays, styles, and clustering                           | `overlays.ts`, `clustering.ts`                |
+| [src/lib/theme](./src/lib/theme/)            | Logic     | Theme configuration and font presets                           | `fonts.ts`, `presets.ts`                      |
+| [src/lib/utils](./src/lib/utils/)            | Logic     | Utility functions (file manager, pixel math, image export)     | `fileManager.ts`, `pixelMath.ts`              |
+| [src/i18n](./src/i18n/CLAUDE.md)             | i18n      | Internationalization with i18n-js, supports en/zh locales      | `index.ts`, `useI18n.ts`                      |
+| [src/utils](./src/utils/)                    | Utilities | Utility functions including className helper                   | `cn.ts`                                       |
 
 ## Run & Develop
 
@@ -151,6 +151,11 @@ pnpm format:check  # Prettier check
 pnpm typecheck     # TypeScript check
 pnpm test          # Jest tests
 pnpm test:coverage # Jest with coverage
+pnpm test:app      # Jest tests for app routes only
+
+# E2E & Parity
+pnpm e2e:parity    # Validate route-flow parity
+pnpm e2e:android   # Run Maestro Android E2E flows
 ```
 
 ### Project Structure
@@ -173,6 +178,7 @@ src/
 |   |-- editor/[id].tsx   # Image editor
 |   |-- stacking/index.tsx# Image stacking
 |   |-- compose/index.tsx # RGB compose
+|   |-- compose/advanced.tsx # Advanced compose
 |   |-- convert/index.tsx # Format converter
 |   |-- convert/batch.tsx # Batch converter
 |   |-- album/[id].tsx    # Album detail
@@ -184,20 +190,24 @@ src/
 |   |   |-- index.tsx
 |   |   |-- _layout.tsx
 |   |   `-- result/[id].tsx
-|   `-- compare/index.tsx # Image comparison
-|-- components/           # Reusable UI components (65+)
-|   |-- common/           # 15 shared components
-|   |-- fits/             # 15 FITS viewer components
-|   |-- gallery/          # 12 gallery components
-|   |-- targets/          # 10 target components
-|   |-- sessions/         # 9 session components
-|   |-- converter/        # 3 converter components
-|   |-- backup/           # 5 backup components
-|   |-- astrometry/       # 5 astrometry components
-|   |-- map/              # 1 map component
-|   `-- settings/         # 3 settings components
-|-- hooks/                # 29 custom React hooks
-|-- stores/               # 10 Zustand state stores
+|   |-- compare/index.tsx # Image comparison
+|   `-- video/[id].tsx   # Video player
+|-- components/           # Reusable UI components (100+)
+|   |-- common/           # Shared components
+|   |-- fits/             # FITS viewer components
+|   |-- files/            # File manager components
+|   |-- gallery/          # Gallery components
+|   |-- targets/          # Target components
+|   |-- sessions/         # Session components
+|   |-- converter/        # Converter components
+|   |-- editor/           # Image editor components
+|   |-- backup/           # Backup components
+|   |-- astrometry/       # Astrometry components
+|   |-- video/            # Video player components
+|   |-- map/              # Map component
+|   `-- settings/         # Settings components
+|-- hooks/                # 50 custom React hooks
+|-- stores/               # 18 Zustand state stores
 |-- lib/                  # Core business logic (13 modules)
 |   |-- fits/             # FITS parsing (4 files)
 |   |-- stacking/         # Image stacking (4 files)
@@ -266,11 +276,11 @@ Key data models defined in `src/lib/fits/types.ts`:
 
 ## Test Strategy
 
-| Type        | Status         | Tools                               | Coverage      |
-| ----------- | -------------- | ----------------------------------- | ------------- |
-| Unit        | Configured     | Jest + React Native Testing Library | 61 test files |
-| Integration | Not configured | -                                   | -             |
-| E2E         | Not configured | -                                   | -             |
+| Type        | Status         | Tools                               | Coverage       |
+| ----------- | -------------- | ----------------------------------- | -------------- |
+| Unit        | Configured     | Jest + React Native Testing Library | 53+ test files |
+| Integration | Not configured | -                                   | -              |
+| E2E         | Configured     | Maestro (Android)                   | All pages      |
 
 ### Test Coverage by Module
 
@@ -284,10 +294,10 @@ Key data models defined in `src/lib/fits/types.ts`:
 | lib/backup/     | 2          | Backup service and manifest tests    |
 | lib/utils/      | 2          | Pixel math and image operations      |
 | lib/converter/  | 1          | Format converter tests               |
-| lib/fits/       | 1          | Header writer tests                  |
+| lib/fits/       | 3          | Parser, writer, compression tests    |
 | hooks/          | 1          | Screen orientation hook tests        |
 | i18n/           | 2          | i18n hook tests                      |
-| app/(tabs)/     | 1          | Tab index tests                      |
+| app/            | 38+        | Route screen and layout tests        |
 | utils/          | 1          | className utility tests              |
 
 ## Coding Standards
@@ -345,6 +355,17 @@ Triggers on push/PR to `master` branch:
 2. **Lint & Format**: `pnpm lint` + `pnpm format:check`
 3. **Test**: `pnpm jest --ci --coverage`
 4. **Build (Web)**: `pnpm exec expo export --platform web`
+
+## Gotchas
+
+- **fitsjs patching**: `pnpm postinstall` runs `scripts/patch-fitsjs.mjs` to patch fitsjs-ng. If you update fitsjs-ng, verify the patch still applies.
+- **Skia rendering**: `@shopify/react-native-skia` requires native modules; FITS pixel rendering won't work in Expo Go — use development builds.
+- **MMKV persistence**: Zustand stores use persist middleware. Changing store shape requires migration logic or users lose data.
+- **i18n sync**: Both `en.ts` and `zh.ts` must have identical key structures — there's no build-time check for missing keys.
+- **Astrometry API key**: Required for plate solving. Obtain from nova.astrometry.net and store via `expo-secure-store`.
+- **HeroUI Native docs**: Always read `.heroui-docs/native/` before using components — do NOT rely on prior knowledge (see AGENTS.md warning).
+- **Web vs Native**: Some features (Skia rendering, file system, camera) behave differently or are unavailable on web platform.
+- **`tailwind-merge`**: Already in dependencies but `src/utils/cn.ts` doesn't use it yet — be aware of potential class conflicts.
 
 ## AI Usage Guidelines
 

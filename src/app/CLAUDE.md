@@ -76,8 +76,18 @@ index.tsx (redirect) -> _layout.tsx (providers + onboarding) -> (tabs)/_layout.t
 | `/backup`                 | `backup/index.tsx`           | Backup management              |
 | `/astrometry`             | `astrometry/index.tsx`       | Astrometry.net jobs            |
 | `/astrometry/result/[id]` | `astrometry/result/[id].tsx` | Astrometry result              |
+| `/compose/advanced`       | `compose/advanced.tsx`       | Advanced compose               |
 | `/compare`                | `compare/index.tsx`          | Image comparison               |
-| `/settings/*`             | `settings/_layout.tsx`       | Settings sub-screens           |
+| `/video/[id]`             | `video/[id].tsx`             | Video player                   |
+| `/settings`               | `settings/index.tsx`         | Settings home                  |
+| `/settings/viewer`        | `settings/viewer.tsx`        | Viewer settings                |
+| `/settings/gallery`       | `settings/gallery.tsx`       | Gallery settings               |
+| `/settings/appearance`    | `settings/appearance.tsx`    | Appearance settings            |
+| `/settings/observation`   | `settings/observation.tsx`   | Observation settings           |
+| `/settings/processing`    | `settings/processing.tsx`    | Processing settings            |
+| `/settings/storage`       | `settings/storage.tsx`       | Storage settings               |
+| `/settings/about`         | `settings/about.tsx`         | About screen                   |
+| `/settings/licenses`      | `settings/licenses.tsx`      | Licenses screen                |
 | `/*`                      | `[...missing].tsx`           | 404 fallback                   |
 
 ### Providers (Root Layout)
@@ -107,28 +117,33 @@ index.tsx (redirect) -> _layout.tsx (providers + onboarding) -> (tabs)/_layout.t
 
 Components consume data from Zustand stores:
 
-| Store                 | Purpose                                 |
-| --------------------- | --------------------------------------- |
-| `useFitsStore`        | FITS file list, selection, search, sort |
-| `useGalleryStore`     | Gallery view mode, filters              |
-| `useViewerStore`      | Viewer state (stretch, colormap, etc.)  |
-| `useTargetStore`      | Observation targets                     |
-| `useTargetGroupStore` | Target groups/categories                |
-| `useSessionStore`     | Observation sessions                    |
-| `useSettingsStore`    | App settings (orientation lock, etc.)   |
-| `useAlbumStore`       | Albums                                  |
-| `useConverterStore`   | Converter settings                      |
-| `useBackupStore`      | Backup state and progress               |
-| `useAstrometryStore`  | Astrometry jobs                         |
-| `useOnboardingStore`  | Onboarding completion state             |
-| `useLogStore`         | App logs                                |
+| Store                   | Purpose                                 |
+| ----------------------- | --------------------------------------- |
+| `useFitsStore`          | FITS file list, selection, search, sort |
+| `useGalleryStore`       | Gallery view mode, filters              |
+| `useViewerStore`        | Viewer state (stretch, colormap, etc.)  |
+| `useTargetStore`        | Observation targets                     |
+| `useTargetGroupStore`   | Target groups/categories                |
+| `useSessionStore`       | Observation sessions                    |
+| `useSettingsStore`      | App settings (orientation lock, etc.)   |
+| `useAlbumStore`         | Albums                                  |
+| `useConverterStore`     | Converter settings                      |
+| `useBackupStore`        | Backup state and progress               |
+| `useAstrometryStore`    | Astrometry jobs                         |
+| `useOnboardingStore`    | Onboarding completion state             |
+| `useLogStore`           | App logs                                |
+| `useFavoriteSitesStore` | Favorite observation sites              |
+| `useFileGroupStore`     | File grouping                           |
+| `useSavedThemesStore`   | Saved theme presets                     |
+| `useTrashStore`         | Trash/recycle bin                       |
+| `useVideoTaskStore`     | Video processing tasks                  |
 
 ## Testing & Quality
 
-| Aspect     | Status         | Files                             |
-| ---------- | -------------- | --------------------------------- |
-| Unit Tests | Partial        | `(tabs)/__tests__/index.test.tsx` |
-| E2E Tests  | Not configured | -                                 |
+| Aspect     | Status     | Files                                        |
+| ---------- | ---------- | -------------------------------------------- |
+| Unit Tests | Good       | 38+ test files across all routes and layouts |
+| E2E Tests  | Configured | Maestro flows (`.maestro/`)                  |
 
 ## FAQ
 
@@ -203,9 +218,19 @@ src/app/
 |       `-- [id].tsx      # Job result
 |-- compare/
 |   `-- index.tsx         # Image comparison
+|-- video/
+|   `-- [id].tsx          # Video player
 `-- settings/
     |-- _layout.tsx       # Settings stack layout
-    `-- (sub-screens)     # Various settings screens
+    |-- index.tsx         # Settings home
+    |-- viewer.tsx        # Viewer settings
+    |-- gallery.tsx       # Gallery settings
+    |-- appearance.tsx    # Appearance settings
+    |-- observation.tsx   # Observation settings
+    |-- processing.tsx    # Processing settings
+    |-- storage.tsx       # Storage settings
+    |-- about.tsx         # About screen
+    `-- licenses.tsx      # Licenses screen
 ```
 
 ## Changelog

@@ -4,6 +4,10 @@ import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { EmptyState } from "../../components/common/EmptyState";
+import {
+  OperationSummaryDialog,
+  type SummaryItem,
+} from "../../components/common/OperationSummaryDialog";
 import { GuideTarget } from "../../components/common/GuideTarget";
 import { SearchBar } from "../../components/common/SearchBar";
 import { ActiveSessionBanner } from "../../components/sessions/ActiveSessionBanner";
@@ -47,8 +51,14 @@ export default function SessionsScreen() {
   const { isLandscape, isLandscapeTablet, contentPaddingTop, sidePanelWidth } =
     useResponsiveLayout();
 
-  const { sessions, autoDetectSessions, getObservationDates, getSessionStats, getMonthlyData } =
-    useSessions();
+  const {
+    sessions,
+    autoDetectSessions,
+    reconcileSessionsFromLinkedFiles,
+    getObservationDates,
+    getSessionStats,
+    getMonthlyData,
+  } = useSessions();
   const {
     calendarSyncEnabled,
     syncSession,
@@ -103,6 +113,13 @@ export default function SessionsScreen() {
   const [sortBy, setSortBy] = useState<"date" | "duration" | "images">("date");
   const [actionSession, setActionSession] = useState<ObservationSession | null>(null);
   const [actionPlan, setActionPlan] = useState<ObservationPlan | null>(null);
+  const [summaryDialog, setSummaryDialog] = useState<{
+    title: string;
+    icon?: string;
+    status?: "success" | "warning" | "danger" | "default";
+    items: SummaryItem[];
+    footnote?: string;
+  } | null>(null);
 
   const getSessionTargetNames = useCallback(
     (session: ObservationSession) => resolveSessionTargetNames(session, targetCatalog),
@@ -143,37 +160,94 @@ export default function SessionsScreen() {
     ]);
   }, [selectedIds, t, removeMultipleSessions, exitSelectionMode]);
 
-  const buildDetectSummaryMessage = useCallback(
-    (result: {
-      totalDetected: number;
-      newCount: number;
-      updatedCount: number;
-      mergedCount: number;
-      skippedCount: number;
-    }) =>
-      [
-        `${t("sessions.detectSummaryDetected")}: ${result.totalDetected}`,
-        `${t("sessions.detectSummaryNew")}: ${result.newCount}`,
-        `${t("sessions.detectSummaryUpdated")}: ${result.updatedCount}`,
-        `${t("sessions.detectSummaryMerged")}: ${result.mergedCount}`,
-        `${t("sessions.detectSummarySkipped")}: ${result.skippedCount}`,
-      ].join("\n"),
-    [t],
-  );
-
   const handleDetectSessions = useCallback(() => {
     const result = autoDetectSessions();
-    Alert.alert(
-      t("sessions.detectSummaryTitle"),
-      buildDetectSummaryMessage({
-        totalDetected: result.totalDetected,
-        newCount: result.newCount,
-        updatedCount: result.updatedCount,
-        mergedCount: result.mergedCount,
-        skippedCount: result.skippedCount,
-      }),
-    );
-  }, [autoDetectSessions, buildDetectSummaryMessage, t]);
+    setSummaryDialog({
+      title: t("sessions.detectSummaryTitle"),
+      icon: "scan-outline",
+      status: "success",
+      items: [
+        {
+          label: t("sessions.detectSummaryDetected"),
+          value: result.totalDetected,
+          color: "accent",
+          icon: "telescope-outline",
+        },
+        {
+          label: t("sessions.detectSummaryNew"),
+          value: result.newCount,
+          color: "success",
+          icon: "add-circle-outline",
+        },
+        {
+          label: t("sessions.detectSummaryUpdated"),
+          value: result.updatedCount,
+          color: "accent",
+          icon: "create-outline",
+        },
+        {
+          label: t("sessions.detectSummaryMerged"),
+          value: result.mergedCount,
+          color: "warning",
+          icon: "git-merge-outline",
+        },
+        {
+          label: t("sessions.detectSummarySkipped"),
+          value: result.skippedCount,
+          color: "default",
+          icon: "remove-circle-outline",
+        },
+      ],
+    });
+  }, [autoDetectSessions, t]);
+
+  const handleReconcileSessions = useCallback(() => {
+    const summary = reconcileSessionsFromLinkedFiles();
+    setSummaryDialog({
+      title: t("sessions.reconcileSummaryTitle"),
+      icon: "construct-outline",
+      status: summary.changed ? "success" : "default",
+      items: [
+        {
+          label: t("sessions.reconcileSummaryProcessed"),
+          value: summary.processed,
+          color: "accent",
+          icon: "layers-outline",
+        },
+        {
+          label: t("sessions.reconcileSummaryUpdated"),
+          value: summary.updated,
+          color: "success",
+          icon: "checkmark-circle-outline",
+        },
+        {
+          label: t("sessions.reconcileSummaryCleared"),
+          value: summary.cleared,
+          color: "warning",
+          icon: "close-circle-outline",
+        },
+        {
+          label: t("sessions.reconcileSummaryLogsAdded"),
+          value: summary.logsAdded,
+          color: "success",
+          icon: "add-outline",
+        },
+        {
+          label: t("sessions.reconcileSummaryLogsRemoved"),
+          value: summary.logsRemoved,
+          color: "danger",
+          icon: "trash-outline",
+        },
+        {
+          label: t("sessions.batchSummaryUnchanged"),
+          value: summary.unchanged,
+          color: "default",
+          icon: "ellipsis-horizontal",
+        },
+      ],
+      footnote: !summary.changed ? t("sessions.reconcileNoChanges") : undefined,
+    });
+  }, [reconcileSessionsFromLinkedFiles, t]);
 
   const observationDates = getObservationDates(calYear, calMonth);
   const plannedDates = getPlannedDates(calYear, calMonth);
@@ -398,15 +472,17 @@ export default function SessionsScreen() {
       return;
     }
 
-    Alert.alert(
-      t("sessions.batchSyncSessions"),
-      [
-        `${t("sessions.batchSummaryTotal")}: ${summary.total}`,
-        `${t("sessions.batchSummarySuccess")}: ${summary.success}`,
-        `${t("sessions.batchSummarySkipped")}: ${summary.skipped}`,
-        `${t("sessions.batchSummaryFailed")}: ${summary.failed}`,
-      ].join("\n"),
-    );
+    setSummaryDialog({
+      title: t("sessions.batchSyncSessions"),
+      icon: "sync-outline",
+      status: summary.failed > 0 ? "warning" : "success",
+      items: [
+        { label: t("sessions.batchSummaryTotal"), value: summary.total, color: "accent" },
+        { label: t("sessions.batchSummarySuccess"), value: summary.success, color: "success" },
+        { label: t("sessions.batchSummarySkipped"), value: summary.skipped, color: "default" },
+        { label: t("sessions.batchSummaryFailed"), value: summary.failed, color: "danger" },
+      ],
+    });
   }, [selectedSessions, syncSessionsBatch, t]);
 
   const handleBatchUnsyncSelected = useCallback(async () => {
@@ -416,15 +492,17 @@ export default function SessionsScreen() {
     }
 
     const summary = await unsyncSessionsBatch(selectedSessions);
-    Alert.alert(
-      t("sessions.batchUnsyncSessions"),
-      [
-        `${t("sessions.batchSummaryTotal")}: ${summary.total}`,
-        `${t("sessions.batchSummarySuccess")}: ${summary.success}`,
-        `${t("sessions.batchSummarySkipped")}: ${summary.skipped}`,
-        `${t("sessions.batchSummaryFailed")}: ${summary.failed}`,
-      ].join("\n"),
-    );
+    setSummaryDialog({
+      title: t("sessions.batchUnsyncSessions"),
+      icon: "unlink-outline",
+      status: summary.failed > 0 ? "warning" : "success",
+      items: [
+        { label: t("sessions.batchSummaryTotal"), value: summary.total, color: "accent" },
+        { label: t("sessions.batchSummarySuccess"), value: summary.success, color: "success" },
+        { label: t("sessions.batchSummarySkipped"), value: summary.skipped, color: "default" },
+        { label: t("sessions.batchSummaryFailed"), value: summary.failed, color: "danger" },
+      ],
+    });
   }, [selectedSessions, t, unsyncSessionsBatch]);
 
   const handleBatchRefreshSelected = useCallback(async () => {
@@ -439,17 +517,19 @@ export default function SessionsScreen() {
       return;
     }
 
-    Alert.alert(
-      t("sessions.batchRefreshSessions"),
-      [
-        `${t("sessions.batchSummaryTotal")}: ${summary.total}`,
-        `${t("sessions.batchSummaryUpdated")}: ${summary.updated}`,
-        `${t("sessions.batchSummaryCleared")}: ${summary.cleared}`,
-        `${t("sessions.batchSummaryUnchanged")}: ${summary.unchanged}`,
-        `${t("sessions.batchSummarySkipped")}: ${summary.skipped}`,
-        `${t("sessions.batchSummaryErrors")}: ${summary.errors}`,
-      ].join("\n"),
-    );
+    setSummaryDialog({
+      title: t("sessions.batchRefreshSessions"),
+      icon: "refresh-outline",
+      status: summary.errors > 0 ? "warning" : "success",
+      items: [
+        { label: t("sessions.batchSummaryTotal"), value: summary.total, color: "accent" },
+        { label: t("sessions.batchSummaryUpdated"), value: summary.updated, color: "success" },
+        { label: t("sessions.batchSummaryCleared"), value: summary.cleared, color: "warning" },
+        { label: t("sessions.batchSummaryUnchanged"), value: summary.unchanged, color: "default" },
+        { label: t("sessions.batchSummarySkipped"), value: summary.skipped, color: "default" },
+        { label: t("sessions.batchSummaryErrors"), value: summary.errors, color: "danger" },
+      ],
+    });
   }, [refreshSessionsBatch, selectedSessions, t]);
 
   const renderSessionItem = useCallback(
@@ -728,6 +808,15 @@ export default function SessionsScreen() {
               <Ionicons name="scan-outline" size={14} color={mutedColor} />
             </Button>
           </GuideTarget>
+          <Button
+            testID="e2e-action-tabs__sessions-reconcile"
+            size="sm"
+            variant="outline"
+            onPress={handleReconcileSessions}
+            accessibilityLabel={t("sessions.reconcileSessions")}
+          >
+            <Ionicons name="construct-outline" size={14} color={mutedColor} />
+          </Button>
         </View>
       </View>
 
@@ -884,6 +973,15 @@ export default function SessionsScreen() {
                 <Button size="sm" variant="outline" onPress={handleDetectSessions}>
                   <Ionicons name="scan-outline" size={14} color={mutedColor} />
                 </Button>
+                <Button
+                  testID="e2e-action-tabs__sessions-reconcile"
+                  size="sm"
+                  variant="outline"
+                  onPress={handleReconcileSessions}
+                  accessibilityLabel={t("sessions.reconcileSessions")}
+                >
+                  <Ionicons name="construct-outline" size={14} color={mutedColor} />
+                </Button>
               </View>
             </View>
             <ActiveSessionBanner />
@@ -1024,6 +1122,17 @@ export default function SessionsScreen() {
         }}
         onDelete={handleDeletePlan}
       />
+      {summaryDialog && (
+        <OperationSummaryDialog
+          visible={!!summaryDialog}
+          onClose={() => setSummaryDialog(null)}
+          title={summaryDialog.title}
+          icon={summaryDialog.icon}
+          status={summaryDialog.status}
+          items={summaryDialog.items}
+          footnote={summaryDialog.footnote}
+        />
+      )}
     </View>
   );
 }

@@ -21,6 +21,12 @@ import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { FilePickerSheet } from "../astrometry/FilePickerSheet";
 import { useVideoProcessingForm } from "../../hooks/useVideoProcessingForm";
+import {
+  formatVideoDuration,
+  formatVideoResolution,
+  estimateOutputSizeBytes,
+} from "../../lib/video/format";
+import { formatFileSize } from "../../lib/utils/fileManager";
 
 type OperationOption = { value: VideoProcessingTag; label: string };
 type PresetOption = { value: "1080p" | "720p" | "custom"; label: string };
@@ -206,6 +212,24 @@ export function VideoProcessingSheet({
             <Dialog.Title>{t("settings.videoProcessingTitle")}</Dialog.Title>
             <Dialog.Description>{t("settings.videoProcessingDescription")}</Dialog.Description>
 
+            {file && (file.videoWidth || file.bitrateKbps || file.durationMs) && (
+              <View className="mt-2 flex-row flex-wrap items-center gap-1">
+                {!!file.videoWidth && !!file.videoHeight && (
+                  <Text className="text-[10px] text-muted">
+                    {formatVideoResolution(file.videoWidth, file.videoHeight)}
+                  </Text>
+                )}
+                {!!file.bitrateKbps && (
+                  <Text className="text-[10px] text-muted">· {file.bitrateKbps}kbps</Text>
+                )}
+                {!!file.durationMs && (
+                  <Text className="text-[10px] text-muted">
+                    · {formatVideoDuration(file.durationMs)}
+                  </Text>
+                )}
+              </View>
+            )}
+
             <View className="mt-3 gap-3">
               <Select
                 value={operationOption}
@@ -233,6 +257,10 @@ export function VideoProcessingSheet({
                   </Select.Content>
                 </Select.Portal>
               </Select>
+
+              <Text className="text-[10px] text-muted">
+                {t(`settings.videoOpDesc_${operation}`)}
+              </Text>
 
               <RadioGroup
                 value={profile}
@@ -754,8 +782,19 @@ export function VideoProcessingSheet({
               </Accordion>
             </View>
 
-            <View className="mt-4 flex-row justify-end gap-2">
+            <View className="mt-4 flex-row flex-wrap items-center justify-end gap-2">
               {!!submitError && <Text className="mr-auto text-xs text-danger">{submitError}</Text>}
+              {!submitError &&
+                (() => {
+                  const durationMs =
+                    operation === "trim"
+                      ? Math.max(0, Number(trimEndMs) - Number(trimStartMs))
+                      : file?.durationMs;
+                  const est = estimateOutputSizeBytes(durationMs, Number(targetBitrateKbps));
+                  return est ? (
+                    <Text className="mr-auto text-[10px] text-muted">~{formatFileSize(est)}</Text>
+                  ) : null;
+                })()}
               <Button variant="outline" onPress={onClose}>
                 <Button.Label>{t("settings.videoCancel")}</Button.Label>
               </Button>

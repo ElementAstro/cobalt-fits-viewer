@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { View, Text } from "react-native";
-import { Button, useThemeColor } from "heroui-native";
+import { Button } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue, runOnJS } from "react-native-reanimated";
@@ -38,7 +38,6 @@ export function RegionSelectOverlay({
   onClear,
 }: RegionSelectOverlayProps) {
   const { t } = useI18n();
-  const accentColor = useThemeColor("accent");
   const regionSourceWidth = sourceWidth ?? renderWidth;
   const regionSourceHeight = sourceHeight ?? renderHeight;
 
@@ -231,7 +230,7 @@ export function RegionSelectOverlay({
                 width: regionDisplay.width,
                 height: regionDisplay.height,
                 borderWidth: 1.5,
-                borderColor: accentColor,
+                borderColor: "#006fee",
                 borderStyle: "dashed",
               }}
             />
@@ -246,7 +245,7 @@ export function RegionSelectOverlay({
             >
               <Text
                 style={{
-                  color: accentColor,
+                  color: "#006fee",
                   fontSize: 9,
                   fontWeight: "600",
                 }}

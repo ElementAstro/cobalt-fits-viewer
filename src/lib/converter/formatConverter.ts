@@ -125,15 +125,32 @@ export function fitsToRGBA(
  * 估算转换后文件大小 (bytes)
  */
 export function estimateFileSize(width: number, height: number, options: ConvertOptions): number {
-  const totalPixels = width * height;
+  let effectiveW = width;
+  let effectiveH = height;
+
+  if (options.outputSize) {
+    const { maxWidth, maxHeight, scale } = options.outputSize;
+    if (maxWidth || maxHeight) {
+      const mw = maxWidth ?? Infinity;
+      const mh = maxHeight ?? Infinity;
+      const ratio = Math.min(mw / width, mh / height, 1);
+      effectiveW = Math.max(1, Math.round(width * ratio));
+      effectiveH = Math.max(1, Math.round(height * ratio));
+    } else if (scale != null && scale > 0 && scale < 1) {
+      effectiveW = Math.max(1, Math.round(width * scale));
+      effectiveH = Math.max(1, Math.round(height * scale));
+    }
+  }
+
+  const totalPixels = effectiveW * effectiveH;
 
   switch (options.format) {
     case "png":
-      return Math.round(totalPixels * 3 * 0.5); // PNG ~ 50% of raw
+      return Math.round(totalPixels * 3 * 0.6); // PNG ~ 60% of raw (astro images compress well)
     case "jpeg":
-      return Math.round(totalPixels * 3 * (options.quality / 100) * 0.15);
+      return Math.round(totalPixels * 3 * (options.quality / 100) * 0.12);
     case "webp":
-      return Math.round(totalPixels * 3 * (options.quality / 100) * 0.1);
+      return Math.round(totalPixels * 3 * (options.quality / 100) * 0.08);
     case "tiff": {
       const bytesPerSample = options.bitDepth / 8;
       const samplesPerPixel = 3;

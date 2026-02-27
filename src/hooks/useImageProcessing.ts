@@ -14,6 +14,7 @@ import {
 import {
   calculateStats,
   calculateHistogram,
+  calculateRegionStats,
   calculateRegionHistogram,
   calculateChannelHistograms,
 } from "../lib/utils/pixelMath";
@@ -41,6 +42,7 @@ interface UseImageProcessingReturn {
   displayWidth: number;
   displayHeight: number;
   stats: ReturnType<typeof calculateStats> | null;
+  regionStats: ReturnType<typeof calculateStats> | null;
   histogram: ReturnType<typeof calculateHistogram> | null;
   rgbHistogram: ChannelHistogramData | null;
   regionHistogram: ReturnType<typeof calculateHistogram> | null;
@@ -105,6 +107,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
   const [displayWidth, setDisplayWidth] = useState(0);
   const [displayHeight, setDisplayHeight] = useState(0);
   const [stats, setStats] = useState<ReturnType<typeof calculateStats> | null>(null);
+  const [regionStats, setRegionStats] = useState<ReturnType<typeof calculateStats> | null>(null);
   const [histogram, setHistogram] = useState<ReturnType<typeof calculateHistogram> | null>(null);
   const [regionHistogram, setRegionHistogram] = useState<ReturnType<
     typeof calculateHistogram
@@ -424,6 +427,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
       bins: number = 256,
     ) => {
       const globalRange = stats ? { min: stats.min, max: stats.max } : undefined;
+      setRegionStats(calculateRegionStats(pixels, width, region.x, region.y, region.w, region.h));
       setRegionHistogram(
         calculateRegionHistogram(
           pixels,
@@ -442,6 +446,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
 
   const clearRegionHistogram = useCallback(() => {
     setRegionHistogram(null);
+    setRegionStats(null);
   }, []);
 
   return {
@@ -449,6 +454,7 @@ export function useImageProcessing(): UseImageProcessingReturn {
     displayWidth,
     displayHeight,
     stats,
+    regionStats,
     histogram,
     rgbHistogram,
     regionHistogram,

@@ -10,7 +10,7 @@ const mockScanAndAutoDetect = jest.fn(() => ({
   updatedCount: 4,
   skippedCount: 5,
 }));
-const mockAlert = jest.spyOn(require("react-native").Alert, "alert");
+const mockSummaryDialogProps = jest.fn();
 const mockAddTargetSheet = jest.fn((props: Record<string, unknown>) => {
   const ReactNative = require("react-native");
   const { Pressable, Text, View } = ReactNative;
@@ -187,6 +187,20 @@ jest.mock("../../../components/common/EmptyState", () => ({
   EmptyState: () => null,
 }));
 
+jest.mock("../../../components/common/OperationSummaryDialog", () => ({
+  OperationSummaryDialog: (props: Record<string, unknown>) => {
+    mockSummaryDialogProps(props);
+    if (!props.visible) return null;
+    const ReactLocal = require("react");
+    const { View, Text } = require("react-native");
+    return ReactLocal.createElement(
+      View,
+      { testID: "operation-summary-dialog" },
+      ReactLocal.createElement(Text, { testID: "summary-dialog-title" }, props.title),
+    );
+  },
+}));
+
 describe("(tabs)/targets.tsx", () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -210,14 +224,23 @@ describe("(tabs)/targets.tsx", () => {
     expect(mockAddTargetSheet).toHaveBeenCalled();
   });
 
-  it("shows full scan summary alert", () => {
+  it("shows full scan summary dialog", () => {
     render(<Screen />);
     fireEvent.press(screen.getByTestId("e2e-action-tabs__targets-scan"));
 
     expect(mockScanAndAutoDetect).toHaveBeenCalled();
-    expect(mockAlert).toHaveBeenCalledWith(
+    expect(screen.getByTestId("operation-summary-dialog")).toBeTruthy();
+    expect(screen.getByTestId("summary-dialog-title").props.children).toBe(
       "targets.scanSummaryTitle",
-      "targets.scanSummaryScanned: 12\ntargets.scanSummaryAdded: 3\ntargets.scanSummaryUpdated: 4\ntargets.scanSummarySkipped: 5",
+    );
+    const lastCall = mockSummaryDialogProps.mock.calls.at(-1)?.[0];
+    expect(lastCall?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "targets.scanSummaryScanned", value: 12 }),
+        expect.objectContaining({ label: "targets.scanSummaryAdded", value: 3 }),
+        expect.objectContaining({ label: "targets.scanSummaryUpdated", value: 4 }),
+        expect.objectContaining({ label: "targets.scanSummarySkipped", value: 5 }),
+      ]),
     );
   });
 });

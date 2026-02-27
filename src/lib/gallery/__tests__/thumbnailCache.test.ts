@@ -45,6 +45,13 @@ function loadThumbnailCacheModule() {
         mockFiles.set(this.uri, data);
       }
 
+      copy(target: { uri: string }) {
+        const data = mockFiles.get(this.uri);
+        if (data !== undefined) {
+          mockFiles.set(target.uri, data);
+        }
+      }
+
       delete() {
         mockFiles.delete(this.uri);
       }
@@ -142,6 +149,13 @@ function loadThumbnailCacheModule() {
       targetSize?: number,
       quality?: number,
     ) => string | null;
+    copyThumbnailToCache: (fileId: string, sourceUri: string) => string | null;
+    generateVideoThumbnailToCache: (
+      fileId: string,
+      filepath: string,
+      timeMs: number,
+      qualityPercent: number,
+    ) => Promise<string | null>;
     downsampleRGBA: (
       rgba: Uint8ClampedArray,
       srcWidth: number,
@@ -309,5 +323,42 @@ describe("thumbnailCache", () => {
     const noUpscale = mod.downsampleRGBA(src, 4, 2, 100);
     expect(noUpscale.width).toBe(4);
     expect(noUpscale.height).toBe(2);
+  });
+
+  it("copies external thumbnail to cache directory", () => {
+    const mod = loadThumbnailCacheModule();
+
+    mockFiles.set("/tmp/video_thumb.jpg", new Uint8Array([10, 20, 30]));
+
+    const result = mod.copyThumbnailToCache("vid-1", "/tmp/video_thumb.jpg");
+
+    expect(result).toBe("/cache/thumbnails/vid-1.jpg");
+    expect(mockFiles.has("/cache/thumbnails/vid-1.jpg")).toBe(true);
+  });
+
+  it("copyThumbnailToCache returns null when source does not exist", () => {
+    const mod = loadThumbnailCacheModule();
+
+    const result = mod.copyThumbnailToCache("vid-2", "/tmp/nonexistent.jpg");
+
+    expect(result).toBeNull();
+  });
+
+  it("copyThumbnailToCache overwrites existing cached thumbnail", () => {
+    const mod = loadThumbnailCacheModule();
+
+    mockFiles.set("/cache/thumbnails/vid-3.jpg", new Uint8Array([1]));
+    mockFiles.set("/tmp/new_thumb.jpg", new Uint8Array([99, 88]));
+
+    const result = mod.copyThumbnailToCache("vid-3", "/tmp/new_thumb.jpg");
+
+    expect(result).toBe("/cache/thumbnails/vid-3.jpg");
+  });
+
+  it("resolves http thumbnailUri without checking file existence", () => {
+    const mod = loadThumbnailCacheModule();
+
+    const result = mod.resolveThumbnailUri("web-1", "https://example.com/thumb.jpg");
+    expect(result).toBe("https://example.com/thumb.jpg");
   });
 });

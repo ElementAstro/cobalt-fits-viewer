@@ -77,7 +77,7 @@ function resolveLocationKey(location: GeoLocation): string {
 }
 
 export function resolveImportSessionId(activeSession: ActiveSessionLike): string | undefined {
-  if (!activeSession || activeSession.status !== "running") return undefined;
+  if (!activeSession) return undefined;
   return activeSession.id;
 }
 

@@ -2,19 +2,17 @@ import { View, Text, ScrollView, StatusBar } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useKeepAwake } from "expo-keep-awake";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import {
-  Alert as HAlert,
-  Button,
-  Skeleton,
-  Spinner,
-  Surface,
-  useThemeColor,
-  useToast,
-} from "heroui-native";
+import { Alert as HAlert, Button, Skeleton, Spinner, Surface, useToast } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
-import Animated, { FadeIn, FadeInDown, FadeInUp } from "react-native-reanimated";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  FadeOut,
+  withTiming,
+} from "react-native-reanimated";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -36,8 +34,15 @@ import {
 import { Minimap } from "../../components/fits/Minimap";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { ExportDialog } from "../../components/common/ExportDialog";
-import type { ExportFormat, ViewerPreset } from "../../lib/fits/types";
-import { computeAutoStretch, computePercentile, computeZScale } from "../../lib/utils/pixelMath";
+import type { ExportFormat, HistogramDiagnostics, ViewerPreset } from "../../lib/fits/types";
+import {
+  computeAutoStretch,
+  computePercentile,
+  computeZScale,
+  getHistogramClipPercents,
+  getHistogramPeakValue,
+  getHistogramPercentile,
+} from "../../lib/utils/pixelMath";
 import { useAstrometry } from "../../hooks/useAstrometry";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { AstrometryAnnotationOverlay } from "../../components/astrometry/AstrometryAnnotationOverlay";
@@ -57,6 +62,7 @@ import {
   formatRaFromDeg,
   formatDecFromDeg,
 } from "../../lib/astrometry/wcsProjection";
+import { zoomAroundCenter, computeOneToOneScale } from "../../lib/viewer/transform";
 import {
   createDefaultLayerVisibility,
   getVisibleTypes,
@@ -71,8 +77,6 @@ export default function ViewerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
-  const successColor = useThemeColor("success");
   const { isLandscape, sidePanelWidth } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
 
@@ -135,7 +139,7 @@ export default function ViewerDetailScreen() {
   const setOutputBlack = useViewerStore((s) => s.setOutputBlack);
   const setOutputWhite = useViewerStore((s) => s.setOutputWhite);
   const resetLevels = useViewerStore((s) => s.resetLevels);
-  const _regionSelection = useViewerStore((s) => s.regionSelection);
+  const regionSelection = useViewerStore((s) => s.regionSelection);
   const setRegionSelection = useViewerStore((s) => s.setRegionSelection);
 
   // Overlay toggles — grouped
@@ -228,6 +232,7 @@ export default function ViewerDetailScreen() {
     getRegionHistogram,
     clearRegionHistogram,
     stats,
+    regionStats,
     isProcessing,
     processingError,
   } = useImageProcessing();
@@ -285,6 +290,56 @@ export default function ViewerDetailScreen() {
 
     return null;
   }, [pixels, stretch, stats, histogram?.edges]);
+
+  const histogramDiagnostics = useMemo<HistogramDiagnostics | null>(() => {
+    if (!histogram || histogram.counts.length === 0 || histogram.edges.length < 2) {
+      return null;
+    }
+
+    const edge0 = histogram.edges[0];
+    const edgeLast = histogram.edges[histogram.edges.length - 1];
+    if (!Number.isFinite(edge0) || !Number.isFinite(edgeLast)) return null;
+
+    const globalMin = Math.min(edge0, edgeLast);
+    const globalMax = Math.max(edge0, edgeLast);
+
+    const hasInputRange =
+      histogramInputRange != null &&
+      Number.isFinite(histogramInputRange.min) &&
+      Number.isFinite(histogramInputRange.max) &&
+      histogramInputRange.min !== histogramInputRange.max;
+
+    const inputMin = hasInputRange
+      ? Math.min(histogramInputRange.min, histogramInputRange.max)
+      : globalMin;
+    const inputMax = hasInputRange
+      ? Math.max(histogramInputRange.min, histogramInputRange.max)
+      : globalMax;
+    const inputSpan = inputMax - inputMin;
+    const hasInputSpan = Number.isFinite(inputSpan) && inputSpan > 0;
+
+    const blackValue =
+      inputMin + Math.max(0, Math.min(1, blackPoint)) * (hasInputSpan ? inputSpan : 1);
+    const whiteValue =
+      inputMin + Math.max(0, Math.min(1, whitePoint)) * (hasInputSpan ? inputSpan : 1);
+
+    const { lowPercent, highPercent } = getHistogramClipPercents(
+      histogram.counts,
+      histogram.edges,
+      blackValue,
+      whiteValue,
+    );
+
+    return {
+      p1: getHistogramPercentile(histogram.counts, histogram.edges, 1),
+      p50: getHistogramPercentile(histogram.counts, histogram.edges, 50),
+      p99: getHistogramPercentile(histogram.counts, histogram.edges, 99),
+      peakValue: getHistogramPeakValue(histogram.counts, histogram.edges),
+      clipLowPercent: lowPercent,
+      clipHighPercent: highPercent,
+      isApproximate: (pixels?.length ?? 0) > 2_000_000,
+    };
+  }, [histogram, histogramInputRange, blackPoint, whitePoint, pixels?.length]);
 
   const [showControls, setShowControls] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -385,6 +440,7 @@ export default function ViewerDetailScreen() {
     onDone: closeExportDialog,
   });
   const prevPixelsRef = useRef<Float32Array | null>(null);
+  const regionHistogramDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [canvasTransform, setCanvasTransform] = useState<CanvasTransform>({
     scale: 1,
     translateX: 0,
@@ -578,20 +634,62 @@ export default function ViewerDetailScreen() {
   }, []);
 
   const handleZoomIn = useCallback(() => {
-    canvasRef.current?.setTransform(
+    const target = canvasTransform.scale * 1.5;
+    const { x, y } = zoomAroundCenter(
+      canvasTransform.scale,
+      target,
       canvasTransform.translateX,
       canvasTransform.translateY,
-      canvasTransform.scale * 1.2,
+      canvasTransform.canvasWidth,
+      canvasTransform.canvasHeight,
     );
+    canvasRef.current?.setTransform(x, y, target);
   }, [canvasTransform]);
 
   const handleZoomOut = useCallback(() => {
-    canvasRef.current?.setTransform(
+    const target = canvasTransform.scale / 1.5;
+    const { x, y } = zoomAroundCenter(
+      canvasTransform.scale,
+      target,
       canvasTransform.translateX,
       canvasTransform.translateY,
-      canvasTransform.scale / 1.2,
+      canvasTransform.canvasWidth,
+      canvasTransform.canvasHeight,
     );
+    canvasRef.current?.setTransform(x, y, target);
   }, [canvasTransform]);
+
+  const handleOneToOne = useCallback(() => {
+    const dims = dimensions;
+    if (!dims || canvasTransform.canvasWidth <= 0 || canvasTransform.canvasHeight <= 0) return;
+    const imgW = displayWidth || dims.width;
+    const imgH = displayHeight || dims.height;
+    const target = computeOneToOneScale(
+      imgW,
+      imgH,
+      canvasTransform.canvasWidth,
+      canvasTransform.canvasHeight,
+    );
+    const { x, y } = zoomAroundCenter(
+      canvasTransform.scale,
+      target,
+      canvasTransform.translateX,
+      canvasTransform.translateY,
+      canvasTransform.canvasWidth,
+      canvasTransform.canvasHeight,
+    );
+    canvasRef.current?.setTransform(x, y, target);
+  }, [canvasTransform, dimensions, displayWidth, displayHeight]);
+
+  const handlePan = useCallback(
+    (dx: number, dy: number) => {
+      canvasRef.current?.setTransform(
+        canvasTransform.translateX + dx,
+        canvasTransform.translateY + dy,
+      );
+    },
+    [canvasTransform],
+  );
 
   useViewerHotkeys({
     enabled: !isFullscreen,
@@ -602,6 +700,9 @@ export default function ViewerDetailScreen() {
     onToggleCrosshair: toggleCrosshair,
     onToggleMinimap: toggleMinimap,
     onTogglePixelInfo: togglePixelInfo,
+    onOneToOne: handleOneToOne,
+    onFit: handleResetView,
+    onPan: handlePan,
   });
 
   const zoomControlsBottomOffset = useMemo(() => {
@@ -740,31 +841,49 @@ export default function ViewerDetailScreen() {
   );
 
   // --- Region selection handlers ---
+  const clearPendingRegionHistogram = useCallback(() => {
+    if (regionHistogramDebounceRef.current) {
+      clearTimeout(regionHistogramDebounceRef.current);
+      regionHistogramDebounceRef.current = null;
+    }
+  }, []);
+
   const handleToggleRegionSelect = useCallback(() => {
     if (isRegionSelectActive) {
+      clearPendingRegionHistogram();
       setIsRegionSelectActive(false);
       setRegionSelection(null);
       clearRegionHistogram();
     } else {
       setIsRegionSelectActive(true);
     }
-  }, [isRegionSelectActive, setRegionSelection, clearRegionHistogram]);
+  }, [isRegionSelectActive, clearPendingRegionHistogram, setRegionSelection, clearRegionHistogram]);
 
   const handleRegionChange = useCallback(
     (region: { x: number; y: number; w: number; h: number }) => {
       setRegionSelection(region);
-      if (pixels && dimensions) {
+      if (!pixels || !dimensions) return;
+
+      clearPendingRegionHistogram();
+      regionHistogramDebounceRef.current = setTimeout(() => {
         getRegionHistogram(pixels, dimensions.width, region, 256);
-      }
+        regionHistogramDebounceRef.current = null;
+      }, 80);
     },
-    [pixels, dimensions, setRegionSelection, getRegionHistogram],
+    [pixels, dimensions, setRegionSelection, clearPendingRegionHistogram, getRegionHistogram],
   );
 
   const handleRegionClear = useCallback(() => {
+    clearPendingRegionHistogram();
     setRegionSelection(null);
     clearRegionHistogram();
     setIsRegionSelectActive(false);
-  }, [setRegionSelection, clearRegionHistogram]);
+  }, [clearPendingRegionHistogram, setRegionSelection, clearRegionHistogram]);
+
+  useEffect(() => () => clearPendingRegionHistogram(), [clearPendingRegionHistogram]);
+  useEffect(() => {
+    clearPendingRegionHistogram();
+  }, [pixels, dimensions?.width, clearPendingRegionHistogram]);
 
   // --- Frame change handler ---
   const handleFrameChange = useCallback(
@@ -963,6 +1082,18 @@ export default function ViewerDetailScreen() {
       histogram,
       rgbHistogram,
       regionHistogram,
+      stats,
+      regionStats,
+      imageDimensions: dimensions
+        ? {
+            width: dimensions.width,
+            height: dimensions.height,
+            depth: dimensions.depth,
+            isDataCube: dimensions.isDataCube,
+          }
+        : undefined,
+      regionSelection,
+      histogramDiagnostics,
       histogramInputRange,
       blackPoint,
       whitePoint,
@@ -1030,6 +1161,14 @@ export default function ViewerDetailScreen() {
       histogram,
       rgbHistogram,
       regionHistogram,
+      stats,
+      regionStats,
+      dimensions?.width,
+      dimensions?.height,
+      dimensions?.depth,
+      dimensions?.isDataCube,
+      regionSelection,
+      histogramDiagnostics,
       histogramInputRange,
       blackPoint,
       whitePoint,
@@ -1061,7 +1200,6 @@ export default function ViewerDetailScreen() {
       hduList,
       currentFrame,
       totalFrames,
-      dimensions?.isDataCube,
       setStretch,
       setColormap,
       setBrightness,
@@ -1095,7 +1233,7 @@ export default function ViewerDetailScreen() {
   if (!file) {
     return (
       <View className="flex-1 items-center justify-center bg-background">
-        <Ionicons name="alert-circle-outline" size={48} color={mutedColor} />
+        <Ionicons name="alert-circle-outline" size={48} className="text-muted" />
         <Text className="mt-4 text-sm text-muted">{t("common.noData")}</Text>
         <Button variant="outline" className="mt-4" onPress={() => router.back()}>
           <Button.Label>{t("common.goHome")}</Button.Label>
@@ -1107,7 +1245,7 @@ export default function ViewerDetailScreen() {
   if (isVideoFile) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
-        <Ionicons name="videocam-outline" size={48} color={mutedColor} />
+        <Ionicons name="videocam-outline" size={48} className="text-muted" />
         <Text className="mt-4 text-center text-sm text-muted">This file is a video.</Text>
         <Button variant="primary" className="mt-4" onPress={() => router.replace(`/video/${id}`)}>
           <Button.Label>Open Video Player</Button.Label>
@@ -1339,24 +1477,26 @@ export default function ViewerDetailScreen() {
                         shimmer: {
                           duration: loadingPhase === 0 ? 2200 : 1400,
                           speed: loadingPhase === 0 ? 0.7 : 1.2,
-                          highlightColor: "rgba(34, 211, 238, 0.08)",
+                          highlightColor: "#22c55e14",
                         },
                       }
                 }
               />
               {/* Centered icon on skeleton */}
               <View className="absolute inset-0 items-center justify-center">
-                <Ionicons
-                  name={
-                    loadingPhase === 0
-                      ? "cloud-download-outline"
-                      : loadingPhase === 1
-                        ? "code-slash-outline"
-                        : "color-palette-outline"
-                  }
-                  size={32}
-                  color="rgba(255,255,255,0.15)"
-                />
+                <View className="opacity-25">
+                  <Ionicons
+                    name={
+                      loadingPhase === 0
+                        ? "cloud-download-outline"
+                        : loadingPhase === 1
+                          ? "code-slash-outline"
+                          : "color-palette-outline"
+                    }
+                    size={32}
+                    className="text-muted"
+                  />
+                </View>
               </View>
             </Animated.View>
 
@@ -1368,12 +1508,13 @@ export default function ViewerDetailScreen() {
               <Surface variant="secondary" className="items-center rounded-2xl px-6 py-4">
                 <Spinner size="md" color="success">
                   <Spinner.Indicator
-                    animation={{ rotation: { speed: 0.6 + loadingPhase * 0.3 } }}
+                    animation={{ rotation: { speed: 0.5 + loadingPhase * 0.4 } }}
                   />
                 </Spinner>
                 <Animated.Text
                   key={loadingPhase}
                   entering={FadeIn.duration(200)}
+                  exiting={FadeOut.duration(150)}
                   className="mt-2 text-xs font-medium text-muted"
                 >
                   {loadingPhase === 0
@@ -1390,18 +1531,22 @@ export default function ViewerDetailScreen() {
               entering={FadeInUp.delay(500).duration(400)}
               className="mt-4 flex-row items-center gap-2"
             >
-              {[0, 1, 2].map((step) => (
-                <View
-                  key={step}
-                  style={{
-                    width: loadingPhase === step ? 16 : 6,
-                    height: 6,
-                    borderRadius: 3,
-                    backgroundColor: loadingPhase >= step ? successColor : "rgba(128,128,128,0.25)",
-                    opacity: loadingPhase === step ? 1 : loadingPhase > step ? 0.5 : 0.3,
-                  }}
-                />
-              ))}
+              {[0, 1, 2].map((step) => {
+                const isActive = loadingPhase >= step;
+                const isCurrent = loadingPhase === step;
+                return (
+                  <Animated.View
+                    key={step}
+                    className={isActive ? "bg-success" : "bg-muted/25"}
+                    style={{
+                      width: withTiming(isCurrent ? 16 : 6, { duration: 300 }),
+                      height: 6,
+                      borderRadius: 3,
+                      opacity: withTiming(isCurrent ? 1 : isActive ? 0.5 : 0.3, { duration: 300 }),
+                    }}
+                  />
+                );
+              })}
             </Animated.View>
           </Animated.View>
         </View>
@@ -1411,12 +1556,8 @@ export default function ViewerDetailScreen() {
 
   const sidePanel = (
     <ScrollView
-      className="bg-background"
-      style={{
-        width: sidePanelWidth,
-        borderLeftWidth: 1,
-        borderLeftColor: "rgba(128,128,128,0.2)",
-      }}
+      className="bg-background border-l border-separator"
+      style={{ width: sidePanelWidth }}
       nestedScrollEnabled
       showsVerticalScrollIndicator={false}
     >

@@ -100,4 +100,39 @@ describe("convertPresets", () => {
     expect(supportsQuality("xisf")).toBe(false);
     expect(supportsQuality("ser")).toBe(false);
   });
+
+  it("includes compression-oriented presets with outputSize", () => {
+    const socialPreset = DEFAULT_CONVERT_PRESETS.find((p) => p.id === "social");
+    expect(socialPreset).toBeDefined();
+    expect(socialPreset!.options.format).toBe("jpeg");
+    expect(socialPreset!.options.quality).toBe(85);
+    expect(socialPreset!.options.outputSize).toEqual({ maxWidth: 1920, maxHeight: 1920 });
+
+    const emailPreset = DEFAULT_CONVERT_PRESETS.find((p) => p.id === "email");
+    expect(emailPreset).toBeDefined();
+    expect(emailPreset!.options.format).toBe("jpeg");
+    expect(emailPreset!.options.quality).toBe(75);
+    expect(emailPreset!.options.outputSize).toEqual({ maxWidth: 1280, maxHeight: 1280 });
+
+    const webOptPreset = DEFAULT_CONVERT_PRESETS.find((p) => p.id === "webOptimized");
+    expect(webOptPreset).toBeDefined();
+    expect(webOptPreset!.options.format).toBe("webp");
+    expect(webOptPreset!.options.quality).toBe(80);
+    expect(webOptPreset!.options.outputSize).toEqual({ maxWidth: 2048, maxHeight: 2048 });
+
+    const thumbPreset = DEFAULT_CONVERT_PRESETS.find((p) => p.id === "thumbnailExport");
+    expect(thumbPreset).toBeDefined();
+    expect(thumbPreset!.options.format).toBe("jpeg");
+    expect(thumbPreset!.options.quality).toBe(70);
+    expect(thumbPreset!.options.outputSize).toEqual({ maxWidth: 512, maxHeight: 512 });
+  });
+
+  it("has 7 built-in presets total (3 original + 4 new)", () => {
+    expect(DEFAULT_CONVERT_PRESETS.length).toBe(7);
+  });
+
+  it("all presets have unique ids", () => {
+    const ids = DEFAULT_CONVERT_PRESETS.map((p) => p.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
 });

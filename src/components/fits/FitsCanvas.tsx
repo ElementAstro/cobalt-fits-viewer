@@ -42,7 +42,7 @@ import {
   computeIncrementalPinchTranslation,
   computeFitGeometry,
   computeTranslateBounds,
-  remapPointBetweenSpaces,
+  screenToSourcePixel,
   zoomAroundPoint,
 } from "../../lib/viewer/transform";
 
@@ -187,11 +187,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
   // Transform state
   const scale = useSharedValue(1);
-  const savedScale = useSharedValue(1);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
-  const savedTranslateX = useSharedValue(0);
-  const savedTranslateY = useSharedValue(0);
   const panStartTranslateX = useSharedValue(0);
   const panStartTranslateY = useSharedValue(0);
   const pinchStartScale = useSharedValue(1);
@@ -261,7 +258,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   // Track scale/translate changes to notify parent
   useAnimatedReaction(
     () => ({
-      s: Math.round(scale.value * 100) / 100,
+      s: Math.round(scale.value * 1000) / 1000,
       tx: Math.round(translateX.value),
       ty: Math.round(translateY.value),
       cw: Math.round(canvasWidth.value),
@@ -312,9 +309,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         translateY.value = clamped.y;
       }
 
-      savedScale.value = targetScale;
-      savedTranslateX.value = clamped.x;
-      savedTranslateY.value = clamped.y;
       panStartTranslateX.value = clamped.x;
       panStartTranslateY.value = clamped.y;
       pinchStartScale.value = targetScale;
@@ -329,9 +323,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       pinchStartScale,
       propMaxScale,
       propMinScale,
-      savedScale,
-      savedTranslateX,
-      savedTranslateY,
       scale,
       translateX,
       translateY,
@@ -364,11 +355,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   // Reset transform when image changes
   useEffect(() => {
     scale.value = 1;
-    savedScale.value = 1;
     translateX.value = 0;
     translateY.value = 0;
-    savedTranslateX.value = 0;
-    savedTranslateY.value = 0;
     panStartTranslateX.value = 0;
     panStartTranslateY.value = 0;
     pinchStartScale.value = 1;
@@ -399,9 +387,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       );
       translateX.value = clamped.x;
       translateY.value = clamped.y;
-      savedScale.value = nextScale;
-      savedTranslateX.value = clamped.x;
-      savedTranslateY.value = clamped.y;
       panStartTranslateX.value = clamped.x;
       panStartTranslateY.value = clamped.y;
       pinchStartScale.value = nextScale;
@@ -429,9 +414,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       pinchPrevFocalX,
       pinchPrevFocalY,
       pinchStartScale,
-      savedScale,
-      savedTranslateX,
-      savedTranslateY,
       scale,
       translateX,
       translateY,
@@ -492,9 +474,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       scale.value = withTiming(targetScale, { duration: 90 });
       translateX.value = withTiming(clamped.x, { duration: 90 });
       translateY.value = withTiming(clamped.y, { duration: 90 });
-      savedScale.value = targetScale;
-      savedTranslateX.value = clamped.x;
-      savedTranslateY.value = clamped.y;
       panStartTranslateX.value = clamped.x;
       panStartTranslateY.value = clamped.y;
       pinchStartScale.value = targetScale;
@@ -505,9 +484,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       scale,
       translateX,
       translateY,
-      savedScale,
-      savedTranslateX,
-      savedTranslateY,
       panStartTranslateX,
       panStartTranslateY,
       pinchStartScale,
@@ -659,7 +635,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       if (Math.abs(scale.value - clampedScale) > 0.01) {
         scale.value = withSpring(clampedScale, SPRING_CONFIG);
       }
-      savedScale.value = clampedScale;
 
       // Snap translation back to valid bounds
       const cw = canvasWidth.value;
@@ -698,9 +673,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         scale.value = withTiming(1, { duration: 250 });
         translateX.value = withTiming(0, { duration: 250 });
         translateY.value = withTiming(0, { duration: 250 });
-        savedScale.value = 1;
-        savedTranslateX.value = 0;
-        savedTranslateY.value = 0;
         panStartTranslateX.value = 0;
         panStartTranslateY.value = 0;
         pinchStartScale.value = 1;
@@ -727,9 +699,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         scale.value = withTiming(targetScale, { duration: 250 });
         translateX.value = withTiming(clamped.x, { duration: 250 });
         translateY.value = withTiming(clamped.y, { duration: 250 });
-        savedScale.value = targetScale;
-        savedTranslateX.value = clamped.x;
-        savedTranslateY.value = clamped.y;
         panStartTranslateX.value = clamped.x;
         panStartTranslateY.value = clamped.y;
         pinchStartScale.value = targetScale;
@@ -742,34 +711,23 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     .maxDistance(10)
     .onEnd((e) => {
       if (!onPixelTap || imgWidth <= 0 || imgHeight <= 0) return;
-      // Convert screen coords to image pixel coords
-      const cw = canvasWidth.value;
-      const ch = canvasHeight.value;
-      const { fitScale, offsetX, offsetY } = computeFitGeometry(imgWidth, imgHeight, cw, ch);
-      if (fitScale <= 0) return;
-
-      // Remove canvas transform
-      const localX = (e.x - translateX.value) / scale.value;
-      const localY = (e.y - translateY.value) / scale.value;
-
-      // Remove fit offset and scale
-      const pixelX = Math.floor((localX - offsetX) / fitScale);
-      const pixelY = Math.floor((localY - offsetY) / fitScale);
-
-      if (pixelX >= 0 && pixelX < imgWidth && pixelY >= 0 && pixelY < imgHeight) {
-        const sourceW = sourceWidth ?? imgWidth;
-        const sourceH = sourceHeight ?? imgHeight;
-        const sourcePoint = remapPointBetweenSpaces(
-          { x: pixelX + 0.5, y: pixelY + 0.5 },
-          imgWidth,
-          imgHeight,
-          sourceW,
-          sourceH,
-        );
-        const sourceX = Math.max(0, Math.min(sourceW - 1, Math.floor(sourcePoint.x)));
-        const sourceY = Math.max(0, Math.min(sourceH - 1, Math.floor(sourcePoint.y)));
-        runOnJS(onPixelTap)(sourceX, sourceY);
-      }
+      const t = {
+        scale: scale.value,
+        translateX: translateX.value,
+        translateY: translateY.value,
+        canvasWidth: canvasWidth.value,
+        canvasHeight: canvasHeight.value,
+      };
+      const pixel = screenToSourcePixel(
+        e.x,
+        e.y,
+        t,
+        imgWidth,
+        imgHeight,
+        sourceWidth ?? imgWidth,
+        sourceHeight ?? imgHeight,
+      );
+      if (pixel) runOnJS(onPixelTap)(pixel.x, pixel.y);
     });
 
   const longPressGesture = Gesture.LongPress()
@@ -780,29 +738,23 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       if (!success) return;
 
       if (onPixelLongPress && imgWidth > 0 && imgHeight > 0) {
-        const cw = canvasWidth.value;
-        const ch = canvasHeight.value;
-        const { fitScale, offsetX, offsetY } = computeFitGeometry(imgWidth, imgHeight, cw, ch);
-        if (fitScale > 0) {
-          const localX = (e.x - translateX.value) / scale.value;
-          const localY = (e.y - translateY.value) / scale.value;
-          const pixelX = Math.floor((localX - offsetX) / fitScale);
-          const pixelY = Math.floor((localY - offsetY) / fitScale);
-          if (pixelX >= 0 && pixelX < imgWidth && pixelY >= 0 && pixelY < imgHeight) {
-            const sourceW = sourceWidth ?? imgWidth;
-            const sourceH = sourceHeight ?? imgHeight;
-            const sourcePoint = remapPointBetweenSpaces(
-              { x: pixelX + 0.5, y: pixelY + 0.5 },
-              imgWidth,
-              imgHeight,
-              sourceW,
-              sourceH,
-            );
-            const sourceX = Math.max(0, Math.min(sourceW - 1, Math.floor(sourcePoint.x)));
-            const sourceY = Math.max(0, Math.min(sourceH - 1, Math.floor(sourcePoint.y)));
-            runOnJS(onPixelLongPress)(sourceX, sourceY);
-          }
-        }
+        const t = {
+          scale: scale.value,
+          translateX: translateX.value,
+          translateY: translateY.value,
+          canvasWidth: canvasWidth.value,
+          canvasHeight: canvasHeight.value,
+        };
+        const pixel = screenToSourcePixel(
+          e.x,
+          e.y,
+          t,
+          imgWidth,
+          imgHeight,
+          sourceWidth ?? imgWidth,
+          sourceHeight ?? imgHeight,
+        );
+        if (pixel) runOnJS(onPixelLongPress)(pixel.x, pixel.y);
       }
 
       if (onLongPress) {
@@ -818,9 +770,9 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
   // --- Skia Transform ---
   const transform = useDerivedValue(() => [
-    { scale: scale.value },
     { translateX: translateX.value },
     { translateY: translateY.value },
+    { scale: scale.value },
   ]);
 
   // Compute the fit-to-canvas offset for centering

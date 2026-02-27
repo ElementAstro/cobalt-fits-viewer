@@ -168,6 +168,7 @@ export type ExportPhase =
 interface UseExportReturn {
   isExporting: boolean;
   exportPhase: ExportPhase;
+  exportProgress: number;
   exportImage: ExportImageFn;
   exportImageDetailed: (request: ExportRequest) => Promise<ExportImageDetailedResult>;
   shareImage: ShareImageFn;
@@ -195,6 +196,7 @@ interface UseExportReturn {
 export function useExport(): UseExportReturn {
   const [isExporting, setIsExporting] = useState(false);
   const [exportPhase, setExportPhase] = useState<ExportPhase>("idle");
+  const [exportProgress, setExportProgress] = useState(0);
 
   const createExportFileDetailed = useCallback(
     async (request: ExportRequest): Promise<ExportImageDetailedResult> => {
@@ -206,12 +208,15 @@ export function useExport(): UseExportReturn {
       };
       try {
         setExportPhase("encoding");
+        setExportProgress(10);
         const encoded = await encodeExportRequest(request);
+        setExportProgress(80);
         if (!encoded.bytes || encoded.bytes.length === 0 || !encoded.extension) {
           return { path: null, diagnostics: encoded.diagnostics };
         }
 
         setExportPhase("writing");
+        setExportProgress(90);
         const { baseName } = splitFilenameExtension(request.filename);
         const exportDir = getExportDir();
         const outFile = new FSFile(
@@ -219,6 +224,7 @@ export function useExport(): UseExportReturn {
           `${(baseName || request.filename).trim()}_export.${encoded.extension}`,
         );
         outFile.write(encoded.bytes);
+        setExportProgress(100);
         return { path: outFile.uri, diagnostics: encoded.diagnostics };
       } catch (error) {
         Logger.warn(LOG_TAGS.Export, "Export failed", error);
@@ -244,6 +250,7 @@ export function useExport(): UseExportReturn {
         return await createExportFile(request);
       } finally {
         setExportPhase("idle");
+        setExportProgress(0);
         setIsExporting(false);
       }
     },
@@ -257,6 +264,7 @@ export function useExport(): UseExportReturn {
         return await createExportFileDetailed(request);
       } finally {
         setExportPhase("idle");
+        setExportProgress(0);
         setIsExporting(false);
       }
     },
@@ -389,6 +397,7 @@ export function useExport(): UseExportReturn {
   return {
     isExporting,
     exportPhase,
+    exportProgress,
     exportImage,
     exportImageDetailed,
     shareImage,

@@ -90,6 +90,18 @@ export const MONO_FONT_PRESETS: Record<MonoFontKey, MonoFontPreset> = {
 export const FONT_FAMILY_KEYS = Object.keys(FONT_FAMILY_PRESETS) as FontFamilyKey[];
 export const MONO_FONT_KEYS = Object.keys(MONO_FONT_PRESETS) as MonoFontKey[];
 
+// ─── HeroUI Native 字体 CSS 变量 ─────────────────────────────
+
+export function getFontCSSVariables(fontKey: FontFamilyKey): Record<string, string> {
+  if (fontKey === "system") return {};
+  const preset = FONT_FAMILY_PRESETS[fontKey];
+  return {
+    "--font-normal": preset.regular,
+    "--font-medium": preset.medium,
+    "--font-semibold": preset.semibold,
+  };
+}
+
 // ─── useFonts 加载映射 ──────────────────────────────────────
 
 export const FONT_LOAD_MAP: Record<string, FontSource> = {

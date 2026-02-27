@@ -386,9 +386,9 @@ describe("estimateFileSize", () => {
     includeWatermark: false,
   };
 
-  it("estimates PNG size as ~50% of raw", () => {
+  it("estimates PNG size as ~60% of raw", () => {
     const size = estimateFileSize(100, 100, { ...baseOpts, format: "png" });
-    expect(size).toBe(Math.round(10000 * 3 * 0.5));
+    expect(size).toBe(Math.round(10000 * 3 * 0.6));
   });
 
   it("estimates FITS size with header overhead", () => {
@@ -439,5 +439,51 @@ describe("estimateFileSize", () => {
       tiff: { ...DEFAULT_TIFF_TARGET_OPTIONS, compression: "none" },
     });
     expect(size).toBe(Math.round(10000 * 4 * 3 * 1.0) + 512);
+  });
+
+  it("reduces estimate when outputSize maxWidth is set", () => {
+    const fullSize = estimateFileSize(1000, 1000, { ...baseOpts, format: "jpeg", quality: 85 });
+    const halfSize = estimateFileSize(1000, 1000, {
+      ...baseOpts,
+      format: "jpeg",
+      quality: 85,
+      outputSize: { maxWidth: 500, maxHeight: 500 },
+    });
+    expect(halfSize).toBeLessThan(fullSize);
+    // 500x500 = 250000 px vs 1000x1000 = 1000000 px → ~4x smaller
+    expect(halfSize).toBeCloseTo(fullSize / 4, -2);
+  });
+
+  it("reduces estimate when outputSize scale is set", () => {
+    const fullSize = estimateFileSize(1000, 1000, { ...baseOpts, format: "png" });
+    const scaledSize = estimateFileSize(1000, 1000, {
+      ...baseOpts,
+      format: "png",
+      outputSize: { scale: 0.5 },
+    });
+    expect(scaledSize).toBeLessThan(fullSize);
+    // 500x500 = 250000 px vs 1000x1000 = 1000000 px → ~4x smaller
+    expect(scaledSize).toBeCloseTo(fullSize / 4, -2);
+  });
+
+  it("does not upscale when outputSize maxWidth exceeds original", () => {
+    const fullSize = estimateFileSize(100, 100, { ...baseOpts, format: "jpeg", quality: 90 });
+    const sameSize = estimateFileSize(100, 100, {
+      ...baseOpts,
+      format: "jpeg",
+      quality: 90,
+      outputSize: { maxWidth: 2000, maxHeight: 2000 },
+    });
+    expect(sameSize).toBe(fullSize);
+  });
+
+  it("uses updated JPEG estimate coefficient", () => {
+    const size = estimateFileSize(100, 100, { ...baseOpts, format: "jpeg", quality: 100 });
+    expect(size).toBe(Math.round(10000 * 3 * 1.0 * 0.12));
+  });
+
+  it("uses updated WebP estimate coefficient", () => {
+    const size = estimateFileSize(100, 100, { ...baseOpts, format: "webp", quality: 100 });
+    expect(size).toBe(Math.round(10000 * 3 * 1.0 * 0.08));
   });
 });

@@ -4,7 +4,7 @@
  */
 
 import { View, Text } from "react-native";
-import { Button, Card, Chip, Spinner, useThemeColor } from "heroui-native";
+import { Button, Card, Chip, Spinner } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
 import { useI18n } from "../../i18n/useI18n";
@@ -55,8 +55,6 @@ export function AstrometryJobCard({
   onDelete,
 }: AstrometryJobCardProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
-  const dangerColor = useThemeColor("danger");
 
   const statusKey = job.status as keyof typeof STATUS_CHIP_CONFIG;
   const chipConfig = STATUS_CHIP_CONFIG[statusKey];
@@ -93,7 +91,7 @@ export function AstrometryJobCard({
             />
           ) : (
             <View className="w-10 h-10 rounded-md bg-surface-secondary items-center justify-center">
-              <Ionicons name="image-outline" size={20} color={mutedColor} />
+              <Ionicons name="image-outline" size={20} className="text-muted" />
             </View>
           )}
 
@@ -139,7 +137,7 @@ export function AstrometryJobCard({
             <Ionicons
               name="warning-outline"
               size={12}
-              color={dangerColor}
+              className="text-danger"
               style={{ marginTop: 1 }}
             />
             <Text className="text-[10px] text-danger flex-1" numberOfLines={2}>

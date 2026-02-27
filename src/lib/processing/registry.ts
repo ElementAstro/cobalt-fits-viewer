@@ -534,11 +534,25 @@ const legacyOps: Array<{
         defaultValue: 1.5,
       },
       { key: "invert", label: "Invert", control: { kind: "toggle" }, defaultValue: false },
+      {
+        key: "growth",
+        label: "Growth",
+        control: { kind: "slider", min: 0, max: 5, step: 1 },
+        defaultValue: 0,
+      },
+      {
+        key: "softness",
+        label: "Softness",
+        control: { kind: "slider", min: 0, max: 5, step: 0.5 },
+        defaultValue: 0,
+      },
     ],
     build: (p) => ({
       type: "starMask",
       scale: asNumber(p, "scale", 1.5),
       invert: asBoolean(p, "invert", false),
+      growth: Math.round(asNumber(p, "growth", 0)),
+      softness: asNumber(p, "softness", 0),
     }),
   },
   {
@@ -585,11 +599,18 @@ const legacyOps: Array<{
         control: { kind: "slider", min: 1, max: 10, step: 0.5 },
         defaultValue: 3,
       },
+      {
+        key: "amount",
+        label: "Amount",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 1,
+      },
     ],
     build: (p) => ({
       type: "clahe",
       tileSize: Math.round(asNumber(p, "tileSize", 8)),
       clipLimit: asNumber(p, "clipLimit", 3),
+      amount: asNumber(p, "amount", 1),
     }),
   },
   {
@@ -1188,6 +1209,107 @@ const legacyOps: Array<{
       postBlurSigma: asNumber(p, "postBlurSigma", 1),
     }),
   },
+  {
+    id: "mlt",
+    label: "MLT Denoise",
+    category: "process",
+    complexity: "heavy",
+    supportsPreview: true,
+    params: [
+      {
+        key: "layers",
+        label: "Layers",
+        control: { kind: "slider", min: 1, max: 8, step: 1 },
+        defaultValue: 4,
+      },
+      {
+        key: "noiseThreshold",
+        label: "Noise Threshold",
+        control: { kind: "slider", min: 0.5, max: 10, step: 0.5 },
+        defaultValue: 3,
+      },
+      {
+        key: "noiseReduction",
+        label: "Noise Reduction",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 0.5,
+      },
+      {
+        key: "bias",
+        label: "Bias",
+        control: { kind: "slider", min: -1, max: 1, step: 0.05 },
+        defaultValue: 0,
+      },
+      {
+        key: "useLinearMask",
+        label: "Linear Mask",
+        control: { kind: "toggle" },
+        defaultValue: true,
+      },
+      {
+        key: "linearMaskAmplification",
+        label: "Mask Amplification",
+        control: { kind: "slider", min: 10, max: 1000, step: 10 },
+        defaultValue: 200,
+      },
+    ],
+    build: (p) => ({
+      type: "mlt" as const,
+      layers: Math.round(asNumber(p, "layers", 4)),
+      noiseThreshold: asNumber(p, "noiseThreshold", 3),
+      noiseReduction: asNumber(p, "noiseReduction", 0.5),
+      bias: asNumber(p, "bias", 0),
+      useLinearMask: asBoolean(p, "useLinearMask", true),
+      linearMaskAmplification: asNumber(p, "linearMaskAmplification", 200),
+    }),
+  },
+  {
+    id: "ghs",
+    label: "Generalized Hyperbolic Stretch",
+    category: "adjust",
+    complexity: "medium",
+    supportsPreview: true,
+    params: [
+      {
+        key: "D",
+        label: "Stretch Factor",
+        control: { kind: "slider", min: 0, max: 10, step: 0.1 },
+        defaultValue: 1,
+      },
+      {
+        key: "b",
+        label: "Symmetry Point",
+        control: { kind: "slider", min: 0, max: 1, step: 0.01 },
+        defaultValue: 0.25,
+      },
+      {
+        key: "SP",
+        label: "Shape",
+        control: { kind: "slider", min: -5, max: 5, step: 0.1 },
+        defaultValue: 0,
+      },
+      {
+        key: "HP",
+        label: "Highlight Protection",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 0,
+      },
+      {
+        key: "LP",
+        label: "Shadow Protection",
+        control: { kind: "slider", min: 0, max: 1, step: 0.05 },
+        defaultValue: 0,
+      },
+    ],
+    build: (p) => ({
+      type: "ghs" as const,
+      D: asNumber(p, "D", 1),
+      b: asNumber(p, "b", 0.25),
+      SP: asNumber(p, "SP", 0),
+      HP: asNumber(p, "HP", 0),
+      LP: asNumber(p, "LP", 0),
+    }),
+  },
 ];
 
 const registry = new Map<ProcessingOperationId, ProcessingOperationSchema>();
@@ -1487,6 +1609,8 @@ export const REQUIRED_PROCESSING_OPERATION_IDS: ProcessingOperationId[] = [
   "integerBin",
   "resample",
   "edgeMask",
+  "mlt",
+  "ghs",
 ];
 
 export function assertProcessingRegistryCoverage() {

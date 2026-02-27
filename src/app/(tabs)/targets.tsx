@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
-import { View, FlatList, Alert, useWindowDimensions } from "react-native";
-import { BottomSheet } from "heroui-native";
+import { View, FlatList, useWindowDimensions } from "react-native";
+import { BottomSheet, Spinner } from "heroui-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
@@ -19,6 +19,10 @@ import { DuplicateMergeSheet } from "../../components/targets/DuplicateMergeShee
 import { GroupManagerSheet } from "../../components/targets/GroupManagerSheet";
 import { TargetListHeader, TargetSearchBar } from "../../components/targets/TargetListHeader";
 import { GuideTarget } from "../../components/common/GuideTarget";
+import {
+  OperationSummaryDialog,
+  type SummaryItem,
+} from "../../components/common/OperationSummaryDialog";
 import { TargetBatchActionBar } from "../../components/targets/TargetBatchActionBar";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
@@ -37,6 +41,13 @@ export default function TargetsScreen() {
   const [showDuplicateMerge, setShowDuplicateMerge] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
+  const [summaryDialog, setSummaryDialog] = useState<{
+    title: string;
+    icon?: string;
+    status?: "success" | "warning" | "danger" | "default";
+    items: SummaryItem[];
+    footnote?: string;
+  } | null>(null);
 
   const [filterType, setFilterType] = useState<TargetType | null>(null);
   const [filterStatus, setFilterStatus] = useState<TargetStatus | null>(null);
@@ -81,6 +92,7 @@ export default function TargetsScreen() {
     isAdvancedMode,
     setIsAdvancedMode,
     results: searchResults,
+    suggestions,
     clearAllConditions,
   } = search;
 
@@ -258,39 +270,45 @@ export default function TargetsScreen() {
     [setAdvancedConditions, setIsAdvancedMode, setSearchQuery],
   );
 
-  const buildScanSummaryMessage = useCallback(
-    (result: {
-      scannedCount: number;
-      newCount: number;
-      updatedCount: number;
-      skippedCount: number;
-    }) =>
-      [
-        `${t("targets.scanSummaryScanned")}: ${result.scannedCount}`,
-        `${t("targets.scanSummaryAdded")}: ${result.newCount}`,
-        `${t("targets.scanSummaryUpdated")}: ${result.updatedCount}`,
-        `${t("targets.scanSummarySkipped")}: ${result.skippedCount}`,
-      ].join("\n"),
-    [t],
-  );
-
   const handleScanTargets = useCallback(() => {
     setIsScanning(true);
     try {
       const result = scanAndAutoDetect();
-      Alert.alert(
-        t("targets.scanSummaryTitle"),
-        buildScanSummaryMessage({
-          scannedCount: result.scannedCount,
-          newCount: result.newCount,
-          updatedCount: result.updatedCount,
-          skippedCount: result.skippedCount,
-        }),
-      );
+      setSummaryDialog({
+        title: t("targets.scanSummaryTitle"),
+        icon: "scan-outline",
+        status: result.newCount > 0 ? "success" : "default",
+        items: [
+          {
+            label: t("targets.scanSummaryScanned"),
+            value: result.scannedCount,
+            color: "accent",
+            icon: "search-outline",
+          },
+          {
+            label: t("targets.scanSummaryAdded"),
+            value: result.newCount,
+            color: "success",
+            icon: "add-circle-outline",
+          },
+          {
+            label: t("targets.scanSummaryUpdated"),
+            value: result.updatedCount,
+            color: "accent",
+            icon: "create-outline",
+          },
+          {
+            label: t("targets.scanSummarySkipped"),
+            value: result.skippedCount,
+            color: "default",
+            icon: "remove-circle-outline",
+          },
+        ],
+      });
     } finally {
       setIsScanning(false);
     }
-  }, [buildScanSummaryMessage, scanAndAutoDetect, t]);
+  }, [scanAndAutoDetect, t]);
 
   const renderTargetItem = useCallback(
     ({ item: target }: { item: import("../../lib/fits/types").Target }) => {
@@ -300,15 +318,13 @@ export default function TargetsScreen() {
       const isSelected = selectedIds.includes(target.id);
 
       return (
-        <View
-          className={`px-4 mb-3 ${isSelected ? "opacity-80" : ""}`}
-          style={isSelected ? { backgroundColor: "rgba(59,130,246,0.08)" } : undefined}
-        >
+        <View className="px-4 mb-3">
           <TargetCard
             target={target}
             frameCount={target.imageIds.length}
             totalExposureMinutes={totalExposureMin}
             completionPercent={completion}
+            isSelected={isSelected}
             onPress={
               isSelectionMode
                 ? () => toggleSelection(target.id)
@@ -437,11 +453,22 @@ export default function TargetsScreen() {
         />
       ) : (
         <GuideTarget name="targets-scan" page="targets" order={1}>
-          <TargetSearchBar
-            searchQuery={searchQuery}
-            onSearchQueryChange={setSearchQuery}
-            interactionUi={resolvedInteractionUi}
-          />
+          <View className="flex-row items-center">
+            <View className="flex-1">
+              <TargetSearchBar
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                suggestions={suggestions}
+                onSelectSuggestion={setSearchQuery}
+                interactionUi={resolvedInteractionUi}
+              />
+            </View>
+            {isScanning && (
+              <View className="pr-4">
+                <Spinner size="sm" />
+              </View>
+            )}
+          </View>
         </GuideTarget>
       )}
       {isLandscapeTablet ? (
@@ -542,6 +569,17 @@ export default function TargetsScreen() {
             </BottomSheet.Content>
           </BottomSheet.Portal>
         </BottomSheet>
+      )}
+      {summaryDialog && (
+        <OperationSummaryDialog
+          visible={!!summaryDialog}
+          onClose={() => setSummaryDialog(null)}
+          title={summaryDialog.title}
+          icon={summaryDialog.icon}
+          status={summaryDialog.status}
+          items={summaryDialog.items}
+          footnote={summaryDialog.footnote}
+        />
       )}
     </View>
   );

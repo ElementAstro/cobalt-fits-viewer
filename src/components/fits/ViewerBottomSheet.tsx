@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ScrollView, View, Text, useWindowDimensions } from "react-native";
-import { BottomSheet, Button, Chip, useThemeColor } from "heroui-native";
+import { View, Text, useWindowDimensions } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { BottomSheet, Button, Chip } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ViewerControlPanel } from "./ViewerControlPanel";
 import type { ComponentProps } from "react";
@@ -17,7 +18,6 @@ export function ViewerBottomSheet({
   onVisibleChange,
   ...controlPanelProps
 }: ViewerBottomSheetProps) {
-  const [mutedColor, surfaceColor] = useThemeColor(["muted", "surface"]);
   const { height: screenHeight } = useWindowDimensions();
   const [sheetIndex, setSheetIndex] = useState(1);
   // Deferred open state: ensures the BottomSheet always mounts with isOpen=false
@@ -60,8 +60,7 @@ export function ViewerBottomSheet({
           index={sheetIndex}
           snapPoints={snapPoints}
           onChange={(index) => setSheetIndex(index)}
-          backgroundStyle={{ backgroundColor: surfaceColor + "F8" }}
-          handleIndicatorStyle={{ backgroundColor: mutedColor, width: 36 }}
+          handleIndicatorStyle={{ width: 36 }}
           enableDynamicSizing={false}
         >
           {/* Collapsed mini toolbar (visible at snap index 0) */}
@@ -86,15 +85,15 @@ export function ViewerBottomSheet({
                 onPress={handleExpand}
                 className="h-6 w-6"
               >
-                <Ionicons name="chevron-up" size={14} color={mutedColor} />
+                <Ionicons name="chevron-up" size={14} className="text-muted" />
               </Button>
             </View>
           </View>
 
           {/* Full control panel content */}
-          <ScrollView showsVerticalScrollIndicator={false}>
+          <BottomSheetScrollView showsVerticalScrollIndicator={false}>
             <ViewerControlPanel {...controlPanelProps} />
-          </ScrollView>
+          </BottomSheetScrollView>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

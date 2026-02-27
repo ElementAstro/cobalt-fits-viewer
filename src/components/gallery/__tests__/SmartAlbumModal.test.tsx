@@ -55,13 +55,18 @@ jest.mock("heroui-native", () => {
 
   const Separator = () => null;
 
+  const Label = ({ children }: any) => <Text>{children}</Text>;
+  const Surface = ({ children, ...rest }: any) => <View {...rest}>{children}</View>;
+
   return {
     Dialog,
     Button,
     Chip,
     CloseButton,
     Input,
+    Label,
     Separator,
+    Surface,
     TextField,
     useThemeColor: () => ["#0f0"],
   };

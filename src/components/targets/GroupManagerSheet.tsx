@@ -3,8 +3,17 @@
  */
 
 import { useState } from "react";
-import { Alert, ScrollView, View, Text } from "react-native";
-import { BottomSheet, Button, Card, Input, Label, Separator, useThemeColor } from "heroui-native";
+import { ScrollView, View, Text } from "react-native";
+import {
+  BottomSheet,
+  Button,
+  Card,
+  Dialog,
+  Input,
+  Label,
+  Separator,
+  useThemeColor,
+} from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
@@ -46,6 +55,8 @@ export function GroupManagerSheet({
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editColor, setEditColor] = useState(GROUP_COLORS[0]);
+  const [deleteGroupId, setDeleteGroupId] = useState<string | null>(null);
+  const deleteGroup = deleteGroupId ? groups.find((g) => g.id === deleteGroupId) : null;
 
   const handleCreate = () => {
     const trimmed = newName.trim();
@@ -257,23 +268,7 @@ export function GroupManagerSheet({
                             <Button
                               variant="ghost"
                               size="sm"
-                              onPress={() => {
-                                Alert.alert(
-                                  t("targets.groups.deleteTitle"),
-                                  t("targets.groups.deleteConfirm", {
-                                    name: group.name,
-                                    count: group.targetIds.length,
-                                  }),
-                                  [
-                                    { text: t("common.cancel"), style: "cancel" },
-                                    {
-                                      text: t("common.delete"),
-                                      style: "destructive",
-                                      onPress: () => onDeleteGroup(group.id),
-                                    },
-                                  ],
-                                );
-                              }}
+                              onPress={() => setDeleteGroupId(group.id)}
                             >
                               <Ionicons name="trash-outline" size={14} color={dangerColor} />
                             </Button>
@@ -286,6 +281,43 @@ export function GroupManagerSheet({
               </View>
             )}
           </ScrollView>
+
+          <Dialog
+            isOpen={deleteGroupId !== null}
+            onOpenChange={(open) => {
+              if (!open) setDeleteGroupId(null);
+            }}
+          >
+            <Dialog.Portal>
+              <Dialog.Overlay />
+              <Dialog.Content>
+                <Dialog.Title>{t("targets.groups.deleteTitle")}</Dialog.Title>
+                {deleteGroup && (
+                  <Dialog.Description>
+                    {t("targets.groups.deleteConfirm", {
+                      name: deleteGroup.name,
+                      count: deleteGroup.targetIds.length,
+                    })}
+                  </Dialog.Description>
+                )}
+                <View className="mt-4 flex-row justify-end gap-2">
+                  <Button variant="outline" size="sm" onPress={() => setDeleteGroupId(null)}>
+                    <Button.Label>{t("common.cancel")}</Button.Label>
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onPress={() => {
+                      if (deleteGroupId) onDeleteGroup(deleteGroupId);
+                      setDeleteGroupId(null);
+                    }}
+                  >
+                    <Button.Label>{t("common.delete")}</Button.Label>
+                  </Button>
+                </View>
+              </Dialog.Content>
+            </Dialog.Portal>
+          </Dialog>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

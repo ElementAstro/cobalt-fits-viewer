@@ -96,6 +96,25 @@ export function zoomAroundPoint(
   };
 }
 
+export function zoomAroundCenter(
+  currentScale: number,
+  targetScale: number,
+  currentTranslateX: number,
+  currentTranslateY: number,
+  canvasWidth: number,
+  canvasHeight: number,
+): Point {
+  "worklet";
+  return zoomAroundPoint(
+    canvasWidth / 2,
+    canvasHeight / 2,
+    currentScale,
+    targetScale,
+    currentTranslateX,
+    currentTranslateY,
+  );
+}
+
 export function computeIncrementalPinchTranslation(
   focalPointX: number,
   focalPointY: number,
@@ -249,5 +268,43 @@ export function remapRegionBetweenSpaces(
     y: p0.y,
     w: Math.max(0, p1.x - p0.x),
     h: Math.max(0, p1.y - p0.y),
+  };
+}
+
+export function screenToSourcePixel(
+  screenX: number,
+  screenY: number,
+  transform: ViewerTransform,
+  imageWidth: number,
+  imageHeight: number,
+  sourceWidth: number,
+  sourceHeight: number,
+): Point | null {
+  "worklet";
+  const { fitScale, offsetX, offsetY } = computeFitGeometry(
+    imageWidth,
+    imageHeight,
+    transform.canvasWidth,
+    transform.canvasHeight,
+  );
+  if (fitScale <= 0) return null;
+
+  const localX = (screenX - transform.translateX) / transform.scale;
+  const localY = (screenY - transform.translateY) / transform.scale;
+  const pixelX = Math.floor((localX - offsetX) / fitScale);
+  const pixelY = Math.floor((localY - offsetY) / fitScale);
+
+  if (pixelX < 0 || pixelX >= imageWidth || pixelY < 0 || pixelY >= imageHeight) return null;
+
+  const mapped = remapPointBetweenSpaces(
+    { x: pixelX + 0.5, y: pixelY + 0.5 },
+    imageWidth,
+    imageHeight,
+    sourceWidth,
+    sourceHeight,
+  );
+  return {
+    x: clamp(Math.floor(mapped.x), 0, sourceWidth - 1),
+    y: clamp(Math.floor(mapped.y), 0, sourceHeight - 1),
   };
 }

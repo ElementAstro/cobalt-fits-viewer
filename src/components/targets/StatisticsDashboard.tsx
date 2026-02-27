@@ -3,7 +3,7 @@
  */
 
 import { ScrollView, View, Text, useWindowDimensions } from "react-native";
-import { Card, Chip, useThemeColor } from "heroui-native";
+import { Accordion, Card, Chip, Surface, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
@@ -35,7 +35,7 @@ function MonthlyChart({ monthlyStats }: { monthlyStats: MonthlyStats[] }) {
               className="w-full bg-primary/60 rounded-t"
               style={{ height: `${Math.max(height, 4)}%` }}
             />
-            <Text className="text-[8px] text-muted mt-1">{month.month.slice(5)}</Text>
+            <Text className="text-[10px] text-muted mt-1">{month.month.slice(5)}</Text>
           </View>
         );
       })}
@@ -113,7 +113,7 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
                   <Text className="text-[9px] text-muted text-center">
                     {t(targetStatusI18nKey(status))}
                   </Text>
-                  <Text className="text-[8px] text-muted">{percent}%</Text>
+                  <Text className="text-[9px] text-muted">{percent}%</Text>
                 </View>
               );
             })}
@@ -121,91 +121,108 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
         </Card.Body>
       </Card>
 
-      {/* 曝光排行榜 */}
-      {statistics.exposureLeaderboard.length > 0 && (
-        <Card variant="secondary" className="mb-4">
-          <Card.Header>
-            <Card.Title>{t("targets.statistics.exposureLeaderboard")}</Card.Title>
-          </Card.Header>
-          <Card.Body className="p-3 pt-0">
-            {statistics.exposureLeaderboard.map((entry, index) => (
-              <View
-                key={entry.target.id}
-                className="flex-row items-center justify-between py-2 border-b border-surface-secondary"
-              >
-                <View className="flex-row items-center gap-2">
-                  <Text
-                    className={`text-sm font-bold w-5 ${index < 3 ? "text-warning" : "text-muted"}`}
+      <Accordion selectionMode="multiple" variant="surface" defaultValue={["leaderboard"]}>
+        {/* 曝光排行榜 */}
+        {statistics.exposureLeaderboard.length > 0 && (
+          <Accordion.Item value="leaderboard">
+            <Accordion.Trigger>
+              <Text className="flex-1 text-xs font-semibold text-muted">
+                {t("targets.statistics.exposureLeaderboard")}
+              </Text>
+              <Accordion.Indicator />
+            </Accordion.Trigger>
+            <Accordion.Content>
+              <View className="px-2">
+                {statistics.exposureLeaderboard.map((entry, index) => (
+                  <Surface
+                    key={entry.target.id}
+                    variant={index < 3 ? "secondary" : "tertiary"}
+                    className="rounded-lg p-2 mb-1"
                   >
-                    #{index + 1}
-                  </Text>
-                  <Text className="text-sm text-foreground">{entry.target.name}</Text>
-                </View>
-                <View className="flex-row items-center gap-2">
-                  <Text className="text-xs text-muted">{entry.frameCount}f</Text>
-                  <Text className="text-xs font-semibold text-foreground">
-                    {formatExposureHours(entry.totalSeconds)}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </Card.Body>
-        </Card>
-      )}
-
-      {/* 月度活动 */}
-      <Card variant="secondary" className="mb-4">
-        <Card.Header>
-          <Card.Title>{t("targets.statistics.monthlyActivity")}</Card.Title>
-        </Card.Header>
-        <Card.Body className="p-3 pt-0">
-          <MonthlyChart monthlyStats={monthlyStats} />
-        </Card.Body>
-      </Card>
-
-      {/* 类型分布 */}
-      <Card variant="secondary" className="mb-4">
-        <Card.Header>
-          <Card.Title>{t("targets.type")}</Card.Title>
-        </Card.Header>
-        <Card.Body className="p-3 pt-0">
-          <View className="flex-row flex-wrap gap-1.5">
-            {Object.entries(statistics.byType).map(([type, count]) => (
-              <Chip key={type} size="sm" variant="secondary">
-                <Chip.Label className="text-[10px]">
-                  {t(targetTypeI18nKey(type as TargetType))}: {count}
-                </Chip.Label>
-              </Chip>
-            ))}
-          </View>
-        </Card.Body>
-      </Card>
-
-      {/* 标签分布 */}
-      {Object.keys(statistics.tagBreakdown).length > 0 && (
-        <Card variant="secondary" className="mb-4">
-          <Card.Header>
-            <Card.Title>{t("targets.tags")}</Card.Title>
-          </Card.Header>
-          <Card.Body className="p-3 pt-0">
-            <View className="flex-row flex-wrap gap-1.5">
-              {Object.entries(statistics.tagBreakdown)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10)
-                .map(([tag, count]) => (
-                  <Chip key={tag} size="sm" variant="secondary">
-                    <Chip.Label className="text-[10px]">
-                      {tag}: {count}
-                    </Chip.Label>
-                  </Chip>
+                    <View className="flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-2">
+                        <Text
+                          className={`text-sm font-bold w-5 ${index < 3 ? "text-warning" : "text-muted"}`}
+                        >
+                          #{index + 1}
+                        </Text>
+                        <Text className="text-sm text-foreground">{entry.target.name}</Text>
+                      </View>
+                      <View className="flex-row items-center gap-2">
+                        <Text className="text-xs text-muted">{entry.frameCount}f</Text>
+                        <Text className="text-xs font-semibold text-foreground">
+                          {formatExposureHours(entry.totalSeconds)}
+                        </Text>
+                      </View>
+                    </View>
+                  </Surface>
                 ))}
+              </View>
+            </Accordion.Content>
+          </Accordion.Item>
+        )}
+
+        {/* 月度活动 */}
+        <Accordion.Item value="monthly">
+          <Accordion.Trigger>
+            <Text className="flex-1 text-xs font-semibold text-muted">
+              {t("targets.statistics.monthlyActivity")}
+            </Text>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+          <Accordion.Content>
+            <View className="px-2">
+              <MonthlyChart monthlyStats={monthlyStats} />
             </View>
-          </Card.Body>
-        </Card>
-      )}
+          </Accordion.Content>
+        </Accordion.Item>
+
+        {/* 类型分布 */}
+        <Accordion.Item value="types">
+          <Accordion.Trigger>
+            <Text className="flex-1 text-xs font-semibold text-muted">{t("targets.type")}</Text>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+          <Accordion.Content>
+            <View className="flex-row flex-wrap gap-1.5 px-2">
+              {Object.entries(statistics.byType).map(([type, count]) => (
+                <Chip key={type} size="sm" variant="secondary">
+                  <Chip.Label className="text-[10px]">
+                    {t(targetTypeI18nKey(type as TargetType))}: {count}
+                  </Chip.Label>
+                </Chip>
+              ))}
+            </View>
+          </Accordion.Content>
+        </Accordion.Item>
+
+        {/* 标签分布 */}
+        {Object.keys(statistics.tagBreakdown).length > 0 && (
+          <Accordion.Item value="tags">
+            <Accordion.Trigger>
+              <Text className="flex-1 text-xs font-semibold text-muted">{t("targets.tags")}</Text>
+              <Accordion.Indicator />
+            </Accordion.Trigger>
+            <Accordion.Content>
+              <View className="flex-row flex-wrap gap-1.5 px-2">
+                {Object.entries(statistics.tagBreakdown)
+                  .sort((a, b) => b[1] - a[1])
+                  .slice(0, 10)
+                  .map(([tag, count]) => (
+                    <Chip key={tag} size="sm" variant="secondary">
+                      <Chip.Label className="text-[10px]">
+                        {tag}: {count}
+                      </Chip.Label>
+                    </Chip>
+                  ))}
+              </View>
+            </Accordion.Content>
+          </Accordion.Item>
+        )}
+      </Accordion>
 
       {/* 快速统计 */}
-      <View className="flex-row gap-2 mb-4">
+      <View className="flex-row gap-2 mt-4 mb-4">
         <Card variant="secondary" className="flex-1">
           <Card.Body className="items-center p-3">
             <Ionicons name="star" size={16} color="#f59e0b" />
