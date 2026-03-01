@@ -5,7 +5,7 @@ import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
 import type { EditorTool, EditorToolParams } from "../../../hooks/useEditorToolState";
 
-const MORPH_OP_KEYS: Record<string, string> = {
+const MORPH_OP_KEYS: Record<EditorToolParams["morphOp"], string> = {
   erode: "editor.paramMorphErode",
   dilate: "editor.paramMorphDilate",
   open: "editor.paramMorphOpen",

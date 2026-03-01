@@ -6,13 +6,13 @@ import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import {
   generateIntegrationReport,
   formatExposureTime,
   exportReportAsMarkdown,
   type TargetReport,
 } from "../../lib/gallery/integrationReport";
+import { useFrameTypeLabelMap } from "../../hooks/useFrameTypeLabelMap";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 
@@ -44,19 +44,7 @@ export function IntegrationReportSheet({ visible, onClose }: IntegrationReportSh
   const files = useFitsStore((s) => s.files);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
   const reportFrameTypes = useSettingsStore((s) => s.reportFrameTypes);
-
-  const frameTypeLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const definition of getFrameTypeDefinitions(frameClassificationConfig)) {
-      map.set(
-        definition.key,
-        definition.builtin
-          ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
-          : definition.label || definition.key,
-      );
-    }
-    return map;
-  }, [frameClassificationConfig, t]);
+  const frameTypeLabelMap = useFrameTypeLabelMap(frameClassificationConfig);
 
   const report = useMemo(
     () =>

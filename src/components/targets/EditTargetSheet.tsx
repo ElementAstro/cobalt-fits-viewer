@@ -2,7 +2,7 @@
  * 编辑目标 Sheet
  */
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { View, ScrollView, Alert } from "react-native";
 import {
   Button,
@@ -69,6 +69,7 @@ export function EditTargetSheet({
   );
 
   useEffect(() => {
+    if (!visible) return;
     setName(target.name);
     setType(target.type);
     setStatus(target.status);
@@ -84,8 +85,7 @@ export function EditTargetSheet({
         seconds: target.plannedExposure[f] ?? 0,
       })),
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target.id]);
+  }, [visible, target]);
 
   const handleAddAlias = () => {
     const trimmed = newAlias.trim();

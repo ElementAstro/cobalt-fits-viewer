@@ -60,10 +60,8 @@ export function GuideTarget({ name: _name, page, order, children, placement }: G
           className="rounded-xl border border-border px-4 py-3"
         >
           <Popover.Arrow />
-          <Popover.Title>{t(stepConfig.titleKey as Parameters<typeof t>[0])}</Popover.Title>
-          <Popover.Description>
-            {t(stepConfig.descKey as Parameters<typeof t>[0])}
-          </Popover.Description>
+          <Popover.Title>{t(stepConfig.titleKey)}</Popover.Title>
+          <Popover.Description>{t(stepConfig.descKey)}</Popover.Description>
           <View className="mt-3 flex-row items-center justify-between">
             <Text className="text-xs text-muted">
               {currentStep + 1} / {totalSteps}
@@ -71,14 +69,12 @@ export function GuideTarget({ name: _name, page, order, children, placement }: G
             <View className="flex-row gap-2">
               <Button variant="ghost" size="sm" onPress={skipAll}>
                 <Button.Label className="text-muted">
-                  {t("onboarding.tooltip.skipAll" as Parameters<typeof t>[0])}
+                  {t("onboarding.tooltip.skipAll")}
                 </Button.Label>
               </Button>
               <Button variant="primary" size="sm" onPress={next}>
                 <Button.Label>
-                  {isLastStep
-                    ? t("onboarding.tooltip.done" as Parameters<typeof t>[0])
-                    : t("onboarding.tooltip.next" as Parameters<typeof t>[0])}
+                  {isLastStep ? t("onboarding.tooltip.done") : t("onboarding.tooltip.next")}
                 </Button.Label>
               </Button>
             </View>

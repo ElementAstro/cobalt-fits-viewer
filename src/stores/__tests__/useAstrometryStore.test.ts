@@ -27,8 +27,6 @@ describe("useAstrometryStore", () => {
     useAstrometryStore.setState({
       config: { ...DEFAULT_ASTROMETRY_CONFIG },
       jobs: [],
-      sessionKey: null,
-      isLoggedIn: false,
     });
   });
 
@@ -59,32 +57,6 @@ describe("useAstrometryStore", () => {
       const { config } = useAstrometryStore.getState();
       expect(config.apiKey).toBe("");
       expect(config.autoSolve).toBe(false);
-    });
-  });
-
-  // ===== Session =====
-
-  describe("session management", () => {
-    it("sets session key and marks logged in", () => {
-      useAstrometryStore.getState().setSessionKey("abc123");
-      const state = useAstrometryStore.getState();
-      expect(state.sessionKey).toBe("abc123");
-      expect(state.isLoggedIn).toBe(true);
-    });
-
-    it("clears session key and marks logged out", () => {
-      useAstrometryStore.getState().setSessionKey("abc");
-      useAstrometryStore.getState().setSessionKey(null);
-      const state = useAstrometryStore.getState();
-      expect(state.sessionKey).toBeNull();
-      expect(state.isLoggedIn).toBe(false);
-    });
-
-    it("setLoggedIn works independently", () => {
-      useAstrometryStore.getState().setLoggedIn(true);
-      expect(useAstrometryStore.getState().isLoggedIn).toBe(true);
-      useAstrometryStore.getState().setLoggedIn(false);
-      expect(useAstrometryStore.getState().isLoggedIn).toBe(false);
     });
   });
 

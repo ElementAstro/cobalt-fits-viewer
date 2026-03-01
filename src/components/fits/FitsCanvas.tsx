@@ -362,6 +362,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     pinchStartScale.value = 1;
     pinchPrevFocalX.value = 0;
     pinchPrevFocalY.value = 0;
+    // Reset all transform state when image dimensions change.
+    // Shared value refs (scale, translateX, etc.) are stable — only dimensions trigger this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [imgWidth, imgHeight]);
 

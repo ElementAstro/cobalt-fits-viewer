@@ -16,7 +16,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import { Button, Card, Separator } from "heroui-native";
+import { Button, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useScreenOrientation } from "../../hooks/useScreenOrientation";
@@ -92,6 +92,7 @@ interface OnboardingScreenProps {
 export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   const { t } = useI18n();
   const { isLandscape } = useScreenOrientation();
+  const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
   const haptics = useHapticFeedback();
   const insets = useSafeAreaInsets();
 
@@ -270,7 +271,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                   style={[
                     styles.dot,
                     {
-                      backgroundColor: index === currentStep ? "#17c964" : "#71717a66",
+                      backgroundColor: index === currentStep ? successColor : `${mutedColor}66`,
                       width: index === currentStep ? 24 : 8,
                     },
                   ]}
@@ -283,10 +284,10 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
               style={[styles.title, isLandscape && { fontSize: 20, marginBottom: 4 }]}
               className="text-foreground"
             >
-              {t(step.titleKey as Parameters<typeof t>[0])}
+              {t(step.titleKey)}
             </Text>
             <Text style={styles.description} className="text-muted">
-              {t(step.descriptionKey as Parameters<typeof t>[0])}
+              {t(step.descriptionKey)}
             </Text>
 
             {/* Feature list card */}
@@ -296,9 +297,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
                   <View key={index}>
                     <View style={styles.featureRow}>
                       <Ionicons name="checkmark-circle" size={18} className="text-success" />
-                      <Text className="ml-3 flex-1 text-sm text-foreground">
-                        {t(featureKey as Parameters<typeof t>[0])}
-                      </Text>
+                      <Text className="ml-3 flex-1 text-sm text-foreground">{t(featureKey)}</Text>
                     </View>
                     {index < step.features.length - 1 && <Separator className="mt-3" />}
                   </View>

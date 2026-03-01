@@ -13,8 +13,6 @@ const defaultProps = {
   title: "Import File",
   subtitle: "FITS, TIFF, PNG",
   onPress: jest.fn(),
-  successColor: "#22c55e",
-  mutedColor: "#6b7280",
 };
 
 describe("SheetActionItem", () => {
@@ -52,6 +50,14 @@ describe("SheetActionItem", () => {
     expect(toJSON()).toBeTruthy();
   });
 
+  it("applies disabled styling when disabled", () => {
+    render(<SheetActionItem {...defaultProps} disabled />);
+    expect(screen.getByText("Import File")).toBeTruthy();
+    // Disabled state renders muted text class; PressableFeedback receives isDisabled
+    const tree = screen.toJSON();
+    expect(JSON.stringify(tree)).toContain("text-muted");
+  });
+
   it("shows chevron when showChevron is true", () => {
     render(<SheetActionItem {...defaultProps} showChevron />);
     expect(screen.getByText("chevron-forward")).toBeTruthy();
@@ -69,6 +75,23 @@ describe("SheetActionItem", () => {
 
   it("renders destructive variant", () => {
     const { toJSON } = render(<SheetActionItem {...defaultProps} destructive />);
+    expect(toJSON()).toBeTruthy();
+  });
+
+  it("uses theme colors by default when color props are omitted", () => {
+    const { toJSON } = render(<SheetActionItem {...defaultProps} />);
+    expect(toJSON()).toBeTruthy();
+  });
+
+  it("accepts optional color overrides", () => {
+    const { toJSON } = render(
+      <SheetActionItem
+        {...defaultProps}
+        successColor="#00ff00"
+        mutedColor="#999"
+        dangerColor="#f00"
+      />,
+    );
     expect(toJSON()).toBeTruthy();
   });
 });

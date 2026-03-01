@@ -430,4 +430,52 @@ describe("LANReceiveSheet", () => {
     fireEvent.press(buttons[0]);
     expect(onConnect).toHaveBeenCalledWith("my-nas.local", 18080, "9999");
   });
+
+  it("calls onClose when close button is pressed in error state", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="error"
+        progress={idleProgress}
+        error="Something went wrong"
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.press(screen.getByText("common.close"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows validation error for invalid host format", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="idle"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.changeText(screen.getByTestId("input-192.168.1.100"), "bad host!");
+    fireEvent.changeText(screen.getByTestId("input-1234"), "1234");
+    const buttons = screen.getAllByTestId("button");
+    fireEvent.press(buttons[0]);
+    expect(onConnect).not.toHaveBeenCalled();
+    expect(screen.getByText("backup.lanHostInvalid")).toBeTruthy();
+  });
+
+  it("shows close button in done state", () => {
+    render(
+      <LANReceiveSheet
+        visible
+        status="done"
+        progress={idleProgress}
+        error={null}
+        onConnect={onConnect}
+        onClose={onClose}
+      />,
+    );
+    expect(screen.getByText("common.close")).toBeTruthy();
+  });
 });

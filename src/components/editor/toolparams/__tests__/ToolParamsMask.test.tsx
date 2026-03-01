@@ -1,5 +1,5 @@
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { render, fireEvent } from "@testing-library/react-native";
 import { ToolParamsMask } from "../ToolParamsMask";
 
 jest.mock("../../../../i18n/useI18n", () => ({
@@ -8,12 +8,18 @@ jest.mock("../../../../i18n/useI18n", () => ({
 
 jest.mock("../../../common/SimpleSlider", () => ({
   SimpleSlider: (props: Record<string, unknown>) => {
-    const { Text } = require("react-native");
-    return <Text testID={`slider-${props.label}`}>{props.label as string}</Text>;
+    const RN = require("react-native");
+    const R = require("react");
+    const cb = props.onValueChange;
+    return R.createElement(
+      RN.Pressable,
+      { testID: `slider-${props.label}`, onPress: () => typeof cb === "function" && cb(5.7) },
+      R.createElement(RN.Text, null, props.label),
+    );
   },
 }));
 
-const mockParams = {
+const mockParamsRaw = {
   starMaskScale: 1.5,
   setStarMaskScale: jest.fn(),
   starMaskInvert: false,
@@ -26,7 +32,8 @@ const mockParams = {
   setRangeMaskFuzz: jest.fn(),
   binarizeThreshold: 0.5,
   setBinarizeThreshold: jest.fn(),
-} as never;
+};
+const mockParams = mockParamsRaw as never;
 
 describe("ToolParamsMask", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -57,5 +64,35 @@ describe("ToolParamsMask", () => {
       <ToolParamsMask activeTool={"unknown" as never} params={mockParams} />,
     );
     expect(toJSON()).toBeNull();
+  });
+
+  it("calls setStarMaskInvert(true) when remove stars button is pressed", () => {
+    const { getByText } = render(<ToolParamsMask activeTool="starMask" params={mockParams} />);
+    fireEvent.press(getByText("editor.paramRemoveStars"));
+    expect(mockParamsRaw.setStarMaskInvert).toHaveBeenCalledWith(true);
+  });
+
+  it("calls setStarMaskInvert(false) when isolate stars button is pressed", () => {
+    const { getByText } = render(<ToolParamsMask activeTool="starMask" params={mockParams} />);
+    fireEvent.press(getByText("editor.paramIsolateStars"));
+    expect(mockParamsRaw.setStarMaskInvert).toHaveBeenCalledWith(false);
+  });
+
+  it("calls setStarMaskScale via starMask scale slider", () => {
+    const { getByTestId } = render(<ToolParamsMask activeTool="starMask" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramScale"));
+    expect(mockParamsRaw.setStarMaskScale).toHaveBeenCalledWith(5.7);
+  });
+
+  it("calls setRangeMaskLow via rangeMask low slider", () => {
+    const { getByTestId } = render(<ToolParamsMask activeTool="rangeMask" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramLow"));
+    expect(mockParamsRaw.setRangeMaskLow).toHaveBeenCalledWith(5.7);
+  });
+
+  it("calls setBinarizeThreshold via binarize threshold slider", () => {
+    const { getByTestId } = render(<ToolParamsMask activeTool="binarize" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramThreshold"));
+    expect(mockParamsRaw.setBinarizeThreshold).toHaveBeenCalledWith(5.7);
   });
 });

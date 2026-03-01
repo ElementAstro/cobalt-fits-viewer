@@ -98,4 +98,47 @@ describe("OperationSummaryDialog", () => {
     fireEvent.press(screen.getByText("common.confirm"));
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("renders item without icon correctly", () => {
+    const itemsNoIcon: SummaryItem[] = [{ label: "NoIcon", value: 10 }];
+    render(
+      <OperationSummaryDialog
+        visible={true}
+        onClose={jest.fn()}
+        title="Summary"
+        items={itemsNoIcon}
+      />,
+    );
+
+    expect(screen.getByText("NoIcon")).toBeTruthy();
+    expect(screen.getByText("10")).toBeTruthy();
+  });
+
+  it("renders with default status when not specified", () => {
+    render(
+      <OperationSummaryDialog
+        visible={true}
+        onClose={jest.fn()}
+        title="Default Status"
+        items={baseItems}
+      />,
+    );
+
+    expect(screen.getByText("Default Status")).toBeTruthy();
+  });
+
+  it("renders icon when provided", () => {
+    render(
+      <OperationSummaryDialog
+        visible={true}
+        onClose={jest.fn()}
+        title="With Icon"
+        icon="scan-outline"
+        status="success"
+        items={baseItems}
+      />,
+    );
+
+    expect(screen.getByText("With Icon")).toBeTruthy();
+  });
 });

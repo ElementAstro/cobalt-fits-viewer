@@ -4,7 +4,8 @@
  */
 
 import type { RestoreTarget } from "./backupService";
-import type { CloudProvider, RestoreConflictStrategy } from "./types";
+import type { CloudProvider } from "./types";
+import { resolveRestoreStrategy } from "./backupUtils";
 import type { useFitsStore } from "../../stores/useFitsStore";
 import type { useAlbumStore } from "../../stores/useAlbumStore";
 import type { useTargetStore } from "../../stores/useTargetStore";
@@ -38,10 +39,6 @@ interface RestoreTargetCallbacks {
   setActiveProvider: (provider: CloudProvider | null) => void;
 }
 
-function resolveStrategy(strategy: RestoreConflictStrategy | undefined): RestoreConflictStrategy {
-  return strategy ?? "skip-existing";
-}
-
 export function createRestoreTarget(
   stores: RestoreTargetStores,
   callbacks: RestoreTargetCallbacks,
@@ -60,7 +57,7 @@ export function createRestoreTarget(
 
   return {
     setFiles: (files, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const store = fitsStore.getState();
       for (const file of files) {
         const existing = store.files.find((f) => f.id === file.id);
@@ -83,7 +80,7 @@ export function createRestoreTarget(
       }
     },
     setAlbums: (albums, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const store = albumStore.getState();
       for (const album of albums) {
         const existing = store.albums.find((a) => a.id === album.id);
@@ -106,7 +103,7 @@ export function createRestoreTarget(
       }
     },
     setTargets: (targets, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const store = targetStore.getState();
       for (const target of targets) {
         const currentTargets = targetStore.getState().targets;
@@ -153,7 +150,7 @@ export function createRestoreTarget(
       }
     },
     setTargetGroups: (groups, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const store = targetGroupStore.getState();
       for (const group of groups) {
         const existing = store.groups.find((g) => g.id === group.id);
@@ -173,7 +170,7 @@ export function createRestoreTarget(
       }
     },
     setSessions: (sessions, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const store = sessionStore.getState();
       for (const session of sessions) {
         const existing = store.sessions.find((s) => s.id === session.id);
@@ -191,7 +188,7 @@ export function createRestoreTarget(
       }
     },
     setPlans: (plans, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const store = sessionStore.getState();
       const targets = targetStore.getState().targets;
       for (const plan of plans) {
@@ -225,7 +222,7 @@ export function createRestoreTarget(
       }
     },
     setLogEntries: (entries, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const store = sessionStore.getState();
       for (const entry of entries) {
         const existing = store.logEntries.find((log) => log.id === entry.id);
@@ -251,7 +248,7 @@ export function createRestoreTarget(
       }
     },
     setFileGroups: (data, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const state = fileGroupStore.getState();
       if (mode === "overwrite-existing") {
         fileGroupStore.setState(
@@ -290,7 +287,7 @@ export function createRestoreTarget(
       fileGroupStore.setState({ groups: nextGroups, fileGroupMap: nextMap }, false);
     },
     setAstrometry: (data, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const state = astrometryStore.getState();
       if (mode === "overwrite-existing") {
         astrometryStore.setState({ config: data.config, jobs: data.jobs }, false);
@@ -315,7 +312,7 @@ export function createRestoreTarget(
       );
     },
     setTrash: (items, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       if (mode === "overwrite-existing") {
         trashStore.setState({ items: [...items] }, false);
         return;
@@ -330,7 +327,7 @@ export function createRestoreTarget(
       trashStore.setState({ items: [...map.values()] }, false);
     },
     setActiveSession: (activeSession, strategy) => {
-      const mode = resolveStrategy(strategy);
+      const mode = resolveRestoreStrategy(strategy);
       const current = sessionStore.getState().activeSession;
       if (mode === "skip-existing" && current) return;
       if (mode === "merge" && current) return;

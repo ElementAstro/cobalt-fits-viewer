@@ -49,9 +49,10 @@ export function BatchRenameSheet({
   const [_mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const [template, setTemplate] = useState(DEFAULT_TEMPLATE);
 
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const selectedFiles = useMemo(
-    () => files.filter((f) => selectedIds.includes(f.id)),
-    [files, selectedIds],
+    () => files.filter((f) => selectedIdSet.has(f.id)),
+    [files, selectedIdSet],
   );
 
   const previews = useMemo(

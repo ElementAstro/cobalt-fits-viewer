@@ -8,6 +8,7 @@ import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { useThumbnailOnDemand } from "../../hooks/useThumbnailOnDemand";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
+import { isVideoFile, isAudioFile } from "../../lib/media/routing";
 import {
   buildInitialSnapshot,
   buildLoadingSummary,
@@ -76,8 +77,8 @@ const ThumbnailItem = memo(function ThumbnailItem({
     () => resolveThumbnailUri(file.id, file.thumbnailUri),
     [file.id, file.thumbnailUri],
   );
-  const isVideo = file.mediaKind === "video" || file.sourceType === "video";
-  const isAudio = file.mediaKind === "audio" || file.sourceType === "audio";
+  const isVideo = isVideoFile(file);
+  const isAudio = isAudioFile(file);
   const duration = formatVideoDuration(file.durationMs);
   const resolution = formatVideoResolution(file.videoWidth, file.videoHeight);
   const [snapshot, setSnapshot] = useState<ThumbnailLoadSnapshot>(() =>

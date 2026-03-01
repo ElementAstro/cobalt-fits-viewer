@@ -34,6 +34,16 @@ export interface RaDec {
   dec: number;
 }
 
+/** 预计算的投影上下文，用于批量坐标转换时避免重复计算 CD 矩阵 */
+export interface ProjectionContext {
+  cd: CDMatrix;
+  inv: CDMatrixInverse;
+  ra0Rad: number;
+  dec0Rad: number;
+  sinDec0: number;
+  cosDec0: number;
+}
+
 /**
  * 从 AstrometryCalibration 计算 CD 矩阵和参考像素
  */
@@ -68,6 +78,26 @@ export function computeCDMatrix(calibration: AstrometryCalibration): CDMatrix {
 }
 
 /**
+ * 从 AstrometryCalibration 预计算投影上下文
+ * 在批量调用 pixelToRaDec / raDecToPixel 时，先调用此函数一次，
+ * 然后将返回的 ctx 传给 *WithContext 变体，避免重复计算矩阵和三角函数
+ */
+export function computeProjectionContext(calibration: AstrometryCalibration): ProjectionContext {
+  const cd = computeCDMatrix(calibration);
+  const inv = invertCDMatrix(cd);
+  const ra0Rad = cd.crval1 * DEG2RAD;
+  const dec0Rad = cd.crval2 * DEG2RAD;
+  return {
+    cd,
+    inv,
+    ra0Rad,
+    dec0Rad,
+    sinDec0: Math.sin(dec0Rad),
+    cosDec0: Math.cos(dec0Rad),
+  };
+}
+
+/**
  * 计算 CD 矩阵的逆矩阵
  */
 export function invertCDMatrix(cd: CDMatrix): CDMatrixInverse {
@@ -96,7 +126,19 @@ export function pixelToRaDec(
   y: number,
   calibration: AstrometryCalibration,
 ): RaDec | null {
-  const cd = computeCDMatrix(calibration);
+  return pixelToRaDecWithContext(x, y, computeProjectionContext(calibration));
+}
+
+/**
+ * 像素坐标 → RA/Dec (使用预计算的投影上下文)
+ * 批量转换时使用此变体以避免重复计算 CD 矩阵
+ */
+export function pixelToRaDecWithContext(
+  x: number,
+  y: number,
+  ctx: ProjectionContext,
+): RaDec | null {
+  const { cd, ra0Rad, sinDec0, cosDec0 } = ctx;
 
   // 相对参考像素的偏移 (FITS 像素从 1 开始, 这里 x/y 是 0-indexed)
   const dx = x + 1 - cd.crpix1;
@@ -109,12 +151,6 @@ export function pixelToRaDec(
   // 转换为弧度
   const xiRad = xi * DEG2RAD;
   const etaRad = eta * DEG2RAD;
-
-  // 参考点的三角函数
-  const ra0Rad = cd.crval1 * DEG2RAD;
-  const dec0Rad = cd.crval2 * DEG2RAD;
-  const sinDec0 = Math.sin(dec0Rad);
-  const cosDec0 = Math.cos(dec0Rad);
 
   // TAN 反投影: 中间坐标 → 天球坐标
   const denom = cosDec0 - etaRad * sinDec0;
@@ -147,17 +183,24 @@ export function raDecToPixel(
   dec: number,
   calibration: AstrometryCalibration,
 ): { x: number; y: number } | null {
-  const cd = computeCDMatrix(calibration);
-  const inv = invertCDMatrix(cd);
+  return raDecToPixelWithContext(ra, dec, computeProjectionContext(calibration));
+}
+
+/**
+ * RA/Dec → 像素坐标 (使用预计算的投影上下文)
+ * 批量转换时使用此变体以避免重复计算 CD 矩阵
+ */
+export function raDecToPixelWithContext(
+  ra: number,
+  dec: number,
+  ctx: ProjectionContext,
+): { x: number; y: number } | null {
+  const { cd, inv, ra0Rad, sinDec0, cosDec0 } = ctx;
 
   // 参考点和目标点的三角函数
-  const ra0Rad = cd.crval1 * DEG2RAD;
-  const dec0Rad = cd.crval2 * DEG2RAD;
   const raRad = ra * DEG2RAD;
   const decRad = dec * DEG2RAD;
 
-  const sinDec0 = Math.sin(dec0Rad);
-  const cosDec0 = Math.cos(dec0Rad);
   const sinDec = Math.sin(decRad);
   const cosDec = Math.cos(decRad);
   const deltaRa = raRad - ra0Rad;
@@ -201,6 +244,5 @@ export function isInsideImage(
   return x >= -margin && x < width + margin && y >= -margin && y < height + margin;
 }
 
-// Re-export formatRA/formatDec from formatUtils to avoid duplication
-// Consumers can import from either module
+// Re-export for backwards compatibility — canonical source is formatUtils.ts
 export { formatRA as formatRaFromDeg, formatDec as formatDecFromDeg } from "./formatUtils";

@@ -28,7 +28,7 @@ export function TargetGroupAssignmentSheet({
   onCreateGroup,
 }: TargetGroupAssignmentSheetProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, accentColor] = useThemeColor(["muted", "accent"]);
   const insets = useSafeAreaInsets();
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(initialSelectedGroupIds);
   const [newGroupName, setNewGroupName] = useState("");
@@ -167,7 +167,7 @@ export function TargetGroupAssignmentSheet({
                           <Ionicons
                             name={selected ? "checkbox" : "square-outline"}
                             size={18}
-                            color={selected ? "#3b82f6" : mutedColor}
+                            color={selected ? accentColor : mutedColor}
                           />
                         </Button>
                       </Card.Body>

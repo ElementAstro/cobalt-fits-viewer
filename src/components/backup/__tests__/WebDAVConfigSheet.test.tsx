@@ -206,4 +206,31 @@ describe("WebDAVConfigSheet", () => {
     expect(onClose).toHaveBeenCalled();
     jest.useRealTimers();
   });
+
+  it("disables connect button while connection test is in progress", async () => {
+    let resolveConnect: (value: boolean) => void;
+    onConnect.mockImplementation(
+      () => new Promise<boolean>((resolve) => (resolveConnect = resolve)),
+    );
+    render(<WebDAVConfigSheet visible onConnect={onConnect} onClose={onClose} />);
+
+    fireEvent.changeText(
+      screen.getByTestId("input-https://cloud.example.com/remote.php/dav/files/user"),
+      "https://my.server.com/dav",
+    );
+    fireEvent.changeText(screen.getByTestId("input-backup.webdavUsername"), "admin");
+
+    // Start connection test (don't await — it's pending)
+    act(() => {
+      fireEvent.press(screen.getByTestId("connect-button"));
+    });
+
+    // Button should be disabled while testing
+    expect(screen.getByTestId("connect-button").props.accessibilityState?.disabled).toBe(true);
+
+    // Resolve and cleanup
+    await act(async () => {
+      resolveConnect!(true);
+    });
+  });
 });

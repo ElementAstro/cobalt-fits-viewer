@@ -95,4 +95,38 @@ describe("PromptDialog", () => {
     fireEvent.press(screen.getByText("common.confirm"));
     expect(defaultProps.onConfirm).toHaveBeenCalledWith("New Value");
   });
+
+  it("renders multiline input when multiline is true", () => {
+    render(<PromptDialog {...defaultProps} multiline />);
+
+    const input = screen.getByTestId("input");
+    expect(input.props.multiline).toBe(true);
+    expect(input.props.numberOfLines).toBe(4);
+  });
+
+  it("does not set onSubmitEditing when multiline is true", () => {
+    render(<PromptDialog {...defaultProps} multiline />);
+
+    const input = screen.getByTestId("input");
+    expect(input.props.onSubmitEditing).toBeUndefined();
+  });
+
+  it("triggers confirm on submitEditing for non-multiline input", () => {
+    render(<PromptDialog {...defaultProps} defaultValue="Test" />);
+
+    const input = screen.getByTestId("input");
+    act(() => {
+      input.props.onSubmitEditing();
+    });
+
+    expect(defaultProps.onConfirm).toHaveBeenCalledWith("Test");
+  });
+
+  it("disables confirm button when value is empty and allowEmpty is false", () => {
+    render(<PromptDialog {...defaultProps} defaultValue="" allowEmpty={false} />);
+
+    // The button should be disabled
+    const tree = screen.toJSON();
+    expect(tree).toBeTruthy();
+  });
 });

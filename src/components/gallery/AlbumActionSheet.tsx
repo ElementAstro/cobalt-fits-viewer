@@ -36,7 +36,7 @@ export function AlbumActionSheet({
   onViewStats,
 }: AlbumActionSheetProps) {
   const { t } = useI18n();
-  const [mutedColor, successColor, dangerColor] = useThemeColor(["muted", "success", "danger"]);
+  const [successColor] = useThemeColor(["success"]);
 
   const actions: {
     label: string;
@@ -125,9 +125,6 @@ export function AlbumActionSheet({
                 }}
                 destructive={action.destructive}
                 compact
-                successColor={action.highlight ? successColor : successColor}
-                mutedColor={mutedColor}
-                dangerColor={dangerColor}
               />
             ))}
           </View>

@@ -25,6 +25,7 @@ import { StarAnnotationPanel } from "../../components/editor/StarAnnotationPanel
 import { ExportDialog } from "../../components/common/ExportDialog";
 import type { ProcessingPipelineSnapshot } from "../../lib/fits/types";
 import type { ImageEditOperation } from "../../lib/utils/imageOperations";
+import { isVideoFile } from "../../lib/media/routing";
 
 const EMPTY_TRANSFORM: CanvasTransform = {
   scale: 1,
@@ -44,7 +45,7 @@ export default function EditorDetailScreen() {
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
   const updateFile = useFitsStore((s) => s.updateFile);
-  const isVideoFile = file?.mediaKind === "video" || file?.sourceType === "video";
+  const isVideo = file ? isVideoFile(file) : false;
   const editorSettings = useSettingsStore(
     useShallow((s) => ({
       defaultBlurSigma: s.defaultBlurSigma,
@@ -148,9 +149,9 @@ export default function EditorDetailScreen() {
   }, [file?.filepath]);
 
   useEffect(() => {
-    if (!id || !isVideoFile) return;
+    if (!id || !isVideo) return;
     router.replace(`/video/${id}`);
-  }, [id, isVideoFile, router]);
+  }, [id, isVideo, router]);
 
   // Initialize editor when pixels are ready
   useEffect(() => {
@@ -245,7 +246,7 @@ export default function EditorDetailScreen() {
     );
   }
 
-  if (isVideoFile) {
+  if (isVideo) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Ionicons name="videocam-outline" size={48} color={mutedColor} />

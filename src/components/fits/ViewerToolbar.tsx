@@ -15,7 +15,6 @@ interface ViewerToolbarProps {
   showControls: boolean;
   hasAstrometryResult: boolean;
   isAstrometryActive: boolean;
-  showAstrometryResult: boolean;
   onToggleFullscreen: () => void;
   onBack: () => void;
   onPrev: () => void;
@@ -38,7 +37,6 @@ export function ViewerToolbar({
   showControls,
   hasAstrometryResult,
   isAstrometryActive,
-  showAstrometryResult: _showAstrometryResult,
   onToggleFullscreen,
   onBack,
   onPrev,

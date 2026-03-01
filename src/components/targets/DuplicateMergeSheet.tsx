@@ -4,7 +4,7 @@
 
 import { ScrollView, View, Text } from "react-native";
 import { BottomSheet, Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
-import { Ionicons as Icons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import type { Target } from "../../lib/fits/types";
@@ -35,17 +35,22 @@ export function DuplicateMergeSheet({
   getTargetStats,
 }: DuplicateMergeSheetProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, successColor, warningColor, dangerColor] = useThemeColor([
+    "muted",
+    "success",
+    "warning",
+    "danger",
+  ]);
   const insets = useSafeAreaInsets();
 
   const getConfidenceColor = (confidence: "high" | "medium" | "low") => {
     switch (confidence) {
       case "high":
-        return "#22c55e";
+        return successColor;
       case "medium":
-        return "#f59e0b";
+        return warningColor;
       case "low":
-        return "#ef4444";
+        return dangerColor;
     }
   };
 
@@ -75,7 +80,7 @@ export function DuplicateMergeSheet({
       >
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
-            {isPrimary && <Icons name="checkmark-circle" size={14} color="#22c55e" />}
+            {isPrimary && <Ionicons name="checkmark-circle" size={14} color={successColor} />}
             <Text className={`text-sm ${isPrimary ? "font-semibold" : ""} text-foreground`}>
               {target.name}
             </Text>
@@ -138,7 +143,7 @@ export function DuplicateMergeSheet({
             {/* 还未检测 */}
             {!detectionResult && !isDetecting && (
               <View className="items-center py-8">
-                <Icons name="copy-outline" size={48} color={mutedColor} />
+                <Ionicons name="copy-outline" size={48} color={mutedColor} />
                 <Text className="mt-4 text-sm text-muted text-center">
                   {t("targets.search.noDuplicates")}
                 </Text>
@@ -151,7 +156,7 @@ export function DuplicateMergeSheet({
             {/* 检测中 */}
             {isDetecting && (
               <View className="items-center py-8">
-                <Icons name="refresh" size={48} color={mutedColor} />
+                <Ionicons name="refresh" size={48} color={mutedColor} />
                 <Text className="mt-4 text-sm text-muted">{t("common.loading")}</Text>
               </View>
             )}
@@ -185,7 +190,7 @@ export function DuplicateMergeSheet({
 
                 {detectionResult.groups.length === 0 ? (
                   <View className="items-center py-8">
-                    <Icons name="checkmark-circle-outline" size={48} color="#22c55e" />
+                    <Ionicons name="checkmark-circle-outline" size={48} color={successColor} />
                     <Text className="mt-4 text-sm text-muted text-center">
                       {t("targets.search.noDuplicates")}
                     </Text>
@@ -240,7 +245,7 @@ export function DuplicateMergeSheet({
                 <Separator className="my-4" />
 
                 <Button variant="outline" onPress={onDetect}>
-                  <Icons name="refresh" size={14} color={mutedColor} />
+                  <Ionicons name="refresh" size={14} color={mutedColor} />
                   <Button.Label>{t("common.retry")}</Button.Label>
                 </Button>
               </>

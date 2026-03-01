@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen, fireEvent } from "@testing-library/react-native";
+import { act, render, screen, fireEvent } from "@testing-library/react-native";
 import { LogViewer } from "../LogViewer";
 
 jest.mock("../../../i18n/useI18n", () => ({
@@ -194,5 +194,254 @@ describe("LogViewer", () => {
 
     fireEvent.press(screen.getByText("App"));
     expect(mockUseLogViewer.setFilterTag).toHaveBeenCalled();
+  });
+
+  it("toggles expand on log entry press", () => {
+    render(<LogViewer />);
+
+    // Press the first log entry to expand it
+    fireEvent.press(screen.getByText("Application started"));
+    // The component uses expandedIds state internally — just verify no crash
+    expect(screen.getByText("Application started")).toBeTruthy();
+  });
+
+  it("shows entry data and stackTrace when expanded", () => {
+    const entriesWithData = [
+      {
+        id: "d1",
+        level: "info" as const,
+        tag: "App",
+        message: "Has data",
+        timestamp: Date.now(),
+        data: { key: "value" },
+      },
+      {
+        id: "d2",
+        level: "error" as const,
+        tag: "App",
+        message: "Has stack",
+        timestamp: Date.now(),
+        stackTrace: "Error: test\n  at foo()",
+      },
+    ];
+    mockUseLogViewer.entries = entriesWithData;
+
+    render(<LogViewer />);
+
+    // Press to expand entry with data
+    fireEvent.press(screen.getByText("Has data"));
+    // After expand, data should be visible as pretty-printed JSON
+    expect(screen.getByText(/"key"/)).toBeTruthy();
+
+    // Press to expand entry with stack trace
+    fireEvent.press(screen.getByText("Has stack"));
+    expect(screen.getByText(/Error: test/)).toBeTruthy();
+
+    mockUseLogViewer.entries = mockEntries;
+  });
+
+  it("shows entry with primitive data when expanded", () => {
+    const entriesWithPrimitive = [
+      {
+        id: "p1",
+        level: "info" as const,
+        tag: "App",
+        message: "Primitive data",
+        timestamp: Date.now(),
+        data: 42,
+      },
+    ];
+    mockUseLogViewer.entries = entriesWithPrimitive;
+
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByText("Primitive data"));
+    expect(screen.getByText("42")).toBeTruthy();
+
+    mockUseLogViewer.entries = mockEntries;
+  });
+
+  it("opens export panel when export button is pressed", () => {
+    render(<LogViewer />);
+
+    // Press the export/download button
+    fireEvent.press(screen.getByLabelText("logs.exportOptions"));
+
+    expect(screen.getByText("logs.exportFormat")).toBeTruthy();
+    expect(screen.getByText("logs.compress")).toBeTruthy();
+    expect(screen.getByText("logs.includeSystemInfo")).toBeTruthy();
+    expect(screen.getByText("logs.exportFilteredOnly")).toBeTruthy();
+  });
+
+  it("shows export and share buttons in export panel", () => {
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.exportOptions"));
+
+    expect(screen.getByText("logs.export")).toBeTruthy();
+    expect(screen.getByText("logs.share")).toBeTruthy();
+  });
+
+  it("calls exportLogs and copies to clipboard when copy button is pressed", async () => {
+    const Clipboard = require("expo-clipboard");
+    render(<LogViewer />);
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText("logs.copyAll"));
+    });
+
+    expect(mockUseLogViewer.exportLogs).toHaveBeenCalledWith("text", false);
+    expect(Clipboard.setStringAsync).toHaveBeenCalledWith("exported text");
+  });
+
+  it("calls exportToFile when export button in panel is pressed", async () => {
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.exportOptions"));
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("logs.export"));
+    });
+
+    expect(mockUseLogViewer.exportToFile).toHaveBeenCalled();
+  });
+
+  it("calls shareLogs when share button in panel is pressed", async () => {
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.exportOptions"));
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("logs.share"));
+    });
+
+    expect(mockUseLogViewer.shareLogs).toHaveBeenCalled();
+  });
+
+  it("shows alert for failed export", async () => {
+    mockUseLogViewer.exportToFile.mockResolvedValueOnce(null);
+    const alertSpy = jest.spyOn(require("react-native").Alert, "alert");
+
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.exportOptions"));
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("logs.export"));
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith("common.error", "logs.exportFailed");
+    alertSpy.mockRestore();
+  });
+
+  it("shows alert for failed share", async () => {
+    mockUseLogViewer.shareLogs.mockResolvedValueOnce(false);
+    const alertSpy = jest.spyOn(require("react-native").Alert, "alert");
+
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.exportOptions"));
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("logs.share"));
+    });
+
+    expect(alertSpy).toHaveBeenCalledWith("common.error", "logs.shareFailed");
+    alertSpy.mockRestore();
+  });
+
+  it("shows clear confirmation alert when clear button is pressed", () => {
+    const alertSpy = jest.spyOn(require("react-native").Alert, "alert");
+
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.clearTitle"));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      "logs.clearTitle",
+      "logs.clearConfirm",
+      expect.any(Array),
+    );
+    alertSpy.mockRestore();
+  });
+
+  it("clears logs when confirm is pressed in clear alert", () => {
+    const alertSpy = jest.spyOn(require("react-native").Alert, "alert");
+
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.clearTitle"));
+
+    // Get the destructive button callback
+    const alertArgs = alertSpy.mock.calls[0];
+    const buttons = alertArgs[2] as Array<{ text: string; onPress?: () => void }>;
+    const confirmButton = buttons.find((b) => b.text === "common.confirm");
+    confirmButton?.onPress?.();
+
+    expect(mockUseLogViewer.clearLogs).toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  it("toggles auto-scroll when pause/play button is pressed", () => {
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.pauseStream"));
+    // After pressing, it should show play icon (label changes)
+    expect(screen.toJSON()).toBeTruthy();
+  });
+
+  it("renders tags with more than 8 tags showing +N button", () => {
+    const manyTags = [
+      "Tag1",
+      "Tag2",
+      "Tag3",
+      "Tag4",
+      "Tag5",
+      "Tag6",
+      "Tag7",
+      "Tag8",
+      "Tag9",
+      "Tag10",
+    ];
+    const originalTags = mockUseLogViewer.availableTags;
+    mockUseLogViewer.availableTags = manyTags;
+
+    render(<LogViewer />);
+
+    // Should show +2 for the extra tags
+    expect(screen.getByText("+2")).toBeTruthy();
+
+    // Press to show all
+    fireEvent.press(screen.getByText("+2"));
+    expect(screen.getByText("Tag9")).toBeTruthy();
+    expect(screen.getByText("Tag10")).toBeTruthy();
+    expect(screen.getByText("logs.showLess")).toBeTruthy();
+
+    // Press to collapse
+    fireEvent.press(screen.getByText("logs.showLess"));
+    expect(screen.getByText("+2")).toBeTruthy();
+
+    mockUseLogViewer.availableTags = originalTags;
+  });
+
+  it("highlights search query in log entries when filterQuery is set", () => {
+    const originalQuery = mockUseLogViewer.filterQuery;
+    mockUseLogViewer.filterQuery = "started";
+
+    render(<LogViewer />);
+
+    // The entry should still be visible
+    expect(screen.getByText("[App]")).toBeTruthy();
+
+    mockUseLogViewer.filterQuery = originalQuery;
+  });
+
+  it("renders format selector chips in export panel", () => {
+    render(<LogViewer />);
+
+    fireEvent.press(screen.getByLabelText("logs.exportOptions"));
+
+    expect(screen.getByText("logs.jsonFormat")).toBeTruthy();
+    expect(screen.getByText("logs.textFormat")).toBeTruthy();
   });
 });

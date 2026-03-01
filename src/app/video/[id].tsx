@@ -18,7 +18,12 @@ import { VideoPlayerCard } from "../../components/video/VideoPlayerCard";
 import { VideoControls } from "../../components/video/VideoControls";
 import { VideoInfoTab } from "../../components/video/VideoInfoTab";
 import { VideoTasksTab } from "../../components/video/VideoTasksTab";
-import { isMediaWorkspaceFile, routeForMedia } from "../../lib/media/routing";
+import {
+  isVideoFile,
+  isAudioFile,
+  isMediaWorkspaceFile,
+  routeForMedia,
+} from "../../lib/media/routing";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -97,8 +102,8 @@ export default function VideoDetailScreen() {
   const [abLoopA, setAbLoopA] = useState<number | null>(null);
   const [abLoopB, setAbLoopB] = useState<number | null>(null);
 
-  const isVideo = file?.mediaKind === "video" || file?.sourceType === "video";
-  const isAudio = file?.mediaKind === "audio" || file?.sourceType === "audio";
+  const isVideo = file ? isVideoFile(file) : false;
+  const isAudio = file ? isAudioFile(file) : false;
   const isMedia = Boolean(file && isMediaWorkspaceFile(file));
   const pipSupported = isPictureInPictureSupported();
 

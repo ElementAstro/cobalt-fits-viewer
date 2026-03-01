@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Alert, ScrollView, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -11,9 +11,9 @@ import {
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { parseGeoCoordinate } from "../../lib/sessions/format";
-import { useChipInput } from "../../hooks/useChipInput";
-import { LocationService } from "../../hooks/useLocation";
+import { useChipInput, normalizeChipValues } from "../../hooks/useChipInput";
+import { useEquipmentFields } from "../../hooks/useEquipmentFields";
+import { useLocationFields } from "../../hooks/useLocationFields";
 import { useSessionStore } from "../../stores/useSessionStore";
 import { ChipInputField } from "./ChipInputField";
 import { EquipmentFields } from "./EquipmentFields";
@@ -23,116 +23,43 @@ interface LiveSessionMetaSheetProps {
   onClose: () => void;
 }
 
-function dedupeValues(values: string[]): string[] {
-  const seen = new Set<string>();
-  const next: string[] = [];
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (!trimmed || seen.has(trimmed)) continue;
-    seen.add(trimmed);
-    next.push(trimmed);
-  }
-  return next;
-}
-
 export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const activeSession = useSessionStore((s) => s.activeSession);
   const updateActiveSessionDraft = useSessionStore((s) => s.updateActiveSessionDraft);
   const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();
+  const equip = useEquipmentFields();
+  const loc = useLocationFields();
 
   const [targets, setTargets] = useState<string[]>([]);
   const [targetInput, setTargetInput] = useState("");
-  const [telescope, setTelescope] = useState("");
-  const [camera, setCamera] = useState("");
-  const [mount, setMount] = useState("");
-  const [filters, setFilters] = useState<string[]>([]);
-  const [filterInput, setFilterInput] = useState("");
-  const [locationName, setLocationName] = useState("");
-  const [latitudeInput, setLatitudeInput] = useState("");
-  const [longitudeInput, setLongitudeInput] = useState("");
 
   useEffect(() => {
     if (!visible) return;
     setTargets(activeSession?.draftTargets ?? []);
     setTargetInput("");
-    setTelescope(activeSession?.draftEquipment?.telescope ?? "");
-    setCamera(activeSession?.draftEquipment?.camera ?? "");
-    setMount(activeSession?.draftEquipment?.mount ?? "");
-    setFilters(activeSession?.draftEquipment?.filters ?? []);
-    setFilterInput("");
-    setLocationName(
-      activeSession?.draftLocation?.placeName ??
-        activeSession?.draftLocation?.city ??
-        activeSession?.draftLocation?.region ??
-        "",
-    );
-    setLatitudeInput(
-      activeSession?.draftLocation?.latitude != null
-        ? String(activeSession.draftLocation.latitude)
-        : "",
-    );
-    setLongitudeInput(
-      activeSession?.draftLocation?.longitude != null
-        ? String(activeSession.draftLocation.longitude)
-        : "",
-    );
-  }, [visible, activeSession]);
+    equip.resetEquipment({
+      telescope: activeSession?.draftEquipment?.telescope,
+      camera: activeSession?.draftEquipment?.camera,
+      mount: activeSession?.draftEquipment?.mount,
+      filters: activeSession?.draftEquipment?.filters,
+    });
+    loc.resetLocation(activeSession?.draftLocation);
+  }, [visible, activeSession, equip.resetEquipment, loc.resetLocation]);
 
-  const handleUseCurrentLocation = useCallback(async () => {
-    const location = await LocationService.getCurrentLocation();
-    if (!location) {
-      Alert.alert(t("common.error"), t("sessions.locationPermissionFailed"));
-      return;
-    }
-
-    setLocationName(location.placeName ?? location.city ?? location.region ?? "");
-    setLatitudeInput(String(location.latitude));
-    setLongitudeInput(String(location.longitude));
-  }, [t]);
+  const handleUseCurrentLocation = useCallback(() => {
+    loc.useCurrentLocation(t);
+  }, [loc, t]);
 
   const handleSave = useCallback(() => {
     if (!activeSession) return;
 
-    const latitude = parseGeoCoordinate(latitudeInput, { min: -90, max: 90 });
-    if (latitude === null) {
-      Alert.alert(t("common.error"), t("sessions.invalidLatitude"));
-      return;
-    }
-    const longitude = parseGeoCoordinate(longitudeInput, { min: -180, max: 180 });
-    if (longitude === null) {
-      Alert.alert(t("common.error"), t("sessions.invalidLongitude"));
-      return;
-    }
+    const draftLocation = loc.validateAndBuild(t);
+    if (draftLocation === null) return;
 
-    const normalizedLocationName = locationName.trim();
-    const hasAnyLocationField =
-      normalizedLocationName.length > 0 || latitude !== undefined || longitude !== undefined;
-    if (
-      hasAnyLocationField &&
-      (normalizedLocationName.length === 0 || latitude === undefined || longitude === undefined)
-    ) {
-      Alert.alert(t("common.error"), t("sessions.incompleteLocation"));
-      return;
-    }
-
-    const normalizedTargets = dedupeValues([...targets, targetInput]);
-    const normalizedFilters = dedupeValues([...filters, filterInput]);
-    const draftEquipment = {
-      ...(telescope.trim() ? { telescope: telescope.trim() } : {}),
-      ...(camera.trim() ? { camera: camera.trim() } : {}),
-      ...(mount.trim() ? { mount: mount.trim() } : {}),
-      ...(normalizedFilters.length > 0 ? { filters: normalizedFilters } : {}),
-    };
-    const draftLocation =
-      normalizedLocationName.length > 0 && latitude != null && longitude != null
-        ? {
-            latitude,
-            longitude,
-            placeName: normalizedLocationName,
-          }
-        : undefined;
+    const normalizedTargets = normalizeChipValues(targets, targetInput);
+    const draftEquipment = equip.buildEquipmentObject();
 
     updateActiveSessionDraft({
       draftTargets: normalizedTargets,
@@ -142,16 +69,10 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
     onClose();
   }, [
     activeSession,
-    latitudeInput,
-    longitudeInput,
-    locationName,
+    loc,
     targets,
     targetInput,
-    filters,
-    filterInput,
-    telescope,
-    camera,
-    mount,
+    equip.buildEquipmentObject,
     updateActiveSessionDraft,
     onClose,
     t,
@@ -186,21 +107,21 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
             <Separator className="mb-3" />
 
             <EquipmentFields
-              telescope={telescope}
-              camera={camera}
-              mount={mount}
-              onTelescopeChange={setTelescope}
-              onCameraChange={setCamera}
-              onMountChange={setMount}
+              telescope={equip.telescope}
+              camera={equip.camera}
+              mount={equip.mount}
+              onTelescopeChange={equip.setTelescope}
+              onCameraChange={equip.setCamera}
+              onMountChange={equip.setMount}
             />
 
             <ChipInputField
               label={t("sessions.filters")}
-              items={filters}
-              inputValue={filterInput}
-              onInputChange={setFilterInput}
-              onAdd={() => addChipItem(filterInput, filters, setFilters, setFilterInput)}
-              onRemove={(filterName) => removeChipItem(filterName, filters, setFilters)}
+              items={equip.filters}
+              inputValue={equip.filterInput}
+              onInputChange={equip.setFilterInput}
+              onAdd={equip.addFilter}
+              onRemove={equip.removeFilter}
               placeholder={t("sessions.filterPlaceholder")}
             />
 
@@ -219,8 +140,8 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
               <TextField className="mb-3">
                 <Label>{t("sessions.locationName")}</Label>
                 <Input
-                  value={locationName}
-                  onChangeText={setLocationName}
+                  value={loc.locationName}
+                  onChangeText={loc.setLocationName}
                   placeholder={t("sessions.locationNamePlaceholder")}
                 />
               </TextField>
@@ -228,8 +149,8 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
                 <TextField className="flex-1">
                   <Label>{t("sessions.latitude")}</Label>
                   <Input
-                    value={latitudeInput}
-                    onChangeText={setLatitudeInput}
+                    value={loc.latitudeInput}
+                    onChangeText={loc.setLatitudeInput}
                     keyboardType="decimal-pad"
                     placeholder="e.g. 39.9042"
                   />
@@ -237,8 +158,8 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
                 <TextField className="flex-1">
                   <Label>{t("sessions.longitude")}</Label>
                   <Input
-                    value={longitudeInput}
-                    onChangeText={setLongitudeInput}
+                    value={loc.longitudeInput}
+                    onChangeText={loc.setLongitudeInput}
                     keyboardType="decimal-pad"
                     placeholder="e.g. 116.4074"
                   />

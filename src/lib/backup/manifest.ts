@@ -100,7 +100,7 @@ export function createManifest(data: ManifestDataInput, options: BackupOptions):
     fileGroupMap: {},
   };
   const astrometry = data.astrometry ?? {
-    config: {} as AstrometryConfig,
+    config: DEFAULT_ASTROMETRY_CONFIG,
     jobs: [],
   };
   const backupPrefs: BackupPrefs = data.backupPrefs ?? {
@@ -125,7 +125,7 @@ export function createManifest(data: ManifestDataInput, options: BackupOptions):
     },
     domains,
     files: options.includeFiles ? data.files.map((file) => normalizeManifestFile(file)) : [],
-    thumbnails: options.includeThumbnails ? [] : [],
+    thumbnails: [],
     albums: options.includeAlbums ? data.albums : [],
     targets: options.includeTargets ? data.targets : [],
     targetGroups: options.includeTargets ? data.targetGroups : [],
@@ -188,32 +188,26 @@ function parseAstrometryConfig(value: unknown): AstrometryConfig {
   };
 }
 
-function validateCrossReferences(manifest: BackupManifest): boolean {
+function repairCrossReferences(manifest: BackupManifest): void {
   const fileIds = new Set(manifest.files.map((file) => file.id));
   const groupIds = new Set(manifest.fileGroups.groups.map((group) => group.id));
 
   for (const album of manifest.albums) {
-    for (const imageId of album.imageIds ?? []) {
-      if (!fileIds.has(imageId)) return false;
-    }
+    album.imageIds = (album.imageIds ?? []).filter((id) => fileIds.has(id));
   }
 
+  const repairedMap: Record<string, string[]> = {};
   for (const [fileId, mappedGroupIds] of Object.entries(manifest.fileGroups.fileGroupMap)) {
-    if (!fileIds.has(fileId)) return false;
-    for (const groupId of mappedGroupIds) {
-      if (!groupIds.has(groupId)) return false;
-    }
+    if (!fileIds.has(fileId)) continue;
+    repairedMap[fileId] = mappedGroupIds.filter((gid) => groupIds.has(gid));
   }
+  manifest.fileGroups.fileGroupMap = repairedMap;
 
-  for (const job of manifest.astrometry.jobs) {
-    if (!job.fileId || !fileIds.has(job.fileId)) return false;
-  }
+  manifest.astrometry.jobs = manifest.astrometry.jobs.filter(
+    (job) => job.fileId && fileIds.has(job.fileId),
+  );
 
-  for (const thumb of manifest.thumbnails) {
-    if (!fileIds.has(thumb.fileId)) return false;
-  }
-
-  return true;
+  manifest.thumbnails = manifest.thumbnails.filter((thumb) => fileIds.has(thumb.fileId));
 }
 
 /**
@@ -275,7 +269,8 @@ export function parseManifest(json: string): BackupManifest | null {
           backupPrefsRaw.activeProvider === "google-drive" ||
           backupPrefsRaw.activeProvider === "onedrive" ||
           backupPrefsRaw.activeProvider === "dropbox" ||
-          backupPrefsRaw.activeProvider === "webdav"
+          backupPrefsRaw.activeProvider === "webdav" ||
+          backupPrefsRaw.activeProvider === "sftp"
             ? backupPrefsRaw.activeProvider
             : null,
         autoBackupEnabled: backupPrefsRaw.autoBackupEnabled === true,
@@ -287,8 +282,8 @@ export function parseManifest(json: string): BackupManifest | null {
       },
     };
 
-    if (manifest.version >= 4 && !validateCrossReferences(manifest)) {
-      return null;
+    if (manifest.version >= 4) {
+      repairCrossReferences(manifest);
     }
     return manifest;
   } catch {

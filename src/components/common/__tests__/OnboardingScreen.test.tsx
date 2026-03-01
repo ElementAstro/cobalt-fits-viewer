@@ -217,4 +217,51 @@ describe("OnboardingScreen", () => {
 
     expect(screen.getByText("onboarding.observeTitle")).toBeTruthy();
   });
+
+  it("advances to next step when next button is pressed on non-last step", () => {
+    mockCurrentStep = 0;
+    render(<OnboardingScreen onComplete={onComplete} />);
+
+    fireEvent.press(screen.getByText("onboarding.next"));
+
+    // withTiming callback fires synchronously in mock, so setCurrentStep should be called
+    expect(mockSetCurrentStep).toHaveBeenCalledWith(1);
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it("goes back to previous step when prev button is pressed", () => {
+    mockCurrentStep = 2;
+    render(<OnboardingScreen onComplete={onComplete} />);
+
+    fireEvent.press(screen.getByText("onboarding.prev"));
+
+    expect(mockSetCurrentStep).toHaveBeenCalledWith(1);
+  });
+
+  it("does not go back when on first step (handlePrev is no-op)", () => {
+    mockCurrentStep = 0;
+    render(<OnboardingScreen onComplete={onComplete} />);
+
+    // Prev button should not be rendered on first step
+    expect(screen.queryByText("onboarding.prev")).toBeNull();
+    // setCurrentStep should not have been called
+    expect(mockSetCurrentStep).not.toHaveBeenCalled();
+  });
+
+  it("renders all 5 step contents correctly", () => {
+    const stepTitles = [
+      "onboarding.welcomeTitle",
+      "onboarding.importTitle",
+      "onboarding.viewerTitle",
+      "onboarding.galleryTitle",
+      "onboarding.observeTitle",
+    ];
+
+    for (let i = 0; i < stepTitles.length; i++) {
+      mockCurrentStep = i;
+      const { unmount } = render(<OnboardingScreen onComplete={onComplete} />);
+      expect(screen.getByText(stepTitles[i])).toBeTruthy();
+      unmount();
+    }
+  });
 });

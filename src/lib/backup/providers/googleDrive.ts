@@ -3,13 +3,12 @@
  * 使用 @react-native-google-signin/google-signin + Drive REST API v3
  */
 
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { BaseCloudProvider } from "../cloudProvider";
-import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
-import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
+import type { CloudProviderConfig, RemoteFile } from "../types";
+import { BACKUP_DIR, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.GoogleDriveProvider;
 const SECURE_STORE_KEY = "backup_google_tokens";
@@ -135,6 +134,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     localPath: string,
     remotePath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     await this.refreshTokenIfNeeded();
     await this.ensureBackupDir();
@@ -151,6 +151,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
       await fetch(`${DRIVE_API}/files/${existingId}`, {
         method: "DELETE",
         headers: this.getAuthHeaders(),
+        signal,
       });
     }
 
@@ -187,6 +188,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
         "Content-Type": `multipart/related; boundary=${boundary}`,
       },
       body: combined,
+      signal,
     });
 
     if (!res.ok) {
@@ -202,6 +204,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     remotePath: string,
     localPath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     await this.refreshTokenIfNeeded();
     await this.ensureBackupDir();
@@ -214,6 +217,7 @@ export class GoogleDriveProvider extends BaseCloudProvider {
 
     const res = await fetch(`${DRIVE_API}/files/${fileId}?alt=media`, {
       headers: this.getAuthHeaders(),
+      signal,
     });
 
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);
@@ -287,37 +291,6 @@ export class GoogleDriveProvider extends BaseCloudProvider {
     return fileId !== null;
   }
 
-  async uploadManifest(manifest: BackupManifest): Promise<void> {
-    await this.ensureBackupDir();
-
-    const json = serializeManifest(manifest);
-    const tmpFile = new File(Paths.cache, `_manifest_tmp_${Date.now()}.json`);
-    tmpFile.write(json);
-
-    try {
-      await this.uploadFile(tmpFile.uri, `${BACKUP_DIR}/${MANIFEST_FILENAME}`);
-    } finally {
-      if (tmpFile.exists) tmpFile.delete();
-    }
-  }
-
-  async downloadManifest(): Promise<BackupManifest | null> {
-    try {
-      await this.ensureBackupDir();
-
-      const tmpFile = new File(Paths.cache, `_manifest_dl_${Date.now()}.json`);
-
-      await this.downloadFile(`${BACKUP_DIR}/${MANIFEST_FILENAME}`, tmpFile.uri);
-
-      const content = await tmpFile.text();
-      if (tmpFile.exists) tmpFile.delete();
-
-      return parseManifest(content);
-    } catch {
-      return null;
-    }
-  }
-
   async getQuota(): Promise<{ used: number; total: number } | null> {
     try {
       await this.refreshTokenIfNeeded();
@@ -358,11 +331,16 @@ export class GoogleDriveProvider extends BaseCloudProvider {
 
   // ===== Private helpers =====
 
+  private escapeQueryValue(value: string): string {
+    return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  }
+
   private async findOrCreateFolder(name: string, parent: string): Promise<string> {
+    const safeName = this.escapeQueryValue(name);
     const query =
       parent === "appDataFolder"
-        ? `name = '${name}' and 'appDataFolder' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
-        : `name = '${name}' and '${parent}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+        ? `name = '${safeName}' and 'appDataFolder' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
+        : `name = '${safeName}' and '${parent}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
 
     const spaces = parent === "appDataFolder" ? "&spaces=appDataFolder" : "";
 
@@ -401,7 +379,8 @@ export class GoogleDriveProvider extends BaseCloudProvider {
   }
 
   private async findFileId(name: string, parentId: string): Promise<string | null> {
-    const query = `name = '${name}' and '${parentId}' in parents and trashed = false`;
+    const safeName = this.escapeQueryValue(name);
+    const query = `name = '${safeName}' and '${parentId}' in parents and trashed = false`;
     const res = await fetch(`${DRIVE_API}/files?q=${encodeURIComponent(query)}&fields=files(id)`, {
       headers: this.getAuthHeaders(),
     });

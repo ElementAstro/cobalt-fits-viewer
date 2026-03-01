@@ -180,4 +180,170 @@ describe("QuickLookModal", () => {
     expect(onClose).toHaveBeenCalled();
     expect(onDelete).toHaveBeenCalledWith("f1");
   });
+
+  it("returns null when file is null", () => {
+    const { toJSON } = render(
+      <QuickLookModal
+        visible
+        file={null}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+      />,
+    );
+
+    expect(toJSON()).toBeNull();
+  });
+
+  it("calls onOpenViewer with file id when view button is pressed", () => {
+    const onOpenViewer = jest.fn();
+    const onClose = jest.fn();
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={onClose}
+        onOpenViewer={onOpenViewer}
+        onOpenEditor={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("viewer.view"));
+    expect(onClose).toHaveBeenCalled();
+    expect(onOpenViewer).toHaveBeenCalledWith("f1");
+  });
+
+  it("calls onOpenEditor with file id when edit button is pressed", () => {
+    const onOpenEditor = jest.fn();
+    const onClose = jest.fn();
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={onClose}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={onOpenEditor}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("common.edit"));
+    expect(onClose).toHaveBeenCalled();
+    expect(onOpenEditor).toHaveBeenCalledWith("f1");
+  });
+
+  it("calls onRename and onClose when rename quick action is pressed", () => {
+    const onRename = jest.fn();
+    const onClose = jest.fn();
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={onClose}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+        onRename={onRename}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("common.rename"));
+    expect(onClose).toHaveBeenCalled();
+    expect(onRename).toHaveBeenCalledWith("f1");
+  });
+
+  it("calls onAddTag and onClose when tag quick action is pressed", () => {
+    const onAddTag = jest.fn();
+    const onClose = jest.fn();
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={onClose}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+        onAddTag={onAddTag}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("files.batchTag"));
+    expect(onClose).toHaveBeenCalled();
+    expect(onAddTag).toHaveBeenCalledWith("f1");
+  });
+
+  it("renders FITS metadata fields when present", () => {
+    const fitsFile: FitsMetadata = {
+      ...baseFile,
+      object: "M42",
+      filter: "Ha",
+      exptime: 300,
+      naxis1: 4096,
+      naxis2: 4096,
+    };
+    render(
+      <QuickLookModal
+        visible
+        file={fitsFile}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("M42")).toBeTruthy();
+    expect(screen.getByText("Ha")).toBeTruthy();
+    expect(screen.getByText("300s")).toBeTruthy();
+    expect(screen.getByText("4096 × 4096")).toBeTruthy();
+  });
+
+  it("renders no thumbnail placeholder for file without thumbnail", () => {
+    jest
+      .spyOn(require("../../../lib/gallery/thumbnailCache"), "resolveThumbnailUri")
+      .mockReturnValueOnce(null);
+
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("settings.regenerateThumbnail")).toBeTruthy();
+  });
+
+  it("calls onClose when cancel button is pressed", () => {
+    const onClose = jest.fn();
+    render(
+      <QuickLookModal
+        visible
+        file={baseFile}
+        onClose={onClose}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+      />,
+    );
+
+    fireEvent.press(screen.getByText("common.cancel"));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("shows favorite heart icon when file is favorite", () => {
+    const favoriteFile: FitsMetadata = {
+      ...baseFile,
+      isFavorite: true,
+    };
+    render(
+      <QuickLookModal
+        visible
+        file={favoriteFile}
+        onClose={jest.fn()}
+        onOpenViewer={jest.fn()}
+        onOpenEditor={jest.fn()}
+        onToggleFavorite={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByText("files.toggleFavorite")).toBeTruthy();
+  });
 });

@@ -5,7 +5,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useI18n } from "../../i18n/useI18n";
 import type { MetadataIndexResult } from "../../lib/gallery/metadataIndex";
 
-interface FrameTypeEntry {
+export interface FrameTypeEntry {
   key: string;
   label: string;
   icon: keyof typeof Ionicons.glyphMap;

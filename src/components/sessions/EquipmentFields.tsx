@@ -24,20 +24,28 @@ export const EquipmentFields = memo(function EquipmentFields({
   return (
     <>
       <TextField className="mb-3">
-        <Label>{t("sessions.equipment")}: Telescope</Label>
+        <Label>{t("sessions.telescope")}</Label>
         <Input
           value={telescope}
           onChangeText={onTelescopeChange}
-          placeholder="e.g. Sky-Watcher 200P"
+          placeholder={t("sessions.telescopePlaceholder")}
         />
       </TextField>
       <TextField className="mb-3">
-        <Label>{t("sessions.equipment")}: Camera</Label>
-        <Input value={camera} onChangeText={onCameraChange} placeholder="e.g. ZWO ASI294MC Pro" />
+        <Label>{t("sessions.camera")}</Label>
+        <Input
+          value={camera}
+          onChangeText={onCameraChange}
+          placeholder={t("sessions.cameraPlaceholder")}
+        />
       </TextField>
       <TextField className="mb-3">
-        <Label>{t("sessions.equipment")}: Mount</Label>
-        <Input value={mount} onChangeText={onMountChange} placeholder="e.g. EQ6-R Pro" />
+        <Label>{t("sessions.mount")}</Label>
+        <Input
+          value={mount}
+          onChangeText={onMountChange}
+          placeholder={t("sessions.mountPlaceholder")}
+        />
       </TextField>
     </>
   );

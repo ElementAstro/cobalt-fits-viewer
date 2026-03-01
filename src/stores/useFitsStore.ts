@@ -26,6 +26,7 @@ interface FitsStoreState {
   removeFile: (id: string) => void;
   removeFiles: (ids: string[]) => void;
   updateFile: (id: string, updates: Partial<FitsMetadata>) => void;
+  batchUpdateFiles: (ids: string[], updates: Partial<FitsMetadata>) => void;
   batchSetSessionId: (fileIds: string[], sessionId: string | undefined) => void;
   toggleFavorite: (id: string) => void;
   addTag: (id: string, tag: string) => void;
@@ -158,6 +159,13 @@ export const useFitsStore = create<FitsStoreState>()(
         set((state) => ({
           files: state.files.map((f) =>
             f.id === id ? sanitizeFileLocation({ ...f, ...sanitizeUpdates(updates) }) : f,
+          ),
+        })),
+
+      batchUpdateFiles: (ids, updates) =>
+        set((state) => ({
+          files: state.files.map((f) =>
+            ids.includes(f.id) ? sanitizeFileLocation({ ...f, ...sanitizeUpdates(updates) }) : f,
           ),
         })),
 

@@ -191,4 +191,52 @@ describe("FilesFilterBar", () => {
     render(<FilesFilterBar {...defaultProps} fileGroups={groups} filterGroupId="g1" />);
     expect(screen.getByText("Group A")).toBeTruthy();
   });
+
+  it("applies primary variant to favorite chip when favoriteOnly is true", () => {
+    const { toJSON } = render(<FilesFilterBar {...defaultProps} favoriteOnly />);
+    expect(toJSON()).toBeTruthy();
+    expect(screen.getByText("gallery.favoritesOnly")).toBeTruthy();
+  });
+
+  it("applies primary variant to selected advanced filter chip", () => {
+    render(<FilesFilterBar {...defaultProps} filters={["Ha", "OIII"]} filterFilter="Ha" />);
+    fireEvent.press(screen.getByText("common.more"));
+    expect(screen.getByText("Ha")).toBeTruthy();
+  });
+
+  it("applies primary variant to selected frame type chip", () => {
+    render(
+      <FilesFilterBar
+        {...defaultProps}
+        frameFilters={["light", "dark"]}
+        frameTypeLabels={
+          new Map([
+            ["light", "Light"],
+            ["dark", "Dark"],
+          ])
+        }
+        filterFrameType="light"
+      />,
+    );
+    fireEvent.press(screen.getByText("common.more"));
+    expect(screen.getByText("Light")).toBeTruthy();
+  });
+
+  it("applies primary variant to selected tag chip", () => {
+    render(<FilesFilterBar {...defaultProps} tags={["best", "review"]} filterTag="best" />);
+    fireEvent.press(screen.getByText("common.more"));
+    expect(screen.getByText("#best")).toBeTruthy();
+  });
+
+  it("renders with compact gap in landscape mode", () => {
+    const { toJSON } = render(<FilesFilterBar {...defaultProps} isLandscape />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("gap-1");
+  });
+
+  it("renders with normal gap in portrait mode", () => {
+    const { toJSON } = render(<FilesFilterBar {...defaultProps} isLandscape={false} />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("gap-2");
+  });
 });

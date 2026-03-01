@@ -119,8 +119,6 @@ export async function bootstrapE2EFullScenario(): Promise<void> {
         apiKey: "e2e-api-key",
       },
       jobs: [...E2E_ASTROMETRY_JOBS],
-      sessionKey: null,
-      isLoggedIn: false,
     },
     false,
   );

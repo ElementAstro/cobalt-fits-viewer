@@ -29,7 +29,12 @@ export function BestImageSelector({
   onRateImage,
 }: BestImageSelectorProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, warningColor, successColor, dangerColor] = useThemeColor([
+    "muted",
+    "warning",
+    "success",
+    "danger",
+  ]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [ratingForSelected, setRatingForSelected] = useState<number>(0);
 
@@ -115,7 +120,7 @@ export function BestImageSelector({
                                     {image.filename}
                                   </Text>
                                   {isCurrentBest && (
-                                    <Ionicons name="star" size={12} color="#f59e0b" />
+                                    <Ionicons name="star" size={12} color={warningColor} />
                                   )}
                                 </View>
                                 <View className="flex-row items-center gap-3 mt-1">
@@ -127,7 +132,7 @@ export function BestImageSelector({
                                   )}
                                   {rating > 0 && (
                                     <View className="flex-row items-center gap-1">
-                                      <Ionicons name="star" size={10} color="#f59e0b" />
+                                      <Ionicons name="star" size={10} color={warningColor} />
                                       <Text className="text-[10px] text-warning">{rating}</Text>
                                     </View>
                                   )}
@@ -135,7 +140,7 @@ export function BestImageSelector({
                               </View>
 
                               {isSelected && (
-                                <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
+                                <Ionicons name="checkmark-circle" size={20} color={successColor} />
                               )}
                             </View>
                           </Button>
@@ -163,7 +168,7 @@ export function BestImageSelector({
                             <Ionicons
                               name={star <= ratingForSelected ? "star" : "star-outline"}
                               size={24}
-                              color={star <= ratingForSelected ? "#f59e0b" : mutedColor}
+                              color={star <= ratingForSelected ? warningColor : mutedColor}
                             />
                           </Button>
                         ))}
@@ -183,7 +188,7 @@ export function BestImageSelector({
                 <View className="flex-row justify-between">
                   {currentBestId && (
                     <Button variant="ghost" onPress={handleClearBest}>
-                      <Ionicons name="trash-outline" size={14} color="#ef4444" />
+                      <Ionicons name="trash-outline" size={14} color={dangerColor} />
                       <Button.Label className="text-destructive">
                         {t("targets.ratings.clearBest")}
                       </Button.Label>

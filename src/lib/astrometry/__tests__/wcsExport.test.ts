@@ -1,5 +1,46 @@
-import { generateWCSKeywords, formatWCSAsText } from "../wcsExport";
-import type { AstrometryCalibration } from "../types";
+import {
+  generateWCSKeywords,
+  formatWCSAsText,
+  exportWCSToFile,
+  writeWCSToFitsHeader,
+  shareWCS,
+} from "../wcsExport";
+import type { AstrometryCalibration, AstrometryResult } from "../types";
+
+const mockWrite = jest.fn();
+const mockUri = "file:///cache/test_wcs.txt";
+
+jest.mock("expo-file-system", () => ({
+  File: jest.fn().mockImplementation(() => ({
+    write: mockWrite,
+    uri: mockUri,
+  })),
+  Paths: { cache: "/cache" },
+}));
+
+const mockWriteHeaderKeywords = jest.fn().mockResolvedValue(17);
+jest.mock("../../fits/headerWriter", () => ({
+  writeHeaderKeywords: (...args: unknown[]) => mockWriteHeaderKeywords(...args),
+}));
+
+const mockShareFile = jest.fn().mockResolvedValue(undefined);
+jest.mock("../../utils/imageExport", () => ({
+  shareFile: (...args: unknown[]) => mockShareFile(...args),
+}));
+
+jest.mock("../../logger", () => {
+  const actual = jest.requireActual("../../logger") as typeof import("../../logger");
+  return {
+    ...actual,
+    Logger: {
+      ...actual.Logger,
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+    },
+  };
+});
 
 const MOCK_CALIBRATION: AstrometryCalibration = {
   ra: 83.633,
@@ -147,5 +188,107 @@ describe("formatWCSAsText", () => {
   it("includes comment after /", () => {
     const text = formatWCSAsText([{ key: "A", value: 1, comment: "my comment" }]);
     expect(text).toContain("/ my comment");
+  });
+});
+
+// ===== I/O functions =====
+
+const MOCK_RESULT: AstrometryResult = {
+  calibration: MOCK_CALIBRATION,
+  annotations: [
+    { type: "messier", names: ["M42"], pixelx: 100.5, pixely: 200.3 },
+    { type: "star", names: [], pixelx: 50, pixely: 50 },
+  ],
+  tags: ["nebula", "emission"],
+};
+
+describe("exportWCSToFile", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("writes WCS text file and returns path", async () => {
+    const path = await exportWCSToFile(MOCK_RESULT, "test_image.fits");
+    expect(path).toBe(mockUri);
+    expect(mockWrite).toHaveBeenCalledTimes(1);
+
+    const written = mockWrite.mock.calls[0][0] as string;
+    expect(written).toContain("# WCS Plate Solution for: test_image.fits");
+    expect(written).toContain("RA---TAN");
+    expect(written).toContain("M42 at (100.5, 200.3)");
+    expect(written).toContain("nebula, emission");
+  });
+
+  it("excludes unnamed annotations from object list", async () => {
+    await exportWCSToFile(MOCK_RESULT, "test.fits");
+    const written = mockWrite.mock.calls[0][0] as string;
+    // Only M42 should appear (star has no names)
+    const objectLines = written
+      .split("\n")
+      .filter((l: string) => l.startsWith("# ") && l.includes(" at ("));
+    expect(objectLines).toHaveLength(1);
+  });
+
+  it("returns null on error", async () => {
+    mockWrite.mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+    const path = await exportWCSToFile(MOCK_RESULT, "test.fits");
+    expect(path).toBeNull();
+  });
+});
+
+describe("writeWCSToFitsHeader", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("calls writeHeaderKeywords with correct entries", async () => {
+    const count = await writeWCSToFitsHeader(MOCK_RESULT, "/path/to/file.fits");
+    expect(count).toBe(17);
+    expect(mockWriteHeaderKeywords).toHaveBeenCalledTimes(1);
+
+    const entries = mockWriteHeaderKeywords.mock.calls[0][1] as Array<{
+      key: string;
+      value: string | number;
+    }>;
+    expect(entries.length).toBeGreaterThan(0);
+    expect(entries.find((e) => e.key === "CTYPE1")?.value).toBe("RA---TAN");
+  });
+
+  it("passes the correct file path", async () => {
+    await writeWCSToFitsHeader(MOCK_RESULT, "/my/file.fits");
+    expect(mockWriteHeaderKeywords.mock.calls[0][0]).toBe("/my/file.fits");
+  });
+});
+
+describe("shareWCS", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("exports and shares successfully", async () => {
+    const ok = await shareWCS(MOCK_RESULT, "image.fits");
+    expect(ok).toBe(true);
+    expect(mockShareFile).toHaveBeenCalledTimes(1);
+    expect(mockShareFile).toHaveBeenCalledWith(mockUri, {
+      mimeType: "text/plain",
+      filename: "WCS Data - image.fits",
+    });
+  });
+
+  it("returns false when shareFile throws", async () => {
+    mockShareFile.mockRejectedValueOnce(new Error("share cancelled"));
+    const ok = await shareWCS(MOCK_RESULT, "image.fits");
+    expect(ok).toBe(false);
+  });
+
+  it("returns false when export fails", async () => {
+    mockWrite.mockImplementationOnce(() => {
+      throw new Error("disk full");
+    });
+    const ok = await shareWCS(MOCK_RESULT, "image.fits");
+    expect(ok).toBe(false);
+    expect(mockShareFile).not.toHaveBeenCalled();
   });
 });

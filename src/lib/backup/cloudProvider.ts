@@ -2,6 +2,7 @@
  * 云存储 Provider 统一抽象接口
  */
 
+import { File, Paths } from "expo-file-system";
 import type {
   CloudProvider,
   CloudProviderCapabilities,
@@ -9,6 +10,8 @@ import type {
   BackupManifest,
   RemoteFile,
 } from "./types";
+import { BACKUP_DIR, MANIFEST_FILENAME } from "./types";
+import { parseManifest, serializeManifest } from "./manifest";
 
 /**
  * 所有云存储 Provider 需实现此接口
@@ -51,6 +54,7 @@ export interface ICloudProvider {
     localPath: string,
     remotePath: string,
     onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
   ): Promise<void>;
 
   /**
@@ -60,6 +64,7 @@ export interface ICloudProvider {
     remotePath: string,
     localPath: string,
     onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
   ): Promise<void>;
 
   /**
@@ -129,20 +134,50 @@ export abstract class BaseCloudProvider implements ICloudProvider {
     localPath: string,
     remotePath: string,
     onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
   ): Promise<void>;
   abstract downloadFile(
     remotePath: string,
     localPath: string,
     onProgress?: (progress: number) => void,
+    signal?: AbortSignal,
   ): Promise<void>;
   abstract deleteFile(remotePath: string): Promise<void>;
   abstract listFiles(remotePath: string): Promise<RemoteFile[]>;
   abstract fileExists(remotePath: string): Promise<boolean>;
-  abstract uploadManifest(manifest: BackupManifest): Promise<void>;
-  abstract downloadManifest(): Promise<BackupManifest | null>;
   abstract getQuota(): Promise<{ used: number; total: number } | null>;
   abstract getUserInfo(): Promise<{ name: string; email?: string } | null>;
   abstract ensureBackupDir(): Promise<void>;
+
+  async uploadManifest(manifest: BackupManifest): Promise<void> {
+    await this.ensureBackupDir();
+
+    const json = serializeManifest(manifest);
+    const tmpFile = new File(Paths.cache, `_manifest_tmp_${Date.now()}.json`);
+    tmpFile.write(json);
+
+    try {
+      await this.uploadFile(tmpFile.uri, `${BACKUP_DIR}/${MANIFEST_FILENAME}`);
+    } finally {
+      if (tmpFile.exists) tmpFile.delete();
+    }
+  }
+
+  async downloadManifest(): Promise<BackupManifest | null> {
+    try {
+      await this.ensureBackupDir();
+
+      const tmpFile = new File(Paths.cache, `_manifest_dl_${Date.now()}.json`);
+      await this.downloadFile(`${BACKUP_DIR}/${MANIFEST_FILENAME}`, tmpFile.uri);
+
+      const content = await tmpFile.text();
+      if (tmpFile.exists) tmpFile.delete();
+
+      return parseManifest(content);
+    } catch {
+      return null;
+    }
+  }
 
   /**
    * 检查 token 是否过期

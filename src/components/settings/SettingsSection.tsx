@@ -19,6 +19,12 @@ export function SettingsSection({
 }: SettingsSectionProps) {
   const { t } = useI18n();
 
+  const resetButton = onReset ? (
+    <Button variant="ghost" size="sm" onPress={onReset}>
+      <Button.Label>{t("settings.resetSection")}</Button.Label>
+    </Button>
+  ) : null;
+
   if (collapsible) {
     return (
       <View className="mb-4">
@@ -30,13 +36,7 @@ export function SettingsSection({
             </Accordion.Trigger>
             <Accordion.Content>
               <View className="px-4 py-1">{children}</View>
-              {onReset ? (
-                <View className="px-4 pb-2">
-                  <Button variant="ghost" size="sm" onPress={onReset}>
-                    <Button.Label>{t("settings.resetSection")}</Button.Label>
-                  </Button>
-                </View>
-              ) : null}
+              {resetButton ? <View className="px-4 pb-2">{resetButton}</View> : null}
             </Accordion.Content>
           </Accordion.Item>
         </Accordion>
@@ -50,13 +50,7 @@ export function SettingsSection({
       <Card variant="secondary">
         <Card.Body className="px-4 py-1">
           {children}
-          {onReset ? (
-            <View className="pt-1 pb-2">
-              <Button variant="ghost" size="sm" onPress={onReset}>
-                <Button.Label>{t("settings.resetSection")}</Button.Label>
-              </Button>
-            </View>
-          ) : null}
+          {resetButton ? <View className="pt-1 pb-2">{resetButton}</View> : null}
         </Card.Body>
       </Card>
     </View>

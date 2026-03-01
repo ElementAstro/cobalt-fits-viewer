@@ -5,7 +5,7 @@ import { Button, Card, Chip, PressableFeedback, Surface, useThemeColor } from "h
 import { Ionicons } from "@expo/vector-icons";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
-import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
+import { resolveAlbumCoverUri } from "../../lib/gallery/thumbnailCache";
 import type { Album } from "../../lib/fits/types";
 
 interface AlbumCardProps {
@@ -39,13 +39,7 @@ export const AlbumCard = memo(function AlbumCard({
   const coverHeight = isGrid ? 120 : compact ? 72 : 112;
   const getFileById = useFitsStore((s) => s.getFileById);
 
-  const coverUri = useMemo(() => {
-    const coverId = album.coverImageId ?? album.imageIds[0];
-    if (!coverId) return undefined;
-    const coverFile = getFileById(coverId);
-    if (!coverFile) return undefined;
-    return resolveThumbnailUri(coverFile.id, coverFile.thumbnailUri) ?? undefined;
-  }, [album.coverImageId, album.imageIds, getFileById]);
+  const coverUri = useMemo(() => resolveAlbumCoverUri(album, getFileById), [album, getFileById]);
 
   return (
     <Pressable onLongPress={onLongPress}>

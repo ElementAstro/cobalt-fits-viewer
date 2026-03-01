@@ -36,6 +36,7 @@ export function AnnotationDetailSheet({
   return (
     <Surface
       className="absolute bottom-16 left-3 right-3 rounded-xl p-3"
+      // Intentionally hardcoded dark overlay — always shown on top of astronomy images
       style={{ backgroundColor: "rgba(20, 20, 30, 0.92)" }}
     >
       {/* Header */}

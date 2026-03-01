@@ -142,4 +142,21 @@ describe("SelectionActionsSheet", () => {
     expect(screen.getByText("files.toggleFavorite")).toBeTruthy();
     expect(screen.getByText("files.export")).toBeTruthy();
   });
+
+  it("renders with compact styling in landscape mode", () => {
+    const { toJSON } = render(<SelectionActionsSheet {...defaultProps} isLandscape />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("px-4");
+  });
+
+  it("renders with normal styling in portrait mode", () => {
+    const { toJSON } = render(<SelectionActionsSheet {...defaultProps} isLandscape={false} />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("px-6");
+  });
+
+  it("renders invert selection as disabled when displayCount is 0", () => {
+    render(<SelectionActionsSheet {...defaultProps} displayCount={0} />);
+    expect(screen.getByText("files.invertSelection")).toBeTruthy();
+  });
 });

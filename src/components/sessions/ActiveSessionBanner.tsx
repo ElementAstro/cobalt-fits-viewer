@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { View, Text, Alert } from "react-native";
 import { Button, Card, Input, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -24,8 +24,10 @@ export function ActiveSessionBanner() {
   const [showAllNotes, setShowAllNotes] = useState(false);
   const [showMetaSheet, setShowMetaSheet] = useState(false);
 
-  const linkedFileCount = useFitsStore(
-    (s) => s.files.filter((f) => f.sessionId === activeSession?.id).length,
+  const files = useFitsStore((s) => s.files);
+  const linkedFileCount = useMemo(
+    () => files.filter((f) => f.sessionId === activeSession?.id).length,
+    [files, activeSession?.id],
   );
 
   const sessionStatus = activeSession?.status;
@@ -183,8 +185,8 @@ export function ActiveSessionBanner() {
 
           {activeSession.notes.length > 0 && (
             <View className="mt-1 gap-0.5">
-              {(showAllNotes ? activeSession.notes : activeSession.notes.slice(-3)).map((n, i) => (
-                <Text key={i} className="text-[9px] text-muted" numberOfLines={1}>
+              {(showAllNotes ? activeSession.notes : activeSession.notes.slice(-3)).map((n) => (
+                <Text key={n.timestamp} className="text-[9px] text-muted" numberOfLines={1}>
                   [
                   {new Date(n.timestamp).toLocaleTimeString([], {
                     hour: "2-digit",

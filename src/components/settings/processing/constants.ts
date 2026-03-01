@@ -15,3 +15,9 @@ export const RULE_HEADER_OPTIONS: FrameClassificationRuleHeaderField[] = [
   "FRAME",
   "ANY",
 ];
+
+export const ALIGNMENT_MODE_I18N: Record<string, string> = {
+  none: "editor.alignNone",
+  translation: "editor.alignTranslation",
+  full: "editor.alignFull",
+};

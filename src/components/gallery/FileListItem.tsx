@@ -8,6 +8,7 @@ import { formatFileSize } from "../../lib/utils/fileManager";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
+import { isVideoFile, isAudioFile } from "../../lib/media/routing";
 import { MediaTypeBadge } from "./MediaTypeBadge";
 
 type FileItemLayout = "grid" | "list" | "compact";
@@ -94,8 +95,8 @@ export const FileListItem = memo(function FileListItem({
   };
 
   const hasSwipeActions = (onDelete || onToggleFavorite) && layout !== "grid";
-  const isVideo = file.mediaKind === "video" || file.sourceType === "video";
-  const isAudio = file.mediaKind === "audio" || file.sourceType === "audio";
+  const isVideo = isVideoFile(file);
+  const isAudio = isAudioFile(file);
   const videoResolution = formatVideoResolution(file.videoWidth, file.videoHeight);
   const mediaDuration = formatVideoDuration(file.durationMs);
 

@@ -3,7 +3,7 @@
  */
 
 import { useMemo } from "react";
-import { ScrollView, View, Text } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { BottomSheet, Separator, Button, Chip, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
@@ -18,6 +18,9 @@ import {
 import { formatExposureTime } from "../../lib/gallery/albumStatistics";
 import { useFavoriteSitesStore } from "../../stores/useFavoriteSitesStore";
 import { ThumbnailGrid } from "./ThumbnailGrid";
+
+const NOOP = () => {};
+const EMPTY_ARRAY: string[] = [];
 
 interface FavoriteSiteButtonProps {
   location: {
@@ -261,17 +264,18 @@ export function LocationMarkerSheet({
                 ) : null}
               </View>
 
-              <ScrollView style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
+              <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
                 <ThumbnailGrid
                   files={cluster.files}
                   columns={3}
                   selectionMode={false}
-                  selectedIds={[]}
+                  selectedIds={EMPTY_ARRAY}
                   onPress={onFilePress}
-                  onLongPress={() => {}}
-                  onSelect={() => {}}
+                  onLongPress={NOOP}
+                  onSelect={NOOP}
+                  scrollEnabled={false}
                 />
-              </ScrollView>
+              </View>
             </>
           ) : null}
         </BottomSheet.Content>

@@ -72,6 +72,21 @@ export function resolveThumbnailUri(fileId: string, thumbnailUri?: string): stri
 }
 
 /**
+ * Resolve the cover image URI for an album.
+ * Uses coverImageId if set, otherwise falls back to the first image.
+ */
+export function resolveAlbumCoverUri(
+  album: { coverImageId?: string; imageIds: string[] },
+  getFileById: (id: string) => { id: string; thumbnailUri?: string } | undefined,
+): string | undefined {
+  const coverId = album.coverImageId ?? album.imageIds[0];
+  if (!coverId) return undefined;
+  const coverFile = getFileById(coverId);
+  if (!coverFile) return undefined;
+  return resolveThumbnailUri(coverFile.id, coverFile.thumbnailUri) ?? undefined;
+}
+
+/**
  * 清除所有缩略图缓存
  */
 export function clearThumbnailCache(): void {

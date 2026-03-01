@@ -277,6 +277,8 @@ export async function performBackup(
     bytesTotal += f.size ?? 0;
   }
 
+  const fileRecordMap = new Map(manifest.files.map((f) => [f.id, f]));
+
   for (const meta of filesToUpload) {
     if (abortSignal?.aborted) throw new Error("Backup cancelled");
 
@@ -284,60 +286,102 @@ export async function performBackup(
     const fileObj = new File(meta.filepath);
     const fileSize = fileObj.size ?? 0;
 
-    // Compute hash first for incremental comparison
-    const bytes = await fileObj.bytes();
-    const hash = await computeSha256Hex(bytes);
-    const size = fileObj.size ?? bytes.length;
-
-    // Check if file is unchanged on remote — skip upload
+    // Check if file is unchanged on remote — skip upload when hash matches
     const remoteInfo = remoteFileHashes.get(meta.id);
-    if (remoteInfo && remoteInfo.hash === hash) {
-      const item = manifest.files.find((file) => file.id === meta.id);
+    if (remoteInfo) {
+      const bytes = await fileObj.bytes();
+      const hash = await computeSha256Hex(bytes);
+      const size = fileObj.size ?? bytes.length;
+
+      if (remoteInfo.hash === hash) {
+        const item = fileRecordMap.get(meta.id);
+        if (item) {
+          item.binary = {
+            remotePath: remoteInfo.remotePath,
+            size: remoteInfo.size,
+            contentHash: remoteInfo.hash,
+            hashAlgorithm: "SHA-256",
+          };
+        }
+        skippedFiles += 1;
+        bytesTransferred += fileSize;
+        current += 1;
+        onProgress?.({
+          phase: "uploading",
+          current,
+          total,
+          currentFile: meta.filename,
+          bytesTransferred,
+          bytesTotal,
+        });
+        continue;
+      }
+
+      // Hash changed — upload needed, reuse computed hash for manifest
+      await withRetry(
+        () =>
+          provider.uploadFile(
+            meta.filepath,
+            remotePath,
+            (fraction) => {
+              onProgress?.({
+                phase: "uploading",
+                current,
+                total,
+                currentFile: meta.filename,
+                bytesTransferred: bytesTransferred + Math.round(fraction * fileSize),
+                bytesTotal,
+              });
+            },
+            abortSignal,
+          ),
+        `upload ${meta.filename}`,
+      );
+
+      const item = fileRecordMap.get(meta.id);
       if (item) {
         item.binary = {
-          remotePath: remoteInfo.remotePath,
-          size: remoteInfo.size,
-          contentHash: remoteInfo.hash,
+          remotePath,
+          size,
+          contentHash: hash,
           hashAlgorithm: "SHA-256",
         };
       }
-      skippedFiles += 1;
-      bytesTransferred += fileSize;
-      current += 1;
-      onProgress?.({
-        phase: "uploading",
-        current,
-        total,
-        currentFile: meta.filename,
-        bytesTransferred,
-        bytesTotal,
-      });
-      continue;
-    }
+    } else {
+      // No remote entry — first upload, compute hash after upload
+      await withRetry(
+        () =>
+          provider.uploadFile(
+            meta.filepath,
+            remotePath,
+            (fraction) => {
+              onProgress?.({
+                phase: "uploading",
+                current,
+                total,
+                currentFile: meta.filename,
+                bytesTransferred: bytesTransferred + Math.round(fraction * fileSize),
+                bytesTotal,
+              });
+            },
+            abortSignal,
+          ),
+        `upload ${meta.filename}`,
+      );
 
-    await withRetry(
-      () =>
-        provider.uploadFile(meta.filepath, remotePath, (fraction) => {
-          onProgress?.({
-            phase: "uploading",
-            current,
-            total,
-            currentFile: meta.filename,
-            bytesTransferred: bytesTransferred + Math.round(fraction * fileSize),
-            bytesTotal,
-          });
-        }),
-      `upload ${meta.filename}`,
-    );
+      const bytes = await fileObj.bytes();
+      const hash = await computeSha256Hex(bytes);
+      const size = fileObj.size ?? bytes.length;
 
-    const item = manifest.files.find((file) => file.id === meta.id);
-    if (item) {
-      item.binary = {
-        remotePath,
-        size,
-        contentHash: hash,
-        hashAlgorithm: "SHA-256",
-      };
+      const item = fileRecordMap.get(meta.id);
+      if (item) {
+        item.binary = {
+          remotePath,
+          size,
+          contentHash: hash,
+          hashAlgorithm: "SHA-256",
+        };
+      }
     }
 
     bytesTransferred += fileSize;
@@ -391,16 +435,21 @@ export async function performBackup(
 
     await withRetry(
       () =>
-        provider.uploadFile(thumb.localPath, remotePath, (fraction) => {
-          onProgress?.({
-            phase: "uploading",
-            current,
-            total,
-            currentFile: thumb.filename,
-            bytesTransferred: bytesTransferred + Math.round(fraction * thumbSize),
-            bytesTotal,
-          });
-        }),
+        provider.uploadFile(
+          thumb.localPath,
+          remotePath,
+          (fraction) => {
+            onProgress?.({
+              phase: "uploading",
+              current,
+              total,
+              currentFile: thumb.filename,
+              bytesTransferred: bytesTransferred + Math.round(fraction * thumbSize),
+              bytesTotal,
+            });
+          },
+          abortSignal,
+        ),
       `upload thumbnail ${thumb.filename}`,
     );
 
@@ -544,12 +593,12 @@ export async function performRestore(
 
         try {
           await withRetry(
-            () => provider.downloadFile(preferredPath, localPath, dlProgress),
+            () => provider.downloadFile(preferredPath, localPath, dlProgress, abortSignal),
             `download ${meta.filename}`,
           );
         } catch {
           await withRetry(
-            () => provider.downloadFile(legacyRemotePath, localPath, dlProgress),
+            () => provider.downloadFile(legacyRemotePath, localPath, dlProgress, abortSignal),
             `download ${meta.filename} (legacy)`,
           );
         }
@@ -628,12 +677,12 @@ export async function performRestore(
 
         try {
           await withRetry(
-            () => provider.downloadFile(preferredPath, localPath, dlProgress),
+            () => provider.downloadFile(preferredPath, localPath, dlProgress, abortSignal),
             `download thumbnail ${thumb.fileId}`,
           );
         } catch {
           await withRetry(
-            () => provider.downloadFile(fallbackPath, localPath, dlProgress),
+            () => provider.downloadFile(fallbackPath, localPath, dlProgress, abortSignal),
             `download thumbnail ${thumb.fileId} (fallback)`,
           );
         }
@@ -671,7 +720,6 @@ export interface BackupVerifyResult {
   totalThumbnails: number;
   missingFiles: string[];
   missingThumbnails: string[];
-  hashMismatches: string[];
 }
 
 /**
@@ -690,13 +738,11 @@ export async function verifyBackupIntegrity(
       totalThumbnails: 0,
       missingFiles: [],
       missingThumbnails: [],
-      hashMismatches: [],
     };
   }
 
   const missingFiles: string[] = [];
   const missingThumbnails: string[] = [];
-  const hashMismatches: string[] = [];
   const total = manifest.files.length + manifest.thumbnails.length;
   let current = 0;
 
@@ -741,8 +787,7 @@ export async function verifyBackupIntegrity(
     onProgress?.(current, total);
   }
 
-  const valid =
-    missingFiles.length === 0 && missingThumbnails.length === 0 && hashMismatches.length === 0;
+  const valid = missingFiles.length === 0 && missingThumbnails.length === 0;
 
   Logger.info(
     TAG,
@@ -755,7 +800,6 @@ export async function verifyBackupIntegrity(
     totalThumbnails: manifest.thumbnails.length,
     missingFiles,
     missingThumbnails,
-    hashMismatches,
   };
 }
 

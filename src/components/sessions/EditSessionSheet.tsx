@@ -16,6 +16,7 @@ import type { ObservationSession } from "../../lib/fits/types";
 import { useTargetStore } from "../../stores/useTargetStore";
 import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
 import { useChipInput } from "../../hooks/useChipInput";
+import { useEquipmentFields } from "../../hooks/useEquipmentFields";
 import { ChipInputField } from "./ChipInputField";
 import { EquipmentFields } from "./EquipmentFields";
 import { RatingSelector } from "./RatingSelector";
@@ -43,15 +44,16 @@ export function EditSessionSheet({
   const [notes, setNotes] = useState(session.notes ?? "");
   const [weather, setWeather] = useState(session.weather ?? "");
   const [seeing, setSeeing] = useState(session.seeing ?? "");
-  const [telescope, setTelescope] = useState(session.equipment.telescope ?? "");
-  const [camera, setCamera] = useState(session.equipment.camera ?? "");
-  const [mount, setMount] = useState(session.equipment.mount ?? "");
+  const equip = useEquipmentFields({
+    telescope: session.equipment.telescope,
+    camera: session.equipment.camera,
+    mount: session.equipment.mount,
+    filters: session.equipment.filters,
+  });
   const [targets, setTargets] = useState<string[]>(
     (session.targetRefs ?? []).map((ref) => ref.name),
   );
   const [targetInput, setTargetInput] = useState("");
-  const [filters, setFilters] = useState<string[]>(session.equipment.filters ?? []);
-  const [filterInput, setFilterInput] = useState("");
   const [rating, setRating] = useState<number | undefined>(session.rating);
   const [bortle, setBortle] = useState<number | undefined>(session.bortle);
   const [tags, setTags] = useState<string[]>(session.tags ?? []);
@@ -61,16 +63,17 @@ export function EditSessionSheet({
     setNotes(session.notes ?? "");
     setWeather(session.weather ?? "");
     setSeeing(session.seeing ?? "");
-    setTelescope(session.equipment.telescope ?? "");
-    setCamera(session.equipment.camera ?? "");
-    setMount(session.equipment.mount ?? "");
+    equip.resetEquipment({
+      telescope: session.equipment.telescope,
+      camera: session.equipment.camera,
+      mount: session.equipment.mount,
+      filters: session.equipment.filters,
+    });
     setTargets((session.targetRefs ?? []).map((ref) => ref.name));
-    setFilters(session.equipment.filters ?? []);
     setRating(session.rating);
     setBortle(session.bortle);
     setTags(session.tags ?? []);
     setTargetInput("");
-    setFilterInput("");
     setTagInput("");
   }, [
     session.id,
@@ -85,6 +88,7 @@ export function EditSessionSheet({
     session.rating,
     session.bortle,
     session.tags,
+    equip.resetEquipment,
   ]);
 
   const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();
@@ -103,10 +107,7 @@ export function EditSessionSheet({
       tags: tags.length > 0 ? tags : undefined,
       equipment: {
         ...session.equipment,
-        telescope: telescope.trim() || undefined,
-        camera: camera.trim() || undefined,
-        mount: mount.trim() || undefined,
-        filters: filters.length > 0 ? filters : undefined,
+        ...equip.buildEquipmentObject(),
       },
     });
   };
@@ -181,22 +182,22 @@ export function EditSessionSheet({
 
             {/* Equipment */}
             <EquipmentFields
-              telescope={telescope}
-              camera={camera}
-              mount={mount}
-              onTelescopeChange={setTelescope}
-              onCameraChange={setCamera}
-              onMountChange={setMount}
+              telescope={equip.telescope}
+              camera={equip.camera}
+              mount={equip.mount}
+              onTelescopeChange={equip.setTelescope}
+              onCameraChange={equip.setCamera}
+              onMountChange={equip.setMount}
             />
 
             {/* Filters */}
             <ChipInputField
               label={t("sessions.filters")}
-              items={filters}
-              inputValue={filterInput}
-              onInputChange={setFilterInput}
-              onAdd={() => addChipItem(filterInput, filters, setFilters, setFilterInput)}
-              onRemove={(f) => removeChipItem(f, filters, setFilters)}
+              items={equip.filters}
+              inputValue={equip.filterInput}
+              onInputChange={equip.setFilterInput}
+              onAdd={equip.addFilter}
+              onRemove={equip.removeFilter}
               placeholder="e.g. Ha, OIII, SII..."
             />
 

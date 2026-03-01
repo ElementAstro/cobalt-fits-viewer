@@ -45,7 +45,7 @@ function MonthlyChart({ monthlyStats }: { monthlyStats: MonthlyStats[] }) {
 
 export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDashboardProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, warningColor] = useThemeColor(["muted", "warning"]);
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
 
@@ -225,7 +225,7 @@ export function StatisticsDashboard({ statistics, monthlyStats }: StatisticsDash
       <View className="flex-row gap-2 mt-4 mb-4">
         <Card variant="secondary" className="flex-1">
           <Card.Body className="items-center p-3">
-            <Ionicons name="star" size={16} color="#f59e0b" />
+            <Ionicons name="star" size={16} color={warningColor} />
             <Text className="text-lg font-bold text-foreground mt-1">
               {statistics.favoritesCount}
             </Text>

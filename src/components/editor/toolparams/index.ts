@@ -1,4 +1,4 @@
 export { ToolParamsGeometry } from "./ToolParamsGeometry";
-export { ToolParamsAdjust } from "./ToolParamsAdjust";
+export { ToolParamsSlider } from "./ToolParamsSlider";
 export { ToolParamsProcess } from "./ToolParamsProcess";
 export { ToolParamsMask } from "./ToolParamsMask";

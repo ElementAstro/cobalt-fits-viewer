@@ -16,15 +16,17 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { formatTimeHHMM, parseGeoCoordinate } from "../../lib/sessions/format";
+import { formatTimeHHMM } from "../../lib/sessions/format";
 import { toLocalDateKey } from "../../lib/sessions/planUtils";
 import { useCalendar } from "../../hooks/useCalendar";
-import { LocationService } from "../../hooks/useLocation";
+import { useEquipmentFields } from "../../hooks/useEquipmentFields";
+import { useLocationFields } from "../../hooks/useLocationFields";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useTargetStore } from "../../stores/useTargetStore";
 import type { ObservationPlan } from "../../lib/fits/types";
 import { resolveTargetId, resolveTargetName } from "../../lib/targets/targetRefs";
-import { useChipInput } from "../../hooks/useChipInput";
+import { ChipInputField } from "./ChipInputField";
+import { EquipmentFields } from "./EquipmentFields";
 
 interface PlanObservationSheetProps {
   visible: boolean;
@@ -87,18 +89,13 @@ export function PlanObservationSheet({
   const [endDate, setEndDate] = useState(() =>
     existingPlan ? new Date(existingPlan.endDate) : makeDefaultEnd(makeDefaultStart(initialDate)),
   );
-  const [telescope, setTelescope] = useState(existingPlan?.equipment?.telescope ?? "");
-  const [camera, setCamera] = useState(existingPlan?.equipment?.camera ?? "");
-  const [mount, setMount] = useState(existingPlan?.equipment?.mount ?? "");
-  const [filters, setFilters] = useState<string[]>(existingPlan?.equipment?.filters ?? []);
-  const [filterInput, setFilterInput] = useState("");
-  const [locationName, setLocationName] = useState(existingPlan?.location?.placeName ?? "");
-  const [latitudeInput, setLatitudeInput] = useState(
-    existingPlan?.location?.latitude != null ? String(existingPlan.location.latitude) : "",
-  );
-  const [longitudeInput, setLongitudeInput] = useState(
-    existingPlan?.location?.longitude != null ? String(existingPlan.location.longitude) : "",
-  );
+  const equip = useEquipmentFields({
+    telescope: existingPlan?.equipment?.telescope,
+    camera: existingPlan?.equipment?.camera,
+    mount: existingPlan?.equipment?.mount,
+    filters: existingPlan?.equipment?.filters,
+  });
+  const loc = useLocationFields(existingPlan?.location);
 
   useEffect(() => {
     if (existingPlan) {
@@ -110,18 +107,13 @@ export function PlanObservationSheet({
       setReminderMinutes(existingPlan.reminderMinutes);
       setStartDate(new Date(existingPlan.startDate));
       setEndDate(new Date(existingPlan.endDate));
-      setTelescope(existingPlan.equipment?.telescope ?? "");
-      setCamera(existingPlan.equipment?.camera ?? "");
-      setMount(existingPlan.equipment?.mount ?? "");
-      setFilters(existingPlan.equipment?.filters ?? []);
-      setFilterInput("");
-      setLocationName(existingPlan.location?.placeName ?? "");
-      setLatitudeInput(
-        existingPlan.location?.latitude != null ? String(existingPlan.location.latitude) : "",
-      );
-      setLongitudeInput(
-        existingPlan.location?.longitude != null ? String(existingPlan.location.longitude) : "",
-      );
+      equip.resetEquipment({
+        telescope: existingPlan.equipment?.telescope,
+        camera: existingPlan.equipment?.camera,
+        mount: existingPlan.equipment?.mount,
+        filters: existingPlan.equipment?.filters,
+      });
+      loc.resetLocation(existingPlan.location);
     } else {
       const s = makeDefaultStart(initialDate);
       setTargetName(initialTargetName ?? "");
@@ -132,14 +124,8 @@ export function PlanObservationSheet({
       setReminderMinutes(defaultReminderMinutes);
       setStartDate(s);
       setEndDate(makeDefaultEnd(s));
-      setTelescope("");
-      setCamera("");
-      setMount("");
-      setFilters([]);
-      setFilterInput("");
-      setLocationName("");
-      setLatitudeInput("");
-      setLongitudeInput("");
+      equip.resetEquipment();
+      loc.resetLocation();
     }
   }, [
     initialDate,
@@ -163,8 +149,6 @@ export function PlanObservationSheet({
     [],
   );
 
-  const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();
-
   const resetForm = () => {
     setTargetName("");
     setSelectedTargetId(undefined);
@@ -175,26 +159,13 @@ export function PlanObservationSheet({
     const s = makeDefaultStart(initialDate);
     setStartDate(s);
     setEndDate(makeDefaultEnd(s));
-    setTelescope("");
-    setCamera("");
-    setMount("");
-    setFilters([]);
-    setFilterInput("");
-    setLocationName("");
-    setLatitudeInput("");
-    setLongitudeInput("");
+    equip.resetEquipment();
+    loc.resetLocation();
   };
 
-  const handleUseCurrentLocation = useCallback(async () => {
-    const location = await LocationService.getCurrentLocation();
-    if (!location) {
-      Alert.alert(t("common.error"), t("sessions.locationPermissionFailed"));
-      return;
-    }
-    setLocationName(location.placeName ?? location.city ?? location.region ?? "");
-    setLatitudeInput(String(location.latitude));
-    setLongitudeInput(String(location.longitude));
-  }, [t]);
+  const handleUseCurrentLocation = useCallback(() => {
+    loc.useCurrentLocation(t);
+  }, [loc, t]);
 
   const handleCreate = async () => {
     if (!targetName.trim()) {
@@ -206,45 +177,10 @@ export function PlanObservationSheet({
       return;
     }
 
-    const latitude = parseGeoCoordinate(latitudeInput, { min: -90, max: 90 });
-    if (latitude === null) {
-      Alert.alert(t("common.error"), t("sessions.invalidLatitude"));
-      return;
-    }
-    const longitude = parseGeoCoordinate(longitudeInput, { min: -180, max: 180 });
-    if (longitude === null) {
-      Alert.alert(t("common.error"), t("sessions.invalidLongitude"));
-      return;
-    }
+    const location = loc.validateAndBuild(t);
+    if (location === null) return;
 
-    const normalizedLocationName = locationName.trim();
-    const hasAnyLocationField =
-      normalizedLocationName.length > 0 || latitude !== undefined || longitude !== undefined;
-    if (
-      hasAnyLocationField &&
-      (normalizedLocationName.length === 0 || latitude === undefined || longitude === undefined)
-    ) {
-      Alert.alert(t("common.error"), t("sessions.incompleteLocation"));
-      return;
-    }
-
-    const normalizedFilters = [
-      ...new Set([...filters, filterInput].map((item) => item.trim()).filter(Boolean)),
-    ];
-    const equipment = {
-      ...(telescope.trim() ? { telescope: telescope.trim() } : {}),
-      ...(camera.trim() ? { camera: camera.trim() } : {}),
-      ...(mount.trim() ? { mount: mount.trim() } : {}),
-      ...(normalizedFilters.length > 0 ? { filters: normalizedFilters } : {}),
-    };
-    const location =
-      normalizedLocationName && latitude != null && longitude != null
-        ? {
-            latitude,
-            longitude,
-            placeName: normalizedLocationName,
-          }
-        : undefined;
+    const equipment = equip.buildEquipmentObject();
 
     const resolvedTargetId =
       selectedTargetId ??
@@ -270,7 +206,7 @@ export function PlanObservationSheet({
         status,
         reminderMinutes,
         equipment: Object.keys(equipment).length > 0 ? equipment : undefined,
-        location,
+        location: location || undefined,
       });
       if (success) {
         Alert.alert(t("common.success"), t("sessions.planUpdated"));
@@ -289,7 +225,7 @@ export function PlanObservationSheet({
       status,
       reminderMinutes,
       equipment: Object.keys(equipment).length > 0 ? equipment : undefined,
-      location,
+      location: location || undefined,
     });
 
     if (success) {
@@ -504,68 +440,23 @@ export function PlanObservationSheet({
                 <Text className="text-xs font-semibold text-foreground">
                   {t("sessions.equipment")}
                 </Text>
-                <TextField>
-                  <Label>{t("sessions.telescope")}</Label>
-                  <Input
-                    value={telescope}
-                    onChangeText={setTelescope}
-                    placeholder={t("sessions.telescopePlaceholder")}
-                  />
-                </TextField>
-                <TextField>
-                  <Label>{t("sessions.camera")}</Label>
-                  <Input
-                    value={camera}
-                    onChangeText={setCamera}
-                    placeholder={t("sessions.cameraPlaceholder")}
-                  />
-                </TextField>
-                <TextField>
-                  <Label>{t("sessions.mount")}</Label>
-                  <Input
-                    value={mount}
-                    onChangeText={setMount}
-                    placeholder={t("sessions.mountPlaceholder")}
-                  />
-                </TextField>
-                <View>
-                  <Text className="mb-1 text-[11px] font-medium text-muted">
-                    {t("sessions.filters")}
-                  </Text>
-                  <View className="flex-row items-center gap-2">
-                    <Input
-                      className="flex-1"
-                      value={filterInput}
-                      onChangeText={setFilterInput}
-                      onSubmitEditing={() =>
-                        addChipItem(filterInput, filters, setFilters, setFilterInput)
-                      }
-                      placeholder={t("sessions.filterPlaceholder")}
-                      returnKeyType="done"
-                    />
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onPress={() => addChipItem(filterInput, filters, setFilters, setFilterInput)}
-                    >
-                      <Button.Label>{t("sessions.addFilter")}</Button.Label>
-                    </Button>
-                  </View>
-                  {filters.length > 0 && (
-                    <View className="mt-2 flex-row flex-wrap gap-2">
-                      {filters.map((item) => (
-                        <Chip
-                          key={item}
-                          size="sm"
-                          variant="secondary"
-                          onPress={() => removeChipItem(item, filters, setFilters)}
-                        >
-                          <Chip.Label>{item}</Chip.Label>
-                        </Chip>
-                      ))}
-                    </View>
-                  )}
-                </View>
+                <EquipmentFields
+                  telescope={equip.telescope}
+                  camera={equip.camera}
+                  mount={equip.mount}
+                  onTelescopeChange={equip.setTelescope}
+                  onCameraChange={equip.setCamera}
+                  onMountChange={equip.setMount}
+                />
+                <ChipInputField
+                  label={t("sessions.filters")}
+                  items={equip.filters}
+                  inputValue={equip.filterInput}
+                  onInputChange={equip.setFilterInput}
+                  onAdd={equip.addFilter}
+                  onRemove={equip.removeFilter}
+                  placeholder={t("sessions.filterPlaceholder")}
+                />
               </Card.Body>
             </Card>
 
@@ -584,8 +475,8 @@ export function PlanObservationSheet({
                 <TextField>
                   <Label>{t("sessions.locationName")}</Label>
                   <Input
-                    value={locationName}
-                    onChangeText={setLocationName}
+                    value={loc.locationName}
+                    onChangeText={loc.setLocationName}
                     placeholder={t("sessions.locationNamePlaceholder")}
                   />
                 </TextField>
@@ -593,8 +484,8 @@ export function PlanObservationSheet({
                   <TextField className="flex-1">
                     <Label>{t("sessions.latitude")}</Label>
                     <Input
-                      value={latitudeInput}
-                      onChangeText={setLatitudeInput}
+                      value={loc.latitudeInput}
+                      onChangeText={loc.setLatitudeInput}
                       placeholder="e.g. 39.9042"
                       keyboardType="decimal-pad"
                     />
@@ -602,8 +493,8 @@ export function PlanObservationSheet({
                   <TextField className="flex-1">
                     <Label>{t("sessions.longitude")}</Label>
                     <Input
-                      value={longitudeInput}
-                      onChangeText={setLongitudeInput}
+                      value={loc.longitudeInput}
+                      onChangeText={loc.setLongitudeInput}
                       placeholder="e.g. 116.4074"
                       keyboardType="decimal-pad"
                     />

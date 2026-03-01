@@ -4,7 +4,11 @@
  */
 
 import type { AstrometryCalibration } from "./types";
-import { raDecToPixel, pixelToRaDec } from "./wcsProjection";
+import {
+  computeProjectionContext,
+  pixelToRaDecWithContext,
+  raDecToPixelWithContext,
+} from "./wcsProjection";
 
 /** 网格线上的一个采样点 */
 export interface GridPoint {
@@ -96,16 +100,18 @@ export function generateGridLines(
   const samples = 40; // 每条线的采样点数
   const margin = spacingDeg * 2;
 
+  const ctx = computeProjectionContext(calibration);
+
   // 获取图像四角的 RA/Dec 范围
   const corners = [
-    pixelToRaDec(0, 0, calibration),
-    pixelToRaDec(imageWidth - 1, 0, calibration),
-    pixelToRaDec(0, imageHeight - 1, calibration),
-    pixelToRaDec(imageWidth - 1, imageHeight - 1, calibration),
-    pixelToRaDec(imageWidth / 2, 0, calibration),
-    pixelToRaDec(imageWidth / 2, imageHeight - 1, calibration),
-    pixelToRaDec(0, imageHeight / 2, calibration),
-    pixelToRaDec(imageWidth - 1, imageHeight / 2, calibration),
+    pixelToRaDecWithContext(0, 0, ctx),
+    pixelToRaDecWithContext(imageWidth - 1, 0, ctx),
+    pixelToRaDecWithContext(0, imageHeight - 1, ctx),
+    pixelToRaDecWithContext(imageWidth - 1, imageHeight - 1, ctx),
+    pixelToRaDecWithContext(imageWidth / 2, 0, ctx),
+    pixelToRaDecWithContext(imageWidth / 2, imageHeight - 1, ctx),
+    pixelToRaDecWithContext(0, imageHeight / 2, ctx),
+    pixelToRaDecWithContext(imageWidth - 1, imageHeight / 2, ctx),
   ].filter(Boolean) as Array<{ ra: number; dec: number }>;
 
   if (corners.length < 4) return lines;
@@ -134,7 +140,7 @@ export function generateGridLines(
     for (let i = 0; i <= samples; i++) {
       const ra = raMin + ((raMax - raMin) * i) / samples;
       const normalRA = ((ra % 360) + 360) % 360;
-      const px = raDecToPixel(normalRA, dec, calibration);
+      const px = raDecToPixelWithContext(normalRA, dec, ctx);
       if (
         px &&
         px.x >= -imageWidth * 0.5 &&
@@ -170,7 +176,7 @@ export function generateGridLines(
     for (let i = 0; i <= samples; i++) {
       const dec = decMin + ((decMax - decMin) * i) / samples;
       if (dec < -90 || dec > 90) continue;
-      const px = raDecToPixel(normalRA, dec, calibration);
+      const px = raDecToPixelWithContext(normalRA, dec, ctx);
       if (
         px &&
         px.x >= -imageWidth * 0.5 &&

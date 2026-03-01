@@ -64,11 +64,21 @@ jest.mock("@expo/vector-icons", () => {
 });
 
 jest.mock("../BatchTaskItem", () => {
-  const { Text, View } = require("react-native");
+  const { Text, View, Pressable } = require("react-native");
   return {
-    BatchTaskItem: ({ task }: any) => (
+    BatchTaskItem: ({ task, onCancel, onRetry }: any) => (
       <View testID={`task-item-${task.id}`}>
         <Text>{task.status}</Text>
+        {onCancel && (
+          <Pressable testID={`cancel-${task.id}`} onPress={onCancel}>
+            <Text>cancel</Text>
+          </Pressable>
+        )}
+        {onRetry && (
+          <Pressable testID={`retry-${task.id}`} onPress={onRetry}>
+            <Text>retry</Text>
+          </Pressable>
+        )}
       </View>
     ),
   };
@@ -198,5 +208,58 @@ describe("BatchConvertContent", () => {
     render(<BatchConvertContent />);
     // Queue count label
     expect(screen.getByText("converter.queue (2)")).toBeTruthy();
+  });
+
+  it("calls cancelTask via onCancel callback", () => {
+    mockBatchTasks = [makeTask({ id: "t1", status: "running" })];
+    render(<BatchConvertContent />);
+    fireEvent.press(screen.getByTestId("cancel-t1"));
+    expect(mockCancelTask).toHaveBeenCalledWith("t1");
+  });
+
+  it("calls retryTask via onRetry callback", () => {
+    mockBatchTasks = [makeTask({ id: "t2", status: "failed" })];
+    render(<BatchConvertContent />);
+    fireEvent.press(screen.getByTestId("retry-t2"));
+    expect(mockRetryTask).toHaveBeenCalledWith("t2");
+  });
+
+  it("calls clearCompletedTasks when clear button is pressed", () => {
+    mockBatchTasks = [makeTask({ id: "t1", status: "completed" })];
+    render(<BatchConvertContent />);
+    // The clear button renders a trash-outline icon wrapped in a Pressable
+    const trashIcons = screen.getAllByText("trash-outline");
+    // press the parent Pressable of the trash icon
+    fireEvent.press(trashIcons[0]);
+    expect(mockClearCompletedTasks).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows clear button when there are failed tasks", () => {
+    mockBatchTasks = [makeTask({ id: "t1", status: "failed" })];
+    render(<BatchConvertContent />);
+    const trashIcons = screen.getAllByText("trash-outline");
+    expect(trashIcons.length).toBeGreaterThan(0);
+  });
+
+  it("passes sourceType and mediaKind to startBatchConvert", () => {
+    mockFiles = [
+      {
+        id: "f1",
+        filepath: "/tmp/a.fits",
+        filename: "a.fits",
+        sourceType: "fits",
+        mediaKind: "image",
+      },
+    ];
+    mockSelectedIds = [];
+    render(<BatchConvertContent />);
+    fireEvent.press(screen.getByTestId("e2e-action-convert__batch-start"));
+    expect(mockStartBatchConvert.mock.calls[0][0][0]).toMatchObject({
+      id: "f1",
+      filepath: "/tmp/a.fits",
+      filename: "a.fits",
+      sourceType: "fits",
+      mediaKind: "image",
+    });
   });
 });

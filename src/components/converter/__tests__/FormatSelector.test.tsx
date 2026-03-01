@@ -6,6 +6,7 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 let capturedOnValueChange: ((val: string) => void) | undefined;
+let mockSelectedValue: string | undefined;
 
 jest.mock("heroui-native", () => {
   const React = require("react");
@@ -13,6 +14,7 @@ jest.mock("heroui-native", () => {
 
   const RadioGroup = ({ children, onValueChange, value, ...rest }: any) => {
     capturedOnValueChange = onValueChange;
+    mockSelectedValue = value;
     return (
       <View {...rest} testID="radio-group" accessibilityValue={{ text: value }}>
         {children}
@@ -20,7 +22,8 @@ jest.mock("heroui-native", () => {
     );
   };
   RadioGroup.Item = ({ children, value }: any) => {
-    const rendered = typeof children === "function" ? children({ isSelected: false }) : children;
+    const isSelected = value === mockSelectedValue;
+    const rendered = typeof children === "function" ? children({ isSelected }) : children;
     return <View testID={`radio-item-${value}`}>{rendered}</View>;
   };
 
@@ -47,6 +50,7 @@ describe("FormatSelector", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedOnValueChange = undefined;
+    mockSelectedValue = undefined;
   });
 
   it("renders all 8 format options", () => {
@@ -93,7 +97,49 @@ describe("FormatSelector", () => {
 
   it("renders description keys for each option", () => {
     render(<FormatSelector selected="png" onSelect={onSelect} />);
-    expect(screen.getByText("converter.fmtPngDesc")).toBeTruthy();
-    expect(screen.getByText("converter.fmtJpegDesc")).toBeTruthy();
+    const descKeys = [
+      "converter.fmtPngDesc",
+      "converter.fmtJpegDesc",
+      "converter.fmtWebpDesc",
+      "converter.fmtTiffDesc",
+      "converter.fmtBmpDesc",
+      "converter.fmtFitsDesc",
+      "converter.fmtXisfDesc",
+      "converter.fmtSerDesc",
+    ];
+    for (const key of descKeys) {
+      expect(screen.getByText(key)).toBeTruthy();
+    }
+  });
+
+  it("selected card renders success border class and checkmark icon", () => {
+    const { toJSON } = render(<FormatSelector selected="jpeg" onSelect={onSelect} />);
+    const tree = JSON.stringify(toJSON());
+    // The selected card (jpeg) should have the success border class
+    expect(tree).toContain("border border-success");
+    // The checkmark icon should render for the selected item
+    expect(tree).toContain("checkmark-circle");
+  });
+
+  it("selected card renders success background class", () => {
+    const { toJSON } = render(<FormatSelector selected="webp" onSelect={onSelect} />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("bg-success/20");
+  });
+
+  it("non-selected cards do not render checkmark or success border", () => {
+    render(<FormatSelector selected="png" onSelect={onSelect} />);
+    // Only the selected item (png) should have the checkmark; others should not
+    // Check a non-selected item's testID card does not have success border
+    const jpegCard = screen.getByTestId("e2e-action-format-selector-jpeg");
+    const jpegClassName = jpegCard.props.className || "";
+    expect(jpegClassName).not.toContain("border border-success");
+  });
+
+  it("non-selected cards have surface-secondary background", () => {
+    const { toJSON } = render(<FormatSelector selected="png" onSelect={onSelect} />);
+    const tree = JSON.stringify(toJSON());
+    // Non-selected items should have bg-surface-secondary
+    expect(tree).toContain("bg-surface-secondary");
   });
 });

@@ -80,4 +80,32 @@ describe("ImportResultSheet", () => {
     fireEvent.press(screen.getByText("common.close"));
     expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it("renders nothing when result is null", () => {
+    const { queryByText } = render(<ImportResultSheet {...defaultProps} result={null} />);
+    expect(queryByText("files.importResultTitle")).toBeNull();
+  });
+
+  it("renders with compact styling in landscape mode", () => {
+    const { toJSON } = render(<ImportResultSheet {...defaultProps} isLandscape />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("px-4");
+  });
+
+  it("renders with normal styling in portrait mode", () => {
+    const { toJSON } = render(<ImportResultSheet {...defaultProps} isLandscape={false} />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("px-5");
+  });
+
+  it("renders skipped duplicates and unsupported counts", () => {
+    render(<ImportResultSheet {...defaultProps} />);
+    expect(screen.getByText("files.importSkippedDuplicates:count=1")).toBeTruthy();
+    expect(screen.getByText("files.importSkippedUnsupported:count=1")).toBeTruthy();
+  });
+
+  it("renders total files count", () => {
+    render(<ImportResultSheet {...defaultProps} />);
+    expect(screen.getByText("files.filesCount:count=3")).toBeTruthy();
+  });
 });

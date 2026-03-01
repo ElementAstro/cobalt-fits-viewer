@@ -190,6 +190,7 @@ const TargetStatusSummary = React.memo(function TargetStatusSummary({
   summaryTextClassName: string;
 }) {
   const { t } = useI18n();
+  const warningColor = useThemeColor("warning");
 
   const { statusCounts, favoriteCount } = React.useMemo(() => {
     const counts: Partial<Record<TargetStatus, number>> = {};
@@ -222,7 +223,7 @@ const TargetStatusSummary = React.memo(function TargetStatusSummary({
       })}
       {favoriteCount > 0 && (
         <View className="flex-row items-center gap-1">
-          <Ionicons name="star" size={miniIconSize} color="#f59e0b" />
+          <Ionicons name="star" size={miniIconSize} color={warningColor} />
           <Text className={summaryTextClassName}>
             {favoriteCount} {t("targets.favorites")}
           </Text>

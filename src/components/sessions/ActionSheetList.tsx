@@ -5,7 +5,7 @@ import { useI18n } from "../../i18n/useI18n";
 
 export interface ActionItem {
   label: string;
-  icon: string;
+  icon: keyof typeof Ionicons.glyphMap;
   onPress: () => void;
   destructive?: boolean;
   highlight?: boolean;
@@ -38,9 +38,9 @@ export function ActionSheetList({ visible, title, actions, onClose }: ActionShee
         <BottomSheet.Content>
           <BottomSheet.Title className="text-center">{title}</BottomSheet.Title>
           <Separator className="my-1" />
-          {actions.map((action, i) => (
+          {actions.map((action) => (
             <Pressable
-              key={i}
+              key={action.label}
               onPress={() => {
                 onClose();
                 action.onPress();
@@ -48,7 +48,7 @@ export function ActionSheetList({ visible, title, actions, onClose }: ActionShee
               className="flex-row items-center gap-3 px-4 py-3.5"
             >
               <Ionicons
-                name={action.icon as keyof typeof Ionicons.glyphMap}
+                name={action.icon}
                 size={18}
                 color={
                   action.destructive ? dangerColor : action.highlight ? successColor : mutedColor

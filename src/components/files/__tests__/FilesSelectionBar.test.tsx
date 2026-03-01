@@ -59,6 +59,13 @@ describe("FilesSelectionBar", () => {
     expect(screen.getByText(/0/)).toBeTruthy();
   });
 
+  it("renders buttons with isDisabled when selectedCount is 0", () => {
+    render(<FilesSelectionBar {...defaultProps} selectedCount={0} />);
+    // HeroUI Button isDisabled blocks press at native level; verify disabled state is applied
+    const tree = screen.toJSON();
+    expect(JSON.stringify(tree)).toContain("isDisabled");
+  });
+
   it("renders stacking button with testID", () => {
     render(<FilesSelectionBar {...defaultProps} />);
     expect(screen.getByTestId("files-go-to-stacking-button")).toBeTruthy();

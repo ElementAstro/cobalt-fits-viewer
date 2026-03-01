@@ -3,6 +3,7 @@
  */
 
 import React from "react";
+import { Platform } from "react-native";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { AddProviderSheet } from "../AddProviderSheet";
 import type { CloudProvider } from "../../../lib/backup/types";
@@ -116,5 +117,22 @@ describe("AddProviderSheet", () => {
     );
     // 5 providers → 4 separators
     expect(screen.getAllByTestId("separator")).toHaveLength(4);
+  });
+
+  it("filters web-unsupported providers on web platform", () => {
+    const origOS = Platform.OS;
+    Object.defineProperty(Platform, "OS", { value: "web", writable: true });
+
+    render(
+      <AddProviderSheet visible existingProviders={[]} onSelect={onSelect} onClose={onClose} />,
+    );
+    // google-drive, onedrive, dropbox, sftp are WEB_UNSUPPORTED → only webdav remains
+    expect(screen.queryByText("Google Drive")).toBeNull();
+    expect(screen.queryByText("OneDrive")).toBeNull();
+    expect(screen.queryByText("Dropbox")).toBeNull();
+    expect(screen.queryByText("SFTP")).toBeNull();
+    expect(screen.getByText("WebDAV")).toBeTruthy();
+
+    Object.defineProperty(Platform, "OS", { value: origOS, writable: true });
   });
 });

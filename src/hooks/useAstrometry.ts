@@ -52,10 +52,9 @@ export function useAstrometry() {
     if (processingRef.current) return;
     processingRef.current = true;
 
-    const activeCount = service.getActiveJobCount();
     const maxConcurrent = config.maxConcurrent;
 
-    while (queueRef.current.length > 0 && activeCount + queueRef.current.length > 0) {
+    while (queueRef.current.length > 0) {
       if (service.getActiveJobCount() >= maxConcurrent) break;
 
       const jobId = queueRef.current.shift();

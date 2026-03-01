@@ -7,14 +7,16 @@ import type { Href } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import type { EditorTool, EditorToolGroup } from "../../hooks/useEditorToolState";
 
-const GEOMETRY_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
+type ToolItem = { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap };
+
+const GEOMETRY_TOOLS: ToolItem[] = [
   { key: "crop", icon: "crop-outline" },
   { key: "rotate", icon: "refresh-outline" },
   { key: "flip", icon: "swap-horizontal-outline" },
   { key: "rotateCustom", icon: "sync-outline" },
 ];
 
-const ADJUST_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const ADJUST_TOOLS: ToolItem[] = [
   { key: "brightness", icon: "sunny-outline" },
   { key: "contrast", icon: "options-outline" },
   { key: "gamma", icon: "pulse-outline" },
@@ -29,7 +31,7 @@ const ADJUST_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyp
   { key: "histogram", icon: "bar-chart-outline" },
 ];
 
-const PROCESS_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const PROCESS_TOOLS: ToolItem[] = [
   { key: "blur", icon: "water-outline" },
   { key: "sharpen", icon: "sparkles-outline" },
   { key: "denoise", icon: "layers-outline" },
@@ -45,7 +47,7 @@ const PROCESS_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.gly
   { key: "background", icon: "globe-outline" },
 ];
 
-const MASK_TOOLS: { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[] = [
+const MASK_TOOLS: ToolItem[] = [
   { key: "starMask", icon: "star-half-outline" },
   { key: "rangeMask", icon: "funnel-outline" },
   { key: "binarize", icon: "moon-outline" },
@@ -68,10 +70,7 @@ const ADVANCED_TOOLS: {
 ];
 const COMING_SOON_ADVANCED_TOOLS = new Set<AdvancedEditorTool>(["calibration", "statistics"]);
 
-const TOOL_GROUP_MAP: Record<
-  EditorToolGroup,
-  { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap }[]
-> = {
+const TOOL_GROUP_MAP: Record<EditorToolGroup, ToolItem[]> = {
   geometry: GEOMETRY_TOOLS,
   adjust: ADJUST_TOOLS,
   process: PROCESS_TOOLS,

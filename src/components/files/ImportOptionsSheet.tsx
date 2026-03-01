@@ -38,7 +38,7 @@ export function ImportOptionsSheet({
   onRecordVideo,
 }: ImportOptionsSheetProps) {
   const { t } = useI18n();
-  const [mutedColor, surfaceColor, successColor] = useThemeColor(["muted", "surface", "success"]);
+  const [mutedColor, surfaceColor] = useThemeColor(["muted", "surface"]);
   const compact = isLandscape;
 
   return (
@@ -69,8 +69,6 @@ export function ImportOptionsSheet({
                   onPress={onImportFile}
                   compact={compact}
                   showChevron
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="folder-open-outline"
@@ -79,8 +77,6 @@ export function ImportOptionsSheet({
                   onPress={onImportFolder}
                   compact={compact}
                   showChevron
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="archive-outline"
@@ -90,8 +86,6 @@ export function ImportOptionsSheet({
                   disabled={!isZipImportAvailable}
                   compact={compact}
                   showChevron
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="cloud-download-outline"
@@ -100,8 +94,6 @@ export function ImportOptionsSheet({
                   onPress={onImportUrl}
                   compact={compact}
                   showChevron
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="clipboard-outline"
@@ -110,8 +102,6 @@ export function ImportOptionsSheet({
                   onPress={onImportClipboard}
                   compact={compact}
                   showChevron
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="images-outline"
@@ -120,8 +110,6 @@ export function ImportOptionsSheet({
                   onPress={onImportMediaLibrary}
                   compact={compact}
                   showChevron
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="videocam-outline"
@@ -130,8 +118,6 @@ export function ImportOptionsSheet({
                   onPress={onRecordVideo}
                   compact={compact}
                   showChevron
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
               </View>
             </ScrollView>

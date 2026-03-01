@@ -13,7 +13,7 @@ import { formatBytes } from "../../lib/utils/format";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
-import { isMediaWorkspaceFile } from "../../lib/media/routing";
+import { isVideoFile, isAudioFile, isMediaWorkspaceFile } from "../../lib/media/routing";
 import { useFitsStore } from "../../stores/useFitsStore";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { InfoRow } from "./InfoRow";
@@ -50,8 +50,8 @@ export function QuickLookModal({
     () => (file ? resolveThumbnailUri(file.id, file.thumbnailUri) : null),
     [file],
   );
-  const isVideo = file?.mediaKind === "video" || file?.sourceType === "video";
-  const isAudio = file?.mediaKind === "audio" || file?.sourceType === "audio";
+  const isVideo = file ? isVideoFile(file) : false;
+  const isAudio = file ? isAudioFile(file) : false;
   const isMedia = file ? isMediaWorkspaceFile(file) : false;
 
   const handleRegenerateThumbnail = useCallback(async () => {
@@ -263,7 +263,7 @@ export function QuickLookModal({
 function QuickAction({
   icon,
   label,
-  color = "#888",
+  color,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
@@ -271,9 +271,10 @@ function QuickAction({
   color?: string;
   onPress: () => void;
 }) {
+  const defaultColor = useThemeColor("muted");
   return (
     <Button variant="ghost" size="sm" onPress={onPress} className="flex-col items-center gap-0.5">
-      <Ionicons name={icon} size={18} color={color} />
+      <Ionicons name={icon} size={18} color={color ?? defaultColor} />
       <Text className="text-[9px] text-muted" numberOfLines={1}>
         {label}
       </Text>

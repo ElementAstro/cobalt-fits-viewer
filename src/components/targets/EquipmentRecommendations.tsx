@@ -2,7 +2,7 @@
  * 设备推荐编辑组件
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Button, Dialog, Input, Label, Separator, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
@@ -27,6 +27,14 @@ export function EquipmentRecommendations({
   const [camera, setCamera] = useState(equipment?.camera ?? "");
   const [filtersText, setFiltersText] = useState(equipment?.filters?.join(", ") ?? "");
   const [notes, setNotes] = useState(equipment?.notes ?? "");
+
+  useEffect(() => {
+    if (!visible) return;
+    setTelescope(equipment?.telescope ?? "");
+    setCamera(equipment?.camera ?? "");
+    setFiltersText(equipment?.filters?.join(", ") ?? "");
+    setNotes(equipment?.notes ?? "");
+  }, [visible, equipment]);
 
   const handleSave = () => {
     const filters = filtersText

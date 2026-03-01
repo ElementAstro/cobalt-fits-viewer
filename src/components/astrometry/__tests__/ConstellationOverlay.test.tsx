@@ -14,7 +14,8 @@ jest.mock("@shopify/react-native-skia", () => {
 });
 
 jest.mock("../../../lib/astrometry/wcsProjection", () => ({
-  raDecToPixel: jest.fn(() => ({
+  computeProjectionContext: jest.fn(() => ({ mock: true })),
+  raDecToPixelWithContext: jest.fn((_ra: number, _dec: number, _ctx: unknown) => ({
     x: 400,
     y: 300,
   })),

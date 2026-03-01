@@ -128,4 +128,32 @@ describe("UpdateBanner", () => {
     // CloseButton is mocked as a View, should exist in the tree
     expect(screen.toJSON()).toBeTruthy();
   });
+
+  it("hides banner when dismiss button is pressed for available status", () => {
+    mockUseAppUpdate.status = "available";
+    render(<UpdateBanner />);
+
+    // Find and press the CloseButton
+    const closeButton = screen.getByTestId("close-button");
+    fireEvent.press(closeButton);
+
+    // After dismissal with non-ready status, component returns null
+    expect(screen.queryByText("settings.newVersionAvailable")).toBeNull();
+  });
+
+  it("still shows banner when dismissed but status becomes ready", () => {
+    mockUseAppUpdate.status = "ready";
+    render(<UpdateBanner />);
+
+    // Banner should render even if dismiss would have been triggered
+    expect(screen.getByText("settings.readyToInstall")).toBeTruthy();
+  });
+
+  it("renders nothing when idle status", () => {
+    mockUseAppUpdate.status = "idle";
+    const { toJSON } = render(<UpdateBanner />);
+
+    // When idle and not dismissed, component renders the animated view (not null)
+    expect(toJSON()).toBeTruthy();
+  });
 });

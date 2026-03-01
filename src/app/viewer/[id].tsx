@@ -71,6 +71,7 @@ import type { AstrometryAnnotationType, AstrometryAnnotation } from "../../lib/a
 import { toViewerPreset } from "../../lib/viewer/model";
 import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
 import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
+import { isVideoFile } from "../../lib/media/routing";
 
 export default function ViewerDetailScreen() {
   useKeepAwake();
@@ -92,7 +93,7 @@ export default function ViewerDetailScreen() {
       nextId: idx < allFiles.length - 1 ? allFiles[idx + 1].id : null,
     };
   }, [allFiles, id]);
-  const isVideoFile = file?.mediaKind === "video" || file?.sourceType === "video";
+  const isVideo = file ? isVideoFile(file) : false;
 
   // Display parameters — grouped to reduce re-renders
   const {
@@ -713,9 +714,9 @@ export default function ViewerDetailScreen() {
   }, [insets.bottom, isFullscreen, isLandscape, showControls]);
 
   useEffect(() => {
-    if (!id || !isVideoFile) return;
+    if (!id || !isVideo) return;
     router.replace(`/video/${id}`);
-  }, [id, isVideoFile, router]);
+  }, [id, isVideo, router]);
 
   // --- Pixel tap handler ---
   const handlePixelTap = useCallback(
@@ -1242,7 +1243,7 @@ export default function ViewerDetailScreen() {
     );
   }
 
-  if (isVideoFile) {
+  if (isVideo) {
     return (
       <View className="flex-1 items-center justify-center bg-background px-6">
         <Ionicons name="videocam-outline" size={48} className="text-muted" />
@@ -1595,7 +1596,6 @@ export default function ViewerDetailScreen() {
           showControls={showControls}
           hasAstrometryResult={!!latestSolvedJob}
           isAstrometryActive={!!activeAstrometryJob}
-          showAstrometryResult={showAstrometryResult}
           onToggleFullscreen={toggleFullscreen}
           onBack={() => router.back()}
           onPrev={() => prevId && navigateTo(prevId)}

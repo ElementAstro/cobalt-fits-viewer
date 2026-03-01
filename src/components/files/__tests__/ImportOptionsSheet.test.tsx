@@ -125,4 +125,16 @@ describe("ImportOptionsSheet", () => {
     render(<ImportOptionsSheet {...defaultProps} />);
     expect(screen.getByText("files.recordVideoHint")).toBeTruthy();
   });
+
+  it("renders with compact styling in landscape mode", () => {
+    const { toJSON } = render(<ImportOptionsSheet {...defaultProps} isLandscape />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("px-4");
+  });
+
+  it("renders with normal styling in portrait mode", () => {
+    const { toJSON } = render(<ImportOptionsSheet {...defaultProps} isLandscape={false} />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("px-6");
+  });
 });

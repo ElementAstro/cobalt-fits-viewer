@@ -8,7 +8,7 @@ import { View, Text } from "react-native";
 import { Button } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { useSharedValue, useAnimatedStyle, runOnJS } from "react-native-reanimated";
+import { useSharedValue, runOnJS } from "react-native-reanimated";
 import {
   clampCropRegion,
   moveCropRegion,
@@ -220,14 +220,6 @@ export function CropOverlay({
     }
   }, [imageHeight, imageWidth]);
 
-  const cropStyle = useAnimatedStyle(() => ({
-    position: "absolute" as const,
-    left: cropDisplay.left,
-    top: cropDisplay.top,
-    width: cropDisplay.width,
-    height: cropDisplay.height,
-  }));
-
   return (
     <View
       style={{
@@ -286,15 +278,17 @@ export function CropOverlay({
 
       {/* Crop border + drag area */}
       <GestureDetector gesture={moveGesture}>
-        <Animated.View
-          style={[
-            cropStyle,
-            {
-              borderWidth: 1.5,
-              borderColor: "#17c964",
-              borderStyle: "dashed",
-            },
-          ]}
+        <View
+          style={{
+            position: "absolute",
+            left: cropDisplay.left,
+            top: cropDisplay.top,
+            width: cropDisplay.width,
+            height: cropDisplay.height,
+            borderWidth: 1.5,
+            borderColor: "#17c964",
+            borderStyle: "dashed",
+          }}
         />
       </GestureDetector>
 

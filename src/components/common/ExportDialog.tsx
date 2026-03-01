@@ -1,28 +1,16 @@
-import { useState, useEffect } from "react";
 import { View, Text } from "react-native";
 import { Button, Chip, Dialog, Input, Separator, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import {
-  DEFAULT_FITS_TARGET_OPTIONS,
-  DEFAULT_TIFF_TARGET_OPTIONS,
-  DEFAULT_XISF_TARGET_OPTIONS,
-  DEFAULT_SER_TARGET_OPTIONS,
-  type ExportFormat,
-  type ExportOutputSize,
-  type FitsColorLayout,
-  type FitsCompression,
-  type FitsExportMode,
-  type FitsTargetOptions,
-  type TiffCompression,
-  type TiffMultipageMode,
-  type TiffTargetOptions,
+import type {
+  ExportFormat,
+  ExportOutputSize,
+  FitsTargetOptions,
+  TiffTargetOptions,
 } from "../../lib/fits/types";
-import { supportsQuality } from "../../lib/converter/convertPresets";
-import { estimateFileSize } from "../../lib/converter/formatConverter";
 import { formatBytes } from "../../lib/utils/format";
 import type { ExportRenderOptions } from "../../lib/converter/exportDecorations";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useExportDialogState } from "../../hooks/useExportDialogState";
 import { FitsExportOptions } from "./FitsExportOptions";
 import { TiffExportOptions } from "./TiffExportOptions";
 import { SimpleSlider } from "./SimpleSlider";
@@ -75,127 +63,58 @@ export function ExportDialog({
 }: ExportDialogProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
-  const savedQuality = useSettingsStore((s) => s.defaultExportQuality);
-  const savedAnnotations = useSettingsStore((s) => s.includeAnnotationsByDefault);
-  const [quality, setQuality] = useState(savedQuality);
-  const [fitsMode, setFitsMode] = useState<FitsExportMode>(DEFAULT_FITS_TARGET_OPTIONS.mode);
-  const [fitsCompression, setFitsCompression] = useState<FitsCompression>(
-    DEFAULT_FITS_TARGET_OPTIONS.compression,
-  );
-  const [fitsBitpix, setFitsBitpix] = useState<FitsTargetOptions["bitpix"]>(
-    DEFAULT_FITS_TARGET_OPTIONS.bitpix,
-  );
-  const [fitsColorLayout, setFitsColorLayout] = useState<FitsColorLayout>(
-    DEFAULT_FITS_TARGET_OPTIONS.colorLayout,
-  );
-  const [fitsPreserveOriginalHeader, setFitsPreserveOriginalHeader] = useState(
-    DEFAULT_FITS_TARGET_OPTIONS.preserveOriginalHeader,
-  );
-  const [fitsPreserveWcs, setFitsPreserveWcs] = useState(DEFAULT_FITS_TARGET_OPTIONS.preserveWcs);
-  const [tiffCompression, setTiffCompression] = useState<TiffCompression>(
-    DEFAULT_TIFF_TARGET_OPTIONS.compression,
-  );
-  const [tiffMultipage, setTiffMultipage] = useState<TiffMultipageMode>(
-    DEFAULT_TIFF_TARGET_OPTIONS.multipage,
-  );
-  const [tiffBitDepth, setTiffBitDepth] = useState<8 | 16 | 32>(
-    DEFAULT_TIFF_TARGET_OPTIONS.bitDepth ?? 16,
-  );
-  const [tiffDpi, setTiffDpi] = useState(DEFAULT_TIFF_TARGET_OPTIONS.dpi ?? 72);
-  const [includeAnnotations, setIncludeAnnotations] = useState(savedAnnotations);
-  const [includeWatermark, setIncludeWatermark] = useState(false);
-  const [watermarkText, setWatermarkText] = useState("");
-  const [outputMaxDim, setOutputMaxDim] = useState<number | undefined>(undefined);
-  const [compressionMode, setCompressionMode] = useState<"quality" | "targetSize">("quality");
-  const [targetFileSizeKB, setTargetFileSizeKB] = useState(500);
-  const [webpLossless, setWebpLossless] = useState(false);
-  const [customFilename, setCustomFilename] = useState(() => filename.replace(/\.[^.]+$/, ""));
 
-  useEffect(() => {
-    setCustomFilename(filename.replace(/\.[^.]+$/, ""));
-  }, [filename]);
-
-  const showQuality = supportsQuality(format);
-  const showFitsOptions = format === "fits";
-  const showTiffOptions = format === "tiff";
-
-  useEffect(() => {
-    if (format === "jpeg") setQuality(85);
-    else if (format === "webp") setQuality(80);
-    else setQuality(100);
-  }, [format]);
-
-  useEffect(() => {
-    if (!fitsScientificAvailable && fitsMode === "scientific") {
-      setFitsMode("rendered");
-    }
-  }, [fitsScientificAvailable, fitsMode]);
-
-  const fitsOptions: Partial<FitsTargetOptions> | undefined = showFitsOptions
-    ? {
-        mode: fitsMode,
-        compression: fitsCompression,
-        bitpix: fitsBitpix,
-        colorLayout: fitsColorLayout,
-        preserveOriginalHeader: fitsPreserveOriginalHeader,
-        preserveWcs: fitsPreserveWcs,
-      }
-    : undefined;
-  const tiffOptions: Partial<TiffTargetOptions> | undefined = showTiffOptions
-    ? {
-        compression: tiffCompression,
-        multipage: tiffMultipage,
-        bitDepth: tiffBitDepth,
-        dpi: tiffDpi,
-      }
-    : undefined;
-  const renderOptions: ExportRenderOptions | undefined =
-    includeAnnotations || includeWatermark
-      ? {
-          includeAnnotations,
-          includeWatermark,
-          watermarkText: includeWatermark ? watermarkText : undefined,
-        }
-      : undefined;
-
-  const resolvedOutputSize: ExportOutputSize | undefined = outputMaxDim
-    ? { maxWidth: outputMaxDim, maxHeight: outputMaxDim }
-    : undefined;
-
-  const resolvedTargetFileSize =
-    compressionMode === "targetSize" && (format === "jpeg" || format === "webp")
-      ? targetFileSizeKB * 1024
-      : undefined;
-
-  const estimatedSize =
-    width && height
-      ? estimateFileSize(width, height, {
-          format,
-          quality,
-          bitDepth: showTiffOptions ? tiffBitDepth : 8,
-          dpi: showTiffOptions ? tiffDpi : 72,
-          tiff: {
-            ...DEFAULT_TIFF_TARGET_OPTIONS,
-            ...(tiffOptions ?? {}),
-          },
-          fits: {
-            ...DEFAULT_FITS_TARGET_OPTIONS,
-            ...(fitsOptions ?? {}),
-          },
-          xisf: DEFAULT_XISF_TARGET_OPTIONS,
-          ser: DEFAULT_SER_TARGET_OPTIONS,
-          stretch: "linear",
-          colormap: "grayscale",
-          blackPoint: 0,
-          whitePoint: 1,
-          gamma: 1,
-          outputBlack: 0,
-          outputWhite: 1,
-          includeAnnotations: false,
-          includeWatermark: false,
-          outputSize: resolvedOutputSize,
-        })
-      : null;
+  const {
+    quality,
+    fitsMode,
+    fitsCompression,
+    fitsBitpix,
+    fitsColorLayout,
+    fitsPreserveOriginalHeader,
+    fitsPreserveWcs,
+    tiffCompression,
+    tiffMultipage,
+    tiffBitDepth,
+    tiffDpi,
+    includeAnnotations,
+    includeWatermark,
+    watermarkText,
+    outputMaxDim,
+    compressionMode,
+    targetFileSizeKB,
+    webpLossless,
+    customFilename,
+    setQuality,
+    setFitsMode,
+    setFitsCompression,
+    setFitsBitpix,
+    setFitsColorLayout,
+    setFitsPreserveOriginalHeader,
+    setFitsPreserveWcs,
+    setTiffCompression,
+    setTiffMultipage,
+    setTiffBitDepth,
+    setTiffDpi,
+    setIncludeAnnotations,
+    setIncludeWatermark,
+    setWatermarkText,
+    setOutputMaxDim,
+    setCompressionMode,
+    setTargetFileSizeKB,
+    setWebpLossless,
+    setCustomFilename,
+    showQuality,
+    showFitsOptions,
+    showTiffOptions,
+    estimatedSize,
+    buildActionOptions,
+  } = useExportDialogState({
+    filename,
+    format,
+    width,
+    height,
+    fitsScientificAvailable,
+  });
 
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
@@ -424,52 +343,16 @@ export function ExportDialog({
             <Button
               testID="e2e-action-export-dialog-export"
               variant="primary"
-              onPress={() =>
-                onExport(quality, {
-                  fits: fitsOptions,
-                  tiff: tiffOptions,
-                  render: renderOptions,
-                  customFilename: customFilename.trim() || undefined,
-                  outputSize: resolvedOutputSize,
-                  targetFileSize: resolvedTargetFileSize,
-                  webpLossless: webpLossless || undefined,
-                })
-              }
+              onPress={() => onExport(quality, buildActionOptions())}
             >
               <Ionicons name="download-outline" size={16} color="#fff" />
               <Button.Label>{t("converter.convert")}</Button.Label>
             </Button>
-            <Button
-              variant="outline"
-              onPress={() =>
-                onSaveToDevice(quality, {
-                  fits: fitsOptions,
-                  tiff: tiffOptions,
-                  render: renderOptions,
-                  customFilename: customFilename.trim() || undefined,
-                  outputSize: resolvedOutputSize,
-                  targetFileSize: resolvedTargetFileSize,
-                  webpLossless: webpLossless || undefined,
-                })
-              }
-            >
+            <Button variant="outline" onPress={() => onSaveToDevice(quality, buildActionOptions())}>
               <Ionicons name="phone-portrait-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.save")}</Button.Label>
             </Button>
-            <Button
-              variant="outline"
-              onPress={() =>
-                onShare(quality, {
-                  fits: fitsOptions,
-                  tiff: tiffOptions,
-                  render: renderOptions,
-                  customFilename: customFilename.trim() || undefined,
-                  outputSize: resolvedOutputSize,
-                  targetFileSize: resolvedTargetFileSize,
-                  webpLossless: webpLossless || undefined,
-                })
-              }
-            >
+            <Button variant="outline" onPress={() => onShare(quality, buildActionOptions())}>
               <Ionicons name="share-outline" size={16} color={mutedColor} />
               <Button.Label>{t("common.share")}</Button.Label>
             </Button>

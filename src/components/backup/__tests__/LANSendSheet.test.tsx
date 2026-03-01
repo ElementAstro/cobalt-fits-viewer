@@ -194,4 +194,34 @@ describe("LANSendSheet", () => {
     expect(onStop).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
+
+  it("does not show connection info when status is not ready", () => {
+    render(
+      <LANSendSheet
+        visible
+        status="preparing"
+        info={null}
+        error={null}
+        onStop={onStop}
+        onClose={onClose}
+      />,
+    );
+    expect(screen.queryByText("192.168.1.100:18080")).toBeNull();
+    expect(screen.queryByText("1234")).toBeNull();
+    expect(screen.queryByText("backup.lanSendInstructions")).toBeNull();
+  });
+
+  it("shows wifi icon in ready state", () => {
+    render(
+      <LANSendSheet
+        visible
+        status="ready"
+        info={mockInfo}
+        error={null}
+        onStop={onStop}
+        onClose={onClose}
+      />,
+    );
+    expect(screen.getByTestId("icon-wifi")).toBeTruthy();
+  });
 });

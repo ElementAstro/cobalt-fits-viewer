@@ -15,17 +15,9 @@ interface AstrometryStoreState {
   // 任务管理 (持久化)
   jobs: AstrometryJob[];
 
-  // 运行时状态
-  sessionKey: string | null;
-  isLoggedIn: boolean;
-
   // 配置 Actions
   setConfig: (updates: Partial<AstrometryConfig>) => void;
   resetConfig: () => void;
-
-  // Session Actions
-  setSessionKey: (key: string | null) => void;
-  setLoggedIn: (value: boolean) => void;
 
   // 任务 Actions
   addJob: (job: AstrometryJob) => void;
@@ -47,15 +39,10 @@ export const useAstrometryStore = create<AstrometryStoreState>()(
     (set, get) => ({
       config: { ...DEFAULT_ASTROMETRY_CONFIG },
       jobs: [],
-      sessionKey: null,
-      isLoggedIn: false,
 
       setConfig: (updates) => set((s) => ({ config: { ...s.config, ...updates } })),
 
       resetConfig: () => set({ config: { ...DEFAULT_ASTROMETRY_CONFIG } }),
-
-      setSessionKey: (key) => set({ sessionKey: key, isLoggedIn: key != null }),
-      setLoggedIn: (value) => set({ isLoggedIn: value }),
 
       addJob: (job) => set((s) => ({ jobs: [job, ...s.jobs] })),
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, memo } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Button, Chip } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -106,7 +106,7 @@ function isImageHDUType(type: string | null) {
   return type === "Image" || type === "CompressedImage";
 }
 
-export function ViewerControls({
+export const ViewerControls = memo(function ViewerControls({
   stretch,
   colormap,
   brightness,
@@ -407,7 +407,7 @@ export function ViewerControls({
       </View>
     </View>
   );
-}
+});
 
 interface FrameNavigationProps {
   currentFrame: number;

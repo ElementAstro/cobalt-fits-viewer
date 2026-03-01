@@ -20,33 +20,9 @@ interface OperationSummaryDialogProps {
   footnote?: string;
 }
 
-const STATUS_ICON_COLOR: Record<string, string> = {
-  success: "#22c55e",
-  warning: "#f59e0b",
-  danger: "#ef4444",
-  default: "#6b7280",
-  accent: "#3b82f6",
-};
-
-const CHIP_COLOR_MAP: Record<string, "success" | "warning" | "danger" | "default" | "accent"> = {
-  success: "success",
-  warning: "warning",
-  danger: "danger",
-  default: "default",
-  accent: "accent",
-};
-
-const ALERT_STATUS_MAP: Record<string, "success" | "warning" | "danger" | "default" | "accent"> = {
-  success: "success",
-  warning: "warning",
-  danger: "danger",
-  default: "default",
-};
-
 function SummaryRow({ item }: { item: SummaryItem }) {
-  const mutedColor = useThemeColor("muted");
   const color = item.color ?? "default";
-  const iconColor = STATUS_ICON_COLOR[color] ?? mutedColor;
+  const iconColor = useThemeColor(color);
 
   return (
     <View className="flex-row items-center justify-between py-1.5">
@@ -60,7 +36,7 @@ function SummaryRow({ item }: { item: SummaryItem }) {
         )}
         <Text className="text-xs text-muted">{item.label}</Text>
       </View>
-      <Chip size="sm" variant="soft" color={CHIP_COLOR_MAP[color] ?? "default"}>
+      <Chip size="sm" variant="soft" color={color}>
         <Chip.Label className="text-[10px] font-semibold">{item.value}</Chip.Label>
       </Chip>
     </View>
@@ -77,7 +53,7 @@ export function OperationSummaryDialog({
   footnote,
 }: OperationSummaryDialogProps) {
   const { t } = useI18n();
-  const iconColor = STATUS_ICON_COLOR[status] ?? STATUS_ICON_COLOR.default;
+  const iconColor = useThemeColor(status);
 
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
@@ -116,7 +92,7 @@ export function OperationSummaryDialog({
           {footnote && (
             <>
               <Separator className="my-3" />
-              <Alert status={ALERT_STATUS_MAP[status] ?? "default"} className="items-center">
+              <Alert status={status} className="items-center">
                 <Alert.Indicator className="pt-0" />
                 <Alert.Content>
                   <Alert.Title>{footnote}</Alert.Title>

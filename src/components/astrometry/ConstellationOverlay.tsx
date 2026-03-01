@@ -16,7 +16,10 @@ import {
 import type { AstrometryCalibration } from "../../lib/astrometry/types";
 import type { CanvasTransform } from "../fits/FitsCanvas";
 import { imageToScreenPoint, remapPointBetweenSpaces } from "../../lib/viewer/transform";
-import { raDecToPixel } from "../../lib/astrometry/wcsProjection";
+import {
+  computeProjectionContext,
+  raDecToPixelWithContext,
+} from "../../lib/astrometry/wcsProjection";
 import { CONSTELLATIONS, type ConstellationDef } from "../../lib/astrometry/constellationData";
 import { OVERLAY_COLORS } from "../../lib/astrometry/annotationConstants";
 
@@ -60,8 +63,9 @@ export function ConstellationOverlay({
   const constellationPixels = useMemo(() => {
     if (!visible || sourceWidth <= 0 || sourceHeight <= 0) return [];
 
+    const ctx = computeProjectionContext(calibration);
     return CONSTELLATIONS.map((c: ConstellationDef) => {
-      const starPixels = c.stars.map((s) => raDecToPixel(s.ra, s.dec, calibration));
+      const starPixels = c.stars.map((s) => raDecToPixelWithContext(s.ra, s.dec, ctx));
       return { def: c, starPixels };
     });
   }, [calibration, sourceWidth, sourceHeight, visible]);

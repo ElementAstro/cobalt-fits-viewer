@@ -1,5 +1,5 @@
 import { View, Text } from "react-native";
-import { PressableFeedback } from "heroui-native";
+import { PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 
 interface SheetActionItemProps {
@@ -11,8 +11,8 @@ interface SheetActionItemProps {
   compact?: boolean;
   destructive?: boolean;
   showChevron?: boolean;
-  successColor: string;
-  mutedColor: string;
+  successColor?: string;
+  mutedColor?: string;
   dangerColor?: string;
 }
 
@@ -25,10 +25,14 @@ export function SheetActionItem({
   compact,
   destructive,
   showChevron,
-  successColor,
-  mutedColor,
-  dangerColor = "#ef4444",
+  successColor: successColorProp,
+  mutedColor: mutedColorProp,
+  dangerColor: dangerColorProp,
 }: SheetActionItemProps) {
+  const [themeSuccess, themeMuted, themeDanger] = useThemeColor(["success", "muted", "danger"]);
+  const successColor = successColorProp ?? themeSuccess;
+  const mutedColor = mutedColorProp ?? themeMuted;
+  const dangerColor = dangerColorProp ?? themeDanger;
   const iconColor = destructive ? dangerColor : disabled ? mutedColor : successColor;
 
   return (

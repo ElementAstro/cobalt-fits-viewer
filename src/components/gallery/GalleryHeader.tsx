@@ -7,7 +7,7 @@ import { useI18n } from "../../i18n/useI18n";
 import { SearchBar } from "../common/SearchBar";
 import type { GalleryViewMode } from "../../lib/fits/types";
 import type { MetadataIndexResult } from "../../lib/gallery/metadataIndex";
-import { GalleryFilterChips } from "./GalleryFilterChips";
+import { GalleryFilterChips, type FrameTypeEntry } from "./GalleryFilterChips";
 import { GallerySelectionToolbar } from "./GallerySelectionToolbar";
 
 const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -15,12 +15,6 @@ const VIEW_MODES: { key: GalleryViewMode; icon: keyof typeof Ionicons.glyphMap }
   { key: "list", icon: "list-outline" },
   { key: "timeline", icon: "time-outline" },
 ];
-
-interface FrameTypeEntry {
-  key: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-}
 
 interface GalleryHeaderProps {
   totalCount: number;

@@ -3,13 +3,12 @@
  * 使用 expo-auth-session + Dropbox HTTP API v2
  */
 
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { BaseCloudProvider } from "../cloudProvider";
-import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
-import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
+import type { CloudProviderConfig, RemoteFile } from "../types";
+import { BACKUP_DIR, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.DropboxProvider;
 const SECURE_STORE_KEY = "backup_dropbox_tokens";
@@ -149,6 +148,7 @@ export class DropboxProvider extends BaseCloudProvider {
     localPath: string,
     remotePath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     if (this.isTokenExpired()) await this.refreshTokenIfNeeded();
 
@@ -159,7 +159,7 @@ export class DropboxProvider extends BaseCloudProvider {
     const dropboxPath = this.toDropboxPath(remotePath);
 
     if (content.length > 150 * 1024 * 1024) {
-      await this.largeFileUpload(dropboxPath, content, onProgress);
+      await this.largeFileUpload(dropboxPath, content, onProgress, signal);
     } else {
       const res = await fetch(`${DROPBOX_CONTENT_API}/files/upload`, {
         method: "POST",
@@ -174,6 +174,7 @@ export class DropboxProvider extends BaseCloudProvider {
           }),
         },
         body: content,
+        signal,
       });
 
       if (!res.ok) {
@@ -190,6 +191,7 @@ export class DropboxProvider extends BaseCloudProvider {
     remotePath: string,
     localPath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     if (this.isTokenExpired()) await this.refreshTokenIfNeeded();
 
@@ -201,6 +203,7 @@ export class DropboxProvider extends BaseCloudProvider {
         ...this.getAuthHeaders(),
         "Dropbox-API-Arg": JSON.stringify({ path: dropboxPath }),
       },
+      signal,
     });
 
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);
@@ -320,36 +323,6 @@ export class DropboxProvider extends BaseCloudProvider {
     return res.ok;
   }
 
-  async uploadManifest(manifest: BackupManifest): Promise<void> {
-    await this.ensureBackupDir();
-
-    const json = serializeManifest(manifest);
-    const tmpFile = new File(Paths.cache, `_manifest_tmp_${Date.now()}.json`);
-    tmpFile.write(json);
-
-    try {
-      await this.uploadFile(tmpFile.uri, `${BACKUP_DIR}/${MANIFEST_FILENAME}`);
-    } finally {
-      if (tmpFile.exists) tmpFile.delete();
-    }
-  }
-
-  async downloadManifest(): Promise<BackupManifest | null> {
-    try {
-      await this.ensureBackupDir();
-
-      const tmpFile = new File(Paths.cache, `_manifest_dl_${Date.now()}.json`);
-      await this.downloadFile(`${BACKUP_DIR}/${MANIFEST_FILENAME}`, tmpFile.uri);
-
-      const content = await tmpFile.text();
-      if (tmpFile.exists) tmpFile.delete();
-
-      return parseManifest(content);
-    } catch {
-      return null;
-    }
-  }
-
   async getQuota(): Promise<{ used: number; total: number } | null> {
     try {
       if (this.isTokenExpired()) await this.refreshTokenIfNeeded();
@@ -428,6 +401,7 @@ export class DropboxProvider extends BaseCloudProvider {
     dropboxPath: string,
     content: Uint8Array,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     const chunkSize = 8 * 1024 * 1024; // 8MB chunks
     const totalSize = content.length;
@@ -441,6 +415,7 @@ export class DropboxProvider extends BaseCloudProvider {
         "Dropbox-API-Arg": JSON.stringify({ close: false }),
       },
       body: content.slice(0, Math.min(chunkSize, totalSize)),
+      signal,
     });
 
     if (!startRes.ok) {
@@ -470,6 +445,7 @@ export class DropboxProvider extends BaseCloudProvider {
           }),
         },
         body: chunk,
+        signal,
       });
 
       if (!appendRes.ok) {
@@ -498,6 +474,7 @@ export class DropboxProvider extends BaseCloudProvider {
         }),
       },
       body: remaining,
+      signal,
     });
 
     if (!finishRes.ok) {

@@ -9,8 +9,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import type { AlbumStatistics } from "../../lib/fits/types";
-import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { formatExposureTime, formatFileSize } from "../../lib/gallery/albumStatistics";
+import { useFrameTypeLabelMap } from "../../hooks/useFrameTypeLabelMap";
 
 interface AlbumStatisticsSheetProps {
   visible: boolean;
@@ -30,19 +30,7 @@ export function AlbumStatisticsSheet({
   const { t } = useI18n();
   const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
-
-  const frameTypeLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const definition of getFrameTypeDefinitions(frameClassificationConfig)) {
-      map.set(
-        definition.key,
-        definition.builtin
-          ? (t(`gallery.frameTypes.${definition.key}`) ?? definition.label)
-          : definition.label || definition.key,
-      );
-    }
-    return map;
-  }, [frameClassificationConfig, t]);
+  const frameTypeLabelMap = useFrameTypeLabelMap(frameClassificationConfig);
 
   const frameEntries = useMemo(
     () =>

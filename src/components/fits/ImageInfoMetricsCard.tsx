@@ -1,6 +1,8 @@
+import { memo } from "react";
 import { Text, View } from "react-native";
 import { Card, Chip } from "heroui-native";
 import type { HistogramDiagnostics } from "../../lib/fits/types";
+import { formatStatValue, formatClipPercent } from "../../lib/utils/formatters";
 import { useI18n } from "../../i18n/useI18n";
 
 interface StatsLike {
@@ -38,21 +40,7 @@ interface ImageInfoMetricsCardProps {
   totalFrames?: number;
 }
 
-function formatStatValue(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "—";
-  const abs = Math.abs(value);
-  if (abs >= 1e4 || (abs > 0 && abs < 1e-3)) return value.toExponential(2);
-  if (abs >= 100) return value.toFixed(1);
-  if (abs >= 1) return value.toFixed(3);
-  return value.toFixed(5);
-}
-
-function formatClipPercent(value: number | null | undefined) {
-  if (typeof value !== "number" || !Number.isFinite(value)) return "0.00%";
-  return `${value.toFixed(value >= 10 ? 1 : 2)}%`;
-}
-
-export function ImageInfoMetricsCard({
+export const ImageInfoMetricsCard = memo(function ImageInfoMetricsCard({
   stats,
   regionStats,
   imageDimensions,
@@ -167,4 +155,4 @@ export function ImageInfoMetricsCard({
       </Card.Body>
     </Card>
   );
-}
+});

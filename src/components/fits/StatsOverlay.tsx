@@ -1,6 +1,7 @@
 import { memo } from "react";
 import { Text } from "react-native";
 import { Card } from "heroui-native";
+import { formatStatValue } from "../../lib/utils/formatters";
 
 interface StatsOverlayProps {
   width: number;
@@ -16,14 +17,6 @@ interface StatsOverlayProps {
   mean: number;
   median?: number;
   stddev?: number;
-}
-
-function formatStatValue(value: number) {
-  const abs = Math.abs(value);
-  if (abs >= 1e4 || (abs > 0 && abs < 1e-3)) return value.toExponential(2);
-  if (abs >= 100) return value.toFixed(1);
-  if (abs >= 1) return value.toFixed(3);
-  return value.toFixed(5);
 }
 
 export const StatsOverlay = memo(function StatsOverlay({

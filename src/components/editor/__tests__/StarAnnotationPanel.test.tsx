@@ -142,4 +142,26 @@ describe("StarAnnotationPanel", () => {
     );
     expect(getByText(/imageEdited/)).toBeTruthy();
   });
+
+  it("calls onSetAnchor with null when pressing already-active anchor", () => {
+    const onSetAnchor = jest.fn();
+    const { getByText } = render(
+      <StarAnnotationPanel {...defaultProps} pendingAnchorIndex={2} onSetAnchor={onSetAnchor} />,
+    );
+    fireEvent.press(getByText("editor.setAnchor2"));
+    expect(onSetAnchor).toHaveBeenCalledWith(null);
+  });
+
+  it("calls onCancelDetection when cancel button is pressed during detection", () => {
+    const onCancelDetection = jest.fn();
+    const { getByText } = render(
+      <StarAnnotationPanel
+        {...defaultProps}
+        isDetectingStars={true}
+        onCancelDetection={onCancelDetection}
+      />,
+    );
+    fireEvent.press(getByText("common.cancel"));
+    expect(onCancelDetection).toHaveBeenCalledTimes(1);
+  });
 });

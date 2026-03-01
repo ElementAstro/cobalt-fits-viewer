@@ -1,9 +1,16 @@
 import { ScrollView, View } from "react-native";
-import { Chip } from "heroui-native";
+import { Chip, Separator } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import type { FitsSortBy, FitsSortOrder } from "../../stores/useFitsStore";
 
 const FILE_LIST_GRID_COLUMNS: Array<2 | 3 | 4> = [2, 3, 4];
+
+const SORT_LABEL_KEYS: Record<FitsSortBy, string> = {
+  name: "files.sortByName",
+  date: "files.sortByDate",
+  size: "files.sortBySize",
+  quality: "gallery.quality",
+};
 
 interface FilesSortBarProps {
   sortBy: FitsSortBy;
@@ -37,20 +44,13 @@ export function FilesSortBar({
             onPress={() => onSortToggle(key)}
           >
             <Chip.Label className="text-xs">
-              {key === "quality"
-                ? t("gallery.quality")
-                : t(
-                    `files.sortBy${key.charAt(0).toUpperCase() + key.slice(1)}` as
-                      | "files.sortByName"
-                      | "files.sortByDate"
-                      | "files.sortBySize",
-                  )}
+              {t(SORT_LABEL_KEYS[key])}
               {sortBy === key && (sortOrder === "asc" ? " ↑" : " ↓")}
             </Chip.Label>
           </Chip>
         ))}
 
-        <View className="h-4 w-px bg-separator" />
+        <Separator orientation="vertical" className="h-4" />
 
         {(["grid", "list", "compact"] as const).map((style) => (
           <Chip
@@ -71,7 +71,7 @@ export function FilesSortBar({
 
         {fileListStyle === "grid" && (
           <>
-            <View className="h-4 w-px bg-separator" />
+            <Separator orientation="vertical" className="h-4" />
             {FILE_LIST_GRID_COLUMNS.map((cols) => (
               <Chip
                 key={`grid-cols-${cols}`}

@@ -122,4 +122,24 @@ describe("BackupProgressDisplay", () => {
     // bytePercentage = Math.round(900/1000*100) = 90
     expect(screen.getByText(/90%/)).toBeTruthy();
   });
+
+  it("shows ETA when speed > 0 and byte data available", () => {
+    const progress: BackupProgress = {
+      phase: "uploading",
+      current: 2,
+      total: 5,
+      bytesTransferred: 5000,
+      bytesTotal: 10000,
+    };
+    // speed = Math.round(5000/2000*1000) = 2500, eta = (10000-5000)/2500 = 2
+    render(<BackupProgressDisplay progress={progress} showSpeed elapsedMs={2000} />);
+    expect(screen.getByText(/backup.eta/)).toBeTruthy();
+    expect(screen.getByText(/2s/)).toBeTruthy();
+  });
+
+  it("renders nothing when total is negative", () => {
+    const progress: BackupProgress = { phase: "preparing", current: 0, total: -1 };
+    const { toJSON } = render(<BackupProgressDisplay progress={progress} />);
+    expect(toJSON()).toBeNull();
+  });
 });

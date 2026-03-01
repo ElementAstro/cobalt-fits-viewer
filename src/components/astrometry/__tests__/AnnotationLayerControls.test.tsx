@@ -159,4 +159,67 @@ describe("AnnotationLayerControls (component)", () => {
     expect(screen.queryByText("astrometry.coordinateGrid")).toBeNull();
     expect(screen.queryByText("astrometry.constellationLines")).toBeNull();
   });
+
+  it("renders chip with secondary variant when type is hidden", () => {
+    const hiddenVis = { ...defaultVisibility, messier: false };
+    const annotations = [makeAnnotation("messier")];
+    render(
+      <AnnotationLayerControls
+        annotations={annotations}
+        visibility={hiddenVis}
+        onToggleType={jest.fn()}
+      />,
+    );
+    // Chip renders but with secondary variant (no background style override)
+    expect(screen.getByText("Messier (1)")).toBeTruthy();
+  });
+
+  it("renders coordinate grid chip with active styling when showCoordinateGrid is true", () => {
+    render(
+      <AnnotationLayerControls
+        annotations={[]}
+        visibility={defaultVisibility}
+        onToggleType={jest.fn()}
+        showCoordinateGrid={true}
+        onToggleCoordinateGrid={jest.fn()}
+      />,
+    );
+    expect(screen.getByText("astrometry.coordinateGrid")).toBeTruthy();
+  });
+
+  it("renders constellation chip with active styling when showConstellations is true", () => {
+    render(
+      <AnnotationLayerControls
+        annotations={[]}
+        visibility={defaultVisibility}
+        onToggleType={jest.fn()}
+        showConstellations={true}
+        onToggleConstellations={jest.fn()}
+      />,
+    );
+    expect(screen.getByText("astrometry.constellationLines")).toBeTruthy();
+  });
+
+  it("renders multiple annotation types with correct counts", () => {
+    const annotations = [
+      makeAnnotation("messier"),
+      makeAnnotation("ngc"),
+      makeAnnotation("ngc"),
+      makeAnnotation("ic"),
+      makeAnnotation("star"),
+      makeAnnotation("star"),
+      makeAnnotation("star"),
+    ];
+    render(
+      <AnnotationLayerControls
+        annotations={annotations}
+        visibility={defaultVisibility}
+        onToggleType={jest.fn()}
+      />,
+    );
+    expect(screen.getByText("Messier (1)")).toBeTruthy();
+    expect(screen.getByText("NGC (2)")).toBeTruthy();
+    expect(screen.getByText("IC (1)")).toBeTruthy();
+    expect(screen.getByText("Stars (3)")).toBeTruthy();
+  });
 });

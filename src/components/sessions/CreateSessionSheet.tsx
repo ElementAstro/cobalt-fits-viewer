@@ -19,6 +19,7 @@ import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
 import { toLocalDateKey } from "../../lib/sessions/planUtils";
 import { resolveManualSessionTimeRange } from "../../lib/sessions/sessionTimeRange";
 import { useChipInput } from "../../hooks/useChipInput";
+import { useEquipmentFields } from "../../hooks/useEquipmentFields";
 import { ChipInputField } from "./ChipInputField";
 import { EquipmentFields } from "./EquipmentFields";
 import { RatingSelector } from "./RatingSelector";
@@ -45,11 +46,7 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
   const [endMinute, setEndMinute] = useState(59);
   const [targets, setTargets] = useState<string[]>([]);
   const [targetInput, setTargetInput] = useState("");
-  const [telescope, setTelescope] = useState("");
-  const [camera, setCamera] = useState("");
-  const [mount, setMount] = useState("");
-  const [filters, setFilters] = useState<string[]>([]);
-  const [filterInput, setFilterInput] = useState("");
+  const equip = useEquipmentFields();
   const [weather, setWeather] = useState("");
   const [seeing, setSeeing] = useState("");
   const [notes, setNotes] = useState("");
@@ -82,11 +79,7 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
     setEndMinute(59);
     setTargets([]);
     setTargetInput("");
-    setTelescope("");
-    setCamera("");
-    setMount("");
-    setFilters([]);
-    setFilterInput("");
+    equip.resetEquipment();
     setWeather("");
     setSeeing("");
     setNotes("");
@@ -121,12 +114,7 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
         targetCatalog,
       ),
       imageIds: [],
-      equipment: {
-        telescope: telescope.trim() || undefined,
-        camera: camera.trim() || undefined,
-        mount: mount.trim() || undefined,
-        filters: filters.length > 0 ? filters : undefined,
-      },
+      equipment: equip.buildEquipmentObject(),
       weather: weather.trim() || undefined,
       seeing: seeing.trim() || undefined,
       notes: notes.trim() || undefined,
@@ -282,22 +270,22 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
 
             {/* Equipment */}
             <EquipmentFields
-              telescope={telescope}
-              camera={camera}
-              mount={mount}
-              onTelescopeChange={setTelescope}
-              onCameraChange={setCamera}
-              onMountChange={setMount}
+              telescope={equip.telescope}
+              camera={equip.camera}
+              mount={equip.mount}
+              onTelescopeChange={equip.setTelescope}
+              onCameraChange={equip.setCamera}
+              onMountChange={equip.setMount}
             />
 
             {/* Filters */}
             <ChipInputField
               label={t("sessions.filters")}
-              items={filters}
-              inputValue={filterInput}
-              onInputChange={setFilterInput}
-              onAdd={() => addChipItem(filterInput, filters, setFilters, setFilterInput)}
-              onRemove={(f) => removeChipItem(f, filters, setFilters)}
+              items={equip.filters}
+              inputValue={equip.filterInput}
+              onInputChange={equip.setFilterInput}
+              onAdd={equip.addFilter}
+              onRemove={equip.removeFilter}
               placeholder="e.g. Ha, OIII, SII..."
             />
 

@@ -232,4 +232,28 @@ describe("AstrometryAnnotationOverlay", () => {
     // No label text should be rendered
     expect(queryByText("M42")).toBeNull();
   });
+
+  it("falls back to sourceToRenderScale=1 when sourceWidth is zero", () => {
+    const { getByTestId } = render(
+      <AstrometryAnnotationOverlay
+        {...baseProps}
+        sourceWidth={0}
+        sourceHeight={0}
+        annotations={[makeAnnotation()]}
+      />,
+    );
+    expect(getByTestId("skia-canvas")).toBeTruthy();
+  });
+
+  it("renders 'other' type annotation with solid_circle style", () => {
+    const other = makeAnnotation({ type: "other", names: ["Unknown Obj"] });
+    const { getByTestId } = render(
+      <AstrometryAnnotationOverlay
+        {...baseProps}
+        annotations={[other]}
+        transform={{ ...baseTransform, scale: 1.5 }}
+      />,
+    );
+    expect(getByTestId("skia-canvas")).toBeTruthy();
+  });
 });

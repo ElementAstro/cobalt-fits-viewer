@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import { FilesHeader } from "../FilesHeader";
 
 jest.mock("../../../i18n/useI18n", () => ({
@@ -13,11 +13,21 @@ jest.mock("../../../lib/utils/fileManager", () => ({
 }));
 
 jest.mock("../../common/SearchBar", () => ({
-  SearchBar: (props: { value: string; placeholder: string; compact?: boolean }) => {
+  SearchBar: (props: {
+    value: string;
+    placeholder: string;
+    compact?: boolean;
+    onChangeText?: (text: string) => void;
+  }) => {
     const { View, TextInput } = require("react-native");
     return (
       <View testID="search-bar">
-        <TextInput testID="search-input" value={props.value} placeholder={props.placeholder} />
+        <TextInput
+          testID="search-input"
+          value={props.value}
+          placeholder={props.placeholder}
+          onChangeText={props.onChangeText}
+        />
       </View>
     );
   },
@@ -89,5 +99,11 @@ describe("FilesHeader", () => {
   it("displays files count text with totalCount", () => {
     render(<FilesHeader {...defaultProps} totalCount={42} />);
     expect(screen.getByText(/42/)).toBeTruthy();
+  });
+
+  it("calls onSearchChange when search input changes", () => {
+    render(<FilesHeader {...defaultProps} />);
+    fireEvent.changeText(screen.getByTestId("search-input"), "test query");
+    expect(defaultProps.onSearchChange).toHaveBeenCalledWith("test query");
   });
 });

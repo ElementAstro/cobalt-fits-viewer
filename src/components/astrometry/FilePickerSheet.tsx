@@ -20,6 +20,9 @@ interface FilePickerSheetProps {
   onClose: () => void;
 }
 
+const ESTIMATED_ROW_HEIGHT = 72;
+const MAX_LIST_HEIGHT = 400;
+
 export function FilePickerSheet({
   visible,
   files,
@@ -100,7 +103,9 @@ export function FilePickerSheet({
               <Text className="mt-2 text-sm text-muted">{t("files.emptyState")}</Text>
             </View>
           ) : (
-            <View style={{ height: Math.min(files.length * 72, 400) }}>
+            <View
+              style={{ height: Math.min(files.length * ESTIMATED_ROW_HEIGHT, MAX_LIST_HEIGHT) }}
+            >
               <FlashList
                 data={files}
                 keyExtractor={(item) => item.id}

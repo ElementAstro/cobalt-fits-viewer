@@ -21,6 +21,10 @@ const IMAGE_PROCESSING_PROFILE_OPTIONS = [
   { label: "Standard", value: "standard" as const },
   { label: "Legacy", value: "legacy" as const },
 ];
+const IMAGE_PROCESSING_PROFILE_I18N: Record<string, string> = {
+  standard: "settings.imageProcessingProfileStandard",
+  legacy: "settings.imageProcessingProfileLegacy",
+};
 
 export function ProcessingPerformanceSection() {
   const { t } = useI18n();
@@ -51,10 +55,6 @@ export function ProcessingPerformanceSection() {
     })),
   );
 
-  const IMAGE_PROCESSING_PROFILE_I18N: Record<string, string> = {
-    standard: "settings.imageProcessingProfileStandard",
-    legacy: "settings.imageProcessingProfileLegacy",
-  };
   const imageProcessingProfileLabel = (value: "standard" | "legacy") =>
     t(IMAGE_PROCESSING_PROFILE_I18N[value] ?? value);
 

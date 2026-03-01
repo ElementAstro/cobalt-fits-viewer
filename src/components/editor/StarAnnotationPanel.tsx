@@ -98,27 +98,16 @@ export const StarAnnotationPanel = React.memo(function StarAnnotationPanel({
                 <Button.Label className="text-[9px]">{t("common.cancel")}</Button.Label>
               </Button>
             )}
-            <Button
-              size="sm"
-              variant={pendingAnchorIndex === 1 ? "primary" : "outline"}
-              onPress={() => onSetAnchor(pendingAnchorIndex === 1 ? null : 1)}
-            >
-              <Button.Label className="text-[9px]">{t("editor.setAnchor1")}</Button.Label>
-            </Button>
-            <Button
-              size="sm"
-              variant={pendingAnchorIndex === 2 ? "primary" : "outline"}
-              onPress={() => onSetAnchor(pendingAnchorIndex === 2 ? null : 2)}
-            >
-              <Button.Label className="text-[9px]">{t("editor.setAnchor2")}</Button.Label>
-            </Button>
-            <Button
-              size="sm"
-              variant={pendingAnchorIndex === 3 ? "primary" : "outline"}
-              onPress={() => onSetAnchor(pendingAnchorIndex === 3 ? null : 3)}
-            >
-              <Button.Label className="text-[9px]">{t("editor.setAnchor3")}</Button.Label>
-            </Button>
+            {([1, 2, 3] as const).map((i) => (
+              <Button
+                key={i}
+                size="sm"
+                variant={pendingAnchorIndex === i ? "primary" : "outline"}
+                onPress={() => onSetAnchor(pendingAnchorIndex === i ? null : i)}
+              >
+                <Button.Label className="text-[9px]">{t(`editor.setAnchor${i}`)}</Button.Label>
+              </Button>
+            ))}
             <Button size="sm" variant="outline" onPress={onClearAnchors}>
               <Button.Label className="text-[9px]">{t("editor.clearAnchors")}</Button.Label>
             </Button>

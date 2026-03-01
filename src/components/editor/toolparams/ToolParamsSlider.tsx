@@ -5,15 +5,15 @@ import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
 import type { EditorTool, EditorToolParams, CurvesPreset } from "../../../hooks/useEditorToolState";
 
-interface ToolParamsAdjustProps {
+interface ToolParamsSliderProps {
   activeTool: EditorTool & string;
   params: EditorToolParams;
 }
 
-export const ToolParamsAdjust = React.memo(function ToolParamsAdjust({
+export const ToolParamsSlider = React.memo(function ToolParamsSlider({
   activeTool,
   params,
-}: ToolParamsAdjustProps) {
+}: ToolParamsSliderProps) {
   const { t } = useI18n();
 
   switch (activeTool) {

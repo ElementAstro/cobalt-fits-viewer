@@ -9,6 +9,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { FitsMetadata } from "../../lib/fits/types";
 
+const RATING_LABEL_KEYS: Record<number, string> = {
+  5: "targets.ratings.excellent",
+  4: "targets.ratings.good",
+  3: "targets.ratings.average",
+  2: "targets.ratings.fair",
+  1: "targets.ratings.poor",
+};
+
 interface ImageRatingSheetProps {
   visible: boolean;
   images: FitsMetadata[];
@@ -29,7 +37,7 @@ export function ImageRatingSheet({
   onSetBest,
 }: ImageRatingSheetProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, warningColor, dangerColor] = useThemeColor(["muted", "warning", "danger"]);
 
   // Group images by rating
   const groupedImages = useMemo(() => {
@@ -85,7 +93,7 @@ export function ImageRatingSheet({
             <Ionicons
               name={star <= currentRating ? "star" : "star-outline"}
               size={16}
-              color={star <= currentRating ? "#f59e0b" : mutedColor}
+              color={star <= currentRating ? warningColor : mutedColor}
             />
           </Button>
         ))}
@@ -103,7 +111,7 @@ export function ImageRatingSheet({
         className="flex-row items-center justify-between py-2 border-b border-surface-secondary"
       >
         <View className="flex-1 flex-row items-center gap-2">
-          {isBest && <Ionicons name="star" size={12} color="#f59e0b" />}
+          {isBest && <Ionicons name="star" size={12} color={warningColor} />}
           <View className="flex-1">
             <Text className="text-sm text-foreground" numberOfLines={1}>
               {image.filename}
@@ -122,7 +130,7 @@ export function ImageRatingSheet({
               <Ionicons
                 name={isBest ? "heart" : "heart-outline"}
                 size={16}
-                color={isBest ? "#ef4444" : mutedColor}
+                color={isBest ? dangerColor : mutedColor}
               />
             </Button>
           )}
@@ -144,7 +152,7 @@ export function ImageRatingSheet({
                 key={star}
                 name={star <= rating ? "star" : "star-outline"}
                 size={12}
-                color={star <= rating ? "#f59e0b" : mutedColor}
+                color={star <= rating ? warningColor : mutedColor}
               />
             ))}
           </View>
@@ -192,7 +200,7 @@ export function ImageRatingSheet({
                       </View>
                       <View className="items-center">
                         <View className="flex-row items-center gap-1">
-                          <Ionicons name="star" size={14} color="#f59e0b" />
+                          <Ionicons name="star" size={14} color={warningColor} />
                           <Text className="text-lg font-bold text-foreground">
                             {stats.averageRating.toFixed(1)}
                           </Text>
@@ -214,19 +222,8 @@ export function ImageRatingSheet({
                 <Separator className="mb-4" />
 
                 {/* Rating groups */}
-                {[5, 4, 3, 2, 1].map((rating) =>
-                  renderRatingGroup(
-                    rating,
-                    rating === 5
-                      ? t("targets.ratings.excellent")
-                      : rating === 4
-                        ? t("targets.ratings.good")
-                        : rating === 3
-                          ? t("targets.ratings.average")
-                          : rating === 2
-                            ? t("targets.ratings.fair")
-                            : t("targets.ratings.poor"),
-                  ),
+                {([5, 4, 3, 2, 1] as const).map((rating) =>
+                  renderRatingGroup(rating, t(RATING_LABEL_KEYS[rating])),
                 )}
 
                 {/* Unrated */}

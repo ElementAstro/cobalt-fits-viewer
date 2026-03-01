@@ -1,4 +1,4 @@
-import { isMediaWorkspaceFile, routeForMedia } from "../routing";
+import { isVideoFile, isAudioFile, isMediaWorkspaceFile, routeForMedia } from "../routing";
 import type { FitsMetadata } from "../../fits/types";
 
 function makeFile(overrides: Partial<FitsMetadata>): FitsMetadata {
@@ -15,6 +15,42 @@ function makeFile(overrides: Partial<FitsMetadata>): FitsMetadata {
     ...overrides,
   };
 }
+
+describe("isVideoFile", () => {
+  it("returns true for video mediaKind", () => {
+    expect(isVideoFile(makeFile({ mediaKind: "video" }))).toBe(true);
+  });
+
+  it("returns true for video sourceType", () => {
+    expect(isVideoFile(makeFile({ sourceType: "video" }))).toBe(true);
+  });
+
+  it("returns false for audio mediaKind", () => {
+    expect(isVideoFile(makeFile({ mediaKind: "audio" }))).toBe(false);
+  });
+
+  it("returns false for plain file", () => {
+    expect(isVideoFile(makeFile({}))).toBe(false);
+  });
+});
+
+describe("isAudioFile", () => {
+  it("returns true for audio mediaKind", () => {
+    expect(isAudioFile(makeFile({ mediaKind: "audio" }))).toBe(true);
+  });
+
+  it("returns true for audio sourceType", () => {
+    expect(isAudioFile(makeFile({ sourceType: "audio" }))).toBe(true);
+  });
+
+  it("returns false for video mediaKind", () => {
+    expect(isAudioFile(makeFile({ mediaKind: "video" }))).toBe(false);
+  });
+
+  it("returns false for plain file", () => {
+    expect(isAudioFile(makeFile({}))).toBe(false);
+  });
+});
 
 describe("isMediaWorkspaceFile", () => {
   it("returns true for video mediaKind", () => {

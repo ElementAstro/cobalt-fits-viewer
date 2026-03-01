@@ -3,13 +3,12 @@
  * 使用 webdav npm 包 (React Native 入口)
  */
 
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { BaseCloudProvider } from "../cloudProvider";
-import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
-import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
+import type { CloudProviderConfig, RemoteFile } from "../types";
+import { BACKUP_DIR, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.WebDAVProvider;
 const SECURE_STORE_KEY = "backup_webdav_config";
@@ -87,6 +86,7 @@ export class WebDAVProvider extends BaseCloudProvider {
     localPath: string,
     remotePath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     const file = new File(localPath);
     if (!file.exists) throw new Error(`Local file not found: ${localPath}`);
@@ -101,6 +101,7 @@ export class WebDAVProvider extends BaseCloudProvider {
         "Content-Type": "application/octet-stream",
       },
       content,
+      signal,
     );
 
     if (!res.ok && res.status !== 201 && res.status !== 204) {
@@ -116,10 +117,11 @@ export class WebDAVProvider extends BaseCloudProvider {
     remotePath: string,
     localPath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     const davPath = this.toDavPath(remotePath);
 
-    const res = await this.davRequest("GET", davPath);
+    const res = await this.davRequest("GET", davPath, undefined, undefined, signal);
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);
 
     const data = new Uint8Array(await res.arrayBuffer());
@@ -157,36 +159,6 @@ export class WebDAVProvider extends BaseCloudProvider {
     });
 
     return res.ok || res.status === 207;
-  }
-
-  async uploadManifest(manifest: BackupManifest): Promise<void> {
-    await this.ensureBackupDir();
-
-    const json = serializeManifest(manifest);
-    const tmpFile = new File(Paths.cache, `_manifest_tmp_${Date.now()}.json`);
-    tmpFile.write(json);
-
-    try {
-      await this.uploadFile(tmpFile.uri, `${BACKUP_DIR}/${MANIFEST_FILENAME}`);
-    } finally {
-      if (tmpFile.exists) tmpFile.delete();
-    }
-  }
-
-  async downloadManifest(): Promise<BackupManifest | null> {
-    try {
-      await this.ensureBackupDir();
-
-      const tmpFile = new File(Paths.cache, `_manifest_dl_${Date.now()}.json`);
-      await this.downloadFile(`${BACKUP_DIR}/${MANIFEST_FILENAME}`, tmpFile.uri);
-
-      const content = await tmpFile.text();
-      if (tmpFile.exists) tmpFile.delete();
-
-      return parseManifest(content);
-    } catch {
-      return null;
-    }
   }
 
   async getQuota(): Promise<{ used: number; total: number } | null> {
@@ -257,6 +229,7 @@ export class WebDAVProvider extends BaseCloudProvider {
     path: string,
     extraHeaders?: Record<string, string>,
     body?: string | Uint8Array,
+    signal?: AbortSignal,
   ): Promise<Response> {
     if (!this._serverUrl) throw new Error("WebDAV not configured");
 
@@ -270,6 +243,7 @@ export class WebDAVProvider extends BaseCloudProvider {
       method,
       headers,
       body: body as BodyInit | undefined,
+      signal,
     });
   }
 
@@ -284,14 +258,16 @@ export class WebDAVProvider extends BaseCloudProvider {
   private parseMultiStatus(xml: string, basePath: string): RemoteFile[] {
     const results: RemoteFile[] = [];
 
-    // Simple XML parsing for DAV:response elements
-    const responseRegex = /<d:response>([\s\S]*?)<\/d:response>/gi;
+    // Namespace-agnostic XML parsing for DAV:response elements
+    // Matches <d:response>, <D:response>, <response xmlns="DAV:">, etc.
+    const ns = "(?:[a-zA-Z]+:)?";
+    const responseRegex = new RegExp(`<${ns}response\\b[^>]*>([\\s\\S]*?)<\\/${ns}response>`, "gi");
     let match;
 
     while ((match = responseRegex.exec(xml)) !== null) {
       const response = match[1];
 
-      const hrefMatch = response.match(/<d:href>(.*?)<\/d:href>/i);
+      const hrefMatch = response.match(new RegExp(`<${ns}href>(.*?)<\\/${ns}href>`, "i"));
       if (!hrefMatch) continue;
 
       const href = decodeURIComponent(hrefMatch[1]);
@@ -304,10 +280,16 @@ export class WebDAVProvider extends BaseCloudProvider {
       }
 
       const name = href.split("/").filter(Boolean).pop() ?? "";
-      const isDirectory = response.includes("<d:collection") || response.includes("d:collection/>");
+      const isDirectory =
+        new RegExp(`<${ns}collection`, "i").test(response) ||
+        new RegExp(`${ns}collection/>`, "i").test(response);
 
-      const sizeMatch = response.match(/<d:getcontentlength>(\d+)<\/d:getcontentlength>/i);
-      const modifiedMatch = response.match(/<d:getlastmodified>(.*?)<\/d:getlastmodified>/i);
+      const sizeMatch = response.match(
+        new RegExp(`<${ns}getcontentlength>(\\d+)<\\/${ns}getcontentlength>`, "i"),
+      );
+      const modifiedMatch = response.match(
+        new RegExp(`<${ns}getlastmodified>(.*?)<\\/${ns}getlastmodified>`, "i"),
+      );
 
       results.push({
         name,

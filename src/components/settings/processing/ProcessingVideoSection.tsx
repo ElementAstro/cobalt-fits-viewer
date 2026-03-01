@@ -11,7 +11,15 @@ import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
 
 const VIDEO_PROFILE_VALUES = ["compatibility", "balanced", "quality"] as const;
+const VIDEO_PROFILE_I18N: Record<string, string> = {
+  compatibility: "settings.videoProfileCompatibility",
+  balanced: "settings.videoProfileBalanced",
+  quality: "settings.videoProfileQuality",
+};
 const VIDEO_TARGET_PRESET_VALUES = ["1080p", "720p", "custom"] as const;
+const VIDEO_TARGET_PRESET_I18N: Record<string, string> = {
+  custom: "settings.videoPresetCustom",
+};
 
 export function ProcessingVideoSection() {
   const { t } = useI18n();
@@ -66,17 +74,9 @@ export function ProcessingVideoSection() {
     })),
   );
 
-  const VIDEO_PROFILE_I18N: Record<string, string> = {
-    compatibility: "settings.videoProfileCompatibility",
-    balanced: "settings.videoProfileBalanced",
-    quality: "settings.videoProfileQuality",
-  };
   const videoProfileLabel = (value: (typeof VIDEO_PROFILE_VALUES)[number]) =>
     t(VIDEO_PROFILE_I18N[value] ?? value);
 
-  const VIDEO_TARGET_PRESET_I18N: Record<string, string> = {
-    custom: "settings.videoPresetCustom",
-  };
   const videoTargetPresetLabel = (value: (typeof VIDEO_TARGET_PRESET_VALUES)[number]) =>
     VIDEO_TARGET_PRESET_I18N[value] ? t(VIDEO_TARGET_PRESET_I18N[value]) : value;
 

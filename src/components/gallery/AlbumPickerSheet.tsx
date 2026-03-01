@@ -7,7 +7,7 @@ import { useI18n } from "../../i18n/useI18n";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { SearchBar } from "../common/SearchBar";
 import { EmptyState } from "../common/EmptyState";
-import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
+import { resolveAlbumCoverUri } from "../../lib/gallery/thumbnailCache";
 import type { Album } from "../../lib/fits/types";
 
 interface AlbumPickerSheetProps {
@@ -29,14 +29,6 @@ export function AlbumPickerSheet({ visible, albums, onClose, onSelect }: AlbumPi
     const q = query.toLowerCase();
     return nonSmart.filter((a) => a.name.toLowerCase().includes(q));
   }, [albums, query]);
-
-  const getCoverUri = (album: Album): string | undefined => {
-    const coverId = album.coverImageId ?? album.imageIds[0];
-    if (!coverId) return undefined;
-    const coverFile = getFileById(coverId);
-    if (!coverFile) return undefined;
-    return resolveThumbnailUri(coverFile.id, coverFile.thumbnailUri) ?? undefined;
-  };
 
   return (
     <BottomSheet
@@ -71,7 +63,7 @@ export function AlbumPickerSheet({ visible, albums, onClose, onSelect }: AlbumPi
           ) : (
             <ScrollView style={{ maxHeight: 320 }}>
               {selectableAlbums.map((album) => {
-                const coverUri = getCoverUri(album);
+                const coverUri = resolveAlbumCoverUri(album, getFileById);
                 return (
                   <PressableFeedback
                     key={album.id}

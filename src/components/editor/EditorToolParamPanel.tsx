@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import {
   ToolParamsGeometry,
-  ToolParamsAdjust,
+  ToolParamsSlider,
   ToolParamsProcess,
   ToolParamsMask,
 } from "./toolparams";
@@ -97,7 +97,7 @@ function ToolParams({
     );
   }
   if (PARAM_SLIDER_TOOLS.has(activeTool)) {
-    return <ToolParamsAdjust activeTool={activeTool} params={params} />;
+    return <ToolParamsSlider activeTool={activeTool} params={params} />;
   }
   if (PARAM_MASK_TOOLS.has(activeTool)) {
     return <ToolParamsMask activeTool={activeTool} params={params} />;

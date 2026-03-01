@@ -2,11 +2,7 @@ import { View, Text, ScrollView } from "react-native";
 import { Button, Chip, Input, Switch, TextField } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import type { FrameClassificationRule } from "../../../lib/fits/types";
-import {
-  RULE_TARGET_OPTIONS,
-  RULE_MATCH_OPTIONS,
-  RULE_HEADER_OPTIONS,
-} from "./frameClassConstants";
+import { RULE_TARGET_OPTIONS, RULE_MATCH_OPTIONS, RULE_HEADER_OPTIONS } from "./constants";
 
 interface ClassificationRuleCardProps {
   rule: FrameClassificationRule;
@@ -149,10 +145,9 @@ export function ClassificationRuleCard({
       </TextField>
       <Text className="mt-1 text-xs text-muted">
         {matchedType
-          ? t("settings.ruleMatched").replace(
-              "{type}",
-              frameTypeLabels.get(matchedType) ?? matchedType,
-            )
+          ? t("settings.ruleMatched", {
+              type: frameTypeLabels.get(matchedType) ?? matchedType,
+            })
           : t("settings.ruleNoMatch")}
       </Text>
     </View>

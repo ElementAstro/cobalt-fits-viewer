@@ -6,11 +6,7 @@ import type {
   FrameClassificationRuleMatchType,
   FrameClassificationRuleTarget,
 } from "../../../lib/fits/types";
-import {
-  RULE_TARGET_OPTIONS,
-  RULE_MATCH_OPTIONS,
-  RULE_HEADER_OPTIONS,
-} from "./frameClassConstants";
+import { RULE_TARGET_OPTIONS, RULE_MATCH_OPTIONS, RULE_HEADER_OPTIONS } from "./constants";
 
 interface AddRuleFormProps {
   frameTypeDefinitions: Array<{ key: string; label: string; builtin?: boolean }>;

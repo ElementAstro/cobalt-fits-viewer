@@ -22,6 +22,7 @@ jest.mock("../../../stores/useFitsStore", () => ({
 
 jest.mock("../../../lib/gallery/thumbnailCache", () => ({
   resolveThumbnailUri: () => null,
+  resolveAlbumCoverUri: () => undefined,
 }));
 
 jest.mock("expo-image", () => {

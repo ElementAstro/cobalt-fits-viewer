@@ -24,77 +24,78 @@ This module provides plate solving capabilities through the Astrometry.net servi
 | `types.ts`             | Type definitions for jobs and results        |
 | `syncToTarget.ts`      | Sync solving results to target store         |
 
-**Initialization:**
+**Usage (via hook):**
 
 ```typescript
-import { AstrometryService } from "./astrometryService";
-import { useAstrometryStore } from "../../stores/useAstrometryStore";
+import { useAstrometry } from "../../hooks/useAstrometry";
 
-const service = new AstrometryService();
-await service.initialize();
+const { submitFile, cancelJob, jobs } = useAstrometry();
+const jobId = submitFile(fileId);
 ```
 
 ## Public Interfaces
 
-### AstrometryService
+### astrometryService (function-based)
 
 ```typescript
-class AstrometryService {
-  // Initialize with stored API key
-  initialize(): Promise<void>;
+// Full plate solving flow: upload → poll → fetch results
+function solveFile(
+  jobId: string,
+  fileUri: string,
+  config: AstrometryConfig,
+  onUpdate: JobUpdateCallback,
+): Promise<void>;
+function solveUrl(
+  jobId: string,
+  imageUrl: string,
+  config: AstrometryConfig,
+  onUpdate: JobUpdateCallback,
+): Promise<void>;
 
-  // Submit a FITS file for solving
-  submitJob(
-    fileId: string,
-    filepath: string,
-    options?: Partial<AstrometryUploadOptions>,
-  ): Promise<AstrometryJob>;
+// Session management
+function ensureSession(config: AstrometryConfig): Promise<string>;
+function clearSession(): void;
+function getServerUrl(config: AstrometryConfig): string;
 
-  // Cancel a running job
-  cancelJob(jobId: string): Promise<void>;
-
-  // Get current job status
-  getJobStatus(jobId: string): Promise<AstrometryJob>;
-
-  // Get all jobs
-  getJobs(): AstrometryJob[];
-
-  // Poll job until completion
-  waitForCompletion(
-    jobId: string,
-    onProgress?: (job: AstrometryJob) => void,
-  ): Promise<AstrometryJob>;
-
-  // Export WCS headers
-  exportWCSHeaders(result: AstrometryResult): HeaderKeyword[];
-}
+// Job control
+function cancelJob(jobId: string): void;
+function cancelAllJobs(): void;
+function getActiveJobCount(): number;
+function isJobActive(jobId: string): boolean;
 ```
 
-### AstrometryClient
+### astrometryClient (function-based)
 
 ```typescript
-class AstrometryClient {
-  // Login and get session token
-  login(apiKey: string): Promise<string>;
+// API Key secure storage
+function saveApiKey(apiKey: string): Promise<void>;
+function getApiKey(): Promise<string | null>;
+function deleteApiKey(): Promise<void>;
 
-  // Upload file for solving
-  upload(session: string, file: Blob | Buffer, options?: AstrometryUploadOptions): Promise<number>; // submission ID
-
-  // Upload from URL
-  urlUpload(session: string, url: string, options?: AstrometryUploadOptions): Promise<number>;
-
-  // Get submission status
-  getSubmissionStatus(submissionId: number): Promise<AstrometrySubmissionStatus>;
-
-  // Get job status
-  getJobStatus(jobId: number): Promise<AstrometryJobStatusResponse>;
-
-  // Get calibration results
-  getCalibration(jobId: number): Promise<AstrometryCalibrationResponse>;
-
-  // Get annotations (celestial objects)
-  getAnnotations(jobId: number): Promise<AstrometryAnnotationResponse[]>;
-}
+// API calls
+function login(apiKey: string, serverUrl: string): Promise<string>;
+function uploadFile(
+  serverUrl: string,
+  fileUri: string,
+  options: AstrometryUploadOptions,
+): Promise<number>;
+function uploadUrl(
+  serverUrl: string,
+  imageUrl: string,
+  options: AstrometryUploadOptions,
+): Promise<number>;
+function getSubmissionStatus(
+  serverUrl: string,
+  submissionId: number,
+): Promise<AstrometrySubmissionStatus>;
+function getJobStatus(serverUrl: string, jobId: number): Promise<AstrometryJobStatusResponse>;
+function getJobCalibration(serverUrl: string, jobId: number): Promise<AstrometryCalibration>;
+function getJobAnnotations(serverUrl: string, jobId: number): Promise<AstrometryAnnotation[]>;
+function getJobInfo(
+  serverUrl: string,
+  jobId: number,
+): Promise<{ tags: string[]; objects_in_field: string[] }>;
+function testConnection(apiKey: string, serverUrl: string): Promise<boolean>;
 ```
 
 ### useAstrometry Hook

@@ -98,4 +98,25 @@ describe("AnimatedSplashScreen", () => {
     // Advance timers past the MIN_DISPLAY_MS (1500ms)
     jest.advanceTimersByTime(2500);
   });
+
+  it("applies custom font family when getFontFamily returns a value", () => {
+    // Override FontProvider mock to return a real font
+    jest.doMock("../FontProvider", () => ({
+      useFontFamily: () => ({
+        getFontFamily: (weight?: string) => (weight === "bold" ? "Inter-Bold" : "Inter-Regular"),
+      }),
+    }));
+
+    // Re-require to pick up the new mock
+    const { AnimatedSplashScreen: ASS } = require("../AnimatedSplashScreen");
+
+    render(
+      <ASS>
+        <></>
+      </ASS>,
+    );
+
+    expect(screen.getByText("splash.appName")).toBeTruthy();
+    expect(screen.getByText("splash.tagline")).toBeTruthy();
+  });
 });

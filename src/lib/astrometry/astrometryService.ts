@@ -52,15 +52,30 @@ export function getServerUrl(config: AstrometryConfig): string {
 
 // ===== 核心解析流程 =====
 
+type UploadFn = (serverUrl: string, options: AstrometryUploadOptions) => Promise<number>;
+
+function buildUploadOptions(session: string, config: AstrometryConfig): AstrometryUploadOptions {
+  const options: AstrometryUploadOptions = {
+    session,
+    publicly_visible: "n",
+  };
+  if (config.defaultScaleLower != null && config.defaultScaleUpper != null) {
+    options.scale_units = config.defaultScaleUnits;
+    options.scale_lower = config.defaultScaleLower;
+    options.scale_upper = config.defaultScaleUpper;
+  }
+  return options;
+}
+
 /**
  * 执行完整的 plate solving 流程:
  * upload → poll submission → get job ID → poll job → fetch results
  */
-export async function solveFile(
+async function executeSolveFlow(
   jobId: string,
-  fileUri: string,
   config: AstrometryConfig,
   onUpdate: JobUpdateCallback,
+  uploadFn: UploadFn,
 ): Promise<void> {
   const controller = new AbortController();
   activeControllers.set(jobId, controller);
@@ -71,21 +86,12 @@ export async function solveFile(
     // 1. 确保已登录
     const session = await ensureSession(config);
 
-    // 2. 上传文件
+    // 2. 上传
     onUpdate(jobId, { status: "uploading", progress: 10 });
     checkAborted(controller);
 
-    const uploadOptions: AstrometryUploadOptions = {
-      session,
-      publicly_visible: "n",
-    };
-    if (config.defaultScaleLower != null && config.defaultScaleUpper != null) {
-      uploadOptions.scale_units = config.defaultScaleUnits;
-      uploadOptions.scale_lower = config.defaultScaleLower;
-      uploadOptions.scale_upper = config.defaultScaleUpper;
-    }
-
-    const submissionId = await client.uploadFile(serverUrl, fileUri, uploadOptions);
+    const uploadOptions = buildUploadOptions(session, config);
+    const submissionId = await uploadFn(serverUrl, uploadOptions);
     onUpdate(jobId, { submissionId, status: "submitted", progress: 30 });
     checkAborted(controller);
 
@@ -125,6 +131,17 @@ export async function solveFile(
   }
 }
 
+export async function solveFile(
+  jobId: string,
+  fileUri: string,
+  config: AstrometryConfig,
+  onUpdate: JobUpdateCallback,
+): Promise<void> {
+  return executeSolveFlow(jobId, config, onUpdate, (serverUrl, opts) =>
+    client.uploadFile(serverUrl, fileUri, opts),
+  );
+}
+
 /**
  * 通过 URL 执行 plate solving
  */
@@ -134,52 +151,9 @@ export async function solveUrl(
   config: AstrometryConfig,
   onUpdate: JobUpdateCallback,
 ): Promise<void> {
-  const controller = new AbortController();
-  activeControllers.set(jobId, controller);
-
-  const serverUrl = getServerUrl(config);
-
-  try {
-    const session = await ensureSession(config);
-
-    onUpdate(jobId, { status: "uploading", progress: 10 });
-    checkAborted(controller);
-
-    const uploadOptions: AstrometryUploadOptions = {
-      session,
-      publicly_visible: "n",
-    };
-    if (config.defaultScaleLower != null && config.defaultScaleUpper != null) {
-      uploadOptions.scale_units = config.defaultScaleUnits;
-      uploadOptions.scale_lower = config.defaultScaleLower;
-      uploadOptions.scale_upper = config.defaultScaleUpper;
-    }
-
-    const submissionId = await client.uploadUrl(serverUrl, imageUrl, uploadOptions);
-    onUpdate(jobId, { submissionId, status: "submitted", progress: 30 });
-    checkAborted(controller);
-
-    const remoteJobId = await pollSubmission(serverUrl, submissionId, controller);
-    onUpdate(jobId, { jobId: remoteJobId, status: "solving", progress: 50 });
-    checkAborted(controller);
-
-    const jobStatus = await pollJob(serverUrl, remoteJobId, controller, (progress) => {
-      onUpdate(jobId, { progress });
-    });
-
-    if (jobStatus !== "success") {
-      onUpdate(jobId, { status: "failure", error: "Plate solving failed", progress: 100 });
-      return;
-    }
-
-    onUpdate(jobId, { progress: 90 });
-    const result = await fetchResults(serverUrl, remoteJobId);
-    onUpdate(jobId, { status: "success", progress: 100, result });
-  } catch (e) {
-    handleSolveError(jobId, e, controller, onUpdate);
-  } finally {
-    activeControllers.delete(jobId);
-  }
+  return executeSolveFlow(jobId, config, onUpdate, (serverUrl, opts) =>
+    client.uploadUrl(serverUrl, imageUrl, opts),
+  );
 }
 
 function handleSolveError(

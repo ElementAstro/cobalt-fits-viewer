@@ -1,5 +1,5 @@
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { render, fireEvent } from "@testing-library/react-native";
 import { ToolParamsProcess } from "../ToolParamsProcess";
 
 jest.mock("../../../../i18n/useI18n", () => ({
@@ -8,12 +8,18 @@ jest.mock("../../../../i18n/useI18n", () => ({
 
 jest.mock("../../../common/SimpleSlider", () => ({
   SimpleSlider: (props: Record<string, unknown>) => {
-    const { Text } = require("react-native");
-    return <Text testID={`slider-${props.label}`}>{props.label as string}</Text>;
+    const RN = require("react-native");
+    const R = require("react");
+    const cb = props.onValueChange;
+    return R.createElement(
+      RN.Pressable,
+      { testID: `slider-${props.label}`, onPress: () => typeof cb === "function" && cb(5.7) },
+      R.createElement(RN.Text, null, props.label),
+    );
   },
 }));
 
-const mockParams = {
+const mockParamsRaw = {
   claheTileSize: 8,
   setClaheTileSize: jest.fn(),
   claheClipLimit: 3.0,
@@ -70,7 +76,8 @@ const mockParams = {
   setColorBalanceBlueGain: jest.fn(),
   pixelMathExpr: "$T",
   setPixelMathExpr: jest.fn(),
-} as never;
+};
+const mockParams = mockParamsRaw as never;
 
 describe("ToolParamsProcess", () => {
   beforeEach(() => jest.clearAllMocks());
@@ -127,5 +134,140 @@ describe("ToolParamsProcess", () => {
       <ToolParamsProcess activeTool={"unknown" as never} params={mockParams} />,
     );
     expect(toJSON()).toBeNull();
+  });
+
+  it("rounds claheTileSize via Math.round", () => {
+    const { getByTestId } = render(<ToolParamsProcess activeTool="clahe" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramTileSize"));
+    expect(mockParamsRaw.setClaheTileSize).toHaveBeenCalledWith(6);
+  });
+
+  it("rounds hdrLayers via Math.round", () => {
+    const { getByTestId } = render(<ToolParamsProcess activeTool="hdr" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramLayers"));
+    expect(mockParamsRaw.setHdrLayers).toHaveBeenCalledWith(6);
+  });
+
+  it("rounds morphRadius via Math.round", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="morphology" params={mockParams} />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramRadius"));
+    expect(mockParamsRaw.setMorphRadius).toHaveBeenCalledWith(6);
+  });
+
+  it("rounds deconvIterations via Math.round", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="deconvolution" params={mockParams} />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramIterations"));
+    expect(mockParamsRaw.setDeconvIterations).toHaveBeenCalledWith(6);
+  });
+
+  it("rounds dbeSamplesX via Math.round", () => {
+    const { getByTestId } = render(<ToolParamsProcess activeTool="dbe" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramSamplesX"));
+    expect(mockParamsRaw.setDbeSamplesX).toHaveBeenCalledWith(6);
+  });
+
+  it("rounds dbeSamplesY via Math.round", () => {
+    const { getByTestId } = render(<ToolParamsProcess activeTool="dbe" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramSamplesY"));
+    expect(mockParamsRaw.setDbeSamplesY).toHaveBeenCalledWith(6);
+  });
+
+  it("rounds multiscaleLayers via Math.round", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="multiscaleDenoise" params={mockParams} />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramLayers"));
+    expect(mockParamsRaw.setMultiscaleLayers).toHaveBeenCalledWith(6);
+  });
+
+  it("rounds deconvAutoIterations via Math.round", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="deconvolutionAuto" params={mockParams} />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramIterations"));
+    expect(mockParamsRaw.setDeconvAutoIterations).toHaveBeenCalledWith(6);
+  });
+
+  it("renders 2 sliders for hdr", () => {
+    const { getByTestId } = render(<ToolParamsProcess activeTool="hdr" params={mockParams} />);
+    expect(getByTestId("slider-editor.paramLayers")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramAmount")).toBeTruthy();
+  });
+
+  it("renders 3 sliders for dbe", () => {
+    const { getByTestId } = render(<ToolParamsProcess activeTool="dbe" params={mockParams} />);
+    expect(getByTestId("slider-editor.paramSamplesX")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramSamplesY")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramSigma")).toBeTruthy();
+  });
+
+  it("renders 2 sliders for multiscaleDenoise", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="multiscaleDenoise" params={mockParams} />,
+    );
+    expect(getByTestId("slider-editor.paramLayers")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramThreshold")).toBeTruthy();
+  });
+
+  it("renders 2 sliders for localContrast", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="localContrast" params={mockParams} />,
+    );
+    expect(getByTestId("slider-editor.paramSigma")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramAmount")).toBeTruthy();
+  });
+
+  it("renders 2 sliders for starReduction", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="starReduction" params={mockParams} />,
+    );
+    expect(getByTestId("slider-editor.paramScale")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramStrength")).toBeTruthy();
+  });
+
+  it("renders 2 sliders for deconvolutionAuto", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="deconvolutionAuto" params={mockParams} />,
+    );
+    expect(getByTestId("slider-editor.paramIterations")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramRegularization")).toBeTruthy();
+  });
+
+  it("renders amount slider for saturation", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="saturation" params={mockParams} />,
+    );
+    expect(getByTestId("slider-editor.paramAmount")).toBeTruthy();
+  });
+
+  it("renders percentile slider for colorCalibration", () => {
+    const { getByTestId } = render(
+      <ToolParamsProcess activeTool="colorCalibration" params={mockParams} />,
+    );
+    expect(getByTestId("slider-editor.paramRefPercentile")).toBeTruthy();
+  });
+
+  it("calls setMorphOp when a morphology op button is pressed", () => {
+    const { getByText } = render(<ToolParamsProcess activeTool="morphology" params={mockParams} />);
+    fireEvent.press(getByText("editor.paramMorphOpen"));
+    expect(mockParamsRaw.setMorphOp).toHaveBeenCalledWith("open");
+  });
+
+  it("calls setScnrMethod when a scnr method button is pressed", () => {
+    const { getByText } = render(<ToolParamsProcess activeTool="scnr" params={mockParams} />);
+    fireEvent.press(getByText("editor.paramMaximum"));
+    expect(mockParamsRaw.setScnrMethod).toHaveBeenCalledWith("maximumNeutral");
+  });
+
+  it("calls setPixelMathExpr when pixelMath text input changes", () => {
+    const { getByDisplayValue } = render(
+      <ToolParamsProcess activeTool="pixelMath" params={mockParams} />,
+    );
+    fireEvent.changeText(getByDisplayValue("$T"), "($T - 0.1)");
+    expect(mockParamsRaw.setPixelMathExpr).toHaveBeenCalledWith("($T - 0.1)");
   });
 });

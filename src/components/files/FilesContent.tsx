@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import React, { useCallback } from "react";
 import { View } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useI18n } from "../../i18n/useI18n";
@@ -38,7 +38,7 @@ interface FilesContentProps {
   onClearFilters: () => void;
 }
 
-export function FilesContent({
+function FilesContentInner({
   displayFiles,
   searchQuery,
   activeFilterCount,
@@ -109,6 +109,15 @@ export function FilesContent({
 
   const keyExtractor = useCallback((item: FitsMetadata) => item.id, []);
 
+  const noResultsState = (
+    <EmptyState
+      icon="search-outline"
+      title={t("files.noSupportedFound")}
+      secondaryLabel={activeFilterCount > 0 ? t("targets.clearFilters") : undefined}
+      onSecondaryAction={activeFilterCount > 0 ? onClearFilters : undefined}
+    />
+  );
+
   if (displayFiles.length === 0 && !searchQuery && activeFilterCount === 0) {
     return (
       <View
@@ -139,12 +148,7 @@ export function FilesContent({
         {displayFiles.length === 0 ? (
           <View className="flex-1">
             {ListHeader}
-            <EmptyState
-              icon="search-outline"
-              title={t("files.noSupportedFound")}
-              secondaryLabel={activeFilterCount > 0 ? t("targets.clearFilters") : undefined}
-              onSecondaryAction={activeFilterCount > 0 ? onClearFilters : undefined}
-            />
+            {noResultsState}
           </View>
         ) : (
           <ThumbnailGrid
@@ -172,14 +176,7 @@ export function FilesContent({
       renderItem={renderFileItem}
       keyExtractor={keyExtractor}
       ListHeaderComponent={ListHeader}
-      ListEmptyComponent={
-        <EmptyState
-          icon="search-outline"
-          title={t("files.noSupportedFound")}
-          secondaryLabel={activeFilterCount > 0 ? t("targets.clearFilters") : undefined}
-          onSecondaryAction={activeFilterCount > 0 ? onClearFilters : undefined}
-        />
-      }
+      ListEmptyComponent={noResultsState}
       contentContainerStyle={{
         paddingHorizontal: horizontalPadding,
         paddingTop: isLandscape ? 8 : contentPaddingTop,
@@ -190,3 +187,5 @@ export function FilesContent({
     />
   );
 }
+
+export const FilesContent = React.memo(FilesContentInner);

@@ -102,4 +102,40 @@ describe("EditorToolBar", () => {
     expect(mockPush).toHaveBeenCalledWith("/compose/advanced?sourceId=abc-123");
     jest.restoreAllMocks();
   });
+
+  it("highlights the active tool", () => {
+    const { getByText } = render(
+      <EditorToolBar {...defaultProps} activeToolGroup="adjust" activeTool="brightness" />,
+    );
+    expect(getByText("editor.brightness")).toBeTruthy();
+  });
+
+  it("highlights starDetect when isStarAnnotationMode is true", () => {
+    const { getByText } = render(
+      <EditorToolBar {...defaultProps} isStarAnnotationMode={true} detectedStarsCount={0} />,
+    );
+    expect(getByText("editor.starDetect")).toBeTruthy();
+  });
+
+  it("navigates to compose generic route when fileId is undefined", () => {
+    const mockPush = jest.fn();
+    jest.spyOn(require("expo-router"), "useRouter").mockReturnValue({
+      push: mockPush,
+      replace: jest.fn(),
+      back: jest.fn(),
+      canGoBack: jest.fn(() => false),
+    });
+    const { getByTestId } = render(<EditorToolBar {...defaultProps} fileId={undefined} />);
+    fireEvent.press(getByTestId("e2e-action-editor__param_id-advanced-compose"));
+    expect(mockPush).toHaveBeenCalledWith("/compose/advanced");
+    jest.restoreAllMocks();
+  });
+
+  it("shows Alert for statistics coming soon tool", () => {
+    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => {});
+    const { getByTestId } = render(<EditorToolBar {...defaultProps} />);
+    fireEvent.press(getByTestId("e2e-action-editor__param_id-advanced-statistics"));
+    expect(alertSpy).toHaveBeenCalledWith("common.comingSoon");
+    alertSpy.mockRestore();
+  });
 });

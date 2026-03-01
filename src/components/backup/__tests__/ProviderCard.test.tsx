@@ -233,4 +233,40 @@ describe("ProviderCard", () => {
     );
     expect(screen.getByText("backup.never")).toBeTruthy();
   });
+
+  it("does not render userName when undefined", () => {
+    const connNoUser: ProviderConnectionState = {
+      ...baseConnection,
+      userName: undefined,
+    };
+    render(
+      <ProviderCard connection={connNoUser} onBackup={noop} onRestore={noop} onDisconnect={noop} />,
+    );
+    expect(screen.queryByText("user@example.com")).toBeNull();
+  });
+
+  it("does not show active provider chip when isActive is false", () => {
+    render(
+      <ProviderCard
+        connection={baseConnection}
+        isActive={false}
+        onBackup={noop}
+        onRestore={noop}
+        onDisconnect={noop}
+      />,
+    );
+    expect(screen.queryByText("backup.activeProvider")).toBeNull();
+  });
+
+  it("does not show quota when quotaUsed/quotaTotal are undefined", () => {
+    render(
+      <ProviderCard
+        connection={baseConnection}
+        onBackup={noop}
+        onRestore={noop}
+        onDisconnect={noop}
+      />,
+    );
+    expect(screen.queryByText("backup.storageUsed")).toBeNull();
+  });
 });

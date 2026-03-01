@@ -131,4 +131,16 @@ describe("FilesToolbar", () => {
     expect(screen.queryByTestId("e2e-action-tabs__index-enter-selection")).toBeNull();
     expect(screen.queryByTestId("e2e-action-tabs__index-open-trash")).toBeNull();
   });
+
+  it("applies full-width class to import button when shouldStack is true", () => {
+    const { toJSON } = render(<FilesToolbar {...defaultProps} shouldStack />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("w-full");
+  });
+
+  it("applies flex-1 class to import button when shouldStack is false", () => {
+    const { toJSON } = render(<FilesToolbar {...defaultProps} shouldStack={false} />);
+    const tree = JSON.stringify(toJSON());
+    expect(tree).toContain("flex-1");
+  });
 });

@@ -19,6 +19,12 @@ const EXPORT_FORMAT_OPTIONS: Array<{ label: string; value: ExportFormat }> = [
   { label: "FITS", value: "fits" },
 ];
 const BATCH_NAMING_VALUES = ["original", "prefix", "suffix", "sequence"] as const;
+const BATCH_NAMING_I18N: Record<string, string> = {
+  original: "settings.namingOriginal",
+  prefix: "settings.namingPrefix",
+  suffix: "settings.namingSuffix",
+  sequence: "settings.namingSequence",
+};
 
 export function ProcessingExportSection() {
   const { t } = useI18n();
@@ -49,12 +55,6 @@ export function ProcessingExportSection() {
     })),
   );
 
-  const BATCH_NAMING_I18N: Record<string, string> = {
-    original: "settings.namingOriginal",
-    prefix: "settings.namingPrefix",
-    suffix: "settings.namingSuffix",
-    sequence: "settings.namingSequence",
-  };
   const batchNamingLabel = (value: (typeof BATCH_NAMING_VALUES)[number]) =>
     t(BATCH_NAMING_I18N[value] ?? value);
 

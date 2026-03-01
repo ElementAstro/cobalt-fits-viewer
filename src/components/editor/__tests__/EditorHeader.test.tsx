@@ -136,4 +136,37 @@ describe("EditorHeader", () => {
     const btn = getByTestId("e2e-action-editor__param_id-open-export");
     expect(btn.props.isDisabled).toBe(true);
   });
+
+  it("calls onClearError when close button in error alert is pressed", () => {
+    const onClearError = jest.fn();
+    const { getByText } = render(
+      <EditorHeader {...defaultProps} editorError="err" onClearError={onClearError} />,
+    );
+    fireEvent.press(getByText("common.close"));
+    expect(onClearError).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows both editorError and fitsError simultaneously", () => {
+    const { getByText } = render(
+      <EditorHeader {...defaultProps} editorError="Editor fail" fitsError="FITS fail" />,
+    );
+    expect(getByText("Editor fail")).toBeTruthy();
+    expect(getByText("FITS fail")).toBeTruthy();
+  });
+
+  it("disables toggle-original when historyLength <= 1 even with hasData", () => {
+    const { getByTestId } = render(
+      <EditorHeader {...defaultProps} hasData={true} historyLength={1} />,
+    );
+    const btn = getByTestId("e2e-action-editor__param_id-toggle-original");
+    expect(btn.props.isDisabled).toBe(true);
+  });
+
+  it("renders toggle-original as primary variant when showOriginal is true", () => {
+    const { getByTestId } = render(
+      <EditorHeader {...defaultProps} hasData={true} historyLength={3} showOriginal={true} />,
+    );
+    const btn = getByTestId("e2e-action-editor__param_id-toggle-original");
+    expect(btn.props.variant).toBe("primary");
+  });
 });

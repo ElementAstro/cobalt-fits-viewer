@@ -10,10 +10,19 @@ import { SettingsRow } from "../../common/SettingsRow";
 import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
+import { ALIGNMENT_MODE_I18N } from "./constants";
 
 const COMPOSE_PRESET_VALUES = ["rgb", "sho", "hoo", "lrgb", "custom"] as const;
+const COMPOSE_PRESET_I18N: Record<string, string> = {
+  custom: "settings.composePresetCustom",
+};
 const ADV_COMPOSE_REGISTRATION_VALUES = ["none", "translation", "full"] as const;
 const ADV_COMPOSE_FRAMING_VALUES = ["first", "min", "cog"] as const;
+const ADV_COMPOSE_FRAMING_I18N: Record<string, string> = {
+  first: "settings.composeAdvancedFramingFirst",
+  min: "settings.composeAdvancedFramingMin",
+  cog: "settings.composeAdvancedFramingCog",
+};
 
 export function ProcessingComposeSection() {
   const { t } = useI18n();
@@ -76,26 +85,13 @@ export function ProcessingComposeSection() {
     })),
   );
 
-  const COMPOSE_PRESET_I18N: Record<string, string> = {
-    custom: "settings.composePresetCustom",
-  };
   const composePresetLabel = (value: (typeof COMPOSE_PRESET_VALUES)[number]) =>
     COMPOSE_PRESET_I18N[value] ? t(COMPOSE_PRESET_I18N[value]) : value.toUpperCase();
 
-  const ADV_COMPOSE_REGISTRATION_I18N: Record<string, string> = {
-    none: "editor.alignNone",
-    translation: "editor.alignTranslation",
-    full: "editor.alignFull",
-  };
   const advancedComposeRegistrationLabel = (
     value: (typeof ADV_COMPOSE_REGISTRATION_VALUES)[number],
-  ) => t(ADV_COMPOSE_REGISTRATION_I18N[value] ?? value);
+  ) => t(ALIGNMENT_MODE_I18N[value] ?? value);
 
-  const ADV_COMPOSE_FRAMING_I18N: Record<string, string> = {
-    first: "settings.composeAdvancedFramingFirst",
-    min: "settings.composeAdvancedFramingMin",
-    cog: "settings.composeAdvancedFramingCog",
-  };
   const advancedComposeFramingLabel = (value: (typeof ADV_COMPOSE_FRAMING_VALUES)[number]) =>
     t(ADV_COMPOSE_FRAMING_I18N[value] ?? value);
 

@@ -12,7 +12,7 @@ jest.mock("../toolparams", () => {
   return {
     ToolParamsGeometry: (props: Record<string, unknown>) =>
       R.createElement(RN.View, { testID: "tool-params-geometry", ...props }),
-    ToolParamsAdjust: (props: Record<string, unknown>) =>
+    ToolParamsSlider: (props: Record<string, unknown>) =>
       R.createElement(RN.View, { testID: "tool-params-adjust", ...props }),
     ToolParamsProcess: (props: Record<string, unknown>) =>
       R.createElement(RN.View, { testID: "tool-params-process", ...props }),

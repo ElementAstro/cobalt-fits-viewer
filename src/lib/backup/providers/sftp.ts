@@ -3,13 +3,12 @@
  * 使用 react-native-ssh-sftp 实现 SSH/SFTP 文件传输
  */
 
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { BaseCloudProvider } from "../cloudProvider";
-import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
-import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
+import type { CloudProviderConfig, RemoteFile } from "../types";
+import { BACKUP_DIR, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.SFTPProvider;
 const SECURE_STORE_KEY = "backup_sftp_config";
@@ -152,6 +151,7 @@ export class SFTPProvider extends BaseCloudProvider {
     localPath: string,
     remotePath: string,
     onProgress?: (p: number) => void,
+    _signal?: AbortSignal,
   ): Promise<void> {
     if (!this._client) throw new Error("SFTP not connected");
 
@@ -169,6 +169,7 @@ export class SFTPProvider extends BaseCloudProvider {
     remotePath: string,
     localPath: string,
     onProgress?: (p: number) => void,
+    _signal?: AbortSignal,
   ): Promise<void> {
     if (!this._client) throw new Error("SFTP not connected");
 
@@ -216,36 +217,6 @@ export class SFTPProvider extends BaseCloudProvider {
     } catch {
       // sftpStat throws if file doesn't exist
       return false;
-    }
-  }
-
-  async uploadManifest(manifest: BackupManifest): Promise<void> {
-    await this.ensureBackupDir();
-
-    const json = serializeManifest(manifest);
-    const tmpFile = new File(Paths.cache, `_manifest_tmp_${Date.now()}.json`);
-    tmpFile.write(json);
-
-    try {
-      await this.uploadFile(tmpFile.uri, `${BACKUP_DIR}/${MANIFEST_FILENAME}`);
-    } finally {
-      if (tmpFile.exists) tmpFile.delete();
-    }
-  }
-
-  async downloadManifest(): Promise<BackupManifest | null> {
-    try {
-      await this.ensureBackupDir();
-
-      const tmpFile = new File(Paths.cache, `_manifest_dl_${Date.now()}.json`);
-      await this.downloadFile(`${BACKUP_DIR}/${MANIFEST_FILENAME}`, tmpFile.uri);
-
-      const content = await tmpFile.text();
-      if (tmpFile.exists) tmpFile.delete();
-
-      return parseManifest(content);
-    } catch {
-      return null;
     }
   }
 

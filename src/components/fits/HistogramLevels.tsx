@@ -6,6 +6,7 @@ import { runOnJS, useSharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 import { Button, Chip } from "heroui-native";
 import { transformHistogramCounts } from "../../lib/utils/pixelMath";
+import { formatEdgeLabel, formatClipPercent } from "../../lib/utils/formatters";
 import type {
   HistogramMode,
   ChannelHistogramData,
@@ -59,21 +60,6 @@ function makeTrianglePath(centerX: number, topY: number, size: number) {
   path.lineTo(centerX + half, topY + size);
   path.close();
   return path;
-}
-
-function formatEdgeLabel(value: number | undefined, range: number): string {
-  if (value == null || !isFinite(value)) return "—";
-  const abs = Math.abs(value);
-  if (range > 100) return value.toFixed(0);
-  if (range > 1) return value.toFixed(1);
-  if (range > 0.01) return value.toFixed(3);
-  if (abs > 0 && abs < 0.001) return value.toExponential(2);
-  return value.toFixed(4);
-}
-
-function formatClipPercent(value: number) {
-  if (!Number.isFinite(value)) return "0.00%";
-  return `${value.toFixed(value >= 10 ? 1 : 2)}%`;
 }
 
 export function HistogramLevels({

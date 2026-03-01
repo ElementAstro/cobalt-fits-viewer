@@ -110,7 +110,7 @@ export function FilesFilterBar({
 
           {hasAdvancedFilters && (
             <>
-              <View className="h-4 w-px bg-separator" />
+              <Separator orientation="vertical" className="h-4" />
               <Chip
                 size="sm"
                 variant={showAdvanced ? "primary" : "secondary"}

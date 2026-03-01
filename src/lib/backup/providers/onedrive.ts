@@ -3,13 +3,12 @@
  * 使用 expo-auth-session + Microsoft Graph REST API v1.0
  */
 
-import { File, Paths } from "expo-file-system";
+import { File } from "expo-file-system";
 import * as SecureStore from "expo-secure-store";
 import { BaseCloudProvider } from "../cloudProvider";
-import { parseManifest, serializeManifest } from "../manifest";
 import { LOG_TAGS, Logger } from "../../logger";
-import type { BackupManifest, CloudProviderConfig, RemoteFile } from "../types";
-import { BACKUP_DIR, MANIFEST_FILENAME, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
+import type { CloudProviderConfig, RemoteFile } from "../types";
+import { BACKUP_DIR, FITS_SUBDIR, THUMBNAIL_SUBDIR } from "../types";
 
 const TAG = LOG_TAGS.OneDriveProvider;
 const SECURE_STORE_KEY = "backup_onedrive_tokens";
@@ -142,6 +141,7 @@ export class OneDriveProvider extends BaseCloudProvider {
     localPath: string,
     remotePath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     if (this.isTokenExpired()) await this.refreshTokenIfNeeded();
 
@@ -153,7 +153,7 @@ export class OneDriveProvider extends BaseCloudProvider {
 
     // Simple upload for files <4MB, otherwise use upload session
     if (content.length > 4 * 1024 * 1024) {
-      await this.largeFileUpload(graphPath, content, onProgress);
+      await this.largeFileUpload(graphPath, content, onProgress, signal);
     } else {
       const res = await fetch(`${GRAPH_API}/me/drive/special/approot:/${graphPath}:/content`, {
         method: "PUT",
@@ -162,6 +162,7 @@ export class OneDriveProvider extends BaseCloudProvider {
           "Content-Type": "application/octet-stream",
         },
         body: content,
+        signal,
       });
 
       if (!res.ok) {
@@ -178,6 +179,7 @@ export class OneDriveProvider extends BaseCloudProvider {
     remotePath: string,
     localPath: string,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     if (this.isTokenExpired()) await this.refreshTokenIfNeeded();
 
@@ -185,6 +187,7 @@ export class OneDriveProvider extends BaseCloudProvider {
     const res = await fetch(`${GRAPH_API}/me/drive/special/approot:/${graphPath}:/content`, {
       headers: this.getAuthHeaders(),
       redirect: "follow",
+      signal,
     });
 
     if (!res.ok) throw new Error(`Download failed: ${res.status}`);
@@ -247,36 +250,6 @@ export class OneDriveProvider extends BaseCloudProvider {
       headers: this.getAuthHeaders(),
     });
     return res.ok;
-  }
-
-  async uploadManifest(manifest: BackupManifest): Promise<void> {
-    await this.ensureBackupDir();
-
-    const json = serializeManifest(manifest);
-    const tmpFile = new File(Paths.cache, `_manifest_tmp_${Date.now()}.json`);
-    tmpFile.write(json);
-
-    try {
-      await this.uploadFile(tmpFile.uri, `${BACKUP_DIR}/${MANIFEST_FILENAME}`);
-    } finally {
-      if (tmpFile.exists) tmpFile.delete();
-    }
-  }
-
-  async downloadManifest(): Promise<BackupManifest | null> {
-    try {
-      await this.ensureBackupDir();
-
-      const tmpFile = new File(Paths.cache, `_manifest_dl_${Date.now()}.json`);
-      await this.downloadFile(`${BACKUP_DIR}/${MANIFEST_FILENAME}`, tmpFile.uri);
-
-      const content = await tmpFile.text();
-      if (tmpFile.exists) tmpFile.delete();
-
-      return parseManifest(content);
-    } catch {
-      return null;
-    }
   }
 
   async getQuota(): Promise<{ used: number; total: number } | null> {
@@ -363,6 +336,7 @@ export class OneDriveProvider extends BaseCloudProvider {
     graphPath: string,
     content: Uint8Array,
     onProgress?: (p: number) => void,
+    signal?: AbortSignal,
   ): Promise<void> {
     // Create upload session
     const sessionRes = await fetch(
@@ -398,6 +372,7 @@ export class OneDriveProvider extends BaseCloudProvider {
           "Content-Range": `bytes ${offset}-${end - 1}/${totalSize}`,
         },
         body: chunk,
+        signal,
       });
 
       if (!chunkRes.ok && chunkRes.status !== 202) {

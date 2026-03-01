@@ -116,7 +116,7 @@ describe("parseManifest compatibility", () => {
     }
   });
 
-  it("rejects invalid v4 cross references", () => {
+  it("repairs invalid v4 cross references by stripping orphan refs", () => {
     const invalidV4: BackupManifest = {
       ...createManifest(mockData, DEFAULT_BACKUP_OPTIONS),
       version: 4,
@@ -124,7 +124,8 @@ describe("parseManifest compatibility", () => {
     };
 
     const parsed = parseManifest(JSON.stringify(invalidV4));
-    expect(parsed).toBeNull();
+    expect(parsed).not.toBeNull();
+    expect(parsed!.albums[0].imageIds).toEqual([]);
   });
 
   it("normalizes legacy files without mediaKind", () => {

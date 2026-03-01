@@ -3,9 +3,10 @@ import { render, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { FontProvider, useFontFamily } from "../FontProvider";
 
+let mockFontSettings = { fontFamily: "system", monoFontFamily: "system-mono" };
+
 jest.mock("../../../stores/useSettingsStore", () => ({
-  useSettingsStore: (selector: (s: any) => any) =>
-    selector({ fontFamily: "system", monoFontFamily: "system-mono" }),
+  useSettingsStore: (selector: (s: any) => any) => selector(mockFontSettings),
 }));
 
 jest.mock("../../../lib/theme/fonts", () => ({
@@ -65,5 +66,27 @@ describe("useFontFamily", () => {
 
     expect(screen.getByTestId("fontFamilyKey").props.children).toBe("system");
     expect(screen.getByTestId("isSystemFont").props.children).toBe("true");
+  });
+});
+
+describe("FontProvider with non-system fonts", () => {
+  afterEach(() => {
+    mockFontSettings = { fontFamily: "system", monoFontFamily: "system-mono" };
+  });
+
+  it("provides non-system font family values", () => {
+    mockFontSettings = { fontFamily: "inter", monoFontFamily: "jetbrains-mono" };
+
+    render(
+      <FontProvider>
+        <TestConsumer />
+      </FontProvider>,
+    );
+
+    expect(screen.getByTestId("fontFamilyKey").props.children).toBe("inter");
+    expect(screen.getByTestId("monoFontKey").props.children).toBe("jetbrains-mono");
+    expect(screen.getByTestId("isSystemFont").props.children).toBe("false");
+    expect(screen.getByTestId("getFontFamily").props.children).toBe("Inter-Bold");
+    expect(screen.getByTestId("getMonoFontFamily").props.children).toBe("JetBrainsMono-Regular");
   });
 });

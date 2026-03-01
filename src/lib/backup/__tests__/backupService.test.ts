@@ -269,11 +269,13 @@ describe("performBackup", () => {
       "/mock/a.fits",
       "cobalt-backup/fits_files/f1_keep.fits",
       expect.any(Function),
+      undefined,
     );
     expect(provider.uploadFile).toHaveBeenCalledWith(
       "/mock/thumbs/f1.jpg",
       "cobalt-backup/thumbnails/f1.jpg",
       expect.any(Function),
+      undefined,
     );
 
     expect(provider.deleteFile).toHaveBeenCalledWith("cobalt-backup/fits_files/stale.fits");
@@ -378,11 +380,13 @@ describe("performRestore", () => {
       "cobalt-backup/fits_files/f1_keep.fits",
       "/mock/fits/keep.fits",
       expect.any(Function),
+      undefined,
     );
     expect(provider.downloadFile).toHaveBeenCalledWith(
       "cobalt-backup/thumbnails/f1.jpg",
       "/mock/thumbs/f1.jpg",
       expect.any(Function),
+      undefined,
     );
     expect(target.setFiles).toHaveBeenCalled();
   });

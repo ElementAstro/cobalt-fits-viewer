@@ -204,4 +204,87 @@ describe("SystemInfoCard", () => {
     expect(screen.getByText("1.0.0")).toBeTruthy();
     expect(screen.getByText("51")).toBeTruthy();
   });
+
+  it("renders N/A for missing device fields", () => {
+    mockUseSystemInfo.systemInfo = {
+      ...mockSystemInfo,
+      device: {
+        ...mockSystemInfo.device,
+        brand: null as any,
+        modelName: null as any,
+        osName: null as any,
+        osVersion: null as any,
+        totalMemory: null as any,
+        isDevice: false,
+      },
+    };
+
+    render(<SystemInfoCard />);
+
+    const naTexts = screen.getAllByText("N/A");
+    expect(naTexts.length).toBeGreaterThanOrEqual(3);
+    expect(screen.getByText("Simulator")).toBeTruthy();
+  });
+
+  it("renders N/A for battery level < 0", () => {
+    mockUseSystemInfo.systemInfo = {
+      ...mockSystemInfo,
+      battery: {
+        ...mockSystemInfo.battery,
+        level: -1,
+        isLowPowerMode: true,
+      },
+    };
+
+    render(<SystemInfoCard />);
+
+    // battery.level < 0 should show N/A
+    const naTexts = screen.getAllByText("N/A");
+    expect(naTexts.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("hides optional fields when not present", () => {
+    mockUseSystemInfo.systemInfo = {
+      ...mockSystemInfo,
+      app: {
+        ...mockSystemInfo.app,
+        runtimeVersion: undefined as any,
+        sdkVersion: undefined as any,
+        appVersion: null as any,
+        buildVersion: null as any,
+        appId: null as any,
+        isDebugMode: false,
+      },
+      network: {
+        ...mockSystemInfo.network,
+        ipAddress: undefined as any,
+        isConnected: false,
+      },
+    };
+
+    render(<SystemInfoCard />);
+
+    expect(screen.queryByText("1.0.0")).toBeNull();
+    expect(screen.queryByText("192.168.1.100")).toBeNull();
+  });
+
+  it("does not copy when getFormattedInfo returns falsy", async () => {
+    const Clipboard = require("expo-clipboard");
+    mockUseSystemInfo.getFormattedInfo.mockReturnValueOnce(null);
+
+    render(<SystemInfoCard />);
+
+    fireEvent.press(screen.getByText("systemInfo.copy"));
+
+    // Should not have tried to copy
+    expect(Clipboard.setStringAsync).not.toHaveBeenCalled();
+  });
+
+  it("renders SectionHeader with custom iconColor", () => {
+    render(<SystemInfoCard />);
+
+    // App section has accentColor, battery has successColor — just verify they render
+    expect(screen.getByText("systemInfo.app")).toBeTruthy();
+    expect(screen.getByText("systemInfo.battery")).toBeTruthy();
+  });
 });

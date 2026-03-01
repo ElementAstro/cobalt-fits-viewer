@@ -43,11 +43,15 @@ export function SelectionActionsSheet({
   onStacking,
 }: SelectionActionsSheetProps) {
   const { t } = useI18n();
-  const [mutedColor, surfaceColor, successColor] = useThemeColor(["muted", "surface", "success"]);
+  const [mutedColor, surfaceColor] = useThemeColor(["muted", "surface"]);
   const compact = isLandscape;
   const hasSelection = selectedCount > 0;
 
   const dismiss = () => onOpenChange(false);
+  const act = (fn: () => void) => () => {
+    fn();
+    dismiss();
+  };
 
   return (
     <BottomSheet isOpen={visible} onOpenChange={onOpenChange}>
@@ -78,25 +82,15 @@ export function SelectionActionsSheet({
                 <SheetActionItem
                   icon="checkbox-outline"
                   title={t("common.selectAll")}
-                  onPress={() => {
-                    onSelectAllVisible();
-                    dismiss();
-                  }}
+                  onPress={act(onSelectAllVisible)}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="shuffle-outline"
                   title={t("files.invertSelection")}
-                  onPress={() => {
-                    onInvertSelection();
-                    dismiss();
-                  }}
+                  onPress={act(onInvertSelection)}
                   disabled={displayCount === 0}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
 
                 <Separator className="my-1" />
@@ -107,62 +101,37 @@ export function SelectionActionsSheet({
                 <SheetActionItem
                   icon="heart-outline"
                   title={t("files.toggleFavorite")}
-                  onPress={() => {
-                    onBatchFavorite();
-                    dismiss();
-                  }}
+                  onPress={act(onBatchFavorite)}
                   disabled={!hasSelection}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="albums-outline"
                   title={t("gallery.addToAlbum")}
-                  onPress={() => {
-                    onAlbumPicker();
-                    dismiss();
-                  }}
+                  onPress={act(onAlbumPicker)}
                   disabled={!hasSelection}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="pricetag-outline"
                   title={t("files.batchTag")}
-                  onPress={() => {
-                    onBatchTag();
-                    dismiss();
-                  }}
+                  onPress={act(onBatchTag)}
                   disabled={!hasSelection}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="text-outline"
                   title={t("files.batchRename")}
-                  onPress={() => {
-                    onBatchRename();
-                    dismiss();
-                  }}
+                  onPress={act(onBatchRename)}
                   disabled={!hasSelection}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="folder-open-outline"
                   title={t("files.fileGroup")}
-                  onPress={() => {
-                    onGroupSheet();
-                    dismiss();
-                  }}
+                  onPress={act(onGroupSheet)}
                   disabled={!hasSelection}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
 
                 <Separator className="my-1" />
@@ -173,38 +142,23 @@ export function SelectionActionsSheet({
                 <SheetActionItem
                   icon="share-social-outline"
                   title={t("files.export")}
-                  onPress={() => {
-                    onBatchExport();
-                    dismiss();
-                  }}
+                  onPress={act(onBatchExport)}
                   disabled={!hasSelection}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="swap-horizontal-outline"
                   title={t("files.batchConvert")}
-                  onPress={() => {
-                    onBatchConvert();
-                    dismiss();
-                  }}
+                  onPress={act(onBatchConvert)}
                   disabled={!hasSelection}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
                 <SheetActionItem
                   icon="layers-outline"
                   title={t("files.stacking")}
-                  onPress={() => {
-                    onStacking();
-                    dismiss();
-                  }}
+                  onPress={act(onStacking)}
                   disabled={selectedCount < 2}
                   compact={compact}
-                  successColor={successColor}
-                  mutedColor={mutedColor}
                 />
               </View>
             </ScrollView>

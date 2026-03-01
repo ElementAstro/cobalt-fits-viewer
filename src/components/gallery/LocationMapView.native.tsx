@@ -5,9 +5,11 @@ import type { LayoutChangeEvent } from "react-native";
 import { useI18n } from "../../i18n/useI18n";
 import { buildSuperclusterIndex } from "../../lib/map/clusteringSuper";
 import { buildClusterCircles, buildClusterPolylines } from "../../lib/map/overlays";
-import { MAP_PRESETS, ASTRONOMY_POI_CATEGORIES, getMarkerColor } from "../../lib/map/styles";
+import { MAP_PRESETS, ASTRONOMY_POI_CATEGORIES } from "../../lib/map/styles";
 import type { MapClusterNode, MapViewport } from "../../lib/map/types";
 import { resolveNodeForOpen } from "../../lib/map/utils";
+import { cameraToViewport, type CameraEvent } from "../../lib/map/coordinates";
+import { buildGoogleMarkers, buildAppleAnnotations } from "../../lib/map/markers";
 import type { LocationMapViewProps } from "./LocationMapView.types";
 
 export type { LocationMapViewRef } from "./LocationMapView.types";
@@ -27,13 +29,6 @@ try {
   // expo-maps native module unavailable (Expo Go / unsupported target)
 }
 
-const MAX_LATITUDE = 85.05112878;
-
-type CameraEvent = {
-  coordinates: { latitude?: number; longitude?: number };
-  zoom: number;
-};
-
 type MapRefLike = {
   setCameraPosition: (config?: {
     coordinates?: { latitude: number; longitude: number };
@@ -43,87 +38,6 @@ type MapRefLike = {
     duration?: number;
   }) => void;
 };
-
-function longitudeToWorldX(longitude: number, worldSize: number): number {
-  return ((longitude + 180) / 360) * worldSize;
-}
-
-function latitudeToWorldY(latitude: number, worldSize: number): number {
-  const lat = Math.max(-MAX_LATITUDE, Math.min(MAX_LATITUDE, latitude));
-  const sin = Math.sin((lat * Math.PI) / 180);
-  return (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * worldSize;
-}
-
-function worldXToLongitude(x: number, worldSize: number): number {
-  return (x / worldSize) * 360 - 180;
-}
-
-function worldYToLatitude(y: number, worldSize: number): number {
-  const n = Math.PI - (2 * Math.PI * y) / worldSize;
-  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-}
-
-function cameraToViewport(
-  camera: CameraEvent,
-  size: { width: number; height: number },
-): MapViewport {
-  if (camera.coordinates.latitude === undefined || camera.coordinates.longitude === undefined) {
-    return {
-      west: -180,
-      south: -85,
-      east: 180,
-      north: 85,
-      zoom: Math.max(0, Math.min(20, camera.zoom)),
-    };
-  }
-
-  const zoom = Math.max(0, Math.min(20, camera.zoom));
-  const worldSize = 256 * 2 ** zoom;
-  const centerX = longitudeToWorldX(camera.coordinates.longitude, worldSize);
-  const centerY = latitudeToWorldY(camera.coordinates.latitude, worldSize);
-
-  const halfWidth = size.width / 2;
-  const halfHeight = size.height / 2;
-
-  const west = worldXToLongitude(centerX - halfWidth, worldSize);
-  const east = worldXToLongitude(centerX + halfWidth, worldSize);
-  const north = worldYToLatitude(centerY - halfHeight, worldSize);
-  const south = worldYToLatitude(centerY + halfHeight, worldSize);
-
-  return {
-    west,
-    east,
-    north: Math.max(-MAX_LATITUDE, Math.min(MAX_LATITUDE, north)),
-    south: Math.max(-MAX_LATITUDE, Math.min(MAX_LATITUDE, south)),
-    zoom,
-  };
-}
-
-function buildGoogleMarkers(nodes: MapClusterNode[]) {
-  return nodes.map((node) => ({
-    id: node.id,
-    coordinates: {
-      latitude: node.location.latitude,
-      longitude: node.location.longitude,
-    },
-    title: node.label,
-    color: getMarkerColor(node.count, node.isCluster),
-  }));
-}
-
-function buildAppleAnnotations(nodes: MapClusterNode[]) {
-  return nodes.map((node) => ({
-    id: node.id,
-    coordinates: {
-      latitude: node.location.latitude,
-      longitude: node.location.longitude,
-    },
-    title: node.label,
-    text: String(node.count),
-    backgroundColor: getMarkerColor(node.count, node.isCluster),
-    textColor: "#FFFFFF",
-  }));
-}
 
 export function LocationMapView({
   ref,
