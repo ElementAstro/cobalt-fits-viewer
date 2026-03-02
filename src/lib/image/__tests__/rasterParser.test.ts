@@ -14,6 +14,7 @@ const mockCreateTiffFrameProvider = jest.fn();
 const mockImageManipulator = {
   manipulate: jest.fn(),
 };
+const mockImageJsDecode = jest.fn();
 
 jest.mock("../../gallery/frameClassifier", () => ({
   classifyWithDetail: (...args: any[]) => (mockClassifyWithDetail as any)(...args),
@@ -40,6 +41,10 @@ jest.mock("@shopify/react-native-skia", () => ({
 jest.mock("expo-image-manipulator", () => ({
   SaveFormat: { PNG: "png" },
   manipulate: (...args: any[]) => (mockImageManipulator.manipulate as any)(...args),
+}));
+
+jest.mock("image-js", () => ({
+  decode: (...args: any[]) => (mockImageJsDecode as any)(...args),
 }));
 
 jest.mock("expo-file-system", () => {
@@ -92,6 +97,9 @@ describe("image rasterParser", () => {
     jest.clearAllMocks();
     mockImageFactoryResult = null;
     mockIsTiffLikeBuffer.mockReturnValue(false);
+    mockImageJsDecode.mockImplementation(() => {
+      throw new Error("image-js unavailable");
+    });
   });
 
   it("throws for unsupported or invalid raster content", () => {
@@ -219,6 +227,32 @@ describe("image rasterParser", () => {
     expect(result.width).toBe(1);
     expect(result.height).toBe(1);
     expect(result.decodeStatus).toBe("ready");
+  });
+
+  it("uses image-js fallback when Skia decode fails", async () => {
+    mockMakeFromEncoded.mockImplementationOnce(() => null);
+    mockImageJsDecode.mockReturnValue({
+      width: 2,
+      height: 1,
+      channels: 3,
+      maxValue: 255,
+      getRawImage: () => ({
+        data: new Uint8Array([255, 0, 0, 0, 255, 0]),
+        channels: 3,
+        bitDepth: 8,
+      }),
+    });
+
+    const result = await parseRasterFromBufferAsync(new ArrayBuffer(8), {
+      filename: "fallback.raw",
+    });
+
+    expect(mockImageJsDecode).toHaveBeenCalled();
+    expect(result.width).toBe(2);
+    expect(result.height).toBe(1);
+    expect(Array.from(result.rgba)).toEqual([255, 0, 0, 255, 0, 255, 0, 255]);
+    expect(result.decodeStatus).toBe("ready");
+    expect(mockImageManipulator.manipulate).not.toHaveBeenCalled();
   });
 
   it("extracts raster metadata", () => {

@@ -26,6 +26,13 @@ export interface ImageRegion {
   h: number;
 }
 
+export interface TranslationRange {
+  minX: number;
+  maxX: number;
+  minY: number;
+  maxY: number;
+}
+
 function clamp(value: number, min: number, max: number) {
   "worklet";
   return Math.max(min, Math.min(max, value));
@@ -72,6 +79,33 @@ export function computeTranslateBounds(
   return { maxX: excessW / 2, maxY: excessH / 2 };
 }
 
+export function computeTranslationRange(
+  scale: number,
+  imageWidth: number,
+  imageHeight: number,
+  canvasWidth: number,
+  canvasHeight: number,
+): TranslationRange {
+  "worklet";
+  const { maxX, maxY } = computeTranslateBounds(
+    scale,
+    imageWidth,
+    imageHeight,
+    canvasWidth,
+    canvasHeight,
+  );
+  // The visible image is fit-centered first, then the whole scene is scaled around (0,0).
+  // Keep clamping around the true centered baseline for the current scale.
+  const centeredX = ((1 - scale) * canvasWidth) / 2;
+  const centeredY = ((1 - scale) * canvasHeight) / 2;
+  return {
+    minX: centeredX - maxX,
+    maxX: centeredX + maxX,
+    minY: centeredY - maxY,
+    maxY: centeredY + maxY,
+  };
+}
+
 export function clampScale(scale: number, minScale: number, maxScale: number) {
   "worklet";
   const safeMin = Math.min(minScale, maxScale);
@@ -115,6 +149,31 @@ export function zoomAroundCenter(
   );
 }
 
+export function computePinchTranslationFromStart(
+  startFocalPointX: number,
+  startFocalPointY: number,
+  currentFocalPointX: number,
+  currentFocalPointY: number,
+  startScale: number,
+  targetScale: number,
+  startTranslateX: number,
+  startTranslateY: number,
+): Point {
+  "worklet";
+  const zoomed = zoomAroundPoint(
+    startFocalPointX,
+    startFocalPointY,
+    startScale,
+    targetScale,
+    startTranslateX,
+    startTranslateY,
+  );
+  return {
+    x: zoomed.x + (currentFocalPointX - startFocalPointX),
+    y: zoomed.y + (currentFocalPointY - startFocalPointY),
+  };
+}
+
 export function computeIncrementalPinchTranslation(
   focalPointX: number,
   focalPointY: number,
@@ -150,7 +209,7 @@ export function clampTranslation(
   canvasHeight: number,
 ): { x: number; y: number } {
   "worklet";
-  const { maxX, maxY } = computeTranslateBounds(
+  const { minX, maxX, minY, maxY } = computeTranslationRange(
     scale,
     imageWidth,
     imageHeight,
@@ -158,8 +217,8 @@ export function clampTranslation(
     canvasHeight,
   );
   return {
-    x: clamp(tx, -maxX, maxX),
-    y: clamp(ty, -maxY, maxY),
+    x: clamp(tx, minX, maxX),
+    y: clamp(ty, minY, maxY),
   };
 }
 

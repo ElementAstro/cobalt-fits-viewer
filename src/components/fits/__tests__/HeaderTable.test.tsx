@@ -1,4 +1,5 @@
 import React from "react";
+import { Alert } from "react-native";
 import { render, fireEvent } from "@testing-library/react-native";
 import { HeaderTable } from "../HeaderTable";
 
@@ -11,6 +12,22 @@ jest.mock("../../common/FontProvider", () => ({
     getFontFamily: () => undefined,
     getMonoFontFamily: () => undefined,
   }),
+}));
+
+jest.mock("expo-clipboard", () => ({
+  setStringAsync: jest.fn().mockResolvedValue(undefined),
+}));
+
+jest.mock("expo-haptics", () => ({
+  notificationAsync: jest.fn(),
+  NotificationFeedbackType: { Success: "success" },
+}));
+
+jest.mock("../../../lib/fits/headerValidator", () => ({
+  isProtectedKeyword: (key: string) =>
+    ["SIMPLE", "BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "NAXIS3", "END"].includes(
+      key.toUpperCase().trim(),
+    ),
 }));
 
 describe("HeaderTable", () => {
@@ -101,5 +118,178 @@ describe("HeaderTable", () => {
     const { getByTestId } = render(<HeaderTable keywords={sampleKeywords} />);
     const input = getByTestId("input");
     expect(input.props.placeholder).toBe("header.searchKeyword");
+  });
+
+  describe("editable mode", () => {
+    it("renders without crashing in editable mode", () => {
+      const { getByText } = render(
+        <HeaderTable
+          keywords={sampleKeywords}
+          editable
+          onEditKeyword={jest.fn()}
+          onDeleteKeyword={jest.fn()}
+        />,
+      );
+      expect(getByText("BITPIX")).toBeTruthy();
+      expect(getByText("OBJECT")).toBeTruthy();
+    });
+
+    it("calls onEditKeyword when row is pressed in editable mode", () => {
+      const onEdit = jest.fn();
+      const { getByText } = render(
+        <HeaderTable
+          keywords={sampleKeywords}
+          editable
+          onEditKeyword={onEdit}
+          onDeleteKeyword={jest.fn()}
+        />,
+      );
+      // PressableFeedback wraps each row — pressing the text triggers onPress
+      fireEvent.press(getByText("OBJECT"));
+      expect(onEdit).toHaveBeenCalledWith(3); // OBJECT is at index 3
+    });
+
+    it("shows Alert on long press", () => {
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const { getByText } = render(
+        <HeaderTable
+          keywords={sampleKeywords}
+          editable
+          onEditKeyword={jest.fn()}
+          onDeleteKeyword={jest.fn()}
+        />,
+      );
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      expect(alertSpy).toHaveBeenCalledWith("OBJECT", "M42", expect.any(Array));
+      alertSpy.mockRestore();
+    });
+
+    it("does not call onEditKeyword when editable is false", () => {
+      const onEdit = jest.fn();
+      const { getByText } = render(
+        <HeaderTable keywords={sampleKeywords} onEditKeyword={onEdit} />,
+      );
+      fireEvent.press(getByText("OBJECT"));
+      expect(onEdit).not.toHaveBeenCalled();
+    });
+
+    it("long press on protected keyword does not show delete option", () => {
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const { getByText } = render(
+        <HeaderTable
+          keywords={sampleKeywords}
+          editable
+          onEditKeyword={jest.fn()}
+          onDeleteKeyword={jest.fn()}
+        />,
+      );
+      fireEvent(getByText("BITPIX"), "onLongPress");
+      expect(alertSpy).toHaveBeenCalled();
+      // Check that "header.deleteKeyword" is not in the actions
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string }>;
+      expect(actions.some((a) => a.text === "header.deleteKeyword")).toBe(false);
+      alertSpy.mockRestore();
+    });
+
+    it("long press on non-protected keyword shows delete option when editable", () => {
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const { getByText } = render(
+        <HeaderTable
+          keywords={sampleKeywords}
+          editable
+          onEditKeyword={jest.fn()}
+          onDeleteKeyword={jest.fn()}
+        />,
+      );
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string }>;
+      expect(actions.some((a) => a.text === "header.deleteKeyword")).toBe(true);
+      alertSpy.mockRestore();
+    });
+
+    it("long press always includes copy options", () => {
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const { getByText } = render(<HeaderTable keywords={sampleKeywords} />);
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string }>;
+      expect(actions.some((a) => a.text === "header.copyValue")).toBe(true);
+      expect(actions.some((a) => a.text === "header.copyRow")).toBe(true);
+      alertSpy.mockRestore();
+    });
+
+    it("copy value action calls Clipboard.setStringAsync", async () => {
+      const Clipboard = require("expo-clipboard");
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const { getByText } = render(<HeaderTable keywords={sampleKeywords} />);
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress: () => void }>;
+      const copyAction = actions.find((a) => a.text === "header.copyValue");
+      expect(copyAction).toBeTruthy();
+      await copyAction!.onPress();
+      expect(Clipboard.setStringAsync).toHaveBeenCalledWith("M42");
+      alertSpy.mockRestore();
+    });
+
+    it("copy row action includes key and value", async () => {
+      const Clipboard = require("expo-clipboard");
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const { getByText } = render(<HeaderTable keywords={sampleKeywords} />);
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress: () => void }>;
+      const copyRowAction = actions.find((a) => a.text === "header.copyRow");
+      await copyRowAction!.onPress();
+      expect(Clipboard.setStringAsync).toHaveBeenCalledWith("OBJECT = M42 / target object");
+      alertSpy.mockRestore();
+    });
+
+    it("edit action in long press calls onEditKeyword", () => {
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const onEdit = jest.fn();
+      const { getByText } = render(
+        <HeaderTable
+          keywords={sampleKeywords}
+          editable
+          onEditKeyword={onEdit}
+          onDeleteKeyword={jest.fn()}
+        />,
+      );
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress: () => void }>;
+      const editAction = actions.find((a) => a.text === "header.editKeyword");
+      expect(editAction).toBeTruthy();
+      editAction!.onPress();
+      expect(onEdit).toHaveBeenCalledWith(3);
+      alertSpy.mockRestore();
+    });
+
+    it("delete action in long press calls onDeleteKeyword", () => {
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const onDelete = jest.fn();
+      const { getByText } = render(
+        <HeaderTable
+          keywords={sampleKeywords}
+          editable
+          onEditKeyword={jest.fn()}
+          onDeleteKeyword={onDelete}
+        />,
+      );
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string; onPress: () => void }>;
+      const deleteAction = actions.find((a) => a.text === "header.deleteKeyword");
+      expect(deleteAction).toBeTruthy();
+      deleteAction!.onPress();
+      expect(onDelete).toHaveBeenCalledWith(3);
+      alertSpy.mockRestore();
+    });
+
+    it("long press without editable does not show edit/delete options", () => {
+      const alertSpy = jest.spyOn(Alert, "alert");
+      const { getByText } = render(<HeaderTable keywords={sampleKeywords} />);
+      fireEvent(getByText("OBJECT"), "onLongPress");
+      const actions = alertSpy.mock.calls[0][2] as Array<{ text: string }>;
+      expect(actions.some((a) => a.text === "header.editKeyword")).toBe(false);
+      expect(actions.some((a) => a.text === "header.deleteKeyword")).toBe(false);
+      alertSpy.mockRestore();
+    });
   });
 });

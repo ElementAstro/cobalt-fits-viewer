@@ -34,6 +34,7 @@ import { GuideTarget } from "../../components/common/GuideTarget";
 import { PromptDialog } from "../../components/common/PromptDialog";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { routeForMedia } from "../../lib/media/routing";
+import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 import type { FitsMetadata, Album } from "../../lib/fits/types";
 import type { ThumbnailLoadingSummary } from "../../components/gallery/thumbnailLoading";
 
@@ -189,6 +190,11 @@ export default function GalleryScreen() {
     Number(Boolean(filterTargetId)) +
     Number(filterFavoriteOnly);
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectedImageIds = useMemo(
+    () => pickImageLikeIds(selectedIds, files, 2),
+    [selectedIds, files],
+  );
+  const selectedImageCount = selectedImageIds.length;
   const allDisplaySelected =
     displayFiles.length > 0 && displayFiles.every((file) => selectedIdSet.has(file.id));
 
@@ -328,9 +334,13 @@ export default function GalleryScreen() {
   }, []);
 
   const handleCompare = useCallback(() => {
-    router.push(`/compare?ids=${selectedIds.join(",")}`);
+    if (selectedImageIds.length < 2) {
+      exitSelectionMode();
+      return;
+    }
+    router.push(`/compare?ids=${selectedImageIds.join(",")}`);
     exitSelectionMode();
-  }, [router, selectedIds, exitSelectionMode]);
+  }, [router, selectedImageIds, exitSelectionMode]);
 
   const handleOpenMap = useCallback(() => router.push("/map"), [router]);
   const handleOpenAlbumPicker = useCallback(() => setShowAlbumPicker(true), []);
@@ -355,6 +365,7 @@ export default function GalleryScreen() {
         isLandscape={isLandscape}
         isSelectionMode={isSelectionMode}
         selectedCount={selectedIds.length}
+        selectedImageCount={selectedImageCount}
         allDisplaySelected={allDisplaySelected}
         onViewModeChange={setViewMode}
         onSearchChange={setSearchQuery}

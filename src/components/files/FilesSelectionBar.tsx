@@ -5,14 +5,18 @@ import { useI18n } from "../../i18n/useI18n";
 
 interface FilesSelectionBarProps {
   selectedCount: number;
+  selectedImageCount: number;
   isLandscape: boolean;
+  onCompare: () => void;
   onBatchConvert: () => void;
   onStacking: () => void;
 }
 
 export function FilesSelectionBar({
   selectedCount,
+  selectedImageCount,
   isLandscape,
+  onCompare,
   onBatchConvert,
   onStacking,
 }: FilesSelectionBarProps) {
@@ -25,6 +29,16 @@ export function FilesSelectionBar({
         {selectedCount} {t("common.selected")}
       </Text>
       <View className="flex-row items-center gap-2">
+        <Button
+          testID="e2e-action-tabs__index-open-compare-bar"
+          size="sm"
+          variant="ghost"
+          onPress={onCompare}
+          isDisabled={selectedImageCount < 2}
+        >
+          <Ionicons name="git-compare-outline" size={14} color={mutedColor} />
+          {!isLandscape && <Button.Label>{t("gallery.compare")}</Button.Label>}
+        </Button>
         <Button size="sm" variant="ghost" onPress={onBatchConvert} isDisabled={!selectedCount}>
           <Ionicons name="swap-horizontal-outline" size={14} color={mutedColor} />
           {!isLandscape && <Button.Label>{t("converter.batchConvert")}</Button.Label>}

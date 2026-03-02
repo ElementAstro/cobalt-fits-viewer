@@ -351,6 +351,7 @@ export function getPixelExtent(pixels: Float32Array): [number, number] {
       if (v > max) max = v;
     }
   }
+  if (min > max) return [0, 0];
   return [min, max];
 }
 

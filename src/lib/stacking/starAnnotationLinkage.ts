@@ -6,6 +6,14 @@ import type {
   StarAnnotationStaleReason,
 } from "../fits/types";
 import type { DetectedStar } from "./starDetection";
+import {
+  STAR_ANNOTATION_EPS,
+  isFinitePoint,
+  distance2,
+  findNearestIndex,
+  ensureUniqueAnchors,
+  createPointId,
+} from "./starAnnotationUtils";
 
 export type ManualRegistrationMode = "oneStar" | "twoStar" | "threeStar";
 
@@ -73,38 +81,6 @@ const DEFAULT_DETECTION_SNAPSHOT: StarAnnotationDetectionSnapshot = {
   snrMin: 2,
 };
 
-const EPS = 1e-8;
-
-function isFinitePoint(point: { x: number; y: number }) {
-  return Number.isFinite(point.x) && Number.isFinite(point.y);
-}
-
-function distance2(a: { x: number; y: number }, b: { x: number; y: number }) {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
-  return dx * dx + dy * dy;
-}
-
-function findNearestIndex(
-  point: { x: number; y: number },
-  candidates: Array<{ x: number; y: number }>,
-  used: Set<number>,
-  maxRadius: number,
-) {
-  const maxDist2 = maxRadius * maxRadius;
-  let bestIndex = -1;
-  let bestDist2 = Infinity;
-  for (let i = 0; i < candidates.length; i++) {
-    if (used.has(i)) continue;
-    const d2 = distance2(point, candidates[i]);
-    if (d2 <= maxDist2 && d2 < bestDist2) {
-      bestDist2 = d2;
-      bestIndex = i;
-    }
-  }
-  return bestIndex;
-}
-
 function normalizeDetectionSnapshot(
   input?: Partial<StarAnnotationDetectionSnapshot> | null,
 ): StarAnnotationDetectionSnapshot {
@@ -138,24 +114,6 @@ function inferGeometryFromPoints(points: StarAnnotationPoint[]) {
     width: Math.max(1, Math.ceil(maxX + 1)),
     height: Math.max(1, Math.ceil(maxY + 1)),
   };
-}
-
-function ensureUniqueAnchors(points: StarAnnotationPoint[]): StarAnnotationPoint[] {
-  const anchorOwner = new Map<1 | 2 | 3, string>();
-  return points.map((point) => {
-    if (!point.anchorIndex) return point;
-    const owner = anchorOwner.get(point.anchorIndex);
-    if (!owner) {
-      anchorOwner.set(point.anchorIndex, point.id);
-      return point;
-    }
-    if (owner === point.id) return point;
-    return { ...point, anchorIndex: undefined };
-  });
-}
-
-function createPointId(prefix: "d" | "m", x: number, y: number) {
-  return `${prefix}_${Math.round(x * 100)}_${Math.round(y * 100)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function createManualStarAnnotationPoint(
@@ -227,7 +185,7 @@ function solveLinear3x3(a: number[][], b: number[]) {
     for (let row = col + 1; row < 3; row++) {
       if (Math.abs(m[row][col]) > Math.abs(m[pivot][col])) pivot = row;
     }
-    if (Math.abs(m[pivot][col]) < EPS) return null;
+    if (Math.abs(m[pivot][col]) < STAR_ANNOTATION_EPS) return null;
     if (pivot !== col) {
       const tmp = m[pivot];
       m[pivot] = m[col];
@@ -284,7 +242,7 @@ export function buildManualTransform(
 
     const rNorm = Math.hypot(rvx, rvy);
     const tNorm = Math.hypot(tvx, tvy);
-    if (rNorm < EPS || tNorm < EPS) return null;
+    if (rNorm < STAR_ANNOTATION_EPS || tNorm < STAR_ANNOTATION_EPS) return null;
 
     const scale = tNorm / rNorm;
     const theta = Math.atan2(tvy, tvx) - Math.atan2(rvy, rvx);

@@ -320,6 +320,7 @@ export function useBackup() {
       const abortController = new AbortController();
       abortRef.current = abortController;
 
+      const startTime = Date.now();
       try {
         setBackupInProgress(true);
         setLastError(null);
@@ -333,20 +334,33 @@ export function useBackup() {
           abortController.signal,
         );
 
+        const files = dataSource.getFiles();
+        let totalSize = 0;
+        for (const f of files) totalSize += f.fileSize ?? 0;
+
         updateConnection(providerType, { lastBackupDate: Date.now() });
         setActiveProvider(providerType);
+        useBackupStore.getState().setLastSuccessfulBackupAt(Date.now());
         addHistoryEntry({
           type: "backup",
           provider: providerType,
           result: "success",
-          fileCount: dataSource.getFiles().length,
+          fileCount: files.length,
+          totalSize,
+          durationMs: Date.now() - startTime,
         });
         resetProgress();
         return { success: true };
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Backup failed";
         setLastError(msg);
-        addHistoryEntry({ type: "backup", provider: providerType, result: "failed", error: msg });
+        addHistoryEntry({
+          type: "backup",
+          provider: providerType,
+          result: "failed",
+          error: msg,
+          durationMs: Date.now() - startTime,
+        });
         resetProgress();
         return { success: false, error: msg };
       } finally {
@@ -402,6 +416,7 @@ export function useBackup() {
       const abortController = new AbortController();
       abortRef.current = abortController;
 
+      const startTime = Date.now();
       try {
         setRestoreInProgress(true);
         setLastError(null);
@@ -418,13 +433,24 @@ export function useBackup() {
         reconcileAlbumFileConsistency();
         reconcileAllStores();
         setActiveProvider(providerType);
-        addHistoryEntry({ type: "restore", provider: providerType, result: "success" });
+        addHistoryEntry({
+          type: "restore",
+          provider: providerType,
+          result: "success",
+          durationMs: Date.now() - startTime,
+        });
         resetProgress();
         return { success: true };
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Restore failed";
         setLastError(msg);
-        addHistoryEntry({ type: "restore", provider: providerType, result: "failed", error: msg });
+        addHistoryEntry({
+          type: "restore",
+          provider: providerType,
+          result: "failed",
+          error: msg,
+          durationMs: Date.now() - startTime,
+        });
         resetProgress();
         return { success: false, error: msg };
       } finally {
@@ -486,6 +512,7 @@ export function useBackup() {
         return { success: false, error: "Operation in progress" };
       }
 
+      const startTime = Date.now();
       try {
         setBackupInProgress(true);
         setLastError(null);
@@ -495,7 +522,13 @@ export function useBackup() {
         );
         resetProgress();
         if (result.success) {
-          addHistoryEntry({ type: "local-export", provider: "local", result: "success" });
+          useBackupStore.getState().setLastSuccessfulBackupAt(Date.now());
+          addHistoryEntry({
+            type: "local-export",
+            provider: "local",
+            result: "success",
+            durationMs: Date.now() - startTime,
+          });
         } else {
           setLastError(result.error ?? "Export failed");
           addHistoryEntry({
@@ -503,13 +536,20 @@ export function useBackup() {
             provider: "local",
             result: "failed",
             error: result.error,
+            durationMs: Date.now() - startTime,
           });
         }
         return result;
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Export failed";
         setLastError(msg);
-        addHistoryEntry({ type: "local-export", provider: "local", result: "failed", error: msg });
+        addHistoryEntry({
+          type: "local-export",
+          provider: "local",
+          result: "failed",
+          error: msg,
+          durationMs: Date.now() - startTime,
+        });
         resetProgress();
         return { success: false, error: msg };
       } finally {
@@ -575,6 +615,7 @@ export function useBackup() {
         return { success: false, error: "Operation in progress" };
       }
 
+      const startTime = Date.now();
       try {
         setRestoreInProgress(true);
         setLastError(null);
@@ -588,7 +629,12 @@ export function useBackup() {
         if (result.success) {
           reconcileAlbumFileConsistency();
           reconcileAllStores();
-          addHistoryEntry({ type: "local-import", provider: "local", result: "success" });
+          addHistoryEntry({
+            type: "local-import",
+            provider: "local",
+            result: "success",
+            durationMs: Date.now() - startTime,
+          });
         } else {
           setLastError(result.error ?? "Import failed");
           addHistoryEntry({
@@ -596,6 +642,7 @@ export function useBackup() {
             provider: "local",
             result: "failed",
             error: result.error,
+            durationMs: Date.now() - startTime,
           });
         }
         resetProgress();
@@ -603,7 +650,13 @@ export function useBackup() {
       } catch (error) {
         const msg = error instanceof Error ? error.message : "Import failed";
         setLastError(msg);
-        addHistoryEntry({ type: "local-import", provider: "local", result: "failed", error: msg });
+        addHistoryEntry({
+          type: "local-import",
+          provider: "local",
+          result: "failed",
+          error: msg,
+          durationMs: Date.now() - startTime,
+        });
         resetProgress();
         return { success: false, error: msg };
       } finally {

@@ -4,24 +4,25 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import {
-  loadScientificFitsFromBuffer,
-  getImagePixels,
-  getImageDimensions,
-  getHeaderValue,
-} from "../lib/fits/parser";
-import {
-  stackAverage,
-  stackMedian,
-  stackSigmaClip,
-  stackMin,
-  stackMax,
-  stackWinsorizedSigmaClip,
-  stackWeightedAverage,
-} from "../lib/utils/pixelMath";
-import { fitsToRGBA } from "../lib/converter/formatConverter";
+import { loadScientificImageFromPath } from "../lib/image/scientificImageLoader";
 import { computeAutoStretch } from "../lib/utils/pixelMath";
+import { fitsToRGBA } from "../lib/converter/formatConverter";
+import {
+  integrateFrames,
+  averageStrategy,
+  medianStrategy,
+  sigmaClipStrategy,
+  winsorizedSigmaClipStrategy,
+  minStrategy,
+  maxStrategy,
+  weightedAverageStrategy,
+  percentileClipStrategy,
+  linearFitClipStrategy,
+  esdStrategy,
+  averagedSigmaClipStrategy,
+  type PixelRejectionStrategy,
+} from "../lib/stacking/integration";
+import { normalizeFrames, type NormalizationMode } from "../lib/stacking/normalization";
 import {
   calibrateFrame,
   createMasterDark,
@@ -59,7 +60,11 @@ export type StackMethod =
   | "min"
   | "max"
   | "winsorized"
-  | "weighted";
+  | "weighted"
+  | "percentile"
+  | "linearFit"
+  | "esd"
+  | "averagedSigma";
 
 export type { AlignmentMode } from "../lib/stacking/alignment";
 export type { FrameQualityMetrics } from "../lib/stacking/frameQuality";
@@ -80,6 +85,25 @@ export interface StackingAdvancedOptions {
     useAnnotatedForAlignment?: boolean;
     stalePolicy?: "auto-fallback-detect";
   };
+  /** 非对称拒绝: 独立 low/high sigma */
+  sigmaLow?: number;
+  sigmaHigh?: number;
+  /** Sigma clipping 迭代次数 (默认 3) */
+  clippingIterations?: number;
+  /** Range rejection 阈值 */
+  rangeLow?: number;
+  rangeHigh?: number;
+  /** 归一化模式 */
+  normalizationMode?: "none" | "additive" | "multiplicative" | "additive+multiplicative";
+  /** 是否生成拒绝图 */
+  generateRejectionMap?: boolean;
+  /** Percentile clipping 参数 */
+  percentileLow?: number;
+  percentileHigh?: number;
+  /** ESD 参数 */
+  esdSignificance?: number;
+  esdMaxOutliers?: number;
+  esdRelaxation?: number;
 }
 
 export interface StackFilesRequest {
@@ -106,6 +130,12 @@ export interface StackResult {
   method: StackMethod;
   duration: number;
   alignmentMode: AlignmentMode;
+  /** 拒绝图 (low/high 拒绝帧数) */
+  rejectionMap?: { low: Uint16Array; high: Uint16Array };
+  /** 拒绝统计 */
+  rejectionStats?: { totalRejectedLow: number; totalRejectedHigh: number; pixelCount: number };
+  /** 归一化结果 */
+  normalizationResults?: Array<{ offset: number; scale: number }>;
   alignmentResults?: Array<{
     filename: string;
     matchedStars: number;
@@ -165,30 +195,18 @@ async function loadPixelsFromPath(filepath: string): Promise<{
   exposure: number | null;
 } | null> {
   try {
-    const buffer = await readFileAsArrayBuffer(filepath);
-    const fits = await loadScientificFitsFromBuffer(buffer, { filename: filepath });
-    const dims = getImageDimensions(fits);
-    const pixels = await getImagePixels(fits);
-    if (!dims || !pixels) return null;
+    const loaded = await loadScientificImageFromPath(filepath, {
+      filename: filenameFromPath(filepath),
+    });
     return {
-      pixels,
-      width: dims.width,
-      height: dims.height,
-      exposure: toPositiveExposure(getHeaderValue(fits, "EXPTIME")),
+      pixels: loaded.pixels,
+      width: loaded.width,
+      height: loaded.height,
+      exposure: loaded.exposure,
     };
   } catch {
     return null;
   }
-}
-
-function toPositiveExposure(value: unknown): number | null {
-  const numeric =
-    typeof value === "number"
-      ? value
-      : typeof value === "string"
-        ? Number.parseFloat(value)
-        : Number.NaN;
-  return Number.isFinite(numeric) && numeric > 0 ? numeric : null;
 }
 
 function filenameFromPath(filepath: string): string {
@@ -404,7 +422,7 @@ export function useStacking() {
 
         if (isCancelled()) return null;
 
-        const frames: Float32Array[] = [];
+        let frames: Float32Array[] = [];
         let refWidth = 0;
         let refHeight = 0;
 
@@ -419,17 +437,12 @@ export function useStacking() {
           });
           await yieldToUI();
 
-          const buffer = await readFileAsArrayBuffer(request.files[i].filepath);
-          const fits = await loadScientificFitsFromBuffer(buffer, {
+          const loaded = await loadScientificImageFromPath(request.files[i].filepath, {
             filename: request.files[i].filename,
           });
-          const dims = getImageDimensions(fits);
-          let pixels = await getImagePixels(fits);
-          const lightExposure = toPositiveExposure(getHeaderValue(fits, "EXPTIME"));
-
-          if (!dims || !pixels) {
-            throw new Error(`Failed to read image data from ${request.files[i].filename}`);
-          }
+          const dims = { width: loaded.width, height: loaded.height };
+          let pixels = loaded.pixels;
+          const lightExposure = loaded.exposure;
 
           if (i === 0) {
             refWidth = dims.width;
@@ -683,42 +696,89 @@ export function useStacking() {
 
         if (isCancelled()) return null;
 
+        // ── Normalization ──
+        const normMode = (request.advanced?.normalizationMode ?? "none") as NormalizationMode;
+        let normalizationResults: Array<{ offset: number; scale: number }> | undefined;
+        if (normMode !== "none" && frames.length >= 2) {
+          setProgress({
+            stage: "stacking",
+            current: 0,
+            total: 2,
+            message: `Normalizing ${frames.length} frames (${normMode})...`,
+          });
+          await yieldToUI();
+          const normResult = normalizeFrames(frames, 0, normMode);
+          frames = normResult.normalized;
+          normalizationResults = normResult.results.map((r) => ({
+            offset: r.offset,
+            scale: r.scale,
+          }));
+        }
+
+        if (isCancelled()) return null;
+
+        // ── Integration (stacking) ──
         setProgress({
           stage: "stacking",
-          current: 0,
-          total: 1,
+          current: normMode !== "none" ? 1 : 0,
+          total: normMode !== "none" ? 2 : 1,
           message: `Stacking ${frames.length} frames (${request.method})...`,
         });
         await yieldToUI();
 
-        let stacked: Float32Array;
-        switch (request.method) {
-          case "average":
-            stacked = stackAverage(frames);
-            break;
-          case "median":
-            stacked = stackMedian(frames);
-            break;
-          case "sigma":
-            stacked = stackSigmaClip(frames, request.sigma ?? 2.5);
-            break;
-          case "min":
-            stacked = stackMin(frames);
-            break;
-          case "max":
-            stacked = stackMax(frames);
-            break;
-          case "winsorized":
-            stacked = stackWinsorizedSigmaClip(frames, request.sigma ?? 2.5);
-            break;
-          case "weighted":
-            stacked = stackWeightedAverage(frames, weights ?? frames.map(() => 1));
-            break;
-          default:
-            stacked = stackAverage(frames);
-            break;
+        const adv = request.advanced ?? {};
+        const sigma = request.sigma ?? 2.5;
+        const sLow = adv.sigmaLow ?? sigma;
+        const sHigh = adv.sigmaHigh ?? sigma;
+        const iterations = adv.clippingIterations ?? 3;
+
+        function resolveStrategy(): PixelRejectionStrategy {
+          switch (request.method) {
+            case "average":
+              return averageStrategy();
+            case "median":
+              return medianStrategy();
+            case "sigma":
+              return sigmaClipStrategy(sLow, sHigh);
+            case "min":
+              return minStrategy();
+            case "max":
+              return maxStrategy();
+            case "winsorized":
+              return winsorizedSigmaClipStrategy(sLow, sHigh);
+            case "weighted":
+              return weightedAverageStrategy(weights ?? frames.map(() => 1));
+            case "percentile":
+              return percentileClipStrategy(adv.percentileLow ?? 10, adv.percentileHigh ?? 90);
+            case "linearFit":
+              return linearFitClipStrategy();
+            case "esd":
+              return esdStrategy();
+            case "averagedSigma":
+              return averagedSigmaClipStrategy(sLow, sHigh);
+            default:
+              return averageStrategy();
+          }
         }
 
+        const integrationResult = integrateFrames(frames, {
+          strategy: resolveStrategy(),
+          rangeLow: adv.rangeLow,
+          rangeHigh: adv.rangeHigh,
+          generateRejectionMap: adv.generateRejectionMap,
+          context: {
+            sigmaLow: sLow,
+            sigmaHigh: sHigh,
+            iterations,
+            params: {
+              significance: adv.esdSignificance ?? 0.05,
+              maxOutliers: adv.esdMaxOutliers ?? 0.3,
+              relaxation: adv.esdRelaxation ?? 1.5,
+            },
+          },
+        });
+
+        const stacked = integrationResult.pixels;
         frames.length = 0;
 
         if (isCancelled()) return null;
@@ -752,6 +812,9 @@ export function useStacking() {
           method: request.method,
           duration,
           alignmentMode: request.alignmentMode ?? "none",
+          rejectionMap: integrationResult.rejectionMap,
+          rejectionStats: integrationResult.stats,
+          normalizationResults,
           alignmentResults: alignmentResults.length > 0 ? alignmentResults : undefined,
           qualityMetrics,
           annotationDiagnostics,

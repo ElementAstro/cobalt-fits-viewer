@@ -14,11 +14,14 @@ import {
 import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
 import { detectSupportedMediaFormat, toImageSourceFormat } from "../lib/import/fileFormat";
 import { generateFileId, importFile } from "../lib/utils/fileManager";
-import { copyThumbnailToCache, generateAndSaveThumbnail } from "../lib/gallery/thumbnailCache";
+import {
+  saveThumbnailFromExternalUri,
+  saveThumbnailFromRGBA,
+} from "../lib/gallery/thumbnailWorkflow";
 import { classifyWithDetail } from "../lib/gallery/frameClassifier";
 import { getFreeDiskBytes } from "../lib/utils/diskSpace";
 import { estimateOutputSizeBytes } from "../lib/video/format";
-import { parseRasterFromBufferAsync, extractRasterMetadata } from "../lib/image/rasterParser";
+import { parseImageBuffer } from "../lib/import/imageParsePipeline";
 import type { FitsMetadata } from "../lib/fits/types";
 import { useI18n } from "../i18n/useI18n";
 
@@ -153,7 +156,7 @@ export function useVideoProcessing() {
               time: Math.max(0, source?.thumbnailAtMs ?? 1000),
               quality: 0.8,
             });
-            thumbnailUri = copyThumbnailToCache(fileId, thumb.uri) ?? undefined;
+            thumbnailUri = saveThumbnailFromExternalUri(fileId, thumb.uri) ?? undefined;
           } catch {
             // ignore thumbnail failures
           }
@@ -240,45 +243,23 @@ export function useVideoProcessing() {
       }
 
       const buffer = await importedFile.arrayBuffer();
-      const parsed = await parseRasterFromBufferAsync(buffer, {
-        frameIndex: 0,
-        cacheSize: 1,
-        preferTiffDecoder: true,
-        sourceUri: importedFile.uri,
+      const parsed = await parseImageBuffer({
+        buffer,
         filename: importedFile.name,
-        formatHint: format?.id,
-      });
-      const rgba = new Uint8ClampedArray(
-        parsed.rgba.buffer,
-        parsed.rgba.byteOffset,
-        parsed.rgba.byteLength,
-      );
-      const { thumbnailSize: thumbSize, thumbnailQuality: thumbQuality } =
-        useSettingsStore.getState();
-      thumbnailUri =
-        generateAndSaveThumbnail(
-          fileId,
-          rgba,
-          parsed.width,
-          parsed.height,
-          thumbSize,
-          thumbQuality,
-        ) ?? undefined;
-
-      const partial = extractRasterMetadata(
-        {
-          filename: importedFile.name,
-          filepath: importedFile.uri,
-          fileSize,
-        },
-        {
-          width: parsed.width,
-          height: parsed.height,
-        },
+        filepath: importedFile.uri,
+        fileSize,
         frameClassificationConfig,
-      );
+      });
+      const rawRgba = parsed.rgba;
+      if (rawRgba && parsed.dimensions?.width && parsed.dimensions?.height) {
+        const rgba = new Uint8ClampedArray(rawRgba.buffer, rawRgba.byteOffset, rawRgba.byteLength);
+        thumbnailUri =
+          saveThumbnailFromRGBA(fileId, rgba, parsed.dimensions.width, parsed.dimensions.height) ??
+          undefined;
+      }
+
       const next: FitsMetadata = {
-        ...partial,
+        ...parsed.metadataBase,
         id: fileId,
         importDate: now,
         isFavorite: false,
@@ -286,10 +267,12 @@ export function useVideoProcessing() {
         albumIds: [],
         sessionId: source?.sessionId,
         location: source?.location,
-        sourceType: "raster",
-        sourceFormat: toImageSourceFormat(format),
+        sourceType: parsed.sourceType,
+        sourceFormat: parsed.sourceFormat,
         mediaKind: "image",
         thumbnailUri,
+        decodeStatus: parsed.decodeStatus,
+        decodeError: parsed.decodeError,
         derivedFromId: source?.id,
         processingTag: request.operation,
       };

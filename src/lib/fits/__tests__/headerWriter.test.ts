@@ -5,6 +5,8 @@ import {
   readAscii,
   writeAscii,
   expandHeaderAndInsert,
+  formatHeaderAsText,
+  formatHeaderAsCSV,
 } from "../headerWriter";
 
 const RECORD_LEN = 80;
@@ -283,5 +285,98 @@ describe("expandHeaderAndInsert", () => {
 
     const result = await expandHeaderAndInsert(original, endOffset, headerEnd, records);
     expect(result.length % BLOCK_SIZE).toBe(0);
+  });
+});
+
+// ===== formatHeaderAsText =====
+
+describe("formatHeaderAsText", () => {
+  it("formats keywords as FITS header text lines", () => {
+    const keywords = [
+      { key: "BITPIX", value: 16, comment: "bits per pixel" },
+      { key: "OBJECT", value: "M42", comment: "target" },
+    ];
+    const text = formatHeaderAsText(keywords);
+    const lines = text.split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain("BITPIX");
+    expect(lines[0]).toContain("16");
+    expect(lines[0]).toContain("/ bits per pixel");
+    expect(lines[1]).toContain("OBJECT");
+    expect(lines[1]).toContain("'M42'");
+  });
+
+  it("pads key to 8 characters", () => {
+    const text = formatHeaderAsText([{ key: "RA", value: 10.0 }]);
+    expect(text.substring(0, 8)).toBe("RA      ");
+  });
+
+  it("formats boolean values as T/F", () => {
+    const text = formatHeaderAsText([{ key: "SIMPLE", value: true }]);
+    expect(text).toContain("T");
+    const text2 = formatHeaderAsText([{ key: "EXTEND", value: false }]);
+    expect(text2).toContain("F");
+  });
+
+  it("handles null value", () => {
+    const text = formatHeaderAsText([{ key: "BLANK", value: null }]);
+    expect(text).toBe("BLANK   ");
+  });
+
+  it("handles keywords without comment", () => {
+    const text = formatHeaderAsText([{ key: "NAXIS", value: 2 }]);
+    expect(text).not.toContain("/");
+    expect(text).toContain("NAXIS");
+    expect(text).toContain("2");
+  });
+
+  it("returns empty string for empty array", () => {
+    expect(formatHeaderAsText([])).toBe("");
+  });
+});
+
+// ===== formatHeaderAsCSV =====
+
+describe("formatHeaderAsCSV", () => {
+  it("formats keywords as CSV with header row", () => {
+    const keywords = [
+      { key: "BITPIX", value: 16, comment: "bits per pixel" },
+      { key: "OBJECT", value: "M42" },
+    ];
+    const csv = formatHeaderAsCSV(keywords);
+    const lines = csv.split("\n");
+    expect(lines[0]).toBe("Key,Value,Comment");
+    expect(lines[1]).toContain("BITPIX");
+    expect(lines[1]).toContain("16");
+    expect(lines[1]).toContain("bits per pixel");
+    expect(lines[2]).toContain("OBJECT");
+    expect(lines[2]).toContain("M42");
+  });
+
+  it("handles empty comment", () => {
+    const csv = formatHeaderAsCSV([{ key: "TEST", value: 1 }]);
+    const lines = csv.split("\n");
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toBe("TEST,1,");
+  });
+
+  it("handles null value", () => {
+    const csv = formatHeaderAsCSV([{ key: "BLANK", value: null }]);
+    const lines = csv.split("\n");
+    expect(lines[1]).toBe("BLANK,,");
+  });
+
+  it("returns only header row for empty array", () => {
+    const csv = formatHeaderAsCSV([]);
+    expect(csv).toBe("Key,Value,Comment");
+  });
+
+  it("escapes CSV special characters in values", () => {
+    const csv = formatHeaderAsCSV([{ key: "NOTE", value: 'has "quotes"', comment: "a,b" }]);
+    const lines = csv.split("\n");
+    // value with quotes should be escaped
+    expect(lines[1]).toContain('"');
+    // comment with comma should be escaped
+    expect(lines[1]).toContain('"a,b"');
   });
 });

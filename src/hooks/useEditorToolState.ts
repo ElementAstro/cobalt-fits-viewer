@@ -36,6 +36,13 @@ export type EditorTool =
   | "saturation"
   | "colorBalance"
   | "pixelMath"
+  | "ghs"
+  | "waveletSharpen"
+  | "tgvDenoise"
+  | "bilateralFilter"
+  | "wienerDeconvolution"
+  | "edgeMask"
+  | "mlt"
   | null;
 
 export type EditorToolGroup = "geometry" | "adjust" | "process" | "mask";
@@ -184,6 +191,56 @@ export interface EditorToolParams {
   setPixelMathExpr: (v: string) => void;
   curvesPreset: CurvesPreset;
   setCurvesPreset: (v: CurvesPreset) => void;
+  ghsD: number;
+  setGhsD: (v: number) => void;
+  ghsB: number;
+  setGhsB: (v: number) => void;
+  ghsSP: number;
+  setGhsSP: (v: number) => void;
+  ghsHP: number;
+  setGhsHP: (v: number) => void;
+  ghsLP: number;
+  setGhsLP: (v: number) => void;
+  waveletSharpenLayers: number;
+  setWaveletSharpenLayers: (v: number) => void;
+  waveletSharpenAmount: number;
+  setWaveletSharpenAmount: (v: number) => void;
+  waveletSharpenProtectStars: boolean;
+  setWaveletSharpenProtectStars: (v: boolean) => void;
+  tgvStrength: number;
+  setTgvStrength: (v: number) => void;
+  tgvSmoothness: number;
+  setTgvSmoothness: (v: number) => void;
+  tgvIterations: number;
+  setTgvIterations: (v: number) => void;
+  tgvEdgeProtection: number;
+  setTgvEdgeProtection: (v: number) => void;
+  bilateralSpatialSigma: number;
+  setBilateralSpatialSigma: (v: number) => void;
+  bilateralRangeSigma: number;
+  setBilateralRangeSigma: (v: number) => void;
+  wienerPsfSigma: number;
+  setWienerPsfSigma: (v: number) => void;
+  wienerNoiseRatio: number;
+  setWienerNoiseRatio: (v: number) => void;
+  edgeMaskPreBlur: number;
+  setEdgeMaskPreBlur: (v: number) => void;
+  edgeMaskThreshold: number;
+  setEdgeMaskThreshold: (v: number) => void;
+  edgeMaskPostBlur: number;
+  setEdgeMaskPostBlur: (v: number) => void;
+  mltLayers: number;
+  setMltLayers: (v: number) => void;
+  mltNoiseThreshold: number;
+  setMltNoiseThreshold: (v: number) => void;
+  mltNoiseReduction: number;
+  setMltNoiseReduction: (v: number) => void;
+  mltBias: number;
+  setMltBias: (v: number) => void;
+  mltUseLinearMask: boolean;
+  setMltUseLinearMask: (v: boolean) => void;
+  mltLinearMaskAmplification: number;
+  setMltLinearMaskAmplification: (v: number) => void;
 }
 
 export interface UseEditorToolStateReturn {
@@ -266,6 +323,45 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
   const [colorBalanceRedGain, setColorBalanceRedGain] = useState(1);
   const [colorBalanceGreenGain, setColorBalanceGreenGain] = useState(1);
   const [colorBalanceBlueGain, setColorBalanceBlueGain] = useState(1);
+
+  // GHS params
+  const [ghsD, setGhsD] = useState(1);
+  const [ghsB, setGhsB] = useState(0.25);
+  const [ghsSP, setGhsSP] = useState(0);
+  const [ghsHP, setGhsHP] = useState(0);
+  const [ghsLP, setGhsLP] = useState(0);
+
+  // Wavelet Sharpen params
+  const [waveletSharpenLayers, setWaveletSharpenLayers] = useState(3);
+  const [waveletSharpenAmount, setWaveletSharpenAmount] = useState(1.5);
+  const [waveletSharpenProtectStars, setWaveletSharpenProtectStars] = useState(false);
+
+  // TGV Denoise params
+  const [tgvStrength, setTgvStrength] = useState(2);
+  const [tgvSmoothness, setTgvSmoothness] = useState(2);
+  const [tgvIterations, setTgvIterations] = useState(200);
+  const [tgvEdgeProtection, setTgvEdgeProtection] = useState(0.5);
+
+  // Bilateral Filter params
+  const [bilateralSpatialSigma, setBilateralSpatialSigma] = useState(2);
+  const [bilateralRangeSigma, setBilateralRangeSigma] = useState(0.1);
+
+  // Wiener Deconvolution params
+  const [wienerPsfSigma, setWienerPsfSigma] = useState(2);
+  const [wienerNoiseRatio, setWienerNoiseRatio] = useState(0.01);
+
+  // Edge Mask params
+  const [edgeMaskPreBlur, setEdgeMaskPreBlur] = useState(1);
+  const [edgeMaskThreshold, setEdgeMaskThreshold] = useState(0.1);
+  const [edgeMaskPostBlur, setEdgeMaskPostBlur] = useState(1);
+
+  // MLT params
+  const [mltLayers, setMltLayers] = useState(4);
+  const [mltNoiseThreshold, setMltNoiseThreshold] = useState(3);
+  const [mltNoiseReduction, setMltNoiseReduction] = useState(0.5);
+  const [mltBias, setMltBias] = useState(0);
+  const [mltUseLinearMask, setMltUseLinearMask] = useState(true);
+  const [mltLinearMaskAmplification, setMltLinearMaskAmplification] = useState(200);
 
   const buildOperation = useCallback((): ImageEditOperation | null => {
     if (!activeTool) return null;
@@ -381,6 +477,52 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
         };
       case "pixelMath":
         return { type: "pixelMath", expression: pixelMathExpr };
+      case "ghs":
+        return { type: "ghs", D: ghsD, b: ghsB, SP: ghsSP, HP: ghsHP, LP: ghsLP };
+      case "waveletSharpen":
+        return {
+          type: "waveletSharpen",
+          layers: waveletSharpenLayers,
+          amount: waveletSharpenAmount,
+          protectStars: waveletSharpenProtectStars,
+        };
+      case "tgvDenoise":
+        return {
+          type: "tgvDenoise",
+          strength: tgvStrength,
+          smoothness: tgvSmoothness,
+          iterations: tgvIterations,
+          edgeProtection: tgvEdgeProtection,
+        };
+      case "bilateralFilter":
+        return {
+          type: "bilateralFilter",
+          spatialSigma: bilateralSpatialSigma,
+          rangeSigma: bilateralRangeSigma,
+        };
+      case "wienerDeconvolution":
+        return {
+          type: "wienerDeconvolution",
+          psfSigma: wienerPsfSigma,
+          noiseRatio: wienerNoiseRatio,
+        };
+      case "edgeMask":
+        return {
+          type: "edgeMask",
+          preBlurSigma: edgeMaskPreBlur,
+          threshold: edgeMaskThreshold,
+          postBlurSigma: edgeMaskPostBlur,
+        };
+      case "mlt":
+        return {
+          type: "mlt",
+          layers: mltLayers,
+          noiseThreshold: mltNoiseThreshold,
+          noiseReduction: mltNoiseReduction,
+          bias: mltBias,
+          useLinearMask: mltUseLinearMask,
+          linearMaskAmplification: mltLinearMaskAmplification,
+        };
       default:
         return null;
     }
@@ -436,6 +578,31 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     colorBalanceBlueGain,
     pixelMathExpr,
     curvesPreset,
+    ghsD,
+    ghsB,
+    ghsSP,
+    ghsHP,
+    ghsLP,
+    waveletSharpenLayers,
+    waveletSharpenAmount,
+    waveletSharpenProtectStars,
+    tgvStrength,
+    tgvSmoothness,
+    tgvIterations,
+    tgvEdgeProtection,
+    bilateralSpatialSigma,
+    bilateralRangeSigma,
+    wienerPsfSigma,
+    wienerNoiseRatio,
+    edgeMaskPreBlur,
+    edgeMaskThreshold,
+    edgeMaskPostBlur,
+    mltLayers,
+    mltNoiseThreshold,
+    mltNoiseReduction,
+    mltBias,
+    mltUseLinearMask,
+    mltLinearMaskAmplification,
   ]);
 
   const params: EditorToolParams = {
@@ -539,6 +706,56 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setPixelMathExpr,
     curvesPreset,
     setCurvesPreset,
+    ghsD,
+    setGhsD,
+    ghsB,
+    setGhsB,
+    ghsSP,
+    setGhsSP,
+    ghsHP,
+    setGhsHP,
+    ghsLP,
+    setGhsLP,
+    waveletSharpenLayers,
+    setWaveletSharpenLayers,
+    waveletSharpenAmount,
+    setWaveletSharpenAmount,
+    waveletSharpenProtectStars,
+    setWaveletSharpenProtectStars,
+    tgvStrength,
+    setTgvStrength,
+    tgvSmoothness,
+    setTgvSmoothness,
+    tgvIterations,
+    setTgvIterations,
+    tgvEdgeProtection,
+    setTgvEdgeProtection,
+    bilateralSpatialSigma,
+    setBilateralSpatialSigma,
+    bilateralRangeSigma,
+    setBilateralRangeSigma,
+    wienerPsfSigma,
+    setWienerPsfSigma,
+    wienerNoiseRatio,
+    setWienerNoiseRatio,
+    edgeMaskPreBlur,
+    setEdgeMaskPreBlur,
+    edgeMaskThreshold,
+    setEdgeMaskThreshold,
+    edgeMaskPostBlur,
+    setEdgeMaskPostBlur,
+    mltLayers,
+    setMltLayers,
+    mltNoiseThreshold,
+    setMltNoiseThreshold,
+    mltNoiseReduction,
+    setMltNoiseReduction,
+    mltBias,
+    setMltBias,
+    mltUseLinearMask,
+    setMltUseLinearMask,
+    mltLinearMaskAmplification,
+    setMltLinearMaskAmplification,
   };
 
   const resetToolParams = useCallback(() => {
@@ -592,6 +809,31 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setColorBalanceRedGain(1);
     setColorBalanceGreenGain(1);
     setColorBalanceBlueGain(1);
+    setGhsD(1);
+    setGhsB(0.25);
+    setGhsSP(0);
+    setGhsHP(0);
+    setGhsLP(0);
+    setWaveletSharpenLayers(3);
+    setWaveletSharpenAmount(1.5);
+    setWaveletSharpenProtectStars(false);
+    setTgvStrength(2);
+    setTgvSmoothness(2);
+    setTgvIterations(200);
+    setTgvEdgeProtection(0.5);
+    setBilateralSpatialSigma(2);
+    setBilateralRangeSigma(0.1);
+    setWienerPsfSigma(2);
+    setWienerNoiseRatio(0.01);
+    setEdgeMaskPreBlur(1);
+    setEdgeMaskThreshold(0.1);
+    setEdgeMaskPostBlur(1);
+    setMltLayers(4);
+    setMltNoiseThreshold(3);
+    setMltNoiseReduction(0.5);
+    setMltBias(0);
+    setMltUseLinearMask(true);
+    setMltLinearMaskAmplification(200);
   }, [defaults.blurSigma, defaults.sharpenAmount, defaults.denoiseRadius]);
 
   return {

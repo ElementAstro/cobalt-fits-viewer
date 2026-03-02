@@ -11,7 +11,7 @@ jest.mock("uniwind", () => ({
   Uniwind: { setTheme: jest.fn(), updateCSSVariables: jest.fn() },
 }));
 jest.mock("../../lib/storage", () => ({
-  zustandMMKVStorage: {
+  zustandAsyncStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
     removeItem: jest.fn(),

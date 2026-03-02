@@ -1,5 +1,5 @@
 import { View, Text, ScrollView, Alert } from "react-native";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   Button,
   Card,
@@ -20,6 +20,8 @@ import { useExport } from "../../hooks/useExport";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
+import { isImageLikeMedia } from "../../lib/import/imageParsePipeline";
+import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 
 type ComposePreset = "rgb" | "sho" | "hoo" | "lrgb" | "custom";
 
@@ -95,6 +97,15 @@ export default function ComposeScreen() {
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
+  const composableFiles = useMemo(
+    () =>
+      files.filter((file) => {
+        if (!isImageLikeMedia(file)) return false;
+        if (file.decodeStatus === "failed") return false;
+        return true;
+      }),
+    [files],
+  );
   const defaultComposePreset = useSettingsStore((s) => s.defaultComposePreset);
   const composeRedWeight = useSettingsStore((s) => s.composeRedWeight);
   const composeGreenWeight = useSettingsStore((s) => s.composeGreenWeight);
@@ -116,6 +127,26 @@ export default function ComposeScreen() {
   >(null);
   const [showWeights, setShowWeights] = useState(false);
   const initializedPresetRef = useRef(false);
+  const compareIds = useMemo(
+    () =>
+      pickImageLikeIds(
+        [
+          composer.channels.red.fileId ?? "",
+          composer.channels.green.fileId ?? "",
+          composer.channels.blue.fileId ?? "",
+          composer.channels.luminance.fileId ?? "",
+        ],
+        composableFiles,
+        2,
+      ),
+    [
+      composableFiles,
+      composer.channels.blue.fileId,
+      composer.channels.green.fileId,
+      composer.channels.luminance.fileId,
+      composer.channels.red.fileId,
+    ],
+  );
 
   const assignFile = useCallback(
     async (
@@ -141,7 +172,9 @@ export default function ComposeScreen() {
       composer.reset();
 
       for (const [channel, filterName] of Object.entries(presetConfig.mapping)) {
-        const match = files.find((f) => f.filter?.toUpperCase().includes(filterName.toUpperCase()));
+        const match = composableFiles.find((f) =>
+          f.filter?.toUpperCase().includes(filterName.toUpperCase()),
+        );
         if (match) {
           await composer.loadChannel(
             channel as "red" | "green" | "blue",
@@ -152,7 +185,7 @@ export default function ComposeScreen() {
         }
       }
     },
-    [files, composer],
+    [composableFiles, composer],
   );
 
   useEffect(() => {
@@ -202,8 +235,20 @@ export default function ComposeScreen() {
             {t("compose.channelsAssigned", { count: composer.assignedCount })}
           </Text>
         </View>
-        {composer.result && (
+        {(composer.result || compareIds.length > 0) && (
           <View className="flex-row gap-2">
+            <Button
+              testID="e2e-action-compose__index-open-compare"
+              size="sm"
+              variant="outline"
+              onPress={() => {
+                if (compareIds.length < 2) return;
+                router.push(`/compare?ids=${compareIds.join(",")}`);
+              }}
+              isDisabled={compareIds.length < 2}
+            >
+              <Ionicons name="git-compare-outline" size={14} color={mutedColor} />
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -472,7 +517,7 @@ export default function ComposeScreen() {
             {t("compose.selectFileFor", { channel: selectingChannel.toUpperCase() })}
           </Text>
           <View className="gap-1 mb-4">
-            {files.map((file) => (
+            {composableFiles.map((file) => (
               <PressableFeedback
                 key={file.id}
                 onPress={() => assignFile(selectingChannel, file.id, file.filepath, file.filename)}
@@ -489,7 +534,7 @@ export default function ComposeScreen() {
                 </Card>
               </PressableFeedback>
             ))}
-            {files.length === 0 && (
+            {composableFiles.length === 0 && (
               <Text className="text-xs text-muted text-center py-4">
                 {t("compose.noFilesAvailable")}
               </Text>

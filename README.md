@@ -24,6 +24,7 @@ View, analyze, stack, and convert astronomical FITS images on **iOS**, **Android
 - **Frame Classification Engine** — Built-in `light/dark/flat/bias/darkflat/unknown` + custom frame types/rules (`header`/`filename`, `exact/contains/regex`, priority), report scope control, and one-click historical reclassification
 - **Image Stacking** — Average, median, sigma clipping, min/max, winsorized, weighted stacking with alignment
 - **Bidirectional Converter** — Full `FITS ↔ PNG/JPEG/WebP/TIFF/BMP`, plus FITS export (`.fits` / `.fits.gz`) with scientific/rendered modes
+- **Best-Effort RAW Import** — Detects common camera RAW extensions (for example `DNG/CR2/CR3/NEF/ARW/RAF/ORF/RW2`) and attempts decode via runtime fallback chain (`Skia` primary, `image-js` fallback). Failed RAW/TIFF decodes are preserved as records with `decodeStatus=failed`.
 - **RGB Compose** — Combine mono FITS into color images
 - **Observation Targets** — Track galaxies, nebulae, clusters with exposure progress and filter planning
 - **Observation Sessions** — Calendar view, timeline, session log, statistics, calendar sync

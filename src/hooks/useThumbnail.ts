@@ -9,9 +9,8 @@ import {
   hasThumbnail,
   clearThumbnailCache,
   getThumbnailCacheSize,
-  generateAndSaveThumbnail,
-  generateVideoThumbnailToCache,
 } from "../lib/gallery/thumbnailCache";
+import { saveThumbnailFromRGBA, saveThumbnailFromVideo } from "../lib/gallery/thumbnailWorkflow";
 import { regenerateFileThumbnail } from "../lib/gallery/thumbnailGenerator";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import type { FitsMetadata } from "../lib/fits/types";
@@ -38,8 +37,6 @@ export function useThumbnail() {
   const [regenerateProgress, setRegenerateProgress] = useState<RegenerateProgress | null>(null);
   const activeTaskCountRef = useRef(0);
   const pendingThumbnailTasksRef = useRef<Map<string, Promise<string | null>>>(new Map());
-  const thumbnailSize = useSettingsStore((s) => s.thumbnailSize);
-  const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
   const videoThumbnailTimeMs = useSettingsStore((s) => s.videoThumbnailTimeMs);
 
   const beginTask = useCallback(() => {
@@ -72,19 +69,12 @@ export function useThumbnail() {
     ): string | null => {
       beginTask();
       try {
-        return generateAndSaveThumbnail(
-          fileId,
-          rgba,
-          srcWidth,
-          srcHeight,
-          thumbnailSize,
-          thumbnailQuality,
-        );
+        return saveThumbnailFromRGBA(fileId, rgba, srcWidth, srcHeight);
       } finally {
         endTask();
       }
     },
-    [beginTask, endTask, thumbnailSize, thumbnailQuality],
+    [beginTask, endTask],
   );
 
   const generateThumbnailAsync = useCallback(
@@ -103,14 +93,7 @@ export function useThumbnail() {
         beginTask();
         try {
           await yieldToMain();
-          return generateAndSaveThumbnail(
-            fileId,
-            rgba,
-            srcWidth,
-            srcHeight,
-            thumbnailSize,
-            thumbnailQuality,
-          );
+          return saveThumbnailFromRGBA(fileId, rgba, srcWidth, srcHeight);
         } finally {
           endTask();
         }
@@ -125,7 +108,7 @@ export function useThumbnail() {
       });
       return task;
     },
-    [beginTask, endTask, thumbnailSize, thumbnailQuality],
+    [beginTask, endTask],
   );
 
   const clearCache = useCallback(() => {
@@ -150,7 +133,7 @@ export function useThumbnail() {
       const task = (async () => {
         beginTask();
         try {
-          return await generateVideoThumbnailToCache(fileId, filepath, timeMs, thumbnailQuality);
+          return await saveThumbnailFromVideo(fileId, filepath, timeMs);
         } finally {
           endTask();
         }
@@ -166,7 +149,7 @@ export function useThumbnail() {
       });
       return task;
     },
-    [beginTask, endTask, thumbnailQuality, videoThumbnailTimeMs],
+    [beginTask, endTask, videoThumbnailTimeMs],
   );
 
   const regenerateThumbnails = useCallback(

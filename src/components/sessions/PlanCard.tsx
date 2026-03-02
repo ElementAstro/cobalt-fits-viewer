@@ -13,6 +13,8 @@ interface PlanCardProps {
   plan: ObservationPlan;
   onPress?: () => void;
   onLongPress?: () => void;
+  /** Compact layout for landscape mode */
+  compact?: boolean;
 }
 
 const STATUS_COLOR_CLASS: Record<"planned" | "completed" | "cancelled", string> = {
@@ -21,7 +23,12 @@ const STATUS_COLOR_CLASS: Record<"planned" | "completed" | "cancelled", string> 
   cancelled: "text-danger",
 };
 
-export const PlanCard = memo(function PlanCard({ plan, onPress, onLongPress }: PlanCardProps) {
+export const PlanCard = memo(function PlanCard({
+  plan,
+  onPress,
+  onLongPress,
+  compact = false,
+}: PlanCardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
   const targets = useTargetStore((s) => s.targets);
@@ -40,7 +47,7 @@ export const PlanCard = memo(function PlanCard({ plan, onPress, onLongPress }: P
     <PressableFeedback onPress={onPress} onLongPress={onLongPress}>
       <PressableFeedback.Highlight />
       <Card variant="secondary" className={isPast ? "opacity-60" : ""}>
-        <Card.Body className="gap-1.5 p-3">
+        <Card.Body className={compact ? "gap-1 p-2" : "gap-1.5 p-3"}>
           <View className="flex-row items-center justify-between">
             <View className="flex-1 flex-row items-center gap-2">
               <Ionicons
@@ -60,7 +67,7 @@ export const PlanCard = memo(function PlanCard({ plan, onPress, onLongPress }: P
             </Chip>
           </View>
 
-          <View className="flex-row items-center gap-3">
+          <View className={`flex-row items-center ${compact ? "gap-2" : "gap-3"}`}>
             <View className="flex-row items-center gap-1">
               <Ionicons name="telescope-outline" size={11} color={mutedColor} />
               <Text className="text-[10px] text-muted">{displayTargetName}</Text>
@@ -73,7 +80,7 @@ export const PlanCard = memo(function PlanCard({ plan, onPress, onLongPress }: P
             </View>
           </View>
 
-          {plan.notes && (
+          {!compact && plan.notes && (
             <Text className="text-[10px] text-muted" numberOfLines={1}>
               {plan.notes}
             </Text>

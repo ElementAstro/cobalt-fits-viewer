@@ -1,18 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { File as FSFile } from "expo-file-system";
-import {
-  loadFitsFromBufferAuto,
-  getImageDimensions,
-  getImagePixels,
-  extractMetadata,
-} from "../lib/fits/parser";
 import { generateFileId } from "../lib/utils/fileManager";
-import { generateAndSaveThumbnail } from "../lib/gallery/thumbnailCache";
+import { saveThumbnailFromRGBA } from "../lib/gallery/thumbnailWorkflow";
 import { useExport } from "./useExport";
 import { useFitsStore } from "../stores/useFitsStore";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { registerCompositeLayers } from "../lib/composite/registrationAdapter";
 import { renderComposite } from "../lib/composite/renderer";
+import { loadScientificImageFromPath } from "../lib/image/scientificImageLoader";
+import { parseImageBuffer } from "../lib/import/imageParsePipeline";
 import type {
   CompositeLayer,
   PixelMathValidationError,
@@ -85,6 +81,7 @@ export function useAdvancedCompose() {
   const updateFile = useFitsStore((s) => s.updateFile);
   const thumbnailSize = useSettingsStore((s) => s.thumbnailSize);
   const thumbnailQuality = useSettingsStore((s) => s.thumbnailQuality);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
 
   const advancedRegistrationMode = useSettingsStore((s) => s.advancedComposeRegistrationMode);
   const advancedFramingMode = useSettingsStore((s) => s.advancedComposeFramingMode);
@@ -204,15 +201,9 @@ export function useAdvancedCompose() {
         });
         setError(null);
 
-        const file = new FSFile(filepath);
-        const buffer = await file.arrayBuffer();
-        const fits = loadFitsFromBufferAuto(buffer);
-        const dims = getImageDimensions(fits);
-        const pixels = await getImagePixels(fits);
-
-        if (!dims || !pixels) {
-          throw new Error(`Failed to decode ${filename}`);
-        }
+        const loaded = await loadScientificImageFromPath(filepath, { filename });
+        const dims = { width: loaded.width, height: loaded.height };
+        const pixels = loaded.pixels;
 
         const currentBase = baseDimensionsRef.current;
         if (
@@ -431,12 +422,14 @@ export function useAdvancedCompose() {
 
         const outputFile = new FSFile(fitsUri);
         const outputBuffer = await outputFile.arrayBuffer();
-        const parsed = loadFitsFromBufferAuto(outputBuffer);
-        const partialMeta = extractMetadata(parsed, {
+        const parsed = await parseImageBuffer({
+          buffer: outputBuffer,
           filename: outputFile.name,
           filepath: outputFile.uri,
           fileSize: outputFile.size ?? outputBuffer.byteLength,
+          frameClassificationConfig,
         });
+        const partialMeta = parsed.metadataBase;
 
         const referenceLayer = project.layers.find((layer) => layer.fileId && layer.enabled);
         const sourceMeta = referenceLayer?.fileId ? getFileById(referenceLayer.fileId) : undefined;
@@ -459,14 +452,10 @@ export function useAdvancedCompose() {
           location: sourceMeta?.location,
         });
 
-        const thumbUri = generateAndSaveThumbnail(
-          id,
-          render.rgbaData,
-          render.width,
-          render.height,
+        const thumbUri = saveThumbnailFromRGBA(id, render.rgbaData, render.width, render.height, {
           thumbnailSize,
           thumbnailQuality,
-        );
+        });
 
         if (thumbUri) {
           updateFile(id, { thumbnailUri: thumbUri });
@@ -493,6 +482,7 @@ export function useAdvancedCompose() {
     [
       addFile,
       exportImage,
+      frameClassificationConfig,
       fullResult,
       getFileById,
       project.layers,

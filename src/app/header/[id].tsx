@@ -1,16 +1,20 @@
-import { View, Text, ScrollView } from "react-native";
-import { useState, useEffect, useMemo } from "react";
+import { View, Text, ScrollView, Alert } from "react-native";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { Button, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useFitsFile } from "../../hooks/useFitsFile";
+import { useHeaderEditor } from "../../hooks/useHeaderEditor";
 import { HeaderTable } from "../../components/fits/HeaderTable";
+import { HeaderEditSheet } from "../../components/fits/HeaderEditSheet";
+import { HeaderExportDialog } from "../../components/fits/HeaderExportDialog";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { HEADER_GROUP_KEYS } from "../../lib/fits/types";
-import type { HeaderGroup } from "../../lib/fits/types";
+import type { HeaderGroup, HeaderKeyword } from "../../lib/fits/types";
 
 const GROUPS: { key: HeaderGroup | "all"; labelKey: string }[] = [
   { key: "all", labelKey: "header.allKeywords" },
@@ -25,25 +29,145 @@ export default function HeaderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, successColor] = useThemeColor(["muted", "success"]);
   const { isLandscapeTablet, contentPaddingTop, horizontalPadding, sidePanelWidth } =
     useResponsiveLayout();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
 
-  const { headers, isLoading, loadFromPath } = useFitsFile();
+  const { headers: rawHeaders, isLoading, loadFromPath } = useFitsFile();
+  const editor = useHeaderEditor();
+
+  const isFits = file?.sourceType === "fits";
+  const editable = isFits;
+  const editorInitialized = useRef(false);
 
   const [selectedGroup, setSelectedGroup] = useState<HeaderGroup | "all">("all");
+  const [editingKeyword, setEditingKeyword] = useState<HeaderKeyword | null>(null);
+  const [editSheetVisible, setEditSheetVisible] = useState(false);
+  const [exportDialogVisible, setExportDialogVisible] = useState(false);
+  const [editingIndex, setEditingIndex] = useState(-1);
 
   useEffect(() => {
     if (file) loadFromPath(file.filepath, file.filename, file.fileSize);
   }, [file, loadFromPath]);
 
+  useEffect(() => {
+    if (rawHeaders.length > 0 && !editorInitialized.current) {
+      editor.initialize(rawHeaders);
+      editorInitialized.current = true;
+    }
+  }, [rawHeaders, editor]);
+
+  const displayHeaders = editable ? editor.headers : rawHeaders;
+
   const filteredHeaders = useMemo(() => {
-    if (selectedGroup === "all") return headers;
+    if (selectedGroup === "all") return displayHeaders;
     const groupKeys = HEADER_GROUP_KEYS[selectedGroup] ?? [];
-    return headers.filter((kw) => groupKeys.includes(kw.key));
-  }, [headers, selectedGroup]);
+    return displayHeaders.filter((kw) => groupKeys.includes(kw.key));
+  }, [displayHeaders, selectedGroup]);
+
+  const handleBack = useCallback(() => {
+    if (editor.isDirty) {
+      Alert.alert(
+        t("header.discardChanges" as Parameters<typeof t>[0]),
+        t("header.unsavedChanges" as Parameters<typeof t>[0]),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("header.discardChanges" as Parameters<typeof t>[0]),
+            style: "destructive",
+            onPress: () => router.back(),
+          },
+        ],
+      );
+    } else {
+      router.back();
+    }
+  }, [editor.isDirty, router, t]);
+
+  const handleEditKeyword = useCallback(
+    (index: number) => {
+      setEditingIndex(index);
+      setEditingKeyword(displayHeaders[index] ?? null);
+      setEditSheetVisible(true);
+    },
+    [displayHeaders],
+  );
+
+  const handleAddKeyword = useCallback(() => {
+    setEditingIndex(-1);
+    setEditingKeyword(null);
+    setEditSheetVisible(true);
+  }, []);
+
+  const handleEditSheetSave = useCallback(
+    (keyword: HeaderKeyword) => {
+      if (editingIndex >= 0) {
+        editor.editKeyword(editingIndex, keyword);
+      } else {
+        editor.addKeyword(keyword);
+      }
+      setEditSheetVisible(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [editingIndex, editor],
+  );
+
+  const handleDeleteKeyword = useCallback(
+    (index: number) => {
+      const kw = displayHeaders[index];
+      if (!kw) return;
+      Alert.alert(
+        t("header.deleteKeyword" as Parameters<typeof t>[0]),
+        `${kw.key} = ${String(kw.value ?? "")}`,
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.delete"),
+            style: "destructive",
+            onPress: () => {
+              editor.deleteKeyword(index);
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            },
+          },
+        ],
+      );
+    },
+    [displayHeaders, editor, t],
+  );
+
+  const handleSave = useCallback(async () => {
+    if (!file || !editor.isDirty) return;
+    const changeCount = editor.historyIndex;
+    Alert.alert(
+      t("header.saveChanges" as Parameters<typeof t>[0]),
+      `${changeCount} change(s) to FITS header?`,
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("common.save"),
+          onPress: async () => {
+            const ok = await editor.save(file.filepath);
+            if (ok) {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert(t("common.success"), t("header.saveSuccess" as Parameters<typeof t>[0]));
+            } else {
+              Alert.alert(
+                t("common.error"),
+                editor.saveError ?? t("header.saveFailed" as Parameters<typeof t>[0]),
+              );
+            }
+          },
+        },
+      ],
+    );
+  }, [file, editor, t]);
+
+  const handleOpenExportDialog = useCallback(() => {
+    if (displayHeaders.length === 0) return;
+    setExportDialogVisible(true);
+  }, [displayHeaders.length]);
 
   if (!file) {
     return (
@@ -57,9 +181,92 @@ export default function HeaderDetailScreen() {
     );
   }
 
+  const toolbarButtons = (
+    <View className="flex-row gap-1">
+      {editable && (
+        <>
+          <Button size="sm" variant="outline" onPress={editor.undo} isDisabled={!editor.canUndo}>
+            <Ionicons
+              name="arrow-undo-outline"
+              size={14}
+              color={editor.canUndo ? successColor : mutedColor}
+            />
+          </Button>
+          <Button size="sm" variant="outline" onPress={editor.redo} isDisabled={!editor.canRedo}>
+            <Ionicons
+              name="arrow-redo-outline"
+              size={14}
+              color={editor.canRedo ? successColor : mutedColor}
+            />
+          </Button>
+          <Button size="sm" variant="outline" onPress={handleAddKeyword}>
+            <Ionicons name="add-outline" size={14} color={successColor} />
+          </Button>
+          <Button
+            size="sm"
+            variant={editor.isDirty ? "primary" : "outline"}
+            onPress={handleSave}
+            isDisabled={!editor.isDirty || editor.isSaving}
+          >
+            <Ionicons name="save-outline" size={14} color={editor.isDirty ? "#fff" : mutedColor} />
+          </Button>
+        </>
+      )}
+      <Button
+        size="sm"
+        variant="outline"
+        onPress={handleOpenExportDialog}
+        isDisabled={displayHeaders.length === 0}
+      >
+        <Ionicons name="share-outline" size={14} color={mutedColor} />
+      </Button>
+    </View>
+  );
+
+  const headerTable = (
+    <>
+      {file.sourceType === "raster" && displayHeaders.length === 0 ? (
+        <View className="rounded-lg bg-surface-secondary px-3 py-4">
+          <Text className="text-xs text-muted">{t("header.noHeaderForFormat")}</Text>
+        </View>
+      ) : (
+        <HeaderTable
+          keywords={filteredHeaders}
+          editable={editable}
+          onEditKeyword={handleEditKeyword}
+          onDeleteKeyword={handleDeleteKeyword}
+        />
+      )}
+    </>
+  );
+
+  const groupFilter = (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
+      <View className="flex-row gap-2">
+        {GROUPS.map((group) => (
+          <Chip
+            key={group.key}
+            size="sm"
+            variant={selectedGroup === group.key ? "primary" : "secondary"}
+            testID={
+              group.key === "observation"
+                ? "e2e-action-header__param_id-group-observation"
+                : `e2e-action-header__param_id-group-${group.key}`
+            }
+            onPress={() => setSelectedGroup(group.key)}
+          >
+            <Chip.Label className="text-[10px]">
+              {t(group.labelKey as Parameters<typeof t>[0])}
+            </Chip.Label>
+          </Chip>
+        ))}
+      </View>
+    </ScrollView>
+  );
+
   return (
     <View testID="e2e-screen-header__param_id" className="flex-1 bg-background">
-      <LoadingOverlay visible={isLoading} />
+      <LoadingOverlay visible={isLoading || editor.isSaving} />
 
       <ScrollView
         className="flex-1"
@@ -77,7 +284,7 @@ export default function HeaderDetailScreen() {
                   testID="e2e-action-header__param_id-back"
                   size="sm"
                   variant="outline"
-                  onPress={() => router.back()}
+                  onPress={handleBack}
                 >
                   <Ionicons name="arrow-back" size={16} color={mutedColor} />
                 </Button>
@@ -88,96 +295,68 @@ export default function HeaderDetailScreen() {
                   </Text>
                 </View>
               </View>
-              <Text className="mb-3 text-[10px] text-muted">{headers.length} keywords</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-                <View className="flex-row gap-2">
-                  {GROUPS.map((group) => (
-                    <Chip
-                      key={group.key}
-                      size="sm"
-                      variant={selectedGroup === group.key ? "primary" : "secondary"}
-                      testID={
-                        group.key === "observation"
-                          ? "e2e-action-header__param_id-group-observation"
-                          : `e2e-action-header__param_id-group-${group.key}`
-                      }
-                      onPress={() => setSelectedGroup(group.key)}
-                    >
-                      <Chip.Label className="text-[10px]">
-                        {t(group.labelKey as Parameters<typeof t>[0])}
-                      </Chip.Label>
-                    </Chip>
-                  ))}
-                </View>
-              </ScrollView>
+              <View className="flex-row items-center justify-between mb-3">
+                <Text className="text-[10px] text-muted">
+                  {displayHeaders.length} keywords
+                  {editor.isDirty ? " *" : ""}
+                </Text>
+                {toolbarButtons}
+              </View>
+              {groupFilter}
             </View>
-            <View className="flex-1">
-              {file.sourceType === "raster" && headers.length === 0 ? (
-                <View className="rounded-lg bg-surface-secondary px-3 py-4">
-                  <Text className="text-xs text-muted">{t("header.noHeaderForFormat")}</Text>
-                </View>
-              ) : (
-                <HeaderTable keywords={filteredHeaders} />
-              )}
-            </View>
+            <View className="flex-1">{headerTable}</View>
           </View>
         ) : (
           <>
             {/* Top Bar */}
-            <View className="flex-row items-center gap-3 mb-4">
+            <View className="flex-row items-center gap-3 mb-2">
               <Button
                 testID="e2e-action-header__param_id-back"
                 size="sm"
                 variant="outline"
-                onPress={() => router.back()}
+                onPress={handleBack}
               >
                 <Ionicons name="arrow-back" size={16} color={mutedColor} />
               </Button>
               <View className="flex-1">
-                <Text className="text-lg font-bold text-foreground">{t("header.title")}</Text>
+                <Text className="text-lg font-bold text-foreground">
+                  {t("header.title")}
+                  {editor.isDirty ? " *" : ""}
+                </Text>
                 <Text className="text-xs text-muted" numberOfLines={1}>
                   {file.filename}
                 </Text>
               </View>
-              <Text className="text-[10px] text-muted">{headers.length} keywords</Text>
+              <Text className="text-[10px] text-muted">{displayHeaders.length}</Text>
             </View>
+
+            {/* Toolbar */}
+            <View className="flex-row justify-end mb-3">{toolbarButtons}</View>
 
             <Separator className="mb-4" />
 
             {/* Header Group Filter */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="mb-4">
-              <View className="flex-row gap-2">
-                {GROUPS.map((group) => (
-                  <Chip
-                    key={group.key}
-                    size="sm"
-                    variant={selectedGroup === group.key ? "primary" : "secondary"}
-                    testID={
-                      group.key === "observation"
-                        ? "e2e-action-header__param_id-group-observation"
-                        : `e2e-action-header__param_id-group-${group.key}`
-                    }
-                    onPress={() => setSelectedGroup(group.key)}
-                  >
-                    <Chip.Label className="text-[10px]">
-                      {t(group.labelKey as Parameters<typeof t>[0])}
-                    </Chip.Label>
-                  </Chip>
-                ))}
-              </View>
-            </ScrollView>
+            {groupFilter}
 
             {/* Header Table */}
-            {file.sourceType === "raster" && headers.length === 0 ? (
-              <View className="rounded-lg bg-surface-secondary px-3 py-4">
-                <Text className="text-xs text-muted">{t("header.noHeaderForFormat")}</Text>
-              </View>
-            ) : (
-              <HeaderTable keywords={filteredHeaders} />
-            )}
+            {headerTable}
           </>
         )}
       </ScrollView>
+
+      {/* Edit/Add Dialog */}
+      <HeaderExportDialog
+        visible={exportDialogVisible}
+        keywords={displayHeaders}
+        onClose={() => setExportDialogVisible(false)}
+      />
+
+      <HeaderEditSheet
+        visible={editSheetVisible}
+        keyword={editingKeyword}
+        onSave={handleEditSheetSave}
+        onClose={() => setEditSheetVisible(false)}
+      />
     </View>
   );
 }

@@ -1,6 +1,7 @@
 import type { ProcessingParamValue } from "../fits/types";
 import type { ProcessingRGBAState } from "./types";
 import { asNumber, asString } from "./paramHelpers";
+import { percentileByRatio as percentile } from "../stacking/robustStats";
 
 export function clampByte(value: number) {
   if (!Number.isFinite(value)) return 0;
@@ -29,12 +30,6 @@ export function applySCNRRGBA(
     result[off + 1] = clampByte(g * (1 - strength) + reduced * strength);
   }
   return result;
-}
-
-function percentile(values: number[], ratio: number): number {
-  if (values.length === 0) return 0;
-  const idx = Math.max(0, Math.min(values.length - 1, Math.floor((values.length - 1) * ratio)));
-  return values[idx];
 }
 
 export function applyColorCalibrationRGBA(

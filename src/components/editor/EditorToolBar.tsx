@@ -23,6 +23,7 @@ const ADJUST_TOOLS: ToolItem[] = [
   { key: "levels", icon: "analytics-outline" },
   { key: "curves", icon: "trending-up-outline" },
   { key: "mtf", icon: "color-wand-outline" },
+  { key: "ghs", icon: "git-branch-outline" },
   { key: "saturation", icon: "color-fill-outline" },
   { key: "colorBalance", icon: "color-filter-outline" },
   { key: "colorCalibration", icon: "flask-outline" },
@@ -34,15 +35,20 @@ const ADJUST_TOOLS: ToolItem[] = [
 const PROCESS_TOOLS: ToolItem[] = [
   { key: "blur", icon: "water-outline" },
   { key: "sharpen", icon: "sparkles-outline" },
+  { key: "waveletSharpen", icon: "pulse-outline" },
   { key: "denoise", icon: "layers-outline" },
+  { key: "tgvDenoise", icon: "shield-outline" },
+  { key: "bilateralFilter", icon: "color-palette-outline" },
   { key: "dbe", icon: "planet-outline" },
   { key: "multiscaleDenoise", icon: "layers-outline" },
+  { key: "mlt", icon: "analytics-outline" },
   { key: "localContrast", icon: "contrast-outline" },
   { key: "starReduction", icon: "star-outline" },
   { key: "clahe", icon: "grid-outline" },
   { key: "hdr", icon: "aperture-outline" },
   { key: "deconvolution", icon: "flashlight-outline" },
   { key: "deconvolutionAuto", icon: "flash-outline" },
+  { key: "wienerDeconvolution", icon: "magnet-outline" },
   { key: "morphology", icon: "shapes-outline" },
   { key: "background", icon: "globe-outline" },
 ];
@@ -50,6 +56,7 @@ const PROCESS_TOOLS: ToolItem[] = [
 const MASK_TOOLS: ToolItem[] = [
   { key: "starMask", icon: "star-half-outline" },
   { key: "rangeMask", icon: "funnel-outline" },
+  { key: "edgeMask", icon: "scan-outline" },
   { key: "binarize", icon: "moon-outline" },
   { key: "rescale", icon: "resize-outline" },
   { key: "pixelMath", icon: "calculator-outline" },
@@ -137,6 +144,11 @@ export const EditorToolBar = React.memo(function EditorToolBar({
                 </View>
               </PressableFeedback>
             ))}
+            <PressableFeedback onPress={() => onToolPress("pipeline" as EditorTool & string)}>
+              <View className="px-3 py-1 rounded-full">
+                <Text className="text-[10px] font-semibold text-muted">{t("editor.pipeline")}</Text>
+              </View>
+            </PressableFeedback>
           </View>
         </ScrollView>
       </View>

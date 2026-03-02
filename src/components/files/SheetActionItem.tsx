@@ -7,6 +7,7 @@ interface SheetActionItemProps {
   title: string;
   subtitle?: string;
   onPress: () => void;
+  testID?: string;
   disabled?: boolean;
   compact?: boolean;
   destructive?: boolean;
@@ -21,6 +22,7 @@ export function SheetActionItem({
   title,
   subtitle,
   onPress,
+  testID,
   disabled,
   compact,
   destructive,
@@ -37,6 +39,7 @@ export function SheetActionItem({
 
   return (
     <PressableFeedback
+      testID={testID}
       onPress={onPress}
       isDisabled={disabled}
       className={`flex-row items-center gap-3 rounded-xl ${

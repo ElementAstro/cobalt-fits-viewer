@@ -4,22 +4,8 @@
 
 import { File as FSFile } from "expo-file-system";
 import type { BatchTask, ConvertOptions } from "../fits/types";
-import {
-  extractMetadata,
-  getCommentsAndHistory,
-  getHeaderKeywords,
-  getImageChannels,
-  getImageDimensions,
-  getImagePixels,
-  isRgbCube,
-  loadScientificFitsFromBuffer,
-} from "../fits/parser";
-import {
-  detectPreferredSupportedImageFormat,
-  splitFilenameExtension,
-  toImageSourceFormat,
-} from "../import/fileFormat";
-import { extractRasterMetadata, parseRasterFromBufferAsync } from "../image/rasterParser";
+import { splitFilenameExtension } from "../import/fileFormat";
+import { parseImageBuffer } from "../import/imageParsePipeline";
 import { readFileAsArrayBuffer } from "../utils/fileManager";
 import { fitsToRGBA } from "./formatConverter";
 import { getExportDir } from "../utils/imageExport";
@@ -88,63 +74,57 @@ function toProgress(total: number, completed: number, failed: number, skipped: n
   return Math.round(((completed + failed + skipped) / total) * 100);
 }
 
+function isUnsupportedImageError(message: string): boolean {
+  return (
+    message === "Unsupported image format" ||
+    message.includes("Distributed XISF") ||
+    message.includes("not supported")
+  );
+}
+
 async function buildExportRequest(
   file: BatchFileInfo,
   options: ConvertOptions,
 ): Promise<ExportRequest> {
   const buffer = await readFileAsArrayBuffer(file.filepath);
-  const detected = detectPreferredSupportedImageFormat({
-    filename: file.filename,
-    payload: buffer,
-  });
-  if (!detected) {
-    throw new Error("Unsupported input format");
-  }
-  if (detected.sourceType === "video" || detected.sourceType === "audio") {
-    throw new Error("non-image-source");
-  }
-
-  let width = 0;
-  let height = 0;
-  let rgbaData: Uint8ClampedArray | null = null;
-  let scientificPixels: Float32Array | null = null;
-  let channels: { r: Float32Array; g: Float32Array; b: Float32Array } | null = null;
-  let headerKeywords: ReturnType<typeof getHeaderKeywords> | undefined;
-  let comments: string[] = [];
-  let history: string[] = [];
-  let metadata:
-    | ReturnType<typeof extractMetadata>
-    | ReturnType<typeof extractRasterMetadata>
-    | undefined;
-
-  if (detected.sourceType === "fits") {
-    const fitsObj = await loadScientificFitsFromBuffer(buffer, {
-      filename: file.filename,
-      detectedFormat: detected,
-    });
-    const dims = getImageDimensions(fitsObj);
-    if (!dims) throw new Error("No image data");
-
-    width = dims.width;
-    height = dims.height;
-    scientificPixels = await getImagePixels(fitsObj);
-    if (!scientificPixels) throw new Error("No pixel data");
-
-    if (isRgbCube(fitsObj).isRgb) {
-      const rgb = await getImageChannels(fitsObj);
-      channels = rgb ? { r: rgb.r, g: rgb.g, b: rgb.b } : null;
-    }
-
-    headerKeywords = getHeaderKeywords(fitsObj);
-    const ch = getCommentsAndHistory(fitsObj);
-    comments = ch.comments;
-    history = ch.history;
-    metadata = extractMetadata(fitsObj, {
+  let parsed: Awaited<ReturnType<typeof parseImageBuffer>>;
+  try {
+    parsed = await parseImageBuffer({
+      buffer,
       filename: file.filename,
       filepath: file.filepath,
       fileSize: buffer.byteLength,
     });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    if (isUnsupportedImageError(message)) {
+      throw new Error("Unsupported input format");
+    }
+    throw error;
+  }
 
+  if (parsed.sourceType !== "fits" && parsed.sourceType !== "raster") {
+    throw new Error("non-image-source");
+  }
+
+  const width = parsed.dimensions?.width ?? 0;
+  const height = parsed.dimensions?.height ?? 0;
+  if (width <= 0 || height <= 0) {
+    throw new Error("No image data");
+  }
+
+  let rgbaData: Uint8ClampedArray;
+  const scientificPixels = parsed.pixels;
+  const channels = parsed.rgbChannels;
+  const metadata = parsed.metadataBase;
+  const headerKeywords = parsed.sourceType === "fits" ? parsed.headers : undefined;
+  const comments = parsed.sourceType === "fits" ? parsed.comments : [];
+  const history = parsed.sourceType === "fits" ? parsed.history : [];
+
+  if (parsed.sourceType === "fits") {
+    if (!scientificPixels) {
+      throw new Error("No pixel data");
+    }
     rgbaData = fitsToRGBA(scientificPixels, width, height, {
       stretch: options.stretch,
       colormap: options.colormap,
@@ -160,36 +140,14 @@ async function buildExportRequest(
       profile: options.profile,
     });
   } else {
-    const decoded = await parseRasterFromBufferAsync(buffer, {
-      frameIndex: 0,
-      cacheSize: 3,
-      preferTiffDecoder: true,
-      sourceUri: file.filepath,
-      filename: file.filename,
-      formatHint: detected.id,
-    });
-    width = decoded.width;
-    height = decoded.height;
-    rgbaData = new Uint8ClampedArray(decoded.rgba);
-    scientificPixels = decoded.pixels;
-    channels = decoded.channels;
-    metadata = extractRasterMetadata(
-      {
-        filename: file.filename,
-        filepath: file.filepath,
-        fileSize: buffer.byteLength,
-      },
-      {
-        width,
-        height,
-        depth: decoded.depth,
-        bitDepth: decoded.bitDepth,
-      },
+    if (!parsed.rgba) {
+      throw new Error("Failed to produce RGBA data");
+    }
+    rgbaData = new Uint8ClampedArray(
+      parsed.rgba.buffer,
+      parsed.rgba.byteOffset,
+      parsed.rgba.byteLength,
     );
-  }
-
-  if (!rgbaData) {
-    throw new Error("Failed to produce RGBA data");
   }
 
   return {
@@ -204,8 +162,8 @@ async function buildExportRequest(
     tiff: options.tiff,
     source: {
       sourceFileId: file.id,
-      sourceType: detected.sourceType,
-      sourceFormat: toImageSourceFormat(detected),
+      sourceType: parsed.sourceType,
+      sourceFormat: parsed.sourceFormat,
       originalBuffer: buffer,
       scientificPixels,
       rgbChannels: channels,

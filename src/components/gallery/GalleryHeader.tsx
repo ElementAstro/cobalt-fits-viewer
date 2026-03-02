@@ -31,6 +31,7 @@ interface GalleryHeaderProps {
   isLandscape: boolean;
   isSelectionMode: boolean;
   selectedCount: number;
+  selectedImageCount: number;
   allDisplaySelected: boolean;
   onViewModeChange: (mode: GalleryViewMode) => void;
   onSearchChange: (query: string) => void;
@@ -65,6 +66,7 @@ export const GalleryHeader = memo(function GalleryHeader({
   isLandscape,
   isSelectionMode,
   selectedCount,
+  selectedImageCount,
   allDisplaySelected,
   onViewModeChange,
   onSearchChange,
@@ -198,6 +200,7 @@ export const GalleryHeader = memo(function GalleryHeader({
       {isSelectionMode && (
         <GallerySelectionToolbar
           selectedCount={selectedCount}
+          selectedImageCount={selectedImageCount}
           allDisplaySelected={allDisplaySelected}
           isLandscape={isLandscape}
           onSelectAllToggle={onSelectAllToggle}

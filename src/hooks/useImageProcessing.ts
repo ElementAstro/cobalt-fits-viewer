@@ -96,6 +96,7 @@ interface UseImageProcessingReturn {
     bins?: number,
   ) => void;
   clearRegionHistogram: () => void;
+  reset: () => void;
 }
 
 function hasRecipeNodes(recipe: ProcessingPipelineSnapshot | null | undefined) {
@@ -225,15 +226,16 @@ export function useImageProcessing(): UseImageProcessingReturn {
             setRgbaData(rgba);
             setDisplayWidth(width);
             setDisplayHeight(height);
-            setIsProcessing(false);
           }
         })
         .catch((e) => {
           if (!controller.signal.aborted) {
             setProcessingError(e instanceof Error ? e.message : "Image processing failed");
             setRgbaData(null);
-            setIsProcessing(false);
           }
+        })
+        .finally(() => {
+          setIsProcessing(false);
         });
     },
     [],
@@ -373,14 +375,15 @@ export function useImageProcessing(): UseImageProcessingReturn {
             setRgbaData(rgba);
             setDisplayWidth(width);
             setDisplayHeight(height);
-            setIsProcessing(false);
           }
         })
         .catch((e) => {
           if (!controller.signal.aborted) {
             setProcessingError(e instanceof Error ? e.message : "Image processing failed");
-            setIsProcessing(false);
           }
+        })
+        .finally(() => {
+          setIsProcessing(false);
         });
     },
     [],
@@ -449,6 +452,28 @@ export function useImageProcessing(): UseImageProcessingReturn {
     setRegionStats(null);
   }, []);
 
+  const reset = useCallback(() => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    if (pendingTask.current) {
+      pendingTask.current.cancel();
+      pendingTask.current = null;
+    }
+    setRgbaData(null);
+    setDisplayWidth(0);
+    setDisplayHeight(0);
+    setStats(null);
+    setRegionStats(null);
+    setHistogram(null);
+    setRgbHistogram(null);
+    setRegionHistogram(null);
+    setIsProcessing(false);
+    setProcessingError(null);
+    extentCacheRef.current = null;
+  }, []);
+
   return {
     rgbaData,
     displayWidth,
@@ -467,5 +492,6 @@ export function useImageProcessing(): UseImageProcessingReturn {
     getStatsAndHistogram,
     getRegionHistogram,
     clearRegionHistogram,
+    reset,
   };
 }

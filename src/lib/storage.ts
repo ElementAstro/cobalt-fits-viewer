@@ -8,7 +8,7 @@ import type { StateStorage } from "zustand/middleware";
 /**
  * Zustand persist 所需的 StateStorage 适配器
  */
-export const zustandMMKVStorage: StateStorage = {
+export const zustandAsyncStorage: StateStorage = {
   getItem: async (name: string) => {
     const value = await AsyncStorage.getItem(name);
     return value ?? null;

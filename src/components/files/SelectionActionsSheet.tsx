@@ -11,6 +11,7 @@ interface SelectionActionsSheetProps {
   visible: boolean;
   onOpenChange: (open: boolean) => void;
   selectedCount: number;
+  selectedImageCount: number;
   displayCount: number;
   isLandscape: boolean;
   onSelectAllVisible: () => void;
@@ -22,6 +23,7 @@ interface SelectionActionsSheetProps {
   onGroupSheet: () => void;
   onBatchExport: () => void;
   onBatchConvert: () => void;
+  onCompare: () => void;
   onStacking: () => void;
 }
 
@@ -29,6 +31,7 @@ export function SelectionActionsSheet({
   visible,
   onOpenChange,
   selectedCount,
+  selectedImageCount,
   displayCount,
   isLandscape,
   onSelectAllVisible,
@@ -40,6 +43,7 @@ export function SelectionActionsSheet({
   onGroupSheet,
   onBatchExport,
   onBatchConvert,
+  onCompare,
   onStacking,
 }: SelectionActionsSheetProps) {
   const { t } = useI18n();
@@ -151,6 +155,14 @@ export function SelectionActionsSheet({
                   title={t("files.batchConvert")}
                   onPress={act(onBatchConvert)}
                   disabled={!hasSelection}
+                  compact={compact}
+                />
+                <SheetActionItem
+                  testID="e2e-action-tabs__index-open-compare-sheet"
+                  icon="git-compare-outline"
+                  title={t("gallery.compare")}
+                  onPress={act(onCompare)}
+                  disabled={selectedImageCount < 2}
                   compact={compact}
                 />
                 <SheetActionItem

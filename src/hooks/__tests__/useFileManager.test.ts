@@ -6,7 +6,7 @@ import { useSessionStore } from "../../stores/useSessionStore";
 import { useTrashStore } from "../../stores/useTrashStore";
 
 jest.mock("../../lib/storage", () => ({
-  zustandMMKVStorage: {
+  zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
     removeItem: jest.fn().mockResolvedValue(undefined),
@@ -173,8 +173,12 @@ jest.mock("../useLocation", () => ({
 }));
 
 jest.mock("../../lib/gallery/thumbnailCache", () => ({
-  generateAndSaveThumbnail: jest.fn(),
   deleteThumbnails: jest.fn(),
+}));
+
+jest.mock("../../lib/gallery/thumbnailWorkflow", () => ({
+  saveThumbnailFromRGBA: jest.fn(),
+  saveThumbnailFromVideo: jest.fn(),
 }));
 
 jest.mock("../../lib/fits/parser", () => ({
@@ -202,9 +206,8 @@ jest.mock("../../lib/gallery/albumSync", () => ({
   })),
 }));
 
-jest.mock("../../lib/image/rasterParser", () => ({
-  extractRasterMetadata: jest.fn(),
-  parseRasterFromBufferAsync: jest.fn(),
+jest.mock("../../lib/import/imageParsePipeline", () => ({
+  parseImageBuffer: jest.fn(),
 }));
 
 jest.mock("../../lib/utils/fileManager", () => ({
@@ -218,6 +221,10 @@ jest.mock("../../lib/utils/fileManager", () => ({
   scanDirectoryForSupportedImages: jest.fn(() => []),
   getTempExtractDir: jest.fn(),
   cleanTempExtractDir: jest.fn(),
+  sanitizeFilename: jest.fn((name: string, fallback: string) => {
+    const trimmed = typeof name === "string" ? name.trim() : "";
+    return trimmed || fallback;
+  }),
 }));
 
 const makeFile = (id: string, filepath?: string): FitsMetadata => ({
@@ -279,9 +286,8 @@ describe("useFileManager", () => {
     moveFileToTrash: jest.Mock;
     restoreFileFromTrash: jest.Mock;
   };
-  const rasterParserMock = require("../../lib/image/rasterParser") as {
-    extractRasterMetadata: jest.Mock;
-    parseRasterFromBufferAsync: jest.Mock;
+  const imageParsePipelineMock = require("../../lib/import/imageParsePipeline") as {
+    parseImageBuffer: jest.Mock;
   };
   const duplicateDetectorMock = require("../../lib/gallery/duplicateDetector") as {
     computeQuickHash: jest.Mock;
@@ -343,32 +349,78 @@ describe("useFileManager", () => {
       imageTypeRaw: "DarkFlat",
       frameHeaderRaw: "DarkFlat",
     });
-    rasterParserMock.parseRasterFromBufferAsync.mockResolvedValue({
-      width: 2,
-      height: 2,
-      depth: 1,
-      bitDepth: 8,
-      rgba: new Uint8Array([255, 255, 255, 255]),
-      pixels: new Float32Array([0.5, 0.5, 0.5, 0.5]),
-      channels: null,
-      headers: [],
-      decodeStatus: "ready",
-      decodeError: undefined,
-    });
-    rasterParserMock.extractRasterMetadata.mockReturnValue({
-      filename: "raster.png",
-      filepath: "file:///document/fits_files/raster.png",
-      fileSize: 8,
-      bitpix: 8,
-      naxis: 2,
-      naxis1: 2,
-      naxis2: 2,
-      naxis3: 1,
-      frameType: "light",
-      frameTypeSource: "filename",
-      decodeStatus: "ready",
-      decodeError: undefined,
-    });
+    imageParsePipelineMock.parseImageBuffer.mockImplementation(
+      async ({
+        filename,
+        filepath,
+        fileSize,
+        detectedFormat,
+      }: {
+        filename: string;
+        filepath: string;
+        fileSize: number;
+        detectedFormat?: { sourceType?: string; id?: string };
+      }) => {
+        const sourceType =
+          detectedFormat?.sourceType ??
+          (filename.endsWith(".png") || filename.endsWith(".tiff") || filename.endsWith(".dng")
+            ? "raster"
+            : "fits");
+        if (sourceType === "raster") {
+          return {
+            detectedFormat: { id: detectedFormat?.id ?? "png", sourceType: "raster" },
+            sourceType: "raster",
+            sourceFormat: detectedFormat?.id ?? "png",
+            fits: null,
+            rasterFrameProvider: null,
+            pixels: new Float32Array([0.5, 0.5, 0.5, 0.5]),
+            rgbChannels: null,
+            dimensions: { width: 2, height: 2, depth: 1, isDataCube: false },
+            headers: [],
+            comments: [],
+            history: [],
+            metadataBase: {
+              filename,
+              filepath,
+              fileSize,
+              bitpix: 8,
+              naxis: 2,
+              naxis1: 2,
+              naxis2: 2,
+              naxis3: 1,
+              frameType: "light",
+              frameTypeSource: "filename",
+            },
+            decodeStatus: "ready",
+            decodeError: undefined,
+            rgba: new Uint8Array([255, 255, 255, 255]),
+          };
+        }
+        return {
+          detectedFormat: { id: detectedFormat?.id ?? "fits", sourceType: "fits" },
+          sourceType: "fits",
+          sourceFormat: detectedFormat?.id ?? "fits",
+          fits: { fits: true },
+          rasterFrameProvider: null,
+          pixels: new Float32Array([0.5, 0.5, 0.5, 0.5]),
+          rgbChannels: null,
+          dimensions: { width: 2, height: 2, depth: 1, isDataCube: false },
+          headers: [{ key: "SIMPLE", value: true }],
+          comments: [],
+          history: [],
+          metadataBase: {
+            filename,
+            filepath,
+            fileSize,
+            frameType: "darkflat",
+            frameTypeSource: "header",
+          },
+          decodeStatus: "ready",
+          decodeError: undefined,
+          serInfo: undefined,
+        };
+      },
+    );
     documentPickerMock.getDocumentAsync.mockResolvedValue({
       canceled: true,
       assets: [],
@@ -837,17 +889,22 @@ describe("useFileManager", () => {
       ),
     };
     fileManagerMock.importFile.mockReturnValue(importedFile);
-    rasterParserMock.parseRasterFromBufferAsync.mockRejectedValue(
-      new Error("Unsupported TIFF photometric: 6"),
-    );
-    rasterParserMock.extractRasterMetadata.mockImplementation(
-      (
-        fileInfo: { filename: string; filepath: string; fileSize: number },
-        _dims: { width: number; height: number; depth?: number; bitDepth?: number },
-        _cfg: unknown,
-        options?: { decodeStatus?: "ready" | "failed"; decodeError?: string },
-      ) => ({
-        ...fileInfo,
+    imageParsePipelineMock.parseImageBuffer.mockResolvedValueOnce({
+      detectedFormat: { id: "tiff", sourceType: "raster" },
+      sourceType: "raster",
+      sourceFormat: "tiff",
+      fits: null,
+      rasterFrameProvider: null,
+      pixels: null,
+      rgbChannels: null,
+      dimensions: { width: 0, height: 0, depth: 1, isDataCube: false },
+      headers: [],
+      comments: [],
+      history: [],
+      metadataBase: {
+        filename: "bad.tiff",
+        filepath: "file:///document/fits_files/bad.tiff",
+        fileSize: 8,
         bitpix: 8,
         naxis: 2,
         naxis1: 0,
@@ -855,10 +912,12 @@ describe("useFileManager", () => {
         naxis3: 1,
         frameType: "unknown",
         frameTypeSource: "filename",
-        decodeStatus: options?.decodeStatus ?? "ready",
-        decodeError: options?.decodeError,
-      }),
-    );
+        decodeStatus: "failed",
+        decodeError: "Unsupported TIFF photometric: 6",
+      },
+      decodeStatus: "failed",
+      decodeError: "Unsupported TIFF photometric: 6",
+    });
     documentPickerMock.getDocumentAsync.mockResolvedValue({
       canceled: false,
       assets: [
@@ -888,13 +947,82 @@ describe("useFileManager", () => {
       }),
     );
     expect(importedFile.delete).not.toHaveBeenCalled();
-    expect(rasterParserMock.extractRasterMetadata).toHaveBeenCalledWith(
-      expect.objectContaining({ filename: "bad.tiff" }),
-      expect.objectContaining({ width: 0, height: 0, depth: 1 }),
-      expect.anything(),
+    expect(imageParsePipelineMock.parseImageBuffer).toHaveBeenCalledWith(
       expect.objectContaining({
+        filename: "bad.tiff",
+        allowDecodeFailureMetadata: true,
+      }),
+    );
+  });
+
+  it("keeps RAW record when decode fails with explicit error", async () => {
+    const importedFile = {
+      uri: "file:///document/fits_files/bad.dng",
+      exists: true,
+      delete: jest.fn(),
+      arrayBuffer: jest.fn(
+        async () => new Uint8Array([0x49, 0x49, 0x2b, 0x00, 0x08, 0x00, 0x00, 0x00]).buffer,
+      ),
+    };
+    fileManagerMock.importFile.mockReturnValue(importedFile);
+    imageParsePipelineMock.parseImageBuffer.mockResolvedValueOnce({
+      detectedFormat: { id: "dng", sourceType: "raster" },
+      sourceType: "raster",
+      sourceFormat: "dng",
+      fits: null,
+      rasterFrameProvider: null,
+      pixels: null,
+      rgbChannels: null,
+      dimensions: { width: 0, height: 0, depth: 1, isDataCube: false },
+      headers: [],
+      comments: [],
+      history: [],
+      metadataBase: {
+        filename: "bad.dng",
+        filepath: importedFile.uri,
+        fileSize: 8,
+        bitpix: 8,
+        naxis: 2,
+        naxis1: 0,
+        naxis2: 0,
+        naxis3: 1,
+        frameType: "light",
+        frameTypeSource: "filename",
+      },
+      decodeStatus: "failed",
+      decodeError: "Unsupported RAW compression",
+    });
+    documentPickerMock.getDocumentAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: "file:///source/bad.dng", name: "bad.dng", size: 8, mimeType: "image/tiff" }],
+    });
+
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.pickAndImportFile();
+    });
+
+    const [file] = useFitsStore.getState().files;
+    expect(file).toEqual(
+      expect.objectContaining({
+        filename: "bad.dng",
+        sourceType: "raster",
+        sourceFormat: "dng",
         decodeStatus: "failed",
-        decodeError: "Unsupported TIFF photometric: 6",
+        decodeError: "Unsupported RAW compression",
+      }),
+    );
+    expect(result.current.lastImportResult).toEqual(
+      expect.objectContaining({
+        success: 1,
+        failed: 0,
+      }),
+    );
+    expect(importedFile.delete).not.toHaveBeenCalled();
+    expect(imageParsePipelineMock.parseImageBuffer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "bad.dng",
+        allowDecodeFailureMetadata: true,
       }),
     );
   });

@@ -77,6 +77,63 @@ jest.mock("../../../hooks/useHapticFeedback", () => ({
   useHapticFeedback: () => mockHaptics,
 }));
 
+jest.mock("react-native-reanimated", () => {
+  const React = require("react");
+  const { View, Text } = require("react-native");
+  const Animated = {
+    View: React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
+      React.createElement(View, { ...props, ref }),
+    ),
+    Text: React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
+      React.createElement(Text, { ...props, ref }),
+    ),
+  };
+  return {
+    __esModule: true,
+    default: Animated,
+    FadeIn: { duration: () => ({ duration: () => ({}) }) },
+    FadeOut: { duration: () => ({ duration: () => ({}) }) },
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+  };
+});
+
+jest.mock("react-native-gesture-handler", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  const chainable = (): any => {
+    const self: Record<string, unknown> = {};
+    return new Proxy(self, {
+      get() {
+        return (..._args: unknown[]) => chainable();
+      },
+    });
+  };
+  return {
+    GestureDetector: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(View, { testID: "gesture-detector" }, children),
+    Gesture: {
+      Tap: () => chainable(),
+      Pan: () => chainable(),
+      LongPress: () => chainable(),
+      Pinch: () => chainable(),
+      Simultaneous: () => chainable(),
+      Exclusive: () => chainable(),
+    },
+  };
+});
+
+jest.mock("../../../hooks/useScreenOrientation", () => ({
+  useScreenOrientation: () => ({
+    isLandscape: false,
+    isPortrait: true,
+    orientation: 1,
+    screenWidth: 390,
+    screenHeight: 844,
+    lockOrientation: jest.fn(),
+    unlockOrientation: jest.fn(),
+  }),
+}));
+
 jest.mock("expo-video", () => {
   const { View } = require("react-native");
   return {

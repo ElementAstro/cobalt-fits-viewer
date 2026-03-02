@@ -10,6 +10,8 @@
 
 import { File as FSFile, Paths } from "expo-file-system";
 import { LOG_TAGS, Logger } from "../logger";
+import type { HeaderKeyword } from "./types";
+import { escapeCSV } from "../sessions/observationLog";
 
 const TAG = LOG_TAGS.FitsHeaderWriter;
 const RECORD_LEN = 80;
@@ -260,4 +262,85 @@ export function writeAscii(data: Uint8Array, offset: number, str: string): void 
   for (let i = 0; i < str.length && offset + i < data.length; i++) {
     data[offset + i] = str.charCodeAt(i);
   }
+}
+
+/**
+ * 删除 FITS header 中的指定关键字
+ * 通过将对应 80 字节记录替换为空白实现（不改变文件大小）
+ *
+ * @returns 删除的 keyword 数量
+ */
+export async function deleteHeaderKeywords(
+  filePath: string,
+  keysToDelete: string[],
+): Promise<number> {
+  if (keysToDelete.length === 0) return 0;
+
+  const file = new FSFile(filePath);
+  if (!file.exists) {
+    throw new Error(`File not found: ${filePath}`);
+  }
+
+  const bytes = await file.bytes();
+  const buffer = bytes.buffer as ArrayBuffer;
+  const view = new Uint8Array(buffer);
+
+  const { existingKeys } = parseHeaderPositions(view);
+
+  let deleted = 0;
+  for (const key of keysToDelete) {
+    const offset = existingKeys.get(key);
+    if (offset != null) {
+      // Replace the 80-byte record with spaces
+      writeAscii(view, offset, " ".repeat(RECORD_LEN));
+      deleted++;
+    }
+  }
+
+  if (deleted > 0) {
+    file.write(bytes);
+    Logger.info(TAG, `Deleted ${deleted} keywords from header`);
+  }
+
+  return deleted;
+}
+
+/**
+ * 将 HeaderKeyword 数组格式化为 FITS header 文本
+ * 每行遵循 FITS 80 字节格式
+ */
+export function formatHeaderAsText(keywords: HeaderKeyword[]): string {
+  return keywords
+    .map((kw) => {
+      const key = kw.key.padEnd(8);
+      if (kw.value === null || kw.value === undefined) {
+        return key;
+      }
+      let valStr: string;
+      if (typeof kw.value === "string") {
+        valStr = `'${kw.value}'`.padEnd(20);
+      } else if (typeof kw.value === "boolean") {
+        valStr = (kw.value ? "T" : "F").padStart(20);
+      } else {
+        valStr = String(kw.value).padStart(20);
+      }
+      let line = `${key}= ${valStr}`;
+      if (kw.comment) {
+        line += ` / ${kw.comment}`;
+      }
+      return line;
+    })
+    .join("\n");
+}
+
+/**
+ * 将 HeaderKeyword 数组格式化为 CSV
+ */
+export function formatHeaderAsCSV(keywords: HeaderKeyword[]): string {
+  const header = "Key,Value,Comment";
+  const rows = keywords.map(
+    (kw) =>
+      `${escapeCSV(kw.key)},${escapeCSV(kw.value != null ? String(kw.value) : "")},${escapeCSV(kw.comment)}`,
+  );
+  return [header, ...rows].join("\n");
 }

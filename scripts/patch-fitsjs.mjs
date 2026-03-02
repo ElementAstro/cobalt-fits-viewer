@@ -22,6 +22,16 @@ const patches = [
     from: "function ts(e){return import(e)}",
     to: 'function ts(e){return Promise.reject(new Error("Dynamic import not supported: "+e))}',
   },
+  {
+    file: "node_modules/image-js/lib/align/affineTransfrom/getAffineTransform.js",
+    from: "debugImagePath = `${import.meta.dirname}/montage.png`,",
+    to: 'debugImagePath = "montage.png",',
+  },
+  {
+    file: "node_modules/image-js/lib/utils/cross_platform.js",
+    from: ".createRequire(import.meta.url);",
+    to: ".createRequire(process.cwd() + '/');",
+  },
 ];
 
 let patched = 0;

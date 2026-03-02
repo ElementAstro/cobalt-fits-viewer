@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type {
   CloudProvider,
   BackupOptions,
@@ -22,6 +22,7 @@ export interface BackupHistoryEntry {
   result: "success" | "failed";
   fileCount?: number;
   totalSize?: number;
+  durationMs?: number;
   error?: string;
 }
 
@@ -46,6 +47,8 @@ interface BackupStoreState {
   history: BackupHistoryEntry[];
   // 一键备份
   lastUsedBackupOptions: BackupOptions | null;
+  // 上次成功备份时间
+  lastSuccessfulBackupAt: number;
   // 错误
   lastError: string | null;
 
@@ -63,6 +66,7 @@ interface BackupStoreState {
   setLastAutoBackupAttempt: (timestamp: number) => void;
   setLastAutoBackupCheck: (timestamp: number) => void;
   setLastAutoBackupResult: (result: "success" | "failed" | null, error?: string | null) => void;
+  setLastSuccessfulBackupAt: (timestamp: number) => void;
   setLastError: (error: string | null) => void;
   getConnection: (provider: CloudProvider) => ProviderConnectionState | undefined;
   resetProgress: () => void;
@@ -94,6 +98,7 @@ export const useBackupStore = create<BackupStoreState>()(
       lastAutoBackupError: null,
       history: [],
       lastUsedBackupOptions: null,
+      lastSuccessfulBackupAt: 0,
       lastError: null,
 
       setActiveProvider: (provider) => set({ activeProvider: provider }),
@@ -141,6 +146,8 @@ export const useBackupStore = create<BackupStoreState>()(
       setLastAutoBackupResult: (result, error) =>
         set({ lastAutoBackupResult: result, lastAutoBackupError: error ?? null }),
 
+      setLastSuccessfulBackupAt: (timestamp) => set({ lastSuccessfulBackupAt: timestamp }),
+
       setLastError: (error) => set({ lastError: error }),
 
       getConnection: (provider) => get().connections.find((c) => c.provider === provider),
@@ -165,7 +172,7 @@ export const useBackupStore = create<BackupStoreState>()(
     }),
     {
       name: "backup-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         connections: state.connections,
         activeProvider: state.activeProvider,
@@ -178,6 +185,7 @@ export const useBackupStore = create<BackupStoreState>()(
         lastAutoBackupError: state.lastAutoBackupError,
         history: state.history,
         lastUsedBackupOptions: state.lastUsedBackupOptions,
+        lastSuccessfulBackupAt: state.lastSuccessfulBackupAt,
       }),
     },
   ),

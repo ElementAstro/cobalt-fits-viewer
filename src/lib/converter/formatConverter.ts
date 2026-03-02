@@ -94,10 +94,11 @@ export function fitsToRGBA(
   const mtfMidtone = options.mtfMidtone ?? 0.5;
   const curvePreset = options.curvePreset ?? "linear";
 
-  const rgba = new Uint8ClampedArray(width * height * 4);
+  const limit = Math.min(n, width * height);
+  const rgba = new Uint8ClampedArray(limit * 4);
   const stretchFn = getStretchFn(stretchType);
 
-  for (let i = 0; i < n; i++) {
+  for (let i = 0; i < limit; i++) {
     let v = (pixels[i] - bp) / span;
     if (v < 0) v = 0;
     else if (v > 1) v = 1;
@@ -273,14 +274,15 @@ export async function fitsToRGBAChunked(
   const curvePreset = options.curvePreset ?? "linear";
 
   // --- Phase 3: Stretch + Colormap combined (chunked) ---
-  const rgba = new Uint8ClampedArray(width * height * 4);
+  const limit = Math.min(n, width * height);
+  const rgba = new Uint8ClampedArray(limit * 4);
   const lut = getColormapLUT(options.colormap, options.profile ?? "standard");
   const lutMax = LUT_SIZE - 1;
   const stretchFn = getStretchFn(stretchType);
 
-  for (let start = 0; start < n; start += CHUNK_SIZE) {
+  for (let start = 0; start < limit; start += CHUNK_SIZE) {
     if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
-    const end = Math.min(start + CHUNK_SIZE, n);
+    const end = Math.min(start + CHUNK_SIZE, limit);
     for (let i = start; i < end; i++) {
       let v = (pixels[i] - bp) / span;
       if (v < 0) v = 0;

@@ -19,6 +19,8 @@ const mockFiles = [
     isFavorite: false,
     tags: [],
     albumIds: [],
+    sourceType: "fits" as const,
+    mediaKind: "image" as const,
   },
   {
     id: "b",
@@ -30,6 +32,21 @@ const mockFiles = [
     isFavorite: false,
     tags: [],
     albumIds: [],
+    sourceType: "raster" as const,
+    mediaKind: "image" as const,
+  },
+  {
+    id: "v",
+    filename: "clip.mp4",
+    filepath: "/tmp/clip.mp4",
+    fileSize: 1,
+    importDate: 3,
+    frameType: "light" as const,
+    isFavorite: false,
+    tags: [],
+    albumIds: [],
+    sourceType: "video" as const,
+    mediaKind: "video" as const,
   },
 ];
 
@@ -92,6 +109,11 @@ jest.mock("../../../hooks/useFitsFile", () => ({
 
 jest.mock("../../../hooks/useImageProcessing", () => ({
   useImageProcessing: () => mockUseImageProcessing(),
+}));
+
+jest.mock("../../../lib/import/imageParsePipeline", () => ({
+  isImageLikeMedia: (file: { mediaKind?: string; sourceType?: string }) =>
+    file?.mediaKind === "image" || file?.sourceType === "fits" || file?.sourceType === "raster",
 }));
 
 jest.mock("../../../hooks/useScreenOrientation", () => ({
@@ -305,6 +327,17 @@ describe("CompareScreen", () => {
     });
   });
 
+  it("filters non-image ids from /compare?ids before initializing comparison", () => {
+    mockUseLocalSearchParams.mockReturnValueOnce({ ids: "a,v,b,v,a" });
+    render(<CompareScreen />);
+    expect(mockUseImageComparison).toHaveBeenCalledWith({
+      initialIds: ["a", "b"],
+      initialMode: "blink",
+      initialBlinkSpeed: 1.5,
+      initialSplitPosition: 0.5,
+    });
+  });
+
   it("passes zoom limits and gestureConfig into FitsCanvas", () => {
     render(<CompareScreen />);
     const entries = fitsCanvasMock.__getCanvasEntries();
@@ -447,5 +480,13 @@ describe("CompareScreen", () => {
       target = entries[entries.length - 1];
       expect(target.setTransform).toHaveBeenCalledWith(100, -50, 1.8, { animated: false });
     });
+  });
+
+  it("picker list excludes non-image files", () => {
+    render(<CompareScreen />);
+    fireEvent.press(screen.getByTestId("e2e-action-compare__index-open-picker-a"));
+    expect(screen.queryByText("clip.mp4")).toBeNull();
+    expect(screen.getByText("A.fits")).toBeTruthy();
+    expect(screen.getByText("B.fits")).toBeTruthy();
   });
 });

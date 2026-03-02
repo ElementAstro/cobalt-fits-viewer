@@ -4,6 +4,8 @@
  * - 新入口: detectStarsAsync() 支持分块异步、去混叠、形态过滤、可取消
  */
 
+import { throwIfAborted } from "../utils/abortUtils";
+
 export type StarDetectionProfile = "legacy" | "fast" | "balanced" | "accurate";
 export type StarDetectionConnectivity = 4 | 8;
 
@@ -96,7 +98,7 @@ interface ResolvedStarDetectionOptions extends Required<Omit<StarDetectionOption
   peakMax?: number;
 }
 
-const PROFILE_PRESETS: Record<StarDetectionProfile, ResolvedStarDetectionOptions> = {
+export const PROFILE_PRESETS: Record<StarDetectionProfile, ResolvedStarDetectionOptions> = {
   legacy: {
     profile: "legacy",
     sigmaThreshold: 5,
@@ -199,14 +201,88 @@ function resolveOptions(
   };
 }
 
-function makeAbortError() {
-  const err = new Error("Aborted");
-  err.name = "AbortError";
-  return err;
+function quickSelectMedian(arr: Float32Array, len: number): number {
+  if (len === 0) return 0;
+  const k = len >>> 1;
+  return quickSelectF32(arr, 0, len - 1, k);
 }
 
-function throwIfAborted(signal?: AbortSignal) {
-  if (signal?.aborted) throw makeAbortError();
+function quickSelectF32(arr: Float32Array, lo: number, hi: number, k: number): number {
+  while (hi > lo) {
+    if (hi - lo > 600) {
+      const n = hi - lo + 1;
+      const i = k - lo + 1;
+      const z = Math.log(n);
+      const s = 0.5 * Math.exp((2 * z) / 3);
+      const sd = 0.5 * Math.sqrt((z * s * (n - s)) / n) * (i - n / 2 < 0 ? -1 : 1);
+      const newLo = Math.max(lo, Math.floor(k - (i * s) / n + sd));
+      const newHi = Math.min(hi, Math.floor(k + ((n - i) * s) / n + sd));
+      quickSelectF32(arr, newLo, newHi, k);
+    }
+    const t = arr[k];
+    let i = lo;
+    let j = hi;
+    arr[k] = arr[lo];
+    arr[lo] = t;
+    if (arr[hi] > t) {
+      arr[lo] = arr[hi];
+      arr[hi] = t;
+    }
+    while (i < j) {
+      const tmp = arr[i];
+      arr[i] = arr[j];
+      arr[j] = tmp;
+      i++;
+      j--;
+      while (arr[i] < t) i++;
+      while (arr[j] > t) j--;
+    }
+    if (arr[lo] === t) {
+      const tmp2 = arr[lo];
+      arr[lo] = arr[j];
+      arr[j] = tmp2;
+    } else {
+      j++;
+      const tmp2 = arr[j];
+      arr[j] = arr[hi];
+      arr[hi] = tmp2;
+    }
+    if (j <= k) lo = j + 1;
+    if (k <= j) hi = j - 1;
+  }
+  return arr[k];
+}
+
+function robustStats(
+  buf: Float32Array,
+  len: number,
+  sigmaClipIters: number,
+): { median: number; sigma: number } {
+  if (len === 0) return { median: 0, sigma: 0 };
+  let currentLen = len;
+  for (let iter = 0; iter <= sigmaClipIters; iter++) {
+    const med = quickSelectMedian(buf, currentLen);
+    const devBuf = new Float32Array(currentLen);
+    for (let i = 0; i < currentLen; i++) devBuf[i] = Math.abs(buf[i] - med);
+    const mad = quickSelectMedian(devBuf, currentLen);
+    const sigma = mad > 0 ? mad / 0.6744897501960817 : 0;
+    if (iter === sigmaClipIters || sigma <= 0) {
+      return { median: med, sigma };
+    }
+    const lower = med - 3 * sigma;
+    const upper = med + 3 * sigma;
+    let newLen = 0;
+    for (let i = 0; i < currentLen; i++) {
+      if (buf[i] >= lower && buf[i] <= upper) {
+        buf[newLen++] = buf[i];
+      }
+    }
+    if (newLen < Math.max(8, Math.floor(currentLen * 0.35))) {
+      return { median: med, sigma };
+    }
+    currentLen = newLen;
+  }
+  return { median: 0, sigma: 0 };
 }
 
 function reportProgress(
@@ -215,34 +291,6 @@ function reportProgress(
   stage: string,
 ) {
   runtime?.onProgress?.(Math.max(0, Math.min(1, progress)), stage);
-}
-
-function medianSorted(values: number[]) {
-  if (values.length === 0) return 0;
-  return values[Math.floor(values.length / 2)];
-}
-
-function robustStats(values: number[], sigmaClipIters: number): { median: number; sigma: number } {
-  if (values.length === 0) return { median: 0, sigma: 0 };
-  let work = values.slice();
-  for (let iter = 0; iter <= sigmaClipIters; iter++) {
-    work.sort((a, b) => a - b);
-    const med = medianSorted(work);
-    const absDev = work.map((v) => Math.abs(v - med)).sort((a, b) => a - b);
-    const mad = medianSorted(absDev);
-    const sigma = mad > 0 ? mad / 0.6744897501960817 : 0;
-    if (iter === sigmaClipIters || sigma <= 0) {
-      return { median: med, sigma };
-    }
-    const lower = med - 3 * sigma;
-    const upper = med + 3 * sigma;
-    const clipped = work.filter((v) => v >= lower && v <= upper);
-    if (clipped.length < Math.max(8, Math.floor(work.length * 0.35))) {
-      return { median: med, sigma };
-    }
-    work = clipped;
-  }
-  return { median: 0, sigma: 0 };
 }
 
 /**
@@ -260,26 +308,58 @@ export function estimateBackground(
   const bg = new Float32Array(n);
   const nx = Math.max(1, Math.ceil(width / meshSize));
   const ny = Math.max(1, Math.ceil(height / meshSize));
-  const meshValues: number[][] = Array.from({ length: nx * ny }, () => []);
+  const numMesh = nx * ny;
+
+  // Pass 1: count valid pixels per mesh cell
+  const meshCounts = new Int32Array(numMesh);
   for (let y = 0; y < height; y++) {
     const my = Math.min(Math.floor(y / meshSize), ny - 1);
     for (let x = 0; x < width; x++) {
       const mx = Math.min(Math.floor(x / meshSize), nx - 1);
       const v = pixels[y * width + x];
       if (!Number.isNaN(v) && Number.isFinite(v)) {
-        meshValues[my * nx + mx].push(v);
+        meshCounts[my * nx + mx]++;
       }
     }
   }
 
-  const meshMedians = new Float32Array(nx * ny);
-  const meshSigmas = new Float32Array(nx * ny);
-  for (let i = 0; i < meshValues.length; i++) {
-    const stats = robustStats(meshValues[i], sigmaClipIters);
+  // Compute offsets and allocate a single contiguous Float32Array buffer
+  const meshOffsets = new Int32Array(numMesh);
+  let totalValid = 0;
+  for (let i = 0; i < numMesh; i++) {
+    meshOffsets[i] = totalValid;
+    totalValid += meshCounts[i];
+  }
+  const meshBuffer = new Float32Array(totalValid);
+
+  // Pass 2: fill buffer
+  const fillPos = new Int32Array(numMesh);
+  for (let y = 0; y < height; y++) {
+    const my = Math.min(Math.floor(y / meshSize), ny - 1);
+    for (let x = 0; x < width; x++) {
+      const mx = Math.min(Math.floor(x / meshSize), nx - 1);
+      const v = pixels[y * width + x];
+      if (!Number.isNaN(v) && Number.isFinite(v)) {
+        const idx = my * nx + mx;
+        meshBuffer[meshOffsets[idx] + fillPos[idx]] = v;
+        fillPos[idx]++;
+      }
+    }
+  }
+
+  // Compute per-mesh robust statistics
+  const meshMedians = new Float32Array(numMesh);
+  const meshSigmas = new Float32Array(numMesh);
+  for (let i = 0; i < numMesh; i++) {
+    const count = meshCounts[i];
+    if (count === 0) continue;
+    const slice = meshBuffer.subarray(meshOffsets[i], meshOffsets[i] + count);
+    const stats = robustStats(slice, count, sigmaClipIters);
     meshMedians[i] = stats.median;
     meshSigmas[i] = stats.sigma;
   }
 
+  // Bilinear interpolation of background
   for (let y = 0; y < height; y++) {
     const fy = (y + 0.5) / meshSize - 0.5;
     const my0 = Math.max(0, Math.min(ny - 1, Math.floor(fy)));
@@ -322,6 +402,35 @@ function gaussianKernel1D(sigma: number) {
   return { kernel, radius };
 }
 
+function convolveRows(
+  input: Float32Array,
+  output: Float32Array,
+  width: number,
+  height: number,
+  kernel: Float32Array,
+  radius: number,
+) {
+  for (let y = 0; y < height; y++) {
+    const rowOff = y * width;
+    for (let x = 0; x < width; x++) {
+      let acc = 0;
+      for (let k = -radius; k <= radius; k++) {
+        const sx = Math.max(0, Math.min(width - 1, x + k));
+        acc += input[rowOff + sx] * kernel[k + radius];
+      }
+      output[rowOff + x] = acc;
+    }
+  }
+}
+
+function transpose(src: Float32Array, w: number, h: number, dst: Float32Array) {
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      dst[x * h + y] = src[y * w + x];
+    }
+  }
+}
+
 function convolveSeparable(
   input: Float32Array,
   width: number,
@@ -330,30 +439,45 @@ function convolveSeparable(
 ): Float32Array {
   const { kernel, radius } = gaussianKernel1D(sigma);
   const temp = new Float32Array(input.length);
-  const output = new Float32Array(input.length);
 
+  // Horizontal pass (row-major access — cache friendly)
+  convolveRows(input, temp, width, height, kernel, radius);
+
+  // Transpose → row-convolve → transpose back (avoids column-major access)
+  const transposed = new Float32Array(input.length);
+  transpose(temp, width, height, transposed);
+  const convT = new Float32Array(input.length);
+  convolveRows(transposed, convT, height, width, kernel, radius);
+  const output = new Float32Array(input.length);
+  transpose(convT, height, width, output);
+  return output;
+}
+
+async function convolveRowsAsync(
+  input: Float32Array,
+  output: Float32Array,
+  width: number,
+  height: number,
+  kernel: Float32Array,
+  radius: number,
+  chunkRows: number,
+  runtime?: StarDetectionRuntime,
+) {
   for (let y = 0; y < height; y++) {
+    throwIfAborted(runtime?.signal);
+    const rowOff = y * width;
     for (let x = 0; x < width; x++) {
       let acc = 0;
       for (let k = -radius; k <= radius; k++) {
         const sx = Math.max(0, Math.min(width - 1, x + k));
-        acc += input[y * width + sx] * kernel[k + radius];
+        acc += input[rowOff + sx] * kernel[k + radius];
       }
-      temp[y * width + x] = acc;
+      output[rowOff + x] = acc;
+    }
+    if ((y + 1) % chunkRows === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0));
     }
   }
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      let acc = 0;
-      for (let k = -radius; k <= radius; k++) {
-        const sy = Math.max(0, Math.min(height - 1, y + k));
-        acc += temp[sy * width + x] * kernel[k + radius];
-      }
-      output[y * width + x] = acc;
-    }
-  }
-  return output;
 }
 
 async function convolveSeparableAsync(
@@ -364,39 +488,19 @@ async function convolveSeparableAsync(
   runtime?: StarDetectionRuntime,
 ): Promise<Float32Array> {
   const { kernel, radius } = gaussianKernel1D(sigma);
-  const temp = new Float32Array(input.length);
-  const output = new Float32Array(input.length);
   const chunkRows = Math.max(8, runtime?.chunkRows ?? 32);
+  const temp = new Float32Array(input.length);
 
-  for (let y = 0; y < height; y++) {
-    throwIfAborted(runtime?.signal);
-    for (let x = 0; x < width; x++) {
-      let acc = 0;
-      for (let k = -radius; k <= radius; k++) {
-        const sx = Math.max(0, Math.min(width - 1, x + k));
-        acc += input[y * width + sx] * kernel[k + radius];
-      }
-      temp[y * width + x] = acc;
-    }
-    if ((y + 1) % chunkRows === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
+  // Horizontal pass (row-major — cache friendly)
+  await convolveRowsAsync(input, temp, width, height, kernel, radius, chunkRows, runtime);
 
-  for (let y = 0; y < height; y++) {
-    throwIfAborted(runtime?.signal);
-    for (let x = 0; x < width; x++) {
-      let acc = 0;
-      for (let k = -radius; k <= radius; k++) {
-        const sy = Math.max(0, Math.min(height - 1, y + k));
-        acc += temp[sy * width + x] * kernel[k + radius];
-      }
-      output[y * width + x] = acc;
-    }
-    if ((y + 1) % chunkRows === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
+  // Transpose → row-convolve → transpose back (avoids column-major access)
+  const transposed = new Float32Array(input.length);
+  transpose(temp, width, height, transposed);
+  const convT = new Float32Array(input.length);
+  await convolveRowsAsync(transposed, convT, height, width, kernel, radius, chunkRows, runtime);
+  const output = new Float32Array(input.length);
+  transpose(convT, height, width, output);
   return output;
 }
 

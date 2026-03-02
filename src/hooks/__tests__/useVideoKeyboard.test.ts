@@ -106,12 +106,67 @@ describe("useVideoKeyboard", () => {
     expect(handlers.onToggleMute).toHaveBeenCalledTimes(1);
   });
 
-  it("calls onToggleLoop on KeyL", () => {
+  it("calls onSeekBy(10) on KeyL (YouTube-style forward)", () => {
     const handlers = createHandlers();
     renderHook(() => useVideoKeyboard(handlers));
     const listener = mockAddEventListener.mock.calls[0][1];
-    listener({ code: "KeyL", preventDefault: jest.fn(), target: { tagName: "DIV" } });
+    listener({
+      code: "KeyL",
+      shiftKey: false,
+      preventDefault: jest.fn(),
+      target: { tagName: "DIV" },
+    });
+    expect(handlers.onSeekBy).toHaveBeenCalledWith(10);
+  });
+
+  it("calls onToggleLoop on Shift+KeyL", () => {
+    const handlers = createHandlers();
+    renderHook(() => useVideoKeyboard(handlers));
+    const listener = mockAddEventListener.mock.calls[0][1];
+    listener({
+      code: "KeyL",
+      shiftKey: true,
+      preventDefault: jest.fn(),
+      target: { tagName: "DIV" },
+    });
     expect(handlers.onToggleLoop).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onPlayPause on KeyK (YouTube-style)", () => {
+    const handlers = createHandlers();
+    renderHook(() => useVideoKeyboard(handlers));
+    const listener = mockAddEventListener.mock.calls[0][1];
+    listener({ code: "KeyK", preventDefault: jest.fn(), target: { tagName: "DIV" } });
+    expect(handlers.onPlayPause).toHaveBeenCalledTimes(1);
+  });
+
+  it("calls onSeekBy(-10) on KeyJ (YouTube-style rewind)", () => {
+    const handlers = createHandlers();
+    renderHook(() => useVideoKeyboard(handlers));
+    const listener = mockAddEventListener.mock.calls[0][1];
+    listener({ code: "KeyJ", preventDefault: jest.fn(), target: { tagName: "DIV" } });
+    expect(handlers.onSeekBy).toHaveBeenCalledWith(-10);
+  });
+
+  it("calls onSeekTo on digit keys when durationSec is provided", () => {
+    const handlers = { ...createHandlers(), onSeekTo: jest.fn(), durationSec: 100 };
+    renderHook(() => useVideoKeyboard(handlers));
+    const listener = mockAddEventListener.mock.calls[0][1];
+    listener({ code: "Digit5", preventDefault: jest.fn(), target: { tagName: "DIV" } });
+    expect(handlers.onSeekTo).toHaveBeenCalledWith(50);
+  });
+
+  it("calls onCycleRate on Shift+Period (> key)", () => {
+    const handlers = { ...createHandlers(), onCycleRate: jest.fn() };
+    renderHook(() => useVideoKeyboard(handlers));
+    const listener = mockAddEventListener.mock.calls[0][1];
+    listener({
+      code: "Period",
+      shiftKey: true,
+      preventDefault: jest.fn(),
+      target: { tagName: "DIV" },
+    });
+    expect(handlers.onCycleRate).toHaveBeenCalledTimes(1);
   });
 
   it("calls onFullscreen on KeyF", () => {

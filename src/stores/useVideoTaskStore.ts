@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { VideoProcessingRequest } from "../lib/video/engine";
 
 export type VideoTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
@@ -183,7 +183,7 @@ export const useVideoTaskStore = create<VideoTaskStoreState>()(
     }),
     {
       name: "video-task-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({ tasks: state.tasks }),
     },
   ),

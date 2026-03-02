@@ -48,6 +48,7 @@ jest.mock("react-native-reanimated", () => {
     withTiming: (value: number) => value,
     withSpring: (value: number) => value,
     withDecay: ({ velocity = 0 }: { velocity?: number }) => velocity,
+    cancelAnimation: jest.fn(),
     FadeIn: { duration: () => ({}) },
     FadeOut: { duration: () => ({}) },
   };
@@ -117,6 +118,7 @@ jest.mock("react-native-gesture-handler", () => {
       },
       minPointers: () => builder,
       maxPointers: () => builder,
+      averageTouches: () => builder,
       minDistance: () => builder,
       maxDistance: () => builder,
       minDuration: () => builder,
@@ -229,8 +231,8 @@ describe("FitsCanvas", () => {
 
     const transform = ref.current?.getTransform();
     expect(transform?.scale).toBe(10);
-    expect(transform?.translateX).toBeCloseTo(900, 6);
-    expect(transform?.translateY).toBeCloseTo(-450, 6);
+    expect(transform?.translateX).toBeCloseTo(0, 6);
+    expect(transform?.translateY).toBeCloseTo(-900, 6);
   });
 
   it("supports immediate transform updates without animation options", () => {
@@ -255,8 +257,8 @@ describe("FitsCanvas", () => {
 
     const transform = ref.current?.getTransform();
     expect(transform?.scale).toBe(10);
-    expect(transform?.translateX).toBeCloseTo(900, 6);
-    expect(transform?.translateY).toBeCloseTo(-450, 6);
+    expect(transform?.translateX).toBeCloseTo(0, 6);
+    expect(transform?.translateY).toBeCloseTo(-900, 6);
   });
 
   it("notifies layout-only changes through onTransformChange", () => {
@@ -314,8 +316,8 @@ describe("FitsCanvas", () => {
 
     const transform = ref.current?.getTransform();
     expect(transform?.scale).toBe(2);
-    expect(transform?.translateX).toBeCloseTo(100, 6);
-    expect(transform?.translateY).toBeCloseTo(50, 6);
+    expect(transform?.translateX).toBeCloseTo(0, 6);
+    expect(transform?.translateY).toBeCloseTo(0, 6);
   });
 
   it("maps single-tap pixel from render space back to source space", () => {

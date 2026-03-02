@@ -53,6 +53,7 @@ describe("GallerySelectionToolbar", () => {
 
   const defaultProps = {
     selectedCount: 3,
+    selectedImageCount: 2,
     allDisplaySelected: false,
     isLandscape: false,
     onSelectAllToggle,
@@ -103,11 +104,17 @@ describe("GallerySelectionToolbar", () => {
     expect(onExitSelection).toHaveBeenCalledTimes(1);
   });
 
-  it("enables compare when selectedCount >= 2", () => {
-    render(<GallerySelectionToolbar {...defaultProps} selectedCount={2} />);
+  it("enables compare when selectedImageCount >= 2", () => {
+    render(<GallerySelectionToolbar {...defaultProps} selectedImageCount={2} />);
 
     fireEvent.press(screen.getByTestId("e2e-action-tabs__gallery-open-compare"));
     expect(onCompare).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables compare when selectedImageCount < 2", () => {
+    render(<GallerySelectionToolbar {...defaultProps} selectedImageCount={1} />);
+    const compareButton = screen.getByTestId("e2e-action-tabs__gallery-open-compare");
+    expect(compareButton.props.onPress).toBeUndefined();
   });
 
   it("enables action buttons when selectedCount > 0", () => {

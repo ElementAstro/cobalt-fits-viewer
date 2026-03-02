@@ -2,12 +2,68 @@ import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { VideoPlayerCard } from "../VideoPlayerCard";
 
+jest.mock("react-native-reanimated", () => {
+  const React = require("react");
+  const { View, Text } = require("react-native");
+  const Animated = {
+    View: React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
+      React.createElement(View, { ...props, ref }),
+    ),
+    Text: React.forwardRef((props: Record<string, unknown>, ref: unknown) =>
+      React.createElement(Text, { ...props, ref }),
+    ),
+  };
+  return {
+    __esModule: true,
+    default: Animated,
+    FadeIn: { duration: () => ({ duration: () => ({}) }) },
+    FadeOut: { duration: () => ({ duration: () => ({}) }) },
+    runOnJS: (fn: (...args: unknown[]) => unknown) => fn,
+  };
+});
+
+jest.mock("react-native-gesture-handler", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  const chainable = (): any => {
+    const self: Record<string, unknown> = {};
+    return new Proxy(self, {
+      get() {
+        return (..._args: unknown[]) => chainable();
+      },
+    });
+  };
+
+  return {
+    GestureDetector: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(View, { testID: "gesture-detector" }, children),
+    Gesture: {
+      Tap: () => chainable(),
+      Pan: () => chainable(),
+      LongPress: () => chainable(),
+      Pinch: () => chainable(),
+      Simultaneous: () => chainable(),
+      Exclusive: () => chainable(),
+    },
+  };
+});
+
 jest.mock("../../common/SimpleSlider", () => {
   const React = require("react");
   const { View } = require("react-native");
   return {
     SimpleSlider: (props: Record<string, unknown>) =>
       React.createElement(View, { testID: `slider-${props.label}`, ...props }),
+  };
+});
+
+jest.mock("../VideoSeekBar", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    VideoSeekBar: (props: Record<string, unknown>) =>
+      React.createElement(View, { testID: "video-seek-bar", ...props }),
   };
 });
 
@@ -30,6 +86,7 @@ describe("VideoPlayerCard", () => {
   const defaultProps = {
     player: mockPlayer as never,
     isPlayerReady: true,
+    isBuffering: false,
     playerStatus: "readyToPlay",
     playerError: null as string | null,
     durationSec: 12,
@@ -75,11 +132,9 @@ describe("VideoPlayerCard", () => {
     expect(defaultProps.onPlayPause).toHaveBeenCalledTimes(1);
   });
 
-  it("renders playback rate button and dispatches onCycleRate", () => {
+  it("renders playback rate display in popover trigger", () => {
     render(<VideoPlayerCard {...defaultProps} playbackRate={1.5} />);
-    const rateBtn = screen.getByText("1.5x");
-    fireEvent.press(rateBtn);
-    expect(defaultProps.onCycleRate).toHaveBeenCalledTimes(1);
+    expect(screen.getByText("1.5x")).toBeTruthy();
   });
 
   it("calls onSeekBy(-10) on rewind button press", () => {
@@ -169,16 +224,10 @@ describe("VideoPlayerCard", () => {
     expect(defaultProps.onClearAbLoop).toHaveBeenCalledTimes(1);
   });
 
-  it("renders seek and volume sliders", () => {
+  it("renders seek bar and volume slider", () => {
     render(<VideoPlayerCard {...defaultProps} />);
-    expect(screen.getByTestId("slider-Seek")).toBeTruthy();
+    expect(screen.getByTestId("video-seek-bar")).toBeTruthy();
     expect(screen.getByTestId("slider-Volume")).toBeTruthy();
-  });
-
-  it("formats current and total time display", () => {
-    render(<VideoPlayerCard {...defaultProps} currentTimeSec={3.5} durationSec={12} />);
-    expect(screen.getByText("00:03.5")).toBeTruthy();
-    expect(screen.getByText("00:12.0")).toBeTruthy();
   });
 
   it("renders audio overlay icon with theme muted color", () => {
@@ -190,5 +239,15 @@ describe("VideoPlayerCard", () => {
     render(<VideoPlayerCard {...defaultProps} playerStatus="error" playerError="Decode error" />);
     expect(screen.getByText("alert-circle-outline")).toBeTruthy();
     expect(screen.getByText("Decode error")).toBeTruthy();
+  });
+
+  it("shows buffering spinner overlay when isBuffering is true", () => {
+    render(<VideoPlayerCard {...defaultProps} isBuffering={true} />);
+    expect(screen.getAllByTestId("spinner").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not show buffering overlay when isBuffering is false", () => {
+    render(<VideoPlayerCard {...defaultProps} isBuffering={false} />);
+    expect(screen.queryAllByTestId("spinner")).toHaveLength(0);
   });
 });

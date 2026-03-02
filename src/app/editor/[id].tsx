@@ -1,9 +1,9 @@
-import { View, Text } from "react-native";
+import { View, Text, Alert } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Button, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { useI18n, type TranslationKey } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -15,17 +15,29 @@ import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useEditorToolState } from "../../hooks/useEditorToolState";
 import { useEditorStarAnnotation } from "../../hooks/useEditorStarAnnotation";
 import { useEditorExport } from "../../hooks/useEditorExport";
-import { FitsCanvas, type CanvasTransform } from "../../components/fits/FitsCanvas";
+import { useEditorHotkeys } from "../../hooks/useEditorHotkeys";
+import {
+  FitsCanvas,
+  type CanvasTransform,
+  type FitsCanvasHandle,
+} from "../../components/fits/FitsCanvas";
 import { CropOverlay } from "../../components/fits/CropOverlay";
 import { StarAnnotationOverlay } from "../../components/fits/StarAnnotationOverlay";
+import { ZoomControls } from "../../components/fits/ZoomControls";
+import { PixelInspector } from "../../components/fits/PixelInspector";
+import { Minimap } from "../../components/fits/Minimap";
+import { HistogramLevels } from "../../components/fits/HistogramLevels";
 import { EditorHeader } from "../../components/editor/EditorHeader";
 import { EditorToolBar } from "../../components/editor/EditorToolBar";
 import { EditorToolParamPanel } from "../../components/editor/EditorToolParamPanel";
 import { StarAnnotationPanel } from "../../components/editor/StarAnnotationPanel";
+import { RecipePipelinePanel } from "../../components/editor/RecipePipelinePanel";
 import { ExportDialog } from "../../components/common/ExportDialog";
 import type { ProcessingPipelineSnapshot } from "../../lib/fits/types";
 import type { ImageEditOperation } from "../../lib/utils/imageOperations";
 import { isVideoFile } from "../../lib/media/routing";
+import { calculateHistogram, calculateStats } from "../../lib/utils/pixelMath";
+import { resolveComparePair } from "../../lib/viewer/compareRouting";
 
 const EMPTY_TRANSFORM: CanvasTransform = {
   scale: 1,
@@ -39,13 +51,20 @@ export default function EditorDetailScreen() {
   useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
   const { t } = useI18n();
   const [successColor, mutedColor] = useThemeColor(["success", "muted"]);
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
+  const allFiles = useFitsStore((s) => s.files);
   const updateFile = useFitsStore((s) => s.updateFile);
   const isVideo = file ? isVideoFile(file) : false;
+  const compareIds = useMemo(
+    () => (file?.id ? resolveComparePair(file.id, allFiles, file.derivedFromId) : []),
+    [allFiles, file?.derivedFromId, file?.id],
+  );
+  const canCompare = compareIds.length >= 2;
   const editorSettings = useSettingsStore(
     useShallow((s) => ({
       defaultBlurSigma: s.defaultBlurSigma,
@@ -89,7 +108,24 @@ export default function EditorDetailScreen() {
   });
   const haptics = useHapticFeedback();
 
+  const canvasRef = useRef<FitsCanvasHandle>(null);
   const [showOriginal, setShowOriginal] = useState(false);
+  const [showPixelInfo, setShowPixelInfo] = useState(false);
+  const [showMinimap, setShowMinimap] = useState(false);
+  const [cursorX, setCursorX] = useState(-1);
+  const [cursorY, setCursorY] = useState(-1);
+  const [showHistogram, setShowHistogram] = useState(false);
+  const [showPipeline, setShowPipeline] = useState(false);
+
+  const editorCurrent = editor.current;
+  const histogramData = useMemo(() => {
+    if (!editorCurrent) return null;
+    const stats = calculateStats(editorCurrent.pixels);
+    const range = { min: stats.min, max: stats.max };
+    const hist = calculateHistogram(editorCurrent.pixels, 256, range);
+    return { counts: hist.counts, edges: hist.edges };
+  }, [editorCurrent]);
+
   const toolState = useEditorToolState({
     blurSigma: editorSettings.defaultBlurSigma,
     sharpenAmount: editorSettings.defaultSharpenAmount,
@@ -179,9 +215,50 @@ export default function EditorDetailScreen() {
     };
   }, [handleEditorOperation]);
 
+  // Unsaved changes guard
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      if (editor.historyLength <= 1) return;
+      e.preventDefault();
+      Alert.alert(
+        t("editor.unsavedChangesTitle" as TranslationKey),
+        t("editor.unsavedChangesMessage" as TranslationKey),
+        [
+          {
+            text: t("editor.keepEditing" as TranslationKey),
+            style: "cancel",
+          },
+          {
+            text: t("editor.discardChanges" as TranslationKey),
+            style: "destructive",
+            onPress: () => navigation.dispatch(e.data.action),
+          },
+        ],
+      );
+    });
+    return unsubscribe;
+  }, [navigation, editor.historyLength, t]);
+
+  const handlePixelTap = useCallback(
+    (x: number, y: number) => {
+      setCursorX(x);
+      setCursorY(y);
+      handleStarPointTap(x, y);
+    },
+    [handleStarPointTap],
+  );
+
   const handleToolPress = useCallback(
     (tool: string) => {
       haptics.selection();
+      if (tool === "histogram") {
+        setShowHistogram((prev) => !prev);
+        return;
+      }
+      if (tool === "pipeline") {
+        setShowPipeline((prev) => !prev);
+        return;
+      }
       setActiveTool(activeTool === tool ? null : (tool as typeof activeTool));
     },
     [haptics, activeTool, setActiveTool],
@@ -196,13 +273,55 @@ export default function EditorDetailScreen() {
     const op = buildOperation();
     if (op) {
       haptics.impact();
-      editor.applyEdit(op);
+      if (editor.isPreviewActive) {
+        editor.commitPreview(op);
+      } else {
+        editor.applyEdit(op);
+      }
     }
     setActiveTool(null);
   }, [activeTool, buildOperation, editor, haptics, setActiveTool, setShowCrop]);
 
+  const handleCancelTool = useCallback(() => {
+    editor.cancelPreview();
+    setActiveTool(null);
+  }, [editor, setActiveTool]);
+
+  useEditorHotkeys({
+    onUndo: editor.undo,
+    onRedo: editor.redo,
+    onCancelTool: handleCancelTool,
+    onToggleOriginal: () => setShowOriginal((prev) => !prev),
+    onToggleHistogram: () => setShowHistogram((prev) => !prev),
+    onTogglePixelInfo: () => setShowPixelInfo((prev) => !prev),
+    onToggleMinimap: () => setShowMinimap((prev) => !prev),
+    onResetView: () => canvasRef.current?.setTransform(0, 0, 1),
+  });
+
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
+    };
+  }, []);
+  const handleParamPreview = useCallback(
+    (op: ImageEditOperation | null) => {
+      if (previewTimerRef.current) {
+        clearTimeout(previewTimerRef.current);
+        previewTimerRef.current = null;
+      }
+      if (!op) return;
+      previewTimerRef.current = setTimeout(() => {
+        editor.previewEdit(op);
+        previewTimerRef.current = null;
+      }, 300);
+    },
+    [editor],
+  );
+
   const handleQuickAction = useCallback(
     (op: ImageEditOperation) => {
+      editor.cancelPreview();
       editor.applyEdit(op);
     },
     [editor],
@@ -283,6 +402,11 @@ export default function EditorDetailScreen() {
         onUndo={editor.undo}
         onRedo={editor.redo}
         onExport={() => setShowExport(true)}
+        canCompare={canCompare}
+        onCompare={() => {
+          if (compareIds.length < 2) return;
+          router.push(`/compare?ids=${compareIds.join(",")}`);
+        }}
         onToggleOriginal={() => setShowOriginal((prev) => !prev)}
         onClearError={editor.clearError}
       />
@@ -308,6 +432,7 @@ export default function EditorDetailScreen() {
             }
           >
             <FitsCanvas
+              ref={canvasRef}
               rgbaData={
                 showOriginal && editor.originalRgbaData ? editor.originalRgbaData : editor.rgbaData
               }
@@ -317,9 +442,9 @@ export default function EditorDetailScreen() {
               sourceHeight={editor.current.height}
               showGrid={false}
               showCrosshair={false}
-              cursorX={-1}
-              cursorY={-1}
-              onPixelTap={handleStarPointTap}
+              cursorX={cursorX}
+              cursorY={cursorY}
+              onPixelTap={handlePixelTap}
               onPixelLongPress={handleStarPointLongPress}
               onTransformChange={setCanvasTransform}
               minScale={editorSettings.canvasMinScale}
@@ -362,6 +487,43 @@ export default function EditorDetailScreen() {
                 }}
               />
             )}
+
+            {/* Pixel Inspector */}
+            <PixelInspector
+              x={cursorX}
+              y={cursorY}
+              value={
+                editor.current && cursorX >= 0 && cursorY >= 0
+                  ? (editor.current.pixels[cursorY * editor.current.width + cursorX] ?? null)
+                  : null
+              }
+              visible={showPixelInfo && cursorX >= 0 && cursorY >= 0}
+            />
+
+            {/* Minimap */}
+            <Minimap
+              rgbaData={editor.rgbaData}
+              imgWidth={editor.current.width}
+              imgHeight={editor.current.height}
+              visible={showMinimap}
+              viewportScale={canvasTransform.scale}
+              viewportTranslateX={canvasTransform.translateX}
+              viewportTranslateY={canvasTransform.translateY}
+              canvasWidth={canvasTransform.canvasWidth}
+              canvasHeight={canvasTransform.canvasHeight}
+            />
+
+            {/* Zoom Controls */}
+            <ZoomControls
+              scale={canvasTransform.scale}
+              translateX={canvasTransform.translateX}
+              translateY={canvasTransform.translateY}
+              canvasWidth={canvasTransform.canvasWidth}
+              canvasHeight={canvasTransform.canvasHeight}
+              imageWidth={editor.current.width}
+              imageHeight={editor.current.height}
+              onSetTransform={(tx, ty, s) => canvasRef.current?.setTransform(tx, ty, s)}
+            />
           </View>
         ) : (
           <View className="flex-1 items-center justify-center">
@@ -376,10 +538,20 @@ export default function EditorDetailScreen() {
           params={toolParams}
           successColor={successColor}
           onApply={handleApply}
-          onCancel={() => setActiveTool(null)}
+          onCancel={handleCancelTool}
           onQuickAction={handleQuickAction}
           onReset={resetToolParams}
+          onParamChange={handleParamPreview}
         />
+        {showPipeline && (
+          <RecipePipelinePanel
+            recipe={editor.recipe}
+            successColor={successColor}
+            onToggleNode={editor.toggleNode}
+            onRemoveNode={editor.removeNode}
+            onClose={() => setShowPipeline(false)}
+          />
+        )}
         {isStarAnnotationMode && (
           <StarAnnotationPanel
             successColor={successColor}
@@ -414,6 +586,13 @@ export default function EditorDetailScreen() {
           </View>
         )}
       </View>
+
+      {/* Histogram Panel */}
+      {showHistogram && histogramData && (
+        <View className="border-t border-separator bg-background px-3 py-2">
+          <HistogramLevels counts={histogramData.counts} edges={histogramData.edges} height={80} />
+        </View>
+      )}
 
       <EditorToolBar
         activeTool={activeTool}

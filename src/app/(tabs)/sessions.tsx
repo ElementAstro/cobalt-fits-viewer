@@ -548,6 +548,7 @@ export default function SessionsScreen() {
         )}
         <SessionCard
           session={session}
+          compact={isLandscape}
           isSelected={isSelectionMode && selectedIds.has(session.id)}
           onPress={() => {
             if (isSelectionMode) {
@@ -560,7 +561,7 @@ export default function SessionsScreen() {
         />
       </View>
     ),
-    [isSelectionMode, selectedIds, mutedColor, toggleSelect, router],
+    [isLandscape, isSelectionMode, selectedIds, mutedColor, toggleSelect, router],
   );
 
   const dateSummarySection = selectedDate ? (
@@ -586,6 +587,7 @@ export default function SessionsScreen() {
           value={planSearchQuery}
           onChangeText={setPlanSearchQuery}
           placeholder={t("sessions.searchSessions")}
+          compact={isLandscape}
         />
       </View>
       <View className="mb-2 flex-row flex-wrap gap-2">
@@ -686,6 +688,7 @@ export default function SessionsScreen() {
             <PlanCard
               key={plan.id}
               plan={plan}
+              compact={isLandscape}
               onPress={() => {
                 setEditingPlan(plan);
                 setShowPlanSheet(true);
@@ -736,6 +739,7 @@ export default function SessionsScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={t("sessions.searchSessions")}
+            compact={isLandscape}
           />
         </View>
       )}
@@ -894,6 +898,7 @@ export default function SessionsScreen() {
 
   const landscapeListHeader = (
     <View className="px-4 pt-4">
+      <ActiveSessionBanner />
       {plansSection}
       {sessionToolsSection}
     </View>
@@ -904,6 +909,7 @@ export default function SessionsScreen() {
       selectedCount={selectedIds.size}
       calendarSyncEnabled={calendarSyncEnabled}
       syncing={syncing}
+      isLandscape={isLandscape}
       onClose={exitSelectionMode}
       onToggleSelectAll={() => {
         if (selectedIds.size === sortedSessions.length) {
@@ -987,22 +993,22 @@ export default function SessionsScreen() {
             <ActiveSessionBanner />
             <View className="mb-3 flex-row gap-2">
               <Card variant="secondary" className="flex-1">
-                <Card.Body className="items-center p-2">
-                  <Text className="text-lg font-bold text-foreground">{sessions.length}</Text>
+                <Card.Body className="items-center p-1.5">
+                  <Text className="text-sm font-bold text-foreground">{sessions.length}</Text>
                   <Text className="text-[9px] text-muted">{t("sessions.session")}</Text>
                 </Card.Body>
               </Card>
               <Card variant="secondary" className="flex-1">
-                <Card.Body className="items-center p-2">
-                  <Text className="text-lg font-bold text-foreground">
+                <Card.Body className="items-center p-1.5">
+                  <Text className="text-sm font-bold text-foreground">
                     {formatDuration(totalDuration)}
                   </Text>
                   <Text className="text-[9px] text-muted">{t("sessions.totalTime")}</Text>
                 </Card.Body>
               </Card>
               <Card variant="secondary" className="flex-1">
-                <Card.Body className="items-center p-2">
-                  <Text className="text-lg font-bold text-foreground">{totalImages}</Text>
+                <Card.Body className="items-center p-1.5">
+                  <Text className="text-sm font-bold text-foreground">{totalImages}</Text>
                   <Text className="text-[9px] text-muted">{t("sessions.imageCount")}</Text>
                 </Card.Body>
               </Card>
@@ -1027,6 +1033,7 @@ export default function SessionsScreen() {
             <SessionStatsCard stats={stats} visible={showDetailedStats} />
             <MonthlyActivityChart data={monthlyData} visible={showDetailedStats} />
             <ObservationCalendar
+              compact
               datesWithData={observationDates}
               plannedDates={plannedDates}
               sessionCountByDate={sessionCountByDate}

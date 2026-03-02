@@ -9,6 +9,7 @@ import { useI18n } from "../../i18n/useI18n";
 import type { BackupOptions, RestoreConflictStrategy } from "../../lib/backup/types";
 import { DEFAULT_BACKUP_OPTIONS } from "../../lib/backup/types";
 import type { LocalBackupPreview } from "../../lib/backup/localBackup";
+import { formatFileSize } from "../../lib/utils/fileManager";
 
 export type BackupOptionsSheetMode =
   | "cloud-backup"
@@ -20,6 +21,8 @@ interface BackupOptionsSheetProps {
   visible: boolean;
   mode: BackupOptionsSheetMode;
   localPreview?: LocalBackupPreview | null;
+  estimatedBytes?: number;
+  fileCount?: number;
   onConfirm: (options: BackupOptions) => void;
   onClose: () => void;
 }
@@ -58,6 +61,8 @@ export function BackupOptionsSheet({
   visible,
   mode,
   localPreview,
+  estimatedBytes,
+  fileCount,
   onConfirm,
   onClose,
 }: BackupOptionsSheetProps) {
@@ -163,6 +168,15 @@ export function BackupOptionsSheet({
           </View>
 
           <BottomSheet.Description className="mb-3">{description}</BottomSheet.Description>
+
+          {!isRestore && estimatedBytes != null && estimatedBytes > 0 && (
+            <View className="mb-3 rounded-lg bg-secondary/50 px-3 py-2">
+              <Text className="text-xs text-muted">
+                {t("backup.summaryEstimatedSize")}: {formatFileSize(estimatedBytes)}
+                {fileCount != null ? ` · ${fileCount} ${t("backup.summaryFiles")}` : ""}
+              </Text>
+            </View>
+          )}
 
           {optionItems.map((item) => (
             <View key={item.key} className="flex-row items-center justify-between py-2">

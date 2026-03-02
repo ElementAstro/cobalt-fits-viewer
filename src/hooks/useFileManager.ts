@@ -30,22 +30,15 @@ import {
   scanDirectoryForSupportedImages,
   getTempExtractDir,
   cleanTempExtractDir,
+  sanitizeFilename,
 } from "../lib/utils/fileManager";
+import { getFreeDiskBytes } from "../lib/utils/diskSpace";
 import { computeQuickHash, findDuplicateOnImport } from "../lib/gallery/duplicateDetector";
 import { classifyWithDetail } from "../lib/gallery/frameClassifier";
 import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
-import {
-  loadScientificFitsFromBuffer,
-  extractMetadata,
-  getImagePixels,
-  getImageDimensions,
-} from "../lib/fits/parser";
 import { fitsToRGBA } from "../lib/converter/formatConverter";
-import {
-  generateAndSaveThumbnail,
-  generateVideoThumbnailToCache,
-  deleteThumbnails,
-} from "../lib/gallery/thumbnailCache";
+import { deleteThumbnails } from "../lib/gallery/thumbnailCache";
+import { saveThumbnailFromRGBA, saveThumbnailFromVideo } from "../lib/gallery/thumbnailWorkflow";
 import { LocationService } from "./useLocation";
 import type { FitsMetadata, TrashedFitsRecord } from "../lib/fits/types";
 import {
@@ -57,7 +50,7 @@ import {
   replaceFilenameExtension,
   toImageSourceFormat,
 } from "../lib/import/fileFormat";
-import { extractRasterMetadata, parseRasterFromBufferAsync } from "../lib/image/rasterParser";
+import { parseImageBuffer } from "../lib/import/imageParsePipeline";
 import { parseHiPSCutoutRequest } from "../lib/import/hipsUrl";
 import { resolveImportSessionId } from "../lib/sessions/sessionLinking";
 import { reconcileSessionsFromLinkedFilesGraph } from "../lib/sessions/sessionReconciliation";
@@ -149,13 +142,7 @@ function isLocalUri(value: string): boolean {
 }
 
 function sanitizeImportFilename(name: string): string {
-  const normalized = name
-    .replace(/[<>:"/\\|?*]/g, "_")
-    .split("")
-    .map((char) => (char.charCodeAt(0) <= 31 ? "_" : char))
-    .join("")
-    .trim();
-  return normalized || `import_${Date.now()}`;
+  return sanitizeFilename(name, `import_${Date.now()}`);
 }
 
 function decodeUriComponentSafe(value: string): string {
@@ -499,23 +486,19 @@ export function useFileManager() {
         const capturedThumbQuality = thumbnailQuality;
         const capturedVideoThumbTimeMs = videoThumbnailTimeMs;
 
-        if (detectedFormat.sourceType === "fits") {
-          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
+        if (detectedFormat.sourceType === "fits" || detectedFormat.sourceType === "raster") {
+          const parsed = await parseImageBuffer({
+            buffer,
             filename: finalName,
+            filepath: importedUri,
+            fileSize: size ?? buffer.byteLength,
+            frameClassificationConfig,
+            allowDecodeFailureMetadata: true,
             detectedFormat,
           });
-          const partialMeta = extractMetadata(
-            fitsObj,
-            {
-              filename: finalName,
-              filepath: importedUri,
-              fileSize: size ?? buffer.byteLength,
-            },
-            frameClassificationConfig,
-          );
 
           fullMeta = {
-            ...partialMeta,
+            ...parsed.metadataBase,
             id: fileId,
             importDate: Date.now(),
             isFavorite: false,
@@ -525,176 +508,90 @@ export function useFileManager() {
             location,
             thumbnailUri: undefined,
             hash,
-            sourceType: "fits",
-            sourceFormat: options?.sourceFormatOverride ?? toImageSourceFormat(detectedFormat),
+            sourceType: parsed.sourceType,
+            sourceFormat: options?.sourceFormatOverride ?? parsed.sourceFormat,
             mediaKind: "image",
+            decodeStatus: parsed.decodeStatus,
+            decodeError: parsed.decodeError,
+            ...(parsed.serInfo ? { serInfo: parsed.serInfo } : {}),
           };
 
           addFile(fullMeta);
 
-          InteractionManager.runAfterInteractions(async () => {
-            try {
-              const dims = getImageDimensions(fitsObj);
-              if (!dims) return;
-              const pixels = await getImagePixels(fitsObj);
-              if (!pixels) return;
-
-              const rgba = fitsToRGBA(pixels, dims.width, dims.height, {
-                stretch: "asinh",
-                colormap: "grayscale",
-                blackPoint: 0,
-                whitePoint: 1,
-                gamma: 1,
-              });
-              const thumbUri = generateAndSaveThumbnail(
-                fileId,
-                rgba,
-                dims.width,
-                dims.height,
-                capturedThumbSize,
-                capturedThumbQuality,
-              );
+          if (
+            parsed.decodeStatus !== "failed" &&
+            parsed.pixels &&
+            parsed.dimensions &&
+            parsed.dimensions.width > 0 &&
+            parsed.dimensions.height > 0
+          ) {
+            const parsedPixels = parsed.pixels;
+            const parsedDimensions = parsed.dimensions;
+            InteractionManager.runAfterInteractions(() => {
               const updates: Partial<FitsMetadata> = {};
-              if (thumbUri) updates.thumbnailUri = thumbUri;
-
               try {
+                if (parsed.sourceType === "fits") {
+                  const rgba = fitsToRGBA(
+                    parsedPixels,
+                    parsedDimensions.width,
+                    parsedDimensions.height,
+                    {
+                      stretch: "asinh",
+                      colormap: "grayscale",
+                      blackPoint: 0,
+                      whitePoint: 1,
+                      gamma: 1,
+                    },
+                  );
+                  const thumbUri = saveThumbnailFromRGBA(
+                    fileId,
+                    rgba,
+                    parsedDimensions.width,
+                    parsedDimensions.height,
+                    {
+                      thumbnailSize: capturedThumbSize,
+                      thumbnailQuality: capturedThumbQuality,
+                    },
+                  );
+                  if (thumbUri) updates.thumbnailUri = thumbUri;
+                } else if (parsed.rgba) {
+                  const rgba = new Uint8ClampedArray(
+                    parsed.rgba.buffer,
+                    parsed.rgba.byteOffset,
+                    parsed.rgba.byteLength,
+                  );
+                  const thumbUri = saveThumbnailFromRGBA(
+                    fileId,
+                    rgba,
+                    parsedDimensions.width,
+                    parsedDimensions.height,
+                    {
+                      thumbnailSize: capturedThumbSize,
+                      thumbnailQuality: capturedThumbQuality,
+                    },
+                  );
+                  if (thumbUri) updates.thumbnailUri = thumbUri;
+                }
+
                 const meta = useFitsStore.getState().getFileById(fileId);
-                if (meta && meta.frameType === "light" && pixels instanceof Float32Array) {
+                if (meta && meta.frameType === "light") {
                   const { evaluateFrameQuality } = require("../lib/stacking/frameQuality");
-                  const quality = evaluateFrameQuality(pixels, dims.width, dims.height);
+                  const quality = evaluateFrameQuality(
+                    parsedPixels,
+                    parsedDimensions.width,
+                    parsedDimensions.height,
+                  );
                   updates.qualityScore = quality.score;
                 }
+
+                if (Object.keys(updates).length > 0) {
+                  useFitsStore.getState().updateFile(fileId, updates);
+                }
               } catch {
-                // Quality evaluation failure is non-critical
+                // Thumbnail generation failure is non-critical
               }
-
-              if (Object.keys(updates).length > 0) {
-                useFitsStore.getState().updateFile(fileId, updates);
-              }
-            } catch {
-              // Thumbnail generation failure is non-critical
-            }
-          });
-        } else if (detectedFormat.sourceType === "raster") {
-          let decoded: Awaited<ReturnType<typeof parseRasterFromBufferAsync>>;
-          try {
-            decoded = await parseRasterFromBufferAsync(buffer, {
-              frameIndex: 0,
-              cacheSize: 3,
-              preferTiffDecoder: true,
-              sourceUri: importedUri,
-              filename: finalName,
-              formatHint: detectedFormat.id,
             });
-          } catch (decodeError) {
-            if (detectedFormat.id !== "tiff") {
-              throw decodeError;
-            }
-            const decodeMessage =
-              decodeError instanceof Error ? decodeError.message : "TIFF decode failed";
-            const partialMeta = extractRasterMetadata(
-              {
-                filename: finalName,
-                filepath: importedUri,
-                fileSize: size ?? buffer.byteLength,
-              },
-              { width: 0, height: 0, depth: 1, bitDepth: 8 },
-              frameClassificationConfig,
-              {
-                decodeStatus: "failed",
-                decodeError: decodeMessage,
-              },
-            );
-
-            fullMeta = {
-              ...partialMeta,
-              id: fileId,
-              importDate: Date.now(),
-              isFavorite: false,
-              tags: [],
-              albumIds: [],
-              sessionId,
-              location,
-              thumbnailUri: undefined,
-              hash,
-              sourceType: "raster",
-              sourceFormat: toImageSourceFormat(detectedFormat),
-              mediaKind: "image",
-            };
-            addFile(fullMeta);
-            return { status: "imported" };
           }
-
-          const partialMeta = extractRasterMetadata(
-            {
-              filename: finalName,
-              filepath: importedUri,
-              fileSize: size ?? buffer.byteLength,
-            },
-            {
-              width: decoded.width,
-              height: decoded.height,
-              depth: decoded.depth,
-              bitDepth: decoded.bitDepth,
-            },
-            frameClassificationConfig,
-            {
-              decodeStatus: decoded.decodeStatus ?? "ready",
-              decodeError: decoded.decodeError,
-            },
-          );
-
-          fullMeta = {
-            ...partialMeta,
-            id: fileId,
-            importDate: Date.now(),
-            isFavorite: false,
-            tags: [],
-            albumIds: [],
-            sessionId,
-            location,
-            thumbnailUri: undefined,
-            hash,
-            sourceType: "raster",
-            sourceFormat: toImageSourceFormat(detectedFormat),
-            mediaKind: "image",
-          };
-
-          addFile(fullMeta);
-
-          const rgba = new Uint8ClampedArray(
-            decoded.rgba.buffer,
-            decoded.rgba.byteOffset,
-            decoded.rgba.byteLength,
-          );
-          InteractionManager.runAfterInteractions(() => {
-            const thumbUri = generateAndSaveThumbnail(
-              fileId,
-              rgba,
-              decoded.width,
-              decoded.height,
-              capturedThumbSize,
-              capturedThumbQuality,
-            );
-
-            const updates: Partial<FitsMetadata> = {};
-            if (thumbUri) updates.thumbnailUri = thumbUri;
-
-            try {
-              const meta = useFitsStore.getState().getFileById(fileId);
-              if (meta && meta.frameType === "light") {
-                const { evaluateFrameQuality } = require("../lib/stacking/frameQuality");
-                const quality = evaluateFrameQuality(decoded.pixels, decoded.width, decoded.height);
-                updates.qualityScore = quality.score;
-              }
-            } catch {
-              // Quality evaluation failure is non-critical
-            }
-
-            if (Object.keys(updates).length > 0) {
-              useFitsStore.getState().updateFile(fileId, updates);
-            }
-          });
         } else if (detectedFormat.sourceType === "video") {
           const classifiedVideoFrame = classifyWithDetail(
             undefined,
@@ -753,11 +650,14 @@ export function useFileManager() {
           addFile(fullMeta);
 
           InteractionManager.runAfterInteractions(async () => {
-            const thumbUri = await generateVideoThumbnailToCache(
+            const thumbUri = await saveThumbnailFromVideo(
               fileId,
               importedUri,
               capturedVideoThumbTimeMs,
-              capturedThumbQuality,
+              {
+                thumbnailQuality: capturedThumbQuality,
+                videoThumbnailTimeMs: capturedVideoThumbTimeMs,
+              },
             );
             if (thumbUri) {
               useFitsStore.getState().updateFile(fileId, { thumbnailUri: thumbUri });
@@ -855,22 +755,39 @@ export function useFileManager() {
       fileEntries: Array<{ uri: string; name: string; size?: number }>,
     ): Promise<ImportResult> => {
       const totalRequested = fileEntries.length;
+
+      const totalRequestedBytes = fileEntries.reduce((sum, e) => sum + (e.size ?? 0), 0);
+      if (totalRequestedBytes > 0) {
+        const free = await getFreeDiskBytes();
+        if (free !== null && free < totalRequestedBytes * 1.2) {
+          return {
+            success: 0,
+            failed: totalRequested,
+            total: totalRequested,
+            skippedDuplicate: 0,
+            skippedUnsupported: 0,
+            failedEntries: [{ name: "batch", reason: "insufficient_disk_space" }],
+          };
+        }
+      }
+
       let processed = 0;
       let success = 0;
       let failed = 0;
       let skippedDuplicate = 0;
       let skippedUnsupported = 0;
       const failedEntries: Array<{ name: string; reason: string }> = [];
+      let lastProgressTs = 0;
+      const PROGRESS_THROTTLE_MS = 300;
 
-      for (let i = 0; i < totalRequested; i++) {
-        if (cancelRef.current) break;
-        processed++;
-
-        const entry = fileEntries[i];
+      const emitProgress = (currentFile: string, force: boolean) => {
+        const now = Date.now();
+        if (!force && now - lastProgressTs < PROGRESS_THROTTLE_MS) return;
+        lastProgressTs = now;
         setImportProgress({
           phase: "importing",
           percent: Math.round((processed / totalRequested) * 100),
-          currentFile: entry.name,
+          currentFile,
           current: processed,
           total: totalRequested,
           success,
@@ -878,6 +795,14 @@ export function useFileManager() {
           skippedDuplicate,
           skippedUnsupported,
         });
+      };
+
+      for (let i = 0; i < totalRequested; i++) {
+        if (cancelRef.current) break;
+        processed++;
+
+        const entry = fileEntries[i];
+        emitProgress(entry.name, i === 0);
 
         const outcome = await processAndImportFile(entry.uri, entry.name, entry.size);
         if (outcome.status === "imported") {
@@ -894,17 +819,7 @@ export function useFileManager() {
           });
         }
 
-        setImportProgress({
-          phase: "importing",
-          percent: Math.round((processed / totalRequested) * 100),
-          currentFile: entry.name,
-          current: processed,
-          total: totalRequested,
-          success,
-          failed,
-          skippedDuplicate,
-          skippedUnsupported,
-        });
+        emitProgress(entry.name, i === totalRequested - 1);
       }
 
       return {

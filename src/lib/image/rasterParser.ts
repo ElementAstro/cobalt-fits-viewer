@@ -152,6 +152,25 @@ interface ExpoFileSystemModuleLike {
   Paths: { cache: string };
 }
 
+interface ImageJsRawImageLike {
+  data: Uint8Array | Uint8ClampedArray | Uint16Array;
+  channels: number;
+  bitDepth: number;
+}
+
+interface ImageJsImageLike {
+  width: number;
+  height: number;
+  channels: number;
+  maxValue?: number;
+  getRawImage?: () => ImageJsRawImageLike;
+  getValueByIndex?: (index: number, channel: number) => number;
+}
+
+interface ImageJsModuleLike {
+  decode: (input: ArrayBufferView) => ImageJsImageLike;
+}
+
 function clampToByte(value: number): number {
   if (!isFinite(value)) return 0;
   if (value <= 0) return 0;
@@ -191,6 +210,106 @@ function rgbaToChannels(rgba: Uint8Array): { r: Float32Array; g: Float32Array; b
     b[p] = rgba[i + 2] / 255;
   }
   return { r, g, b };
+}
+
+function normalizeToByte(value: number, maxValue: number): number {
+  if (!isFinite(value)) return 0;
+  if (maxValue > 1) {
+    return clampToByte((value / maxValue) * 255);
+  }
+  if (value >= 0 && value <= 1) {
+    return clampToByte(value * 255);
+  }
+  return clampToByte(value);
+}
+
+function convertImageJsToRgba(image: ImageJsImageLike): Uint8Array {
+  const width = Number(image.width) || 0;
+  const height = Number(image.height) || 0;
+  if (width <= 0 || height <= 0) {
+    throw new Error("Invalid image-js dimensions");
+  }
+
+  const channels = Number(image.channels) || 0;
+  if (channels < 1) {
+    throw new Error("Invalid image-js channel layout");
+  }
+
+  const totalPixels = width * height;
+  const rgba = new Uint8Array(totalPixels * 4);
+  const maxValue = typeof image.maxValue === "number" && image.maxValue > 0 ? image.maxValue : 255;
+
+  const rawImage = image.getRawImage?.();
+  const rawData = rawImage?.data;
+  const rawChannels = rawImage?.channels ?? channels;
+  if (rawData && rawChannels >= 1) {
+    for (let i = 0; i < totalPixels; i++) {
+      const source = i * rawChannels;
+      const target = i * 4;
+      const c0 = normalizeToByte(rawData[source] ?? 0, maxValue);
+      const c1 = normalizeToByte(rawData[source + 1] ?? c0, maxValue);
+      const c2 = normalizeToByte(rawData[source + 2] ?? c0, maxValue);
+      const alpha =
+        rawChannels >= 2 && (rawChannels === 2 || rawChannels >= 4)
+          ? normalizeToByte(rawData[source + (rawChannels === 2 ? 1 : 3)] ?? maxValue, maxValue)
+          : 255;
+
+      rgba[target] = c0;
+      rgba[target + 1] = rawChannels === 1 ? c0 : c1;
+      rgba[target + 2] = rawChannels === 1 ? c0 : rawChannels === 2 ? c0 : c2;
+      rgba[target + 3] = alpha;
+    }
+    return rgba;
+  }
+
+  if (typeof image.getValueByIndex !== "function") {
+    throw new Error("image-js decode result has no readable pixel API");
+  }
+
+  for (let i = 0; i < totalPixels; i++) {
+    const target = i * 4;
+    const c0 = normalizeToByte(image.getValueByIndex(i, 0), maxValue);
+    const c1 = normalizeToByte(image.getValueByIndex(i, Math.min(1, channels - 1)), maxValue);
+    const c2 = normalizeToByte(image.getValueByIndex(i, Math.min(2, channels - 1)), maxValue);
+    const alpha =
+      channels >= 2 && (channels === 2 || channels >= 4)
+        ? normalizeToByte(image.getValueByIndex(i, channels === 2 ? 1 : 3), maxValue)
+        : 255;
+
+    rgba[target] = c0;
+    rgba[target + 1] = channels === 1 ? c0 : c1;
+    rgba[target + 2] = channels === 1 ? c0 : channels === 2 ? c0 : c2;
+    rgba[target + 3] = alpha;
+  }
+
+  return rgba;
+}
+
+async function decodeViaImageJs(
+  buffer: ArrayBuffer,
+): Promise<{ width: number; height: number; rgba: Uint8Array }> {
+  // Use require() for compatibility with Metro bundling and Jest mocks while keeping lazy loading.
+  const moduleUnknown: unknown = require("image-js");
+  const moduleObject = moduleUnknown as { decode?: unknown; default?: unknown };
+  const maybeDefault = moduleObject.default as { decode?: unknown } | undefined;
+  const decodeFn =
+    typeof moduleObject.decode === "function"
+      ? (moduleObject.decode as ImageJsModuleLike["decode"])
+      : typeof maybeDefault?.decode === "function"
+        ? (maybeDefault.decode as ImageJsModuleLike["decode"])
+        : null;
+
+  if (!decodeFn) {
+    throw new Error("image-js decode API is unavailable");
+  }
+
+  const image = decodeFn(new Uint8Array(buffer));
+  const rgba = convertImageJsToRgba(image);
+  return {
+    width: image.width,
+    height: image.height,
+    rgba,
+  };
 }
 
 export function parseRasterFromBuffer(buffer: ArrayBuffer): RasterDecodeResult {
@@ -477,6 +596,25 @@ export async function parseRasterFromBufferAsync(
           mimeType: options?.mimeType ?? undefined,
           payload: buffer,
         })?.id;
+
+      try {
+        const decoded = await decodeViaImageJs(buffer);
+        return {
+          width: decoded.width,
+          height: decoded.height,
+          depth: 1,
+          isMultiFrame: false,
+          frameIndex: 0,
+          bitDepth: 8,
+          rgba: decoded.rgba,
+          pixels: rgbaToLuma(decoded.rgba),
+          channels: rgbaToChannels(decoded.rgba),
+          headers: [],
+          decodeStatus: "ready",
+        };
+      } catch {
+        // ignore image-js fallback errors and continue with platform-specific fallbacks.
+      }
 
       // Web fallback: use browser decoders first, then libheif-js for HEIC/AVIF containers.
       if (Platform.OS === "web") {

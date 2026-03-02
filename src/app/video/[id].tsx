@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useVideoPlayerState } from "../../hooks/useVideoPlayerState";
-import { Alert, ScrollView, StatusBar, Text, View } from "react-native";
+import { ScrollView, StatusBar, Text, View } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Button, Tabs, useThemeColor } from "heroui-native";
-import { isPictureInPictureSupported, useVideoPlayer } from "expo-video";
+import { Button, Tabs, useThemeColor, useToast } from "heroui-native";
+import { createVideoPlayer, isPictureInPictureSupported, useVideoPlayer } from "expo-video";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { shareFile, type MediaExportFormat } from "../../lib/utils/imageExport";
@@ -28,9 +28,10 @@ import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useVideoKeyboard } from "../../hooks/useVideoKeyboard";
 import * as VideoThumbnails from "expo-video-thumbnails";
-import { copyThumbnailToCache } from "../../lib/gallery/thumbnailCache";
+import { saveThumbnailFromExternalUri } from "../../lib/gallery/thumbnailWorkflow";
 
 function toMediaExportFormat(
   format?: string,
@@ -69,6 +70,8 @@ export default function VideoDetailScreen() {
   const { isLandscape, sidePanelWidth } = useResponsiveLayout();
   const insets = useSafeAreaInsets();
   const haptics = useHapticFeedback();
+  const { lockOrientation, unlockOrientation } = useScreenOrientation();
+  const { toast } = useToast();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
   const allFiles = useFitsStore((s) => s.files);
@@ -129,6 +132,29 @@ export default function VideoDetailScreen() {
   }, [allFiles, currentFileIndex]);
 
   useEffect(() => {
+    const adjacentIds = [prevVideoId, nextVideoId].filter(Boolean) as string[];
+    if (adjacentIds.length === 0) return;
+    const preloadPlayers = adjacentIds.map((adjId) => {
+      const adjFile = allFiles.find((f) => f.id === adjId);
+      if (!adjFile?.filepath) return null;
+      try {
+        return createVideoPlayer({ uri: adjFile.filepath });
+      } catch {
+        return null;
+      }
+    });
+    return () => {
+      for (const p of preloadPlayers) {
+        try {
+          p?.release();
+        } catch {
+          // noop
+        }
+      }
+    };
+  }, [prevVideoId, nextVideoId, allFiles]);
+
+  useEffect(() => {
     if (!id || !file) return;
     if (!isMedia) {
       router.replace(`/viewer/${id}`);
@@ -166,6 +192,7 @@ export default function VideoDetailScreen() {
 
   const {
     isPlayerReady,
+    isBuffering,
     playerStatus,
     playerError,
     durationSec,
@@ -188,6 +215,7 @@ export default function VideoDetailScreen() {
     handleSelectAudioTrack,
     handleSelectSubtitleTrack,
     handleRetryPlayback,
+    handleSetRate,
   } = useVideoPlayerState(player, haptics, {
     abLoopA,
     abLoopB,
@@ -207,6 +235,16 @@ export default function VideoDetailScreen() {
       player.currentTime = file.lastPlaybackPositionMs / 1000;
     }
   }, [file?.lastPlaybackPositionMs, isPlayerReady, player, videoResumePlayback]);
+
+  useEffect(() => {
+    if (!isPlayerReady || !file) return;
+    try {
+      player.showNowPlayingNotification = true;
+      player.staysActiveInBackground = true;
+    } catch {
+      // best effort — not supported on all platforms
+    }
+  }, [isPlayerReady, file, player]);
 
   const currentTimeSecRef = useRef(0);
   useEffect(() => {
@@ -247,23 +285,39 @@ export default function VideoDetailScreen() {
   }, [haptics]);
 
   const handleFullscreen = useCallback(() => {
-    Alert.alert(t("settings.videoFullscreenError"));
-  }, [t]);
+    toast.show({ variant: "warning", label: t("settings.videoFullscreenError") });
+  }, [t, toast]);
 
   const handlePip = useCallback(() => {
-    Alert.alert(t("settings.videoPipError"));
-  }, [t]);
+    toast.show({ variant: "warning", label: t("settings.videoPipError") });
+  }, [t, toast]);
+
+  const handleEnterFullscreen = useCallback(async () => {
+    try {
+      await lockOrientation("landscape");
+    } catch {
+      // best effort
+    }
+  }, [lockOrientation]);
+
+  const handleExitFullscreen = useCallback(async () => {
+    try {
+      await unlockOrientation();
+    } catch {
+      // best effort
+    }
+  }, [unlockOrientation]);
 
   const handleSaveToLibrary = useCallback(async () => {
     if (!file) return;
     const intent = isVideo ? "video" : "unknown";
     const uri = await saveToDevice(file.filepath, intent);
     if (uri) {
-      Alert.alert(t("settings.videoSavedToLibrary"));
+      toast.show({ variant: "success", label: t("settings.videoSavedToLibrary") });
       return;
     }
-    Alert.alert(t("settings.videoSaveError"));
-  }, [file, isVideo, saveToDevice, t]);
+    toast.show({ variant: "danger", label: t("settings.videoSaveError") });
+  }, [file, isVideo, saveToDevice, t, toast]);
 
   const handleShare = useCallback(async () => {
     if (!file) return;
@@ -276,9 +330,9 @@ export default function VideoDetailScreen() {
         filename: file.filename,
       });
     } catch {
-      Alert.alert(t("settings.videoShareError"));
+      toast.show({ variant: "danger", label: t("settings.videoShareError") });
     }
-  }, [file, isAudio, isVideo, t]);
+  }, [file, isAudio, isVideo, t, toast]);
 
   const handleOpenOutput = useCallback(
     (fileId: string) => {
@@ -297,25 +351,28 @@ export default function VideoDetailScreen() {
         time: timeMs,
         quality: 0.8,
       });
-      const newUri = copyThumbnailToCache(file.id, thumb.uri);
+      const newUri = saveThumbnailFromExternalUri(file.id, thumb.uri);
       updateFile(file.id, {
         thumbnailAtMs: timeMs,
         ...(newUri ? { thumbnailUri: newUri } : {}),
       });
-      Alert.alert(t("settings.videoThumbnailUpdated"));
+      toast.show({ variant: "success", label: t("settings.videoThumbnailUpdated") });
     } catch {
-      Alert.alert(t("settings.videoThumbnailError"));
+      toast.show({ variant: "danger", label: t("settings.videoThumbnailError") });
     }
-  }, [file, isVideo, currentTimeSec, updateFile, t]);
+  }, [file, isVideo, currentTimeSec, updateFile, t, toast]);
 
   useVideoKeyboard({
     onPlayPause: handlePlayPause,
     onSeekBy: handleSeekBy,
+    onSeekTo: handleSeekTo,
     onToggleMute: handleToggleMute,
     onToggleLoop: handleToggleLoop,
+    onCycleRate: handleCycleRate,
     onVolumeChange: handleVolumeChange,
     onFullscreen: handleFullscreen,
     volume,
+    durationSec,
   });
 
   if (!file) {
@@ -376,6 +433,7 @@ export default function VideoDetailScreen() {
             <VideoPlayerCard
               player={player}
               isPlayerReady={isPlayerReady}
+              isBuffering={isBuffering}
               playerStatus={playerStatus}
               playerError={playerError}
               durationSec={durationSec}
@@ -387,6 +445,8 @@ export default function VideoDetailScreen() {
               isVideo={!!isVideo}
               isAudio={!!isAudio}
               isLandscape={isLandscape}
+              videoWidth={file.videoWidth}
+              videoHeight={file.videoHeight}
               fileDurationMs={file.durationMs}
               pipSupported={pipSupported}
               abLoopA={abLoopA}
@@ -403,6 +463,9 @@ export default function VideoDetailScreen() {
               onSetAbLoopA={handleSetAbLoopA}
               onSetAbLoopB={handleSetAbLoopB}
               onClearAbLoop={handleClearAbLoop}
+              onSetRate={handleSetRate}
+              onEnterFullscreen={handleEnterFullscreen}
+              onExitFullscreen={handleExitFullscreen}
             />
           </ScrollView>
           <ScrollView
@@ -471,6 +534,7 @@ export default function VideoDetailScreen() {
           <VideoPlayerCard
             player={player}
             isPlayerReady={isPlayerReady}
+            isBuffering={isBuffering}
             playerStatus={playerStatus}
             playerError={playerError}
             durationSec={durationSec}
@@ -482,6 +546,8 @@ export default function VideoDetailScreen() {
             isVideo={!!isVideo}
             isAudio={!!isAudio}
             isLandscape={isLandscape}
+            videoWidth={file.videoWidth}
+            videoHeight={file.videoHeight}
             fileDurationMs={file.durationMs}
             pipSupported={pipSupported}
             abLoopA={abLoopA}
@@ -498,6 +564,9 @@ export default function VideoDetailScreen() {
             onSetAbLoopA={handleSetAbLoopA}
             onSetAbLoopB={handleSetAbLoopB}
             onClearAbLoop={handleClearAbLoop}
+            onSetRate={handleSetRate}
+            onEnterFullscreen={handleEnterFullscreen}
+            onExitFullscreen={handleExitFullscreen}
           />
           <VideoControls
             isLoop={player.loop}
@@ -559,12 +628,15 @@ export default function VideoDetailScreen() {
         onSubmit={async (request) => {
           const spaceError = await checkDiskSpaceForTask(request);
           if (spaceError) {
-            Alert.alert(t("settings.videoInsufficientDiskSpace"));
+            toast.show({ variant: "danger", label: t("settings.videoInsufficientDiskSpace") });
             return;
           }
           const result = enqueueProcessingTask(request);
           if (!result.taskId) {
-            Alert.alert(result.errorMessage ?? t("settings.videoEngineUnavailable"));
+            toast.show({
+              variant: "danger",
+              label: result.errorMessage ?? t("settings.videoEngineUnavailable"),
+            });
             return;
           }
           setShowQueueSheet(true);

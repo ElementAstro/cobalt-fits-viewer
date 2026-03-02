@@ -7,10 +7,7 @@ import {
 } from "../../fits/types";
 
 const mockReadFileAsArrayBuffer = jest.fn();
-const mockDetectPreferredSupportedImageFormat = jest.fn();
-const mockLoadScientificFitsFromBuffer = jest.fn();
-const mockGetImageDimensions = jest.fn();
-const mockGetImagePixels = jest.fn();
+const mockParseImageBuffer = jest.fn();
 const mockFitsToRGBA = jest.fn();
 const mockEncodeExportRequest = jest.fn();
 const mockWrittenFiles = new Map<string, Uint8Array>();
@@ -19,10 +16,11 @@ jest.mock("../../utils/fileManager", () => ({
   readFileAsArrayBuffer: (...args: any[]) => (mockReadFileAsArrayBuffer as any)(...args),
 }));
 
+jest.mock("../../import/imageParsePipeline", () => ({
+  parseImageBuffer: (...args: any[]) => (mockParseImageBuffer as any)(...args),
+}));
+
 jest.mock("../../import/fileFormat", () => ({
-  detectPreferredSupportedImageFormat: (...args: any[]) =>
-    (mockDetectPreferredSupportedImageFormat as any)(...args),
-  toImageSourceFormat: () => "fits",
   splitFilenameExtension: (name: string) => {
     const lastDot = name.lastIndexOf(".");
     return {
@@ -30,23 +28,6 @@ jest.mock("../../import/fileFormat", () => ({
       extension: lastDot > 0 ? name.slice(lastDot) : "",
     };
   },
-}));
-
-jest.mock("../../fits/parser", () => ({
-  loadScientificFitsFromBuffer: (...args: any[]) =>
-    (mockLoadScientificFitsFromBuffer as any)(...args),
-  getImageDimensions: (...args: any[]) => (mockGetImageDimensions as any)(...args),
-  getImagePixels: (...args: any[]) => (mockGetImagePixels as any)(...args),
-  isRgbCube: () => ({ isRgb: false, width: 0, height: 0 }),
-  getImageChannels: jest.fn(),
-  getHeaderKeywords: jest.fn(() => []),
-  getCommentsAndHistory: jest.fn(() => ({ comments: [], history: [] })),
-  extractMetadata: jest.fn(() => ({ bitpix: 16 })),
-}));
-
-jest.mock("../../image/rasterParser", () => ({
-  parseRasterFromBufferAsync: jest.fn(),
-  extractRasterMetadata: jest.fn(() => ({ frameType: "unknown" })),
 }));
 
 jest.mock("../formatConverter", () => ({
@@ -127,14 +108,23 @@ describe("batchProcessor", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockWrittenFiles.clear();
-    mockDetectPreferredSupportedImageFormat.mockReturnValue({
-      id: "fits",
-      sourceType: "fits",
-    });
     mockReadFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    mockLoadScientificFitsFromBuffer.mockResolvedValue({});
-    mockGetImageDimensions.mockReturnValue({ width: 2, height: 1, depth: 1, isDataCube: false });
-    mockGetImagePixels.mockResolvedValue(new Float32Array([0.1, 0.2]));
+    mockParseImageBuffer.mockResolvedValue({
+      detectedFormat: { id: "fits", sourceType: "fits" },
+      sourceType: "fits",
+      sourceFormat: "fits",
+      fits: { fits: true },
+      rasterFrameProvider: null,
+      pixels: new Float32Array([0.1, 0.2]),
+      rgbChannels: null,
+      dimensions: { width: 2, height: 1, depth: 1, isDataCube: false },
+      headers: [{ key: "SIMPLE", value: true }],
+      comments: [],
+      history: [],
+      metadataBase: { bitpix: 16 },
+      decodeStatus: "ready",
+      decodeError: undefined,
+    });
     mockFitsToRGBA.mockReturnValue(new Uint8ClampedArray([1, 2, 3, 255, 4, 5, 6, 255]));
     mockEncodeExportRequest.mockResolvedValue({
       bytes: new Uint8Array([9, 8, 7]),
@@ -176,10 +166,7 @@ describe("batchProcessor", () => {
       onProgress,
     );
 
-    expect(onProgress).toHaveBeenCalledWith(
-      "task-1",
-      expect.objectContaining({ status: "running" }),
-    );
+    expect(mockParseImageBuffer).toHaveBeenCalled();
     expect(mockFitsToRGBA).toHaveBeenCalledWith(
       expect.any(Float32Array),
       2,
@@ -188,12 +175,12 @@ describe("batchProcessor", () => {
         profile: "legacy",
       }),
     );
-    expect(mockEncodeExportRequest).toHaveBeenCalled();
     const request = mockEncodeExportRequest.mock.calls[0]?.[0];
-    expect(request?.renderOptions).toEqual(
+    expect(request?.source).toEqual(
       expect.objectContaining({
-        includeWatermark: true,
-        watermarkText: "Test Watermark",
+        sourceType: "fits",
+        sourceFormat: "fits",
+        metadata: expect.objectContaining({ bitpix: 16 }),
       }),
     );
     expect(mockWrittenFiles.get("/exports/m42.jpg")).toEqual(new Uint8Array([9, 8, 7]));
@@ -204,6 +191,43 @@ describe("batchProcessor", () => {
     expect(final.completed).toBe(1);
     expect(final.failed).toBe(0);
     expect(final.skipped).toBe(0);
+  });
+
+  it("encodes raster parse result without fits stretch conversion", async () => {
+    mockParseImageBuffer.mockResolvedValueOnce({
+      detectedFormat: { id: "png", sourceType: "raster" },
+      sourceType: "raster",
+      sourceFormat: "png",
+      fits: null,
+      rasterFrameProvider: null,
+      pixels: new Float32Array([0, 1, 2, 3]),
+      rgbChannels: null,
+      dimensions: { width: 2, height: 2, depth: 1, isDataCube: false },
+      headers: [],
+      comments: [],
+      history: [],
+      metadataBase: { frameType: "light" },
+      decodeStatus: "ready",
+      decodeError: undefined,
+      rgba: new Uint8Array([255, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 255, 0, 0, 0, 255]),
+    });
+    const onProgress = jest.fn();
+
+    await executeBatchConvert(
+      "task-raster",
+      [{ id: "r1", filepath: "/fits/stack.png", filename: "stack.png", sourceType: "raster" }],
+      defaultOptions,
+      onProgress,
+    );
+
+    expect(mockFitsToRGBA).not.toHaveBeenCalled();
+    const request = mockEncodeExportRequest.mock.calls[0]?.[0];
+    expect(request?.source).toEqual(
+      expect.objectContaining({
+        sourceType: "raster",
+        sourceFormat: "png",
+      }),
+    );
   });
 
   it("marks non-image file as skipped (not failed)", async () => {
@@ -227,10 +251,8 @@ describe("batchProcessor", () => {
 
   it("separates failed and skipped counts", async () => {
     const onProgress = jest.fn();
-    mockDetectPreferredSupportedImageFormat
-      .mockReturnValueOnce({ id: "fits", sourceType: "fits" })
-      .mockReturnValueOnce(null);
     mockEncodeExportRequest.mockRejectedValueOnce(new Error("encode failed"));
+    mockParseImageBuffer.mockRejectedValueOnce(new Error("Unsupported image format"));
 
     await executeBatchConvert(
       "task-3",

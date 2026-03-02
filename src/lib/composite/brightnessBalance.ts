@@ -1,12 +1,4 @@
-function computeMedian(values: number[]): number {
-  if (values.length === 0) return 0;
-  values.sort((a, b) => a - b);
-  const mid = Math.floor(values.length / 2);
-  if (values.length % 2 === 0) {
-    return (values[mid - 1] + values[mid]) * 0.5;
-  }
-  return values[mid];
-}
+import { robustMedian as computeMedian } from "../stacking/robustStats";
 
 export interface BrightnessBalanceResult {
   gain: number;

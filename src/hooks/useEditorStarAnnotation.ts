@@ -180,16 +180,18 @@ export function useEditorStarAnnotation({
   const [starDetectionStage, setStarDetectionStage] = useState("idle");
   const [pendingAnchorIndex, setPendingAnchorIndex] = useState<1 | 2 | 3 | null>(null);
 
-  // Memoized counts
-  const detectedStarCount = useMemo(
-    () => starPoints.filter((p) => p.source === "detected").length,
-    [starPoints],
-  );
-  const manualStarCount = useMemo(
-    () => starPoints.filter((p) => p.source === "manual").length,
-    [starPoints],
-  );
-  const enabledStarCount = useMemo(() => starPoints.filter((p) => p.enabled).length, [starPoints]);
+  // Memoized counts (single traversal)
+  const { detectedStarCount, manualStarCount, enabledStarCount } = useMemo(() => {
+    let detected = 0;
+    let manual = 0;
+    let enabled = 0;
+    for (const p of starPoints) {
+      if (p.source === "detected") detected++;
+      else if (p.source === "manual") manual++;
+      if (p.enabled) enabled++;
+    }
+    return { detectedStarCount: detected, manualStarCount: manual, enabledStarCount: enabled };
+  }, [starPoints]);
 
   // Helpers
   const updateDetectedStarsFromPoints = useCallback((points: StarAnnotationPoint[]) => {

@@ -196,6 +196,57 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
         </View>
       );
 
+    case "ghs":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramD")}
+            value={params.ghsD}
+            min={0}
+            max={10}
+            step={0.1}
+            defaultValue={1}
+            onValueChange={params.setGhsD}
+          />
+          <SimpleSlider
+            label={t("editor.paramB")}
+            value={params.ghsB}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultValue={0.25}
+            onValueChange={params.setGhsB}
+          />
+          <SimpleSlider
+            label={t("editor.paramSP")}
+            value={params.ghsSP}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultValue={0}
+            onValueChange={params.setGhsSP}
+          />
+          <SimpleSlider
+            label={t("editor.paramHP")}
+            value={params.ghsHP}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultValue={0}
+            onValueChange={params.setGhsHP}
+          />
+          <SimpleSlider
+            label={t("editor.paramLP")}
+            value={params.ghsLP}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultValue={0}
+            onValueChange={params.setGhsLP}
+          />
+        </View>
+      );
+
     default:
       return null;
   }

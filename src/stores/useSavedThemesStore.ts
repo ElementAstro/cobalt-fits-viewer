@@ -5,7 +5,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { ThemeCustomColors } from "../lib/theme/presets";
 
 export const MAX_SAVED_THEMES = 10;
@@ -72,7 +72,7 @@ export const useSavedThemesStore = create<SavedThemesState>()(
     }),
     {
       name: "saved-themes-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
     },
   ),
 );

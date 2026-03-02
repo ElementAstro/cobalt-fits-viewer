@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import { siteKey } from "../lib/map/utils";
 
 export interface FavoriteSite {
@@ -56,7 +56,7 @@ export const useFavoriteSitesStore = create<FavoriteSitesStoreState>()(
     }),
     {
       name: "favorite-sites-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({ sites: state.sites }),
     },
   ),

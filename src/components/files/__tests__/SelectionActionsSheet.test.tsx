@@ -12,6 +12,7 @@ const defaultProps = {
   visible: true,
   onOpenChange: jest.fn(),
   selectedCount: 2,
+  selectedImageCount: 2,
   displayCount: 5,
   isLandscape: false,
   onSelectAllVisible: jest.fn(),
@@ -23,6 +24,7 @@ const defaultProps = {
   onGroupSheet: jest.fn(),
   onBatchExport: jest.fn(),
   onBatchConvert: jest.fn(),
+  onCompare: jest.fn(),
   onStacking: jest.fn(),
 };
 
@@ -55,6 +57,7 @@ describe("SelectionActionsSheet", () => {
     expect(screen.getByText("files.fileGroup")).toBeTruthy();
     expect(screen.getByText("files.export")).toBeTruthy();
     expect(screen.getByText("files.batchConvert")).toBeTruthy();
+    expect(screen.getByText("gallery.compare")).toBeTruthy();
     expect(screen.getByText("files.stacking")).toBeTruthy();
   });
 
@@ -123,6 +126,13 @@ describe("SelectionActionsSheet", () => {
     expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it("calls onCompare and closes sheet when compare is pressed", () => {
+    render(<SelectionActionsSheet {...defaultProps} />);
+    fireEvent.press(screen.getByText("gallery.compare"));
+    expect(defaultProps.onCompare).toHaveBeenCalled();
+    expect(defaultProps.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it("calls onStacking and closes sheet when stacking is pressed", () => {
     render(<SelectionActionsSheet {...defaultProps} />);
     fireEvent.press(screen.getByText("files.stacking"));
@@ -134,6 +144,11 @@ describe("SelectionActionsSheet", () => {
     render(<SelectionActionsSheet {...defaultProps} selectedCount={1} />);
     // Stacking renders but in disabled state
     expect(screen.getByText("files.stacking")).toBeTruthy();
+  });
+
+  it("renders compare as disabled when selectedImageCount < 2", () => {
+    render(<SelectionActionsSheet {...defaultProps} selectedImageCount={1} />);
+    expect(screen.getByText("gallery.compare")).toBeTruthy();
   });
 
   it("renders action items as disabled when selectedCount is 0", () => {

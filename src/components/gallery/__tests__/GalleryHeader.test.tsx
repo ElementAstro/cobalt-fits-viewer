@@ -90,6 +90,7 @@ const defaultProps = {
   isLandscape: false,
   isSelectionMode: false,
   selectedCount: 0,
+  selectedImageCount: 0,
   allDisplaySelected: false,
   onViewModeChange: jest.fn(),
   onSearchChange: jest.fn(),

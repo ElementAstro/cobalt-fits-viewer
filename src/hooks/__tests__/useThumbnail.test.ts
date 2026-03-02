@@ -6,8 +6,8 @@ const mockHasThumbnail = jest.fn();
 const mockGetThumbnailPath = jest.fn();
 const mockClearThumbnailCache = jest.fn();
 const mockGetThumbnailCacheSize = jest.fn();
-const mockGenerateAndSaveThumbnail = jest.fn();
-const mockGenerateVideoThumbnailToCache = jest.fn();
+const mockSaveThumbnailFromRGBA = jest.fn();
+const mockSaveThumbnailFromVideo = jest.fn();
 const mockRegenerateFileThumbnail = jest.fn();
 
 jest.mock("../../lib/gallery/thumbnailCache", () => ({
@@ -15,8 +15,11 @@ jest.mock("../../lib/gallery/thumbnailCache", () => ({
   getThumbnailPath: (...args: unknown[]) => mockGetThumbnailPath(...args),
   clearThumbnailCache: (...args: unknown[]) => mockClearThumbnailCache(...args),
   getThumbnailCacheSize: (...args: unknown[]) => mockGetThumbnailCacheSize(...args),
-  generateAndSaveThumbnail: (...args: unknown[]) => mockGenerateAndSaveThumbnail(...args),
-  generateVideoThumbnailToCache: (...args: unknown[]) => mockGenerateVideoThumbnailToCache(...args),
+}));
+
+jest.mock("../../lib/gallery/thumbnailWorkflow", () => ({
+  saveThumbnailFromRGBA: (...args: unknown[]) => mockSaveThumbnailFromRGBA(...args),
+  saveThumbnailFromVideo: (...args: unknown[]) => mockSaveThumbnailFromVideo(...args),
 }));
 
 jest.mock("../../lib/gallery/thumbnailGenerator", () => ({
@@ -53,12 +56,14 @@ describe("useThumbnail", () => {
       selector({
         thumbnailSize: 256,
         thumbnailQuality: 80,
+        thumbnailCacheMaxSizeMB: 200,
         videoThumbnailTimeMs: 1000,
       }),
     );
     mockGetThumbnailPath.mockReturnValue("file:///thumb/f1.jpg");
     mockGetThumbnailCacheSize.mockReturnValue(1024);
-    mockGenerateAndSaveThumbnail.mockImplementation((id: string) => `file:///thumb/${id}.jpg`);
+    mockSaveThumbnailFromRGBA.mockImplementation((id: string) => `file:///thumb/${id}.jpg`);
+    mockSaveThumbnailFromVideo.mockImplementation((id: string) => `file:///thumb/${id}.jpg`);
     mockRegenerateFileThumbnail.mockImplementation((file: FitsMetadata) =>
       Promise.resolve({ fileId: file.id, uri: `file:///thumb/${file.id}.jpg` }),
     );

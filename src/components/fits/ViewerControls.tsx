@@ -316,8 +316,8 @@ export const ViewerControls = memo(function ViewerControls({
                       key={hdu.index}
                       size="sm"
                       variant={currentHDU === hdu.index ? "primary" : "secondary"}
-                      disabled={!selectable}
-                      onPress={() => selectable && onHDUChange(hdu.index)}
+                      onPress={selectable ? () => onHDUChange(hdu.index) : undefined}
+                      style={!selectable ? { opacity: 0.5 } : undefined}
                     >
                       <Chip.Label className="text-[9px]">
                         #{hdu.index} {hdu.type ?? "Unknown"}
@@ -478,8 +478,8 @@ function FrameNavigation({ currentFrame, totalFrames, onFrameChange }: FrameNavi
       <Button
         size="sm"
         variant="outline"
-        isDisabled={currentFrame <= 0 || isPlaying}
         onPress={() => onFrameChange(currentFrame - 1)}
+        isDisabled={currentFrame <= 0 || isPlaying}
       >
         <Ionicons name="chevron-back" size={12} className="text-muted" />
       </Button>
@@ -489,8 +489,8 @@ function FrameNavigation({ currentFrame, totalFrames, onFrameChange }: FrameNavi
       <Button
         size="sm"
         variant="outline"
-        isDisabled={currentFrame >= totalFrames - 1 || isPlaying}
         onPress={() => onFrameChange(currentFrame + 1)}
+        isDisabled={currentFrame >= totalFrames - 1 || isPlaying}
       >
         <Ionicons name="chevron-forward" size={12} className="text-muted" />
       </Button>

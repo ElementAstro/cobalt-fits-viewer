@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { Uniwind } from "uniwind";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import { setI18nLocale } from "../i18n";
 import type {
   StretchType,
@@ -28,6 +28,7 @@ import {
   STYLE_PRESETS,
   THEME_COLOR_MODES,
   applyThemeVariables,
+  expandLayoutVariables,
   getThemeVariables,
   normalizeHexColor,
   type AccentColorKey,
@@ -444,7 +445,6 @@ function syncThemeToRuntime(
   const radiusValue = RADIUS_PRESETS[radiusPreset]?.value ?? "0.5rem";
   const bwValue = BORDER_WIDTH_PRESETS[extras.borderWidthPreset ?? "thin"]?.value ?? "1px";
   const fbwValue = BORDER_WIDTH_PRESETS[extras.fieldBorderWidthPreset ?? "none"]?.value ?? "0px";
-  const frValue = `calc(${radiusValue} * 1.5)`;
 
   // NOTE: --opacity-disabled is intentionally NOT overridden here.
   // Uniwind.updateCSSVariables passes string values ("0.5") directly to
@@ -452,14 +452,9 @@ function syncThemeToRuntime(
   // crashes Android Fabric ("java.lang.String cannot be cast to java.lang.Double").
   // HeroUI's CSS-defined --opacity-disabled: 0.5 (in variables.css) works
   // because Uniwind's CSS parser correctly treats it as a numeric literal.
-  const sharedVars: Record<string, string> = {
-    "--radius": radiusValue,
-    "--border-width": bwValue,
-    "--field-border-width": fbwValue,
-    "--field-radius": frValue,
-  };
-  Uniwind.updateCSSVariables("light", sharedVars);
-  Uniwind.updateCSSVariables("dark", sharedVars);
+  const layoutVars = expandLayoutVariables(radiusValue, bwValue, fbwValue);
+  Uniwind.updateCSSVariables("light", layoutVars);
+  Uniwind.updateCSSVariables("dark", layoutVars);
 
   const fontVars = getFontCSSVariables(fontFamily);
   if (Object.keys(fontVars).length > 0) {
@@ -1700,7 +1695,7 @@ export const useSettingsStore = create<SettingsStoreState>()(
     }),
     {
       name: "settings-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       merge: (persistedState, currentState) => {
         const persistedPatch = sanitizeSettingsPatch(
           (persistedState as Record<string, unknown>) ?? {},

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { View, Text, useWindowDimensions } from "react-native";
-import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { View, Text, ScrollView, useWindowDimensions } from "react-native";
 import { BottomSheet, Button, Chip } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ViewerControlPanel } from "./ViewerControlPanel";
 import type { ComponentProps } from "react";
 
@@ -13,32 +13,36 @@ interface ViewerBottomSheetProps extends ControlPanelProps {
   onVisibleChange?: (visible: boolean) => void;
 }
 
+const COLLAPSED_SNAP_INDEX = 0;
+const DEFAULT_OPEN_SNAP_INDEX = 2;
+
 export function ViewerBottomSheet({
   visible,
   onVisibleChange,
   ...controlPanelProps
 }: ViewerBottomSheetProps) {
   const { height: screenHeight } = useWindowDimensions();
-  const [sheetIndex, setSheetIndex] = useState(1);
+  const insets = useSafeAreaInsets();
+  const [sheetIndex, setSheetIndex] = useState(DEFAULT_OPEN_SNAP_INDEX);
   // Deferred open state: ensures the BottomSheet always mounts with isOpen=false
   // first, then transitions to true — required by heroui-native's internal
   // BottomSheetContentContainer to detect the false→true change and call snapToIndex.
   const [internalOpen, setInternalOpen] = useState(false);
 
   const snapPoints = useMemo(
-    () => [56, Math.round(screenHeight * 0.45), Math.round(screenHeight * 0.85)],
+    () => [56, Math.round(screenHeight * 0.45), Math.round(screenHeight * 0.96)],
     [screenHeight],
   );
 
   const handleExpand = useCallback(() => {
-    setSheetIndex(1);
+    setSheetIndex(DEFAULT_OPEN_SNAP_INDEX);
   }, []);
 
   useEffect(() => {
     if (visible) {
-      setSheetIndex(1);
+      setSheetIndex(DEFAULT_OPEN_SNAP_INDEX);
     } else {
-      setSheetIndex(0);
+      setSheetIndex(COLLAPSED_SNAP_INDEX);
     }
     setInternalOpen(visible);
   }, [visible]);
@@ -62,6 +66,8 @@ export function ViewerBottomSheet({
           onChange={(index) => setSheetIndex(index)}
           handleIndicatorStyle={{ width: 36 }}
           enableDynamicSizing={false}
+          enableContentPanningGesture={false}
+          contentContainerClassName="h-full px-0"
         >
           {/* Collapsed mini toolbar (visible at snap index 0) */}
           <View className="flex-row items-center justify-between px-3" style={{ height: 32 }}>
@@ -73,9 +79,9 @@ export function ViewerBottomSheet({
               <Text className="text-[10px] text-muted">{controlPanelProps.colormap}</Text>
             </View>
             <View className="flex-row items-center gap-1">
-              {controlPanelProps.file.object && (
+              {controlPanelProps.file?.object && (
                 <Chip size="sm" variant="primary">
-                  <Chip.Label className="text-[8px]">{controlPanelProps.file.object}</Chip.Label>
+                  <Chip.Label className="text-[8px]">{controlPanelProps.file?.object}</Chip.Label>
                 </Chip>
               )}
               <Button
@@ -91,9 +97,15 @@ export function ViewerBottomSheet({
           </View>
 
           {/* Full control panel content */}
-          <BottomSheetScrollView showsVerticalScrollIndicator={false}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            nestedScrollEnabled
+            style={{ flex: 1 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 20 }}
+            keyboardShouldPersistTaps="handled"
+          >
             <ViewerControlPanel {...controlPanelProps} />
-          </BottomSheetScrollView>
+          </ScrollView>
         </BottomSheet.Content>
       </BottomSheet.Portal>
     </BottomSheet>

@@ -26,6 +26,8 @@ import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useAdvancedCompose } from "../../hooks/useAdvancedCompose";
+import { isImageLikeMedia } from "../../lib/import/imageParsePipeline";
+import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 import type {
   CompositeBlendMode,
   CompositeColorSpace,
@@ -76,9 +78,11 @@ export default function AdvancedComposeScreen() {
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
   const haptics = useHapticFeedback();
 
-  const files = useFitsStore((s) => s.files).filter(
-    (file) => file.mediaKind !== "video" && file.mediaKind !== "audio",
-  );
+  const files = useFitsStore((s) => s.files).filter((file) => {
+    if (!isImageLikeMedia(file)) return false;
+    if (file.decodeStatus === "failed") return false;
+    return true;
+  });
 
   const compose = useAdvancedCompose();
 
@@ -88,6 +92,15 @@ export default function AdvancedComposeScreen() {
     png: true,
     tiff: false,
   });
+  const compareIds = useMemo(
+    () =>
+      pickImageLikeIds(
+        compose.project.layers.map((layer) => layer.fileId ?? ""),
+        files,
+        2,
+      ),
+    [compose.project.layers, files],
+  );
 
   const displayResult = compose.fullResult ?? compose.previewResult;
   const pixelMathError = compose.pixelMathError;
@@ -156,6 +169,17 @@ export default function AdvancedComposeScreen() {
           {t("composeAdvanced.title")}
         </Text>
         <View className="flex-row gap-2">
+          <Button
+            testID="e2e-action-compose__advanced-open-compare"
+            variant="outline"
+            onPress={() => {
+              if (compareIds.length < 2) return;
+              router.push(`/compare?ids=${compareIds.join(",")}`);
+            }}
+            isDisabled={compareIds.length < 2}
+          >
+            <Button.Label>{t("gallery.compare")}</Button.Label>
+          </Button>
           <Button
             testID="e2e-action-compose__advanced-render"
             variant="secondary"

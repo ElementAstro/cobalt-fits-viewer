@@ -225,6 +225,42 @@ describe("stacking/index route params", () => {
       expect(screen.getByText(/stack\s*\(\s*0\s*frames\s*\)/)).toBeTruthy();
     });
   });
+
+  it("excludes decode failed image entries from stackable candidates", async () => {
+    useFitsStore.setState({
+      files: [
+        makeFile({
+          id: "ok-1",
+          filename: "ok-1.dng",
+          filepath: "file:///document/fits_files/ok-1.dng",
+          sourceType: "raster",
+          sourceFormat: "dng",
+          mediaKind: "image",
+          decodeStatus: "ready",
+        }),
+        makeFile({
+          id: "bad-1",
+          filename: "bad-1.dng",
+          filepath: "file:///document/fits_files/bad-1.dng",
+          sourceType: "raster",
+          sourceFormat: "dng",
+          mediaKind: "image",
+          decodeStatus: "failed",
+        }),
+      ],
+    });
+    mockUseLocalSearchParams.mockReturnValue({
+      ids: "ok-1,bad-1",
+    });
+
+    render(<StackingScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText("selected:1/1")).toBeTruthy();
+      expect(screen.getByText(/pre:1\/2/)).toBeTruthy();
+      expect(screen.getByText(/ignored:1/)).toBeTruthy();
+    });
+  });
 });
 
 describe("stacking/index precheck", () => {

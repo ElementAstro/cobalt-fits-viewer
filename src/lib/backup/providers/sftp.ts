@@ -147,6 +147,9 @@ export class SFTPProvider extends BaseCloudProvider {
     await this.mkdirSafe(`${base}/${BACKUP_DIR}/${THUMBNAIL_SUBDIR}`);
   }
 
+  // Note: react-native-ssh-sftp does not support per-chunk progress callbacks for
+  // sftpUpload/sftpDownload, so we report 0 → 1 (start → complete). The UI shows
+  // an indeterminate spinner via BackupProgressSheet during SFTP transfers.
   async uploadFile(
     localPath: string,
     remotePath: string,
@@ -159,6 +162,7 @@ export class SFTPProvider extends BaseCloudProvider {
     if (!file.exists) throw new Error(`Local file not found: ${localPath}`);
 
     const fullRemote = this.toRemotePath(remotePath);
+    onProgress?.(0);
     await this._client.sftpUpload(localPath, fullRemote);
 
     onProgress?.(1);
@@ -174,6 +178,7 @@ export class SFTPProvider extends BaseCloudProvider {
     if (!this._client) throw new Error("SFTP not connected");
 
     const fullRemote = this.toRemotePath(remotePath);
+    onProgress?.(0);
     await this._client.sftpDownload(fullRemote, localPath);
 
     onProgress?.(1);

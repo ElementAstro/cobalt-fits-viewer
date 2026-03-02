@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { TrashedFitsRecord } from "../lib/fits/types";
 
 interface TrashStoreState {
@@ -52,7 +52,7 @@ export const useTrashStore = create<TrashStoreState>()(
     }),
     {
       name: "trash-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         items: state.items,
       }),

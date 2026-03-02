@@ -95,6 +95,39 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
         />
       );
 
+    case "edgeMask":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramPreBlurSigma")}
+            value={params.edgeMaskPreBlur}
+            min={0}
+            max={5}
+            step={0.1}
+            defaultValue={1}
+            onValueChange={params.setEdgeMaskPreBlur}
+          />
+          <SimpleSlider
+            label={t("editor.paramThreshold")}
+            value={params.edgeMaskThreshold}
+            min={0}
+            max={1}
+            step={0.01}
+            defaultValue={0.1}
+            onValueChange={params.setEdgeMaskThreshold}
+          />
+          <SimpleSlider
+            label={t("editor.paramPostBlurSigma")}
+            value={params.edgeMaskPostBlur}
+            min={0}
+            max={5}
+            step={0.1}
+            defaultValue={1}
+            onValueChange={params.setEdgeMaskPostBlur}
+          />
+        </View>
+      );
+
     default:
       return null;
   }

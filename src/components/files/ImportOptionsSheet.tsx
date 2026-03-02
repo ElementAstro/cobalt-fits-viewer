@@ -1,12 +1,13 @@
-import { ScrollView, View, Text } from "react-native";
+import { View, Text } from "react-native";
+import { BottomSheetScrollView } from "@gorhom/bottom-sheet";
 import { BottomSheet, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { hexWithAlpha } from "../../lib/utils/colorUtils";
 import { SheetActionItem } from "./SheetActionItem";
 
-const SHEET_MAX_SNAP_HEIGHT = 520;
-const SHEET_HEIGHT_RATIO = 0.7;
-const SHEET_MAX_SCROLL_RATIO = 0.5;
+const SHEET_MAX_SNAP_HEIGHT = 680;
+const SHEET_HEIGHT_RATIO = 0.85;
+const SHEET_MAX_SCROLL_RATIO = 0.7;
 
 interface ImportOptionsSheetProps {
   visible: boolean;
@@ -57,7 +58,7 @@ export function ImportOptionsSheet({
             </Text>
             <Text className="mb-4 text-xs text-muted">{t("files.selectImportMethod")}</Text>
 
-            <ScrollView
+            <BottomSheetScrollView
               showsVerticalScrollIndicator={false}
               style={{ maxHeight: screenHeight * SHEET_MAX_SCROLL_RATIO }}
             >
@@ -120,7 +121,7 @@ export function ImportOptionsSheet({
                   showChevron
                 />
               </View>
-            </ScrollView>
+            </BottomSheetScrollView>
           </View>
         </BottomSheet.Content>
       </BottomSheet.Portal>

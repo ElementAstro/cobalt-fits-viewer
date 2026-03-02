@@ -169,6 +169,7 @@ jest.mock("../../../components/files/SelectionActionsSheet", () => ({
     onInvertSelection: () => void;
     onBatchRename: () => void;
     onBatchTag: () => void;
+    onCompare: () => void;
   }) => {
     const React = require("react");
     const { View, Pressable, Text } = require("react-native");
@@ -190,6 +191,11 @@ jest.mock("../../../components/files/SelectionActionsSheet", () => ({
         Pressable,
         { testID: "files-open-batch-tag-button", onPress: props.onBatchTag },
         React.createElement(Text, null, "Tag"),
+      ),
+      React.createElement(
+        Pressable,
+        { testID: "files-open-compare-button", onPress: props.onCompare },
+        React.createElement(Text, null, "Compare"),
       ),
     );
   },
@@ -540,6 +546,51 @@ describe("FilesScreen", () => {
     fireEvent.press(screen.getByTestId("files-go-to-stacking-button"));
 
     expect(mockPush).toHaveBeenCalledWith("/stacking");
+  });
+
+  it("routes to /compare when at least two image-like files are selected", () => {
+    useFitsStore.setState({
+      files: [
+        makeFile({ id: "file-1" }),
+        makeFile({
+          id: "video-1",
+          sourceType: "video",
+          mediaKind: "video",
+          sourceFormat: "mp4",
+          frameType: "unknown",
+        }),
+        makeFile({ id: "file-2", sourceType: "raster" }),
+      ],
+      selectedIds: ["file-1", "video-1", "file-2"],
+      isSelectionMode: true,
+    });
+
+    render(<FilesScreen />);
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__index-open-compare-bar"));
+
+    expect(mockPush).toHaveBeenCalledWith("/compare?ids=file-1,file-2");
+  });
+
+  it("does not route to /compare when fewer than two image-like files are selected", () => {
+    useFitsStore.setState({
+      files: [
+        makeFile({ id: "file-1" }),
+        makeFile({
+          id: "video-1",
+          sourceType: "video",
+          mediaKind: "video",
+          sourceFormat: "mp4",
+          frameType: "unknown",
+        }),
+      ],
+      selectedIds: ["file-1", "video-1"],
+      isSelectionMode: true,
+    });
+
+    render(<FilesScreen />);
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__index-open-compare-bar"));
+
+    expect(mockPush).not.toHaveBeenCalledWith(expect.stringContaining("/compare?ids="));
   });
 
   it("should select all visible files", () => {

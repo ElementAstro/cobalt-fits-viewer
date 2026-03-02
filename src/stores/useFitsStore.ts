@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { FitsMetadata } from "../lib/fits/types";
 import { normalizeGeoLocation } from "../lib/map/geo";
 
@@ -304,7 +304,7 @@ export const useFitsStore = create<FitsStoreState>()(
     }),
     {
       name: "fits-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         files: state.files,
       }),

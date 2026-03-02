@@ -11,6 +11,7 @@ import {
   type StarDetectionOptions,
   type StarDetectionRuntime,
 } from "./starDetection";
+import { throwIfAborted } from "../utils/abortUtils";
 
 export interface FrameQualityMetrics {
   /** 背景中值 */
@@ -82,6 +83,8 @@ function normalizeWeights(weights: FrameQualityScoringWeights): FrameQualityScor
 }
 
 function resolveOptions(options: FrameQualityOptions | undefined) {
+  // Intentionally uses legacy profile for backward-compatible frame quality scoring.
+  // Values kept in sync with PROFILE_PRESETS.legacy from starDetection.ts.
   const detectionDefaults: StarDetectionOptions = {
     profile: "legacy",
     sigmaThreshold: 5,
@@ -238,11 +241,7 @@ export async function evaluateFrameQualityAsync(
   options: FrameQualityOptions = {},
   runtime: FrameQualityRuntime = {},
 ): Promise<FrameQualityMetrics> {
-  if (runtime.signal?.aborted) {
-    const err = new Error("Aborted");
-    err.name = "AbortError";
-    throw err;
-  }
+  throwIfAborted(runtime.signal);
 
   const resolved = resolveOptions(options);
   runtime.onProgress?.(0.05, "background");
@@ -317,11 +316,7 @@ export async function evaluateFramesBatchAsync(
   const results: FrameQualityMetrics[] = [];
 
   for (let i = 0; i < frames.length; i++) {
-    if (runtime.signal?.aborted) {
-      const err = new Error("Aborted");
-      err.name = "AbortError";
-      throw err;
-    }
+    throwIfAborted(runtime.signal);
 
     runtime.onProgress?.(i, frames.length, "start-frame");
     const metrics = await evaluateFrameQualityAsync(

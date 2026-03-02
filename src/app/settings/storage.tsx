@@ -1,4 +1,3 @@
-import { useCallback, useEffect, useState } from "react";
 import { View, ScrollView, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Separator } from "heroui-native";
@@ -13,14 +12,12 @@ import { useAstrometryStore } from "../../stores/useAstrometryStore";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useVideoTaskStore } from "../../stores/useVideoTaskStore";
 import { useThumbnail } from "../../hooks/useThumbnail";
-import { pruneThumbnailCache } from "../../lib/gallery/thumbnailCache";
-import {
-  getVideoProcessingCacheSize,
-  clearVideoProcessingCache,
-} from "../../lib/video/engine/ffmpegAdapter";
+import { pruneThumbnailCacheWithPolicy } from "../../lib/gallery/thumbnailWorkflow";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { formatBytes } from "../../lib/utils/format";
+import { useStorageStats } from "../../hooks/useStorageStats";
+import { checkAndRepairFileSystemIntegrity } from "../../lib/utils/fileSystemIntegrity";
 
 export default function StorageSettingsScreen() {
   const { t } = useI18n();
@@ -92,6 +89,7 @@ export default function StorageSettingsScreen() {
       for (const file of allFiles) {
         updateFile(file.id, { thumbnailUri: undefined });
       }
+      void refreshStorageStats();
       haptics.notify(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t("common.success"), t("settings.cacheCleared"));
     });
@@ -122,21 +120,46 @@ export default function StorageSettingsScreen() {
   const hasActiveVideoTasks = useVideoTaskStore((s) =>
     s.tasks.some((t) => t.status === "running" || t.status === "pending"),
   );
-  const [videoCacheSizeBytes, setVideoCacheSizeBytes] = useState(0);
-  const refreshVideoCacheSize = useCallback(() => {
-    void getVideoProcessingCacheSize().then(setVideoCacheSizeBytes);
-  }, []);
-  useEffect(() => {
-    refreshVideoCacheSize();
-  }, [refreshVideoCacheSize]);
+
+  const {
+    breakdown,
+    refresh: refreshStorageStats,
+    clearExportCache,
+    clearVideoCache,
+    clearPixelCache,
+  } = useStorageStats();
 
   const handleClearVideoCache = () => {
     runDestructiveAction(
       t("settings.clearVideoProcessingCache"),
       t("settings.clearVideoProcessingCacheConfirm"),
       () => {
-        clearVideoProcessingCache();
-        refreshVideoCacheSize();
+        clearVideoCache();
+        void refreshStorageStats();
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
+      },
+    );
+  };
+
+  const handleClearExportCache = () => {
+    runDestructiveAction(
+      t("settings.clearExportCache"),
+      t("settings.clearExportCacheConfirm"),
+      () => {
+        clearExportCache();
+        void refreshStorageStats();
+        haptics.notify(Haptics.NotificationFeedbackType.Success);
+      },
+    );
+  };
+
+  const handleClearPixelCache = () => {
+    runDestructiveAction(
+      t("settings.clearPixelCache"),
+      t("settings.clearPixelCacheConfirm"),
+      () => {
+        clearPixelCache();
+        void refreshStorageStats();
         haptics.notify(Haptics.NotificationFeedbackType.Success);
       },
     );
@@ -155,7 +178,7 @@ export default function StorageSettingsScreen() {
         }
 
         const result = await regenerateThumbnails(allFiles);
-        pruneThumbnailCache(thumbnailCacheMaxSizeMB * 1024 * 1024);
+        pruneThumbnailCacheWithPolicy({ thumbnailCacheMaxSizeMB }, { force: true });
 
         for (const item of result.results) {
           if (item.uri) {
@@ -163,6 +186,7 @@ export default function StorageSettingsScreen() {
           }
         }
 
+        await refreshStorageStats();
         haptics.notify(Haptics.NotificationFeedbackType.Success);
         Alert.alert(
           t("settings.regenerateDone"),
@@ -194,6 +218,18 @@ export default function StorageSettingsScreen() {
             icon="server-outline"
             label={t("settings.storageUsage")}
             value={t("files.filesCount", { count: filesCount })}
+          />
+          <Separator />
+          <SettingsRow
+            icon="cube-outline"
+            label={t("settings.filesTotalSize")}
+            value={formatBytes(breakdown.filesTotalBytes)}
+          />
+          <Separator />
+          <SettingsRow
+            icon="trash-bin-outline"
+            label={t("settings.trashSize")}
+            value={`${breakdown.trashCount} · ${formatBytes(breakdown.trashTotalBytes)}`}
           />
           <Separator />
           <SettingsRow
@@ -232,7 +268,7 @@ export default function StorageSettingsScreen() {
           <SettingsRow
             icon="videocam-outline"
             label={t("settings.videoProcessingCache")}
-            value={formatBytes(videoCacheSizeBytes)}
+            value={formatBytes(breakdown.videoCacheBytes)}
           />
           <Separator />
           <SettingsRow
@@ -240,6 +276,74 @@ export default function StorageSettingsScreen() {
             label={t("settings.clearVideoProcessingCache")}
             onPress={handleClearVideoCache}
             disabled={hasActiveVideoTasks}
+          />
+          <Separator />
+          <SettingsRow
+            icon="share-outline"
+            label={t("settings.exportCache")}
+            value={formatBytes(breakdown.exportCacheBytes)}
+          />
+          <Separator />
+          <SettingsRow
+            icon="trash-outline"
+            label={t("settings.clearExportCache")}
+            onPress={handleClearExportCache}
+          />
+          <Separator />
+          <SettingsRow
+            icon="analytics-outline"
+            label={t("settings.pixelCache")}
+            value={
+              breakdown.pixelCacheEntries > 0
+                ? `${breakdown.pixelCacheEntries} · ${formatBytes(breakdown.pixelCacheBytes)}`
+                : formatBytes(0)
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="trash-outline"
+            label={t("settings.clearPixelCache")}
+            onPress={handleClearPixelCache}
+            disabled={breakdown.pixelCacheEntries === 0}
+          />
+          {breakdown.freeDiskBytes !== null && (
+            <>
+              <Separator />
+              <SettingsRow
+                icon="hardware-chip-outline"
+                label={t("settings.freeDiskSpace")}
+                value={formatBytes(breakdown.freeDiskBytes)}
+              />
+            </>
+          )}
+          <Separator />
+          <SettingsRow
+            icon="shield-checkmark-outline"
+            label={t("settings.checkIntegrity")}
+            onPress={() => {
+              runDestructiveAction(
+                t("settings.checkIntegrity"),
+                t("settings.checkIntegrityConfirm"),
+                () => {
+                  const result = checkAndRepairFileSystemIntegrity();
+                  const total =
+                    result.repairedGhosts + result.repairedOrphans + result.repairedTrashGhosts;
+                  if (total === 0) {
+                    Alert.alert(t("common.success"), t("settings.integrityClean"));
+                  } else {
+                    Alert.alert(
+                      t("common.success"),
+                      t("settings.integrityRepaired", {
+                        ghosts: result.repairedGhosts,
+                        orphans: result.repairedOrphans,
+                        trashGhosts: result.repairedTrashGhosts,
+                      }),
+                    );
+                  }
+                  haptics.notify(Haptics.NotificationFeedbackType.Success);
+                },
+              );
+            }}
           />
         </SettingsSection>
 

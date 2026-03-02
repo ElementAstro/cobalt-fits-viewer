@@ -31,6 +31,8 @@ import {
 import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";
 import { syncCompareTransform } from "../../lib/viewer/compareTransformSync";
 import { computeAutoStretch } from "../../lib/utils/pixelMath";
+import { isImageLikeMedia } from "../../lib/import/imageParsePipeline";
+import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 
 const MODES: { key: CompareMode; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "blink", labelKey: "compare.modeBlink", icon: "eye-outline" },
@@ -81,6 +83,7 @@ export default function CompareScreen() {
   const { horizontalPadding } = useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
+  const imageFiles = useMemo(() => files.filter((file) => isImageLikeMedia(file)), [files]);
   const updateFile = useFitsStore((s) => s.updateFile);
   const defaultStretch = useSettingsStore((s) => s.defaultStretch);
   const defaultColormap = useSettingsStore((s) => s.defaultColormap);
@@ -147,7 +150,10 @@ export default function CompareScreen() {
     [defaultShowGrid, defaultShowCrosshair, defaultShowPixelInfo, defaultShowMinimap],
   );
 
-  const initialIds = useMemo(() => (params.ids ? params.ids.split(",") : []), [params.ids]);
+  const initialIds = useMemo(() => {
+    if (!params.ids) return [];
+    return pickImageLikeIds(params.ids.split(","), files, 2);
+  }, [files, params.ids]);
   const {
     imageIds,
     mode,
@@ -169,8 +175,8 @@ export default function CompareScreen() {
     initialSplitPosition: defaultCompareSplitPosition,
   });
 
-  const fileA = useMemo(() => files.find((f) => f.id === imageIds[0]), [files, imageIds]);
-  const fileB = useMemo(() => files.find((f) => f.id === imageIds[1]), [files, imageIds]);
+  const fileA = useMemo(() => imageFiles.find((f) => f.id === imageIds[0]), [imageFiles, imageIds]);
+  const fileB = useMemo(() => imageFiles.find((f) => f.id === imageIds[1]), [imageFiles, imageIds]);
 
   const fitsA = useFitsFile();
   const fitsB = useFitsFile();
@@ -495,14 +501,14 @@ export default function CompareScreen() {
 
   const pickerFiles = useMemo(() => {
     const q = pickerQuery.trim().toLowerCase();
-    if (!q) return files;
-    return files.filter(
+    if (!q) return imageFiles;
+    return imageFiles.filter(
       (f) =>
         f.filename.toLowerCase().includes(q) ||
         f.object?.toLowerCase().includes(q) ||
         f.filter?.toLowerCase().includes(q),
     );
-  }, [pickerQuery, files]);
+  }, [pickerQuery, imageFiles]);
 
   const activeCursor = activeSide === "A" ? cursorA : cursorB;
   const activePixels = activeSide === "A" ? pixelsA : pixelsB;

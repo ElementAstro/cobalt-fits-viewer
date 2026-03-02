@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { useUniwind } from "uniwind";
@@ -9,10 +10,13 @@ export default function TabLayout() {
   const { isLandscape } = useScreenOrientation();
   const { theme } = useUniwind();
   const isDark = theme === "dark";
-  const background = isDark ? "#000000" : "#ffffff";
-  const borderColor = isDark ? "#27272a" : "#e4e4e7";
-  const activeColor = isDark ? "#17c964" : "#12a150";
-  const inactiveColor = isDark ? "#71717a" : "#a1a1aa";
+
+  const [bg, border, accent, muted] = useThemeColor(["background", "separator", "accent", "muted"]);
+
+  const background = bg || (isDark ? "#000000" : "#ffffff");
+  const borderColor = border || (isDark ? "#27272a" : "#e4e4e7");
+  const activeColor = accent || (isDark ? "#17c964" : "#12a150");
+  const inactiveColor = muted || (isDark ? "#71717a" : "#a1a1aa");
 
   return (
     <Tabs

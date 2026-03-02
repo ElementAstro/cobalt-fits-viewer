@@ -368,6 +368,182 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
         </View>
       );
 
+    case "waveletSharpen":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramLayers")}
+            value={params.waveletSharpenLayers}
+            min={1}
+            max={6}
+            step={1}
+            defaultValue={3}
+            onValueChange={(v) => params.setWaveletSharpenLayers(Math.round(v))}
+          />
+          <SimpleSlider
+            label={t("editor.paramAmount")}
+            value={params.waveletSharpenAmount}
+            min={0}
+            max={5}
+            step={0.1}
+            defaultValue={1.5}
+            onValueChange={params.setWaveletSharpenAmount}
+          />
+          <View className="flex-row gap-2 mt-1">
+            <Button
+              size="sm"
+              variant={params.waveletSharpenProtectStars ? "primary" : "outline"}
+              onPress={() =>
+                params.setWaveletSharpenProtectStars(!params.waveletSharpenProtectStars)
+              }
+            >
+              <Button.Label className="text-[9px]">{t("editor.paramProtectStars")}</Button.Label>
+            </Button>
+          </View>
+        </View>
+      );
+
+    case "tgvDenoise":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramStrength")}
+            value={params.tgvStrength}
+            min={0.1}
+            max={10}
+            step={0.1}
+            defaultValue={2}
+            onValueChange={params.setTgvStrength}
+          />
+          <SimpleSlider
+            label={t("editor.paramSmoothness")}
+            value={params.tgvSmoothness}
+            min={1}
+            max={5}
+            step={0.5}
+            defaultValue={2}
+            onValueChange={params.setTgvSmoothness}
+          />
+          <SimpleSlider
+            label={t("editor.paramIterations")}
+            value={params.tgvIterations}
+            min={50}
+            max={500}
+            step={10}
+            defaultValue={200}
+            onValueChange={(v) => params.setTgvIterations(Math.round(v))}
+          />
+          <SimpleSlider
+            label={t("editor.paramEdgeProtection")}
+            value={params.tgvEdgeProtection}
+            min={0}
+            max={1}
+            step={0.05}
+            defaultValue={0.5}
+            onValueChange={params.setTgvEdgeProtection}
+          />
+        </View>
+      );
+
+    case "bilateralFilter":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramSpatialSigma")}
+            value={params.bilateralSpatialSigma}
+            min={0.5}
+            max={10}
+            step={0.5}
+            defaultValue={2}
+            onValueChange={params.setBilateralSpatialSigma}
+          />
+          <SimpleSlider
+            label={t("editor.paramRangeSigmaLabel")}
+            value={params.bilateralRangeSigma}
+            min={0.01}
+            max={0.5}
+            step={0.01}
+            defaultValue={0.1}
+            onValueChange={params.setBilateralRangeSigma}
+          />
+        </View>
+      );
+
+    case "wienerDeconvolution":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramPsfSigma")}
+            value={params.wienerPsfSigma}
+            min={0.5}
+            max={10}
+            step={0.1}
+            defaultValue={2}
+            onValueChange={params.setWienerPsfSigma}
+          />
+          <SimpleSlider
+            label={t("editor.paramNoiseRatio")}
+            value={params.wienerNoiseRatio}
+            min={0.001}
+            max={0.5}
+            step={0.001}
+            defaultValue={0.01}
+            onValueChange={params.setWienerNoiseRatio}
+          />
+        </View>
+      );
+
+    case "mlt":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramLayers")}
+            value={params.mltLayers}
+            min={1}
+            max={8}
+            step={1}
+            defaultValue={4}
+            onValueChange={(v) => params.setMltLayers(Math.round(v))}
+          />
+          <SimpleSlider
+            label={t("editor.paramNoiseThreshold")}
+            value={params.mltNoiseThreshold}
+            min={0.5}
+            max={10}
+            step={0.5}
+            defaultValue={3}
+            onValueChange={params.setMltNoiseThreshold}
+          />
+          <SimpleSlider
+            label={t("editor.paramNoiseReduction")}
+            value={params.mltNoiseReduction}
+            min={0}
+            max={1}
+            step={0.05}
+            defaultValue={0.5}
+            onValueChange={params.setMltNoiseReduction}
+          />
+          <SimpleSlider
+            label={t("editor.paramBias")}
+            value={params.mltBias}
+            min={-1}
+            max={1}
+            step={0.05}
+            defaultValue={0}
+            onValueChange={params.setMltBias}
+          />
+          <SimpleSlider
+            label={t("editor.paramMaskAmplification")}
+            value={params.mltLinearMaskAmplification}
+            min={10}
+            max={1000}
+            step={10}
+            defaultValue={200}
+            onValueChange={(v) => params.setMltLinearMaskAmplification(Math.round(v))}
+          />
+        </View>
+      );
+
     default:
       return null;
   }

@@ -3,7 +3,7 @@ import { useFitsStore } from "../useFitsStore";
 import type { Album } from "../../lib/fits/types";
 
 jest.mock("../../lib/storage", () => ({
-  zustandMMKVStorage: {
+  zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
     removeItem: jest.fn().mockResolvedValue(undefined),

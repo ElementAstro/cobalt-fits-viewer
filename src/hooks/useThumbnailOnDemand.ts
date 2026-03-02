@@ -10,6 +10,7 @@ import { useFitsStore } from "../stores/useFitsStore";
 import type { FitsMetadata } from "../lib/fits/types";
 
 const ON_DEMAND_CONCURRENCY = 2;
+const FAILURE_COOLDOWN_MS = 60_000;
 
 export function useThumbnailOnDemand() {
   const updateFile = useFitsStore((s) => s.updateFile);
@@ -17,7 +18,7 @@ export function useThumbnailOnDemand() {
   const queueRef = useRef<FitsMetadata[]>([]);
   const activeCountRef = useRef(0);
   const enqueuedIdsRef = useRef<Set<string>>(new Set());
-  const failedIdsRef = useRef<Set<string>>(new Set());
+  const failedAtRef = useRef<Map<string, number>>(new Map());
 
   const processQueue = useCallback(async () => {
     while (queueRef.current.length > 0 && activeCountRef.current < ON_DEMAND_CONCURRENCY) {
@@ -29,11 +30,12 @@ export function useThumbnailOnDemand() {
         const result = await regenerateFileThumbnail(file);
         if (result.uri) {
           updateFile(result.fileId, { thumbnailUri: result.uri });
+          failedAtRef.current.delete(result.fileId);
         } else {
-          failedIdsRef.current.add(result.fileId);
+          failedAtRef.current.set(result.fileId, Date.now());
         }
       } catch {
-        failedIdsRef.current.add(file.id);
+        failedAtRef.current.set(file.id, Date.now());
       } finally {
         activeCountRef.current -= 1;
         enqueuedIdsRef.current.delete(file.id);
@@ -43,9 +45,14 @@ export function useThumbnailOnDemand() {
 
   const requestThumbnail = useCallback(
     (file: FitsMetadata) => {
+      const now = Date.now();
       if (hasThumbnail(file.id)) return;
       if (enqueuedIdsRef.current.has(file.id)) return;
-      if (failedIdsRef.current.has(file.id)) return;
+      const failedAt = failedAtRef.current.get(file.id);
+      if (typeof failedAt === "number") {
+        if (now - failedAt < FAILURE_COOLDOWN_MS) return;
+        failedAtRef.current.delete(file.id);
+      }
       if (file.sourceType === "audio") return;
 
       enqueuedIdsRef.current.add(file.id);
@@ -56,7 +63,7 @@ export function useThumbnailOnDemand() {
   );
 
   const resetFailed = useCallback(() => {
-    failedIdsRef.current.clear();
+    failedAtRef.current.clear();
   }, []);
 
   return { requestThumbnail, resetFailed };

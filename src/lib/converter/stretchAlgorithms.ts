@@ -17,6 +17,7 @@ export function getExtent(pixels: Float32Array): [number, number] {
       if (v > max) max = v;
     }
   }
+  if (min > max) return [0, 0];
   return [min, max];
 }
 
@@ -68,8 +69,8 @@ export function resolveBlackWhitePoints(
   }
 
   if (!Number.isFinite(baseMin) || !Number.isFinite(baseMax)) {
-    baseMin = rawMin;
-    baseMax = rawMax;
+    baseMin = Number.isFinite(rawMin) ? rawMin : 0;
+    baseMax = Number.isFinite(rawMax) ? rawMax : 0;
   }
 
   if (baseMin > baseMax) {

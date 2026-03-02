@@ -1,5 +1,6 @@
 import type { StarAnnotationPoint, StarAnnotationStaleReason } from "../fits/types";
 import type { ImageEditOperation } from "../utils/imageOperations";
+import { isFinitePoint, ensureUniqueAnchors, clampToImage } from "./starAnnotationUtils";
 
 interface GeometryState {
   width: number;
@@ -12,31 +13,6 @@ export interface TransformStarAnnotationPointsResult {
   height: number;
   transformed: boolean;
   staleReason?: StarAnnotationStaleReason;
-}
-
-function isFinitePoint(point: { x: number; y: number }) {
-  return Number.isFinite(point.x) && Number.isFinite(point.y);
-}
-
-function ensureUniqueAnchors(points: StarAnnotationPoint[]) {
-  const anchorOwner = new Map<1 | 2 | 3, string>();
-  return points.map((point) => {
-    if (!point.anchorIndex) return point;
-    const owner = anchorOwner.get(point.anchorIndex);
-    if (!owner) {
-      anchorOwner.set(point.anchorIndex, point.id);
-      return point;
-    }
-    if (owner === point.id) return point;
-    return { ...point, anchorIndex: undefined };
-  });
-}
-
-function clampToImage(points: StarAnnotationPoint[], width: number, height: number) {
-  return points.filter((point) => {
-    if (!isFinitePoint(point)) return false;
-    return point.x >= 0 && point.y >= 0 && point.x < width && point.y < height;
-  });
 }
 
 function mapPoints(

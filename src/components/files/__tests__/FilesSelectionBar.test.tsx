@@ -10,7 +10,9 @@ jest.mock("../../../i18n/useI18n", () => ({
 
 const defaultProps = {
   selectedCount: 3,
+  selectedImageCount: 2,
   isLandscape: false,
+  onCompare: jest.fn(),
   onBatchConvert: jest.fn(),
   onStacking: jest.fn(),
 };
@@ -31,6 +33,11 @@ describe("FilesSelectionBar", () => {
     expect(screen.getByText("converter.batchConvert")).toBeTruthy();
   });
 
+  it("renders compare button label in portrait", () => {
+    render(<FilesSelectionBar {...defaultProps} />);
+    expect(screen.getByText("gallery.compare")).toBeTruthy();
+  });
+
   it("renders stacking button label in portrait", () => {
     render(<FilesSelectionBar {...defaultProps} />);
     expect(screen.getByText("gallery.batchStack")).toBeTruthy();
@@ -38,8 +45,15 @@ describe("FilesSelectionBar", () => {
 
   it("hides button labels in landscape mode", () => {
     render(<FilesSelectionBar {...defaultProps} isLandscape />);
+    expect(screen.queryByText("gallery.compare")).toBeNull();
     expect(screen.queryByText("converter.batchConvert")).toBeNull();
     expect(screen.queryByText("gallery.batchStack")).toBeNull();
+  });
+
+  it("calls onCompare when compare button is pressed", () => {
+    render(<FilesSelectionBar {...defaultProps} />);
+    fireEvent.press(screen.getByText("gallery.compare"));
+    expect(defaultProps.onCompare).toHaveBeenCalled();
   });
 
   it("calls onBatchConvert when convert button is pressed", () => {
@@ -66,8 +80,19 @@ describe("FilesSelectionBar", () => {
     expect(JSON.stringify(tree)).toContain("isDisabled");
   });
 
+  it("disables compare button when selectedImageCount is 1", () => {
+    render(<FilesSelectionBar {...defaultProps} selectedImageCount={1} />);
+    const tree = screen.toJSON();
+    expect(JSON.stringify(tree)).toContain("e2e-action-tabs__index-open-compare-bar");
+  });
+
   it("renders stacking button with testID", () => {
     render(<FilesSelectionBar {...defaultProps} />);
     expect(screen.getByTestId("files-go-to-stacking-button")).toBeTruthy();
+  });
+
+  it("renders compare button with testID", () => {
+    render(<FilesSelectionBar {...defaultProps} />);
+    expect(screen.getByTestId("e2e-action-tabs__index-open-compare-bar")).toBeTruthy();
   });
 });

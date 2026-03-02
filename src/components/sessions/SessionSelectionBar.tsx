@@ -7,6 +7,7 @@ interface SessionSelectionBarProps {
   selectedCount: number;
   calendarSyncEnabled: boolean;
   syncing: boolean;
+  isLandscape: boolean;
   onClose: () => void;
   onToggleSelectAll: () => void;
   onBatchSync: () => void;
@@ -19,6 +20,7 @@ export function SessionSelectionBar({
   selectedCount,
   calendarSyncEnabled,
   syncing,
+  isLandscape,
   onClose,
   onToggleSelectAll,
   onBatchSync,
@@ -58,7 +60,9 @@ export function SessionSelectionBar({
               onPress={onBatchSync}
             >
               <Ionicons name="sync-outline" size={16} color={mutedColor} />
-              <Button.Label className="text-[10px]">{t("sessions.batchSync")}</Button.Label>
+              {!isLandscape && (
+                <Button.Label className="text-[10px]">{t("sessions.batchSync")}</Button.Label>
+              )}
             </Button>
             <Button
               testID="e2e-action-tabs__sessions-selection-batch-refresh"
@@ -68,7 +72,9 @@ export function SessionSelectionBar({
               onPress={onBatchRefresh}
             >
               <Ionicons name="refresh-outline" size={16} color={mutedColor} />
-              <Button.Label className="text-[10px]">{t("sessions.batchRefresh")}</Button.Label>
+              {!isLandscape && (
+                <Button.Label className="text-[10px]">{t("sessions.batchRefresh")}</Button.Label>
+              )}
             </Button>
             <Button
               testID="e2e-action-tabs__sessions-selection-batch-unsync"
@@ -78,7 +84,9 @@ export function SessionSelectionBar({
               onPress={onBatchUnsync}
             >
               <Ionicons name="link-outline" size={16} color={mutedColor} />
-              <Button.Label className="text-[10px]">{t("sessions.batchUnsync")}</Button.Label>
+              {!isLandscape && (
+                <Button.Label className="text-[10px]">{t("sessions.batchUnsync")}</Button.Label>
+              )}
             </Button>
           </>
         )}

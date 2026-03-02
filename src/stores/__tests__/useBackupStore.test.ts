@@ -22,6 +22,7 @@ beforeEach(() => {
     lastAutoBackupError: null,
     history: [],
     lastUsedBackupOptions: null,
+    lastSuccessfulBackupAt: 0,
     lastError: null,
   });
 });
@@ -283,6 +284,43 @@ describe("useBackupStore", () => {
 
       useBackupStore.getState().setLastError(null);
       expect(useBackupStore.getState().lastError).toBeNull();
+    });
+  });
+
+  describe("history durationMs", () => {
+    it("should store durationMs in history entry", () => {
+      useBackupStore.getState().addHistoryEntry({
+        type: "backup",
+        provider: "webdav",
+        result: "success",
+        durationMs: 3500,
+      });
+      const { history } = useBackupStore.getState();
+      expect(history[0].durationMs).toBe(3500);
+    });
+
+    it("should store totalSize in history entry", () => {
+      useBackupStore.getState().addHistoryEntry({
+        type: "backup",
+        provider: "webdav",
+        result: "success",
+        totalSize: 1024000,
+        durationMs: 2000,
+      });
+      const { history } = useBackupStore.getState();
+      expect(history[0].totalSize).toBe(1024000);
+      expect(history[0].durationMs).toBe(2000);
+    });
+  });
+
+  describe("lastSuccessfulBackupAt", () => {
+    it("should default to 0", () => {
+      expect(useBackupStore.getState().lastSuccessfulBackupAt).toBe(0);
+    });
+
+    it("should set lastSuccessfulBackupAt", () => {
+      useBackupStore.getState().setLastSuccessfulBackupAt(1700000000000);
+      expect(useBackupStore.getState().lastSuccessfulBackupAt).toBe(1700000000000);
     });
   });
 });

@@ -54,6 +54,7 @@ export {
   previewLocalBackup,
   buildFullPackage,
   importFromPackage,
+  cleanupStaleBackupTempFiles,
   type LocalBackupPreview,
 } from "./localBackup";
 export { authenticateOneDrive, authenticateDropbox } from "./oauthHelper";

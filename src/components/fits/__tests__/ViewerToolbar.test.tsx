@@ -32,6 +32,7 @@ describe("ViewerToolbar", () => {
     onToggleFavorite: jest.fn(),
     onOpenHeader: jest.fn(),
     onOpenEditor: jest.fn(),
+    canCompare: true,
     onCompare: jest.fn(),
     onExport: jest.fn(),
     onAstrometry: jest.fn(),
@@ -139,6 +140,13 @@ describe("ViewerToolbar", () => {
 
     fireEvent.press(getByText("header.title"));
     expect(baseProps.onOpenHeader).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onCompare when compare action is disabled", () => {
+    const { getByText } = render(<ViewerToolbar {...baseProps} canCompare={false} />);
+    fireEvent.press(getByText("ellipsis-horizontal"));
+    fireEvent.press(getByText("gallery.compare"));
+    expect(baseProps.onCompare).not.toHaveBeenCalled();
   });
 
   it("renders filename in more menu sheet title", () => {

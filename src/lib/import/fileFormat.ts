@@ -20,6 +20,29 @@ export type SupportedMediaFormatId =
   | "jpeg"
   | "webp"
   | "tiff"
+  | "dng"
+  | "cr2"
+  | "cr3"
+  | "crw"
+  | "nef"
+  | "nrw"
+  | "arw"
+  | "srf"
+  | "sr2"
+  | "raf"
+  | "orf"
+  | "rw2"
+  | "pef"
+  | "srw"
+  | "rwl"
+  | "3fr"
+  | "iiq"
+  | "dcr"
+  | "kdc"
+  | "erf"
+  | "mef"
+  | "mos"
+  | "raw"
   | "bmp"
   | "gif"
   | "heic"
@@ -40,6 +63,34 @@ export type SupportedImageFormatId = Exclude<
   SupportedMediaFormatId,
   "mp4" | "mov" | "m4v" | "webm" | "mkv" | "avi" | "3gp" | "mp3" | "aac" | "m4a" | "wav"
 >;
+
+export const RAW_RASTER_FORMAT_IDS = [
+  "dng",
+  "cr2",
+  "cr3",
+  "crw",
+  "nef",
+  "nrw",
+  "arw",
+  "srf",
+  "sr2",
+  "raf",
+  "orf",
+  "rw2",
+  "pef",
+  "srw",
+  "rwl",
+  "3fr",
+  "iiq",
+  "dcr",
+  "kdc",
+  "erf",
+  "mef",
+  "mos",
+  "raw",
+] as const;
+
+type RawRasterFormatId = (typeof RAW_RASTER_FORMAT_IDS)[number];
 
 export interface SupportedMediaFormat {
   id: SupportedMediaFormatId;
@@ -69,6 +120,29 @@ const SUPPORTED_FORMATS: SupportedMediaFormat[] = [
   },
   { id: "webp", sourceType: "raster", label: "WebP", extensions: [".webp"] },
   { id: "tiff", sourceType: "raster", label: "TIFF", extensions: [".tif", ".tiff"] },
+  { id: "dng", sourceType: "raster", label: "DNG", extensions: [".dng"] },
+  { id: "cr2", sourceType: "raster", label: "CR2", extensions: [".cr2"] },
+  { id: "cr3", sourceType: "raster", label: "CR3", extensions: [".cr3"] },
+  { id: "crw", sourceType: "raster", label: "CRW", extensions: [".crw"] },
+  { id: "nef", sourceType: "raster", label: "NEF", extensions: [".nef"] },
+  { id: "nrw", sourceType: "raster", label: "NRW", extensions: [".nrw"] },
+  { id: "arw", sourceType: "raster", label: "ARW", extensions: [".arw"] },
+  { id: "srf", sourceType: "raster", label: "SRF", extensions: [".srf"] },
+  { id: "sr2", sourceType: "raster", label: "SR2", extensions: [".sr2"] },
+  { id: "raf", sourceType: "raster", label: "RAF", extensions: [".raf"] },
+  { id: "orf", sourceType: "raster", label: "ORF", extensions: [".orf"] },
+  { id: "rw2", sourceType: "raster", label: "RW2", extensions: [".rw2"] },
+  { id: "pef", sourceType: "raster", label: "PEF", extensions: [".pef"] },
+  { id: "srw", sourceType: "raster", label: "SRW", extensions: [".srw"] },
+  { id: "rwl", sourceType: "raster", label: "RWL", extensions: [".rwl"] },
+  { id: "3fr", sourceType: "raster", label: "3FR", extensions: [".3fr"] },
+  { id: "iiq", sourceType: "raster", label: "IIQ", extensions: [".iiq"] },
+  { id: "dcr", sourceType: "raster", label: "DCR", extensions: [".dcr"] },
+  { id: "kdc", sourceType: "raster", label: "KDC", extensions: [".kdc"] },
+  { id: "erf", sourceType: "raster", label: "ERF", extensions: [".erf"] },
+  { id: "mef", sourceType: "raster", label: "MEF", extensions: [".mef"] },
+  { id: "mos", sourceType: "raster", label: "MOS", extensions: [".mos"] },
+  { id: "raw", sourceType: "raster", label: "RAW", extensions: [".raw"] },
   { id: "bmp", sourceType: "raster", label: "BMP", extensions: [".bmp"] },
   { id: "gif", sourceType: "raster", label: "GIF", extensions: [".gif"] },
   { id: "heic", sourceType: "raster", label: "HEIC/HEIF", extensions: [".heic", ".heif"] },
@@ -98,6 +172,19 @@ for (const format of SUPPORTED_FORMATS) {
   FORMAT_ID_LOOKUP.set(format.id, format);
 }
 
+const RAW_RASTER_FORMAT_ID_SET = new Set<SupportedMediaFormatId>(RAW_RASTER_FORMAT_IDS);
+
+const CONTAINER_ALIAS_FORMAT_ID_SET = new Set<SupportedMediaFormatId>([
+  "tiff",
+  "mp4",
+  "mov",
+  "m4v",
+  "3gp",
+  "heic",
+  "avif",
+  "jpeg",
+]);
+
 const MIME_LOOKUP = new Map<string, SupportedMediaFormatId>([
   ["image/png", "png"],
   ["image/jpeg", "jpeg"],
@@ -106,6 +193,33 @@ const MIME_LOOKUP = new Map<string, SupportedMediaFormatId>([
   ["image/webp", "webp"],
   ["image/tiff", "tiff"],
   ["image/x-tiff", "tiff"],
+  ["image/dng", "dng"],
+  ["image/x-adobe-dng", "dng"],
+  ["application/dng", "dng"],
+  ["application/x-adobe-dng", "dng"],
+  ["image/x-canon-cr2", "cr2"],
+  ["image/x-canon-cr3", "cr3"],
+  ["image/x-canon-crw", "crw"],
+  ["image/x-nikon-nef", "nef"],
+  ["image/x-nikon-nrw", "nrw"],
+  ["image/x-sony-arw", "arw"],
+  ["image/x-sony-srf", "srf"],
+  ["image/x-sony-sr2", "sr2"],
+  ["image/x-fuji-raf", "raf"],
+  ["image/x-olympus-orf", "orf"],
+  ["image/x-panasonic-rw2", "rw2"],
+  ["image/x-pentax-pef", "pef"],
+  ["image/x-samsung-srw", "srw"],
+  ["image/x-leica-rwl", "rwl"],
+  ["image/x-hasselblad-3fr", "3fr"],
+  ["image/x-phaseone-iiq", "iiq"],
+  ["image/x-kodak-dcr", "dcr"],
+  ["image/x-kodak-kdc", "kdc"],
+  ["image/x-epson-erf", "erf"],
+  ["image/x-mamiya-mef", "mef"],
+  ["image/x-leaf-mos", "mos"],
+  ["image/x-raw", "raw"],
+  ["application/x-raw", "raw"],
   ["image/bmp", "bmp"],
   ["image/x-ms-bmp", "bmp"],
   ["image/gif", "gif"],
@@ -220,14 +334,45 @@ export function detectSupportedImageFormat(filename: string): SupportedMediaForm
   return detectSupportedMediaFormat(filename);
 }
 
+export function isRawRasterFormatId(
+  formatId: SupportedMediaFormatId | null | undefined,
+): formatId is RawRasterFormatId {
+  if (!formatId) return false;
+  return RAW_RASTER_FORMAT_ID_SET.has(formatId);
+}
+
+function getRawFormatFromFilename(
+  filename: string | null | undefined,
+): SupportedMediaFormat | null {
+  if (!filename) return null;
+  const byFilename = detectSupportedMediaFormat(filename);
+  if (!byFilename || !isRawRasterFormatId(byFilename.id)) return null;
+  return byFilename;
+}
+
+function isContainerAliasFormatId(formatId: SupportedMediaFormatId): boolean {
+  return CONTAINER_ALIAS_FORMAT_ID_SET.has(formatId);
+}
+
 export function detectPreferredSupportedMediaFormat(
   input: SupportedMediaFormatDetectionInput,
 ): SupportedMediaFormat | null {
+  const rawAlias = getRawFormatFromFilename(input.filename);
   const byContent = detectSupportedMediaFormatByContent(input.payload);
-  if (byContent) return byContent;
+  if (byContent) {
+    if (rawAlias && isContainerAliasFormatId(byContent.id)) {
+      return rawAlias;
+    }
+    return byContent;
+  }
 
   const byMimeType = detectSupportedMediaFormatByMimeType(input.mimeType);
-  if (byMimeType) return byMimeType;
+  if (byMimeType) {
+    if (rawAlias && isContainerAliasFormatId(byMimeType.id)) {
+      return rawAlias;
+    }
+    return byMimeType;
+  }
 
   if (input.filename) {
     return detectSupportedMediaFormat(input.filename);
@@ -478,6 +623,29 @@ const FORMAT_TO_SOURCE_FORMAT: Record<
   jpeg: "jpeg",
   webp: "webp",
   tiff: "tiff",
+  dng: "dng",
+  cr2: "cr2",
+  cr3: "cr3",
+  crw: "crw",
+  nef: "nef",
+  nrw: "nrw",
+  arw: "arw",
+  srf: "srf",
+  sr2: "sr2",
+  raf: "raf",
+  orf: "orf",
+  rw2: "rw2",
+  pef: "pef",
+  srw: "srw",
+  rwl: "rwl",
+  "3fr": "3fr",
+  iiq: "iiq",
+  dcr: "dcr",
+  kdc: "kdc",
+  erf: "erf",
+  mef: "mef",
+  mos: "mos",
+  raw: "raw",
   bmp: "bmp",
   gif: "gif",
   heic: "heic",

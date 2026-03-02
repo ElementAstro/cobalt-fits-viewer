@@ -1,13 +1,8 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useCompose } from "../useCompose";
 
-jest.mock("../../lib/utils/fileManager", () => ({
-  readFileAsArrayBuffer: jest.fn(),
-}));
-jest.mock("../../lib/fits/parser", () => ({
-  loadScientificFitsFromBuffer: jest.fn(),
-  getImagePixels: jest.fn(),
-  getImageDimensions: jest.fn(),
+jest.mock("../../lib/image/scientificImageLoader", () => ({
+  loadScientificImageFromPath: jest.fn(),
 }));
 jest.mock("../../lib/utils/rgbCompose", () => ({
   composeRGB: jest.fn(),
@@ -30,13 +25,8 @@ jest.mock("../../lib/logger", () => ({
   },
 }));
 
-const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
-  readFileAsArrayBuffer: jest.Mock;
-};
-const parserLib = jest.requireMock("../../lib/fits/parser") as {
-  loadScientificFitsFromBuffer: jest.Mock;
-  getImagePixels: jest.Mock;
-  getImageDimensions: jest.Mock;
+const loaderLib = jest.requireMock("../../lib/image/scientificImageLoader") as {
+  loadScientificImageFromPath: jest.Mock;
 };
 const rgbLib = jest.requireMock("../../lib/utils/rgbCompose") as {
   composeRGB: jest.Mock;
@@ -51,10 +41,14 @@ const colorLib = jest.requireMock("../../lib/processing/color") as {
 describe("useCompose", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    parserLib.loadScientificFitsFromBuffer.mockResolvedValue({ id: "fits" });
-    parserLib.getImageDimensions.mockReturnValue({ width: 2, height: 2 });
-    parserLib.getImagePixels.mockResolvedValue(new Float32Array([0, 1, 2, 3]));
+    loaderLib.loadScientificImageFromPath.mockResolvedValue({
+      pixels: new Float32Array([0, 1, 2, 3]),
+      width: 2,
+      height: 2,
+      exposure: 30,
+      sourceType: "fits",
+      sourceFormat: "fits",
+    });
     rgbLib.composeRGB.mockReturnValue(new Uint8ClampedArray([255, 0, 0, 255]));
     colorLib.applySCNRRGBA.mockImplementation((rgba: Uint8ClampedArray) => rgba);
     colorLib.applyColorCalibrationRGBA.mockImplementation((rgba: Uint8ClampedArray) => rgba);
@@ -66,7 +60,7 @@ describe("useCompose", () => {
     const { result } = renderHook(() => useCompose());
 
     await act(async () => {
-      await result.current.loadChannel("red", "r1", "/tmp/r.fits", "r.fits");
+      await result.current.loadChannel("red", "r1", "/tmp/r.dng", "r.dng");
       await result.current.loadChannel("green", "g1", "/tmp/g.fits", "g.fits");
       await result.current.loadChannel("luminance", "l1", "/tmp/l.fits", "l.fits");
     });
@@ -88,8 +82,23 @@ describe("useCompose", () => {
 
   it("handles dimension mismatch and channel preconditions", async () => {
     const { result } = renderHook(() => useCompose());
-    parserLib.getImageDimensions.mockReturnValueOnce({ width: 2, height: 2 });
-    parserLib.getImageDimensions.mockReturnValueOnce({ width: 4, height: 4 });
+    loaderLib.loadScientificImageFromPath
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([0, 1, 2, 3]),
+        width: 2,
+        height: 2,
+        exposure: 30,
+        sourceType: "fits",
+        sourceFormat: "fits",
+      })
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([0, 1, 2, 3]),
+        width: 4,
+        height: 4,
+        exposure: 30,
+        sourceType: "raster",
+        sourceFormat: "dng",
+      });
 
     await act(async () => {
       await result.current.loadChannel("red", "r1", "/tmp/r.fits", "r.fits");

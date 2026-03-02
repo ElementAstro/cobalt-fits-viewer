@@ -253,6 +253,19 @@ export interface MoveFileResult {
 }
 
 /**
+ * 安全的 copy + delete：复制后校验目标文件大小，校验通过再删除源文件。
+ * 失败时清理不完整的目标副本。
+ */
+function safeCopyAndDelete(source: File, target: File): void {
+  source.copy(target);
+  if (!target.exists || (source.size != null && target.size !== source.size)) {
+    if (target.exists) target.delete();
+    throw new Error("Copy verification failed: size mismatch");
+  }
+  source.delete();
+}
+
+/**
  * 移动文件到回收站（copy + delete）
  */
 export function moveFileToTrash(filepath: string, preferredName?: string): MoveFileResult {
@@ -271,8 +284,7 @@ export function moveFileToTrash(filepath: string, preferredName?: string): MoveF
   const { file: target, filename } = resolveUniquePath(getTrashDir(), requestedName, source.uri);
 
   try {
-    source.copy(target);
-    source.delete();
+    safeCopyAndDelete(source, target);
     return {
       success: true,
       filepath: target.uri,
@@ -318,8 +330,7 @@ export function restoreFileFromTrash(
   const { file: target, filename } = resolveUniquePath(getFitsDir(), normalizedName, source.uri);
 
   try {
-    source.copy(target);
-    source.delete();
+    safeCopyAndDelete(source, target);
     return {
       success: true,
       filepath: target.uri,
@@ -405,8 +416,7 @@ export function renameFitsFile(filepath: string, nextFilename: string): RenameFi
   }
 
   try {
-    source.copy(candidateFile);
-    source.delete();
+    safeCopyAndDelete(source, candidateFile);
     return {
       success: true,
       filepath: candidateFile.uri,
@@ -422,7 +432,7 @@ export function renameFitsFile(filepath: string, nextFilename: string): RenameFi
   }
 }
 
-function sanitizeFilename(name: string): string {
+export function sanitizeFilename(name: string, fallback: string = "untitled"): string {
   const sanitized = name
     .replace(/[<>:"/\\|?*]/g, "_")
     .split("")
@@ -430,7 +440,7 @@ function sanitizeFilename(name: string): string {
     .join("")
     .trim()
     .replace(/\s+/g, " ");
-  return sanitized || "untitled";
+  return sanitized || fallback;
 }
 
 function resolveUniquePath(

@@ -1,7 +1,7 @@
 import "../global.css";
 import "../lib/polyfills/webCrypto";
 
-import { useCallback, useEffect, useState, type PropsWithChildren } from "react";
+import { useCallback, useEffect, useRef, useState, type PropsWithChildren } from "react";
 import { Text, View } from "react-native";
 import { Stack } from "expo-router";
 import {
@@ -24,6 +24,8 @@ import { cleanExpiredExports } from "../lib/utils/imageExport";
 import { useAutoSolve } from "../hooks/useAutoSolve";
 import { useAutoBackup } from "../hooks/useAutoBackup";
 import { Logger, cleanLogExports, initLoggerRuntime } from "../lib/logger";
+import { configurePixelCache } from "../lib/cache/pixelCache";
+import { pruneThumbnailCacheWithPolicy } from "../lib/gallery/thumbnailWorkflow";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useOnboardingStore } from "../stores/useOnboardingStore";
 import { useTargetStore } from "../stores/useTargetStore";
@@ -211,12 +213,14 @@ export default function RootLayout() {
   const { theme } = useUniwind();
   const { fontsLoaded, fontError } = useFontLoader();
   const orientationLock = useSettingsStore((s) => s.orientationLock);
+  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
   const logMinLevel = useSettingsStore((s) => s.logMinLevel);
   const logMaxEntries = useSettingsStore((s) => s.logMaxEntries);
   const logConsoleOutput = useSettingsStore((s) => s.logConsoleOutput);
   const logPersistEnabled = useSettingsStore((s) => s.logPersistEnabled);
   const [settingsHydrated, setSettingsHydrated] = useState(false);
   const [e2eReady, setE2eReady] = useState(!e2eMode);
+  const startupCachePreparedRef = useRef(false);
 
   useEffect(() => {
     cleanExpiredExports();
@@ -248,6 +252,21 @@ export default function RootLayout() {
       persistEnabled: logPersistEnabled,
     });
   }, [logMinLevel, logMaxEntries, logConsoleOutput, logPersistEnabled]);
+
+  useEffect(() => {
+    if (!settingsHydrated) return;
+    const useLegacyProfile = imageProcessingProfile === "legacy";
+    configurePixelCache({
+      maxEntries: useLegacyProfile ? 2 : 3,
+      maxBytes: (useLegacyProfile ? 256 : 512) * 1024 * 1024,
+    });
+  }, [settingsHydrated, imageProcessingProfile]);
+
+  useEffect(() => {
+    if (!settingsHydrated || startupCachePreparedRef.current) return;
+    startupCachePreparedRef.current = true;
+    pruneThumbnailCacheWithPolicy({}, { force: true });
+  }, [settingsHydrated]);
 
   useEffect(() => {
     if ((fontsLoaded || fontError) && settingsHydrated) {

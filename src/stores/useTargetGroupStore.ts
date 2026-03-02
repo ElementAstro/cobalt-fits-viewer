@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { TargetGroup } from "../lib/fits/types";
 
 const generateId = () => `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -139,7 +139,7 @@ export const useTargetGroupStore = create<TargetGroupStoreState>()(
     }),
     {
       name: "target-group-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({ groups: state.groups }),
       version: 2,
       migrate: (persistedState, _version) => {

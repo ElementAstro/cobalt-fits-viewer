@@ -6,13 +6,7 @@ import { Alert as HAlert, Button, Skeleton, Spinner, Surface, useToast } from "h
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-  FadeOut,
-  withTiming,
-} from "react-native-reanimated";
+import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from "react-native-reanimated";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
@@ -33,8 +27,14 @@ import {
 } from "../../components/fits/FitsCanvas";
 import { Minimap } from "../../components/fits/Minimap";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
+import { ViewerErrorBoundary } from "../../components/common/ViewerErrorBoundary";
 import { ExportDialog } from "../../components/common/ExportDialog";
-import type { ExportFormat, HistogramDiagnostics, ViewerPreset } from "../../lib/fits/types";
+import type {
+  ExportFormat,
+  FitsMetadata,
+  HistogramDiagnostics,
+  ViewerPreset,
+} from "../../lib/fits/types";
 import {
   computeAutoStretch,
   computePercentile,
@@ -72,6 +72,7 @@ import { toViewerPreset } from "../../lib/viewer/model";
 import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
 import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
 import { isVideoFile } from "../../lib/media/routing";
+import { resolveComparePair } from "../../lib/viewer/compareRouting";
 
 export default function ViewerDetailScreen() {
   useKeepAwake();
@@ -93,6 +94,11 @@ export default function ViewerDetailScreen() {
       nextId: idx < allFiles.length - 1 ? allFiles[idx + 1].id : null,
     };
   }, [allFiles, id]);
+  const compareIds = useMemo(() => {
+    if (!id) return [];
+    return resolveComparePair(id, allFiles, file?.derivedFromId);
+  }, [allFiles, file?.derivedFromId, id]);
+  const canCompare = compareIds.length >= 2;
   const isVideo = file ? isVideoFile(file) : false;
 
   // Display parameters — grouped to reduce re-renders
@@ -236,6 +242,7 @@ export default function ViewerDetailScreen() {
     regionStats,
     isProcessing,
     processingError,
+    reset: resetImageProcessing,
   } = useImageProcessing();
 
   const { generateThumbnailAsync } = useThumbnail();
@@ -918,6 +925,7 @@ export default function ViewerDetailScreen() {
     }
     return () => {
       resetFits();
+      resetImageProcessing();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file?.id]);
@@ -1079,7 +1087,7 @@ export default function ViewerDetailScreen() {
 
   const controlPanelProps = useMemo(
     () => ({
-      file: file!,
+      file: file as FitsMetadata,
       histogram,
       rgbHistogram,
       regionHistogram,
@@ -1268,198 +1276,200 @@ export default function ViewerDetailScreen() {
           </HAlert>
         </View>
       ) : rgbaData && dimensions ? (
-        <Animated.View entering={FadeIn.duration(250)} className="flex-1">
-          <FitsCanvas
-            ref={canvasRef}
-            rgbaData={rgbaData}
-            width={displayWidth || dimensions.width}
-            height={displayHeight || dimensions.height}
-            sourceWidth={dimensions.width}
-            sourceHeight={dimensions.height}
-            showGrid={showGrid}
-            showCrosshair={showCrosshair}
-            cursorX={cursorX}
-            cursorY={cursorY}
-            onPixelTap={handlePixelTap}
-            onTransformChange={setCanvasTransform}
-            gridColor={settingsGridColor}
-            gridOpacity={settingsGridOpacity}
-            crosshairColor={settingsCrosshairColor}
-            crosshairOpacity={settingsCrosshairOpacity}
-            minScale={settingsMinScale}
-            maxScale={settingsMaxScale}
-            doubleTapScale={settingsDoubleTapScale}
-            gestureConfig={canvasGestureConfig}
-            onSwipeLeft={() => nextId && navigateTo(nextId)}
-            onSwipeRight={() => prevId && navigateTo(prevId)}
-            onLongPress={toggleFullscreen}
-            interactionEnabled={!isRegionSelectActive}
-            wheelZoomEnabled
-          />
-
-          {/* Pixel Inspector */}
-          <PixelInspector
-            x={cursorX}
-            y={cursorY}
-            value={pixelValue}
-            visible={showPixelInfo}
-            decimalPlaces={pixelInfoDecimalPlaces}
-            ra={pixelWcs?.ra}
-            dec={pixelWcs?.dec}
-          />
-
-          {/* Minimap */}
-          <Minimap
-            rgbaData={rgbaData}
-            imgWidth={displayWidth || dimensions.width}
-            imgHeight={displayHeight || dimensions.height}
-            visible={showMinimap}
-            viewportScale={canvasTransform.scale}
-            viewportTranslateX={canvasTransform.translateX}
-            viewportTranslateY={canvasTransform.translateY}
-            canvasWidth={canvasTransform.canvasWidth}
-            canvasHeight={canvasTransform.canvasHeight}
-            onNavigate={(tx: number, ty: number) => canvasRef.current?.setTransform(tx, ty)}
-          />
-
-          {/* Astrometry Annotation Overlay */}
-          {latestSolvedJob?.result && showAnnotations && dimensions && (
-            <View className="absolute inset-0" pointerEvents="none">
-              <AstrometryAnnotationOverlay
-                annotations={latestSolvedJob.result.annotations}
-                renderWidth={displayWidth || dimensions.width}
-                renderHeight={displayHeight || dimensions.height}
-                sourceWidth={dimensions.width}
-                sourceHeight={dimensions.height}
-                transform={canvasTransform}
-                visible={showAnnotations}
-                visibleTypes={visibleAnnotationTypes}
-              />
-            </View>
-          )}
-
-          {/* Coordinate Grid Overlay */}
-          {latestSolvedJob?.result && showCoordinateGrid && dimensions && (
-            <View className="absolute inset-0" pointerEvents="none">
-              <CoordinateGridOverlay
-                calibration={latestSolvedJob.result.calibration}
-                renderWidth={displayWidth || dimensions.width}
-                renderHeight={displayHeight || dimensions.height}
-                sourceWidth={dimensions.width}
-                sourceHeight={dimensions.height}
-                transform={canvasTransform}
-                visible={showCoordinateGrid}
-              />
-            </View>
-          )}
-
-          {/* Constellation Lines Overlay */}
-          {latestSolvedJob?.result && showConstellations && dimensions && (
-            <View className="absolute inset-0" pointerEvents="none">
-              <ConstellationOverlay
-                calibration={latestSolvedJob.result.calibration}
-                renderWidth={displayWidth || dimensions.width}
-                renderHeight={displayHeight || dimensions.height}
-                sourceWidth={dimensions.width}
-                sourceHeight={dimensions.height}
-                transform={canvasTransform}
-                visible={showConstellations}
-              />
-            </View>
-          )}
-
-          {/* Region selection overlay */}
-          {isRegionSelectActive && dimensions && (
-            <RegionSelectOverlay
-              renderWidth={displayWidth || dimensions.width}
-              renderHeight={displayHeight || dimensions.height}
+        <ViewerErrorBoundary onReset={handleResetView}>
+          <Animated.View entering={FadeIn.duration(250)} className="flex-1">
+            <FitsCanvas
+              ref={canvasRef}
+              rgbaData={rgbaData}
+              width={displayWidth || dimensions.width}
+              height={displayHeight || dimensions.height}
               sourceWidth={dimensions.width}
               sourceHeight={dimensions.height}
-              containerWidth={canvasTransform.canvasWidth || 300}
-              containerHeight={canvasTransform.canvasHeight || 300}
-              transform={canvasTransform}
-              onRegionChange={handleRegionChange}
-              onClear={handleRegionClear}
+              showGrid={showGrid}
+              showCrosshair={showCrosshair}
+              cursorX={cursorX}
+              cursorY={cursorY}
+              onPixelTap={handlePixelTap}
+              onTransformChange={setCanvasTransform}
+              gridColor={settingsGridColor}
+              gridOpacity={settingsGridOpacity}
+              crosshairColor={settingsCrosshairColor}
+              crosshairOpacity={settingsCrosshairOpacity}
+              minScale={settingsMinScale}
+              maxScale={settingsMaxScale}
+              doubleTapScale={settingsDoubleTapScale}
+              gestureConfig={canvasGestureConfig}
+              onSwipeLeft={() => nextId && navigateTo(nextId)}
+              onSwipeRight={() => prevId && navigateTo(prevId)}
+              onLongPress={toggleFullscreen}
+              interactionEnabled={!isRegionSelectActive}
+              wheelZoomEnabled
             />
-          )}
 
-          {/* Stats overlay */}
-          {stats && (
-            <StatsOverlay
-              width={dimensions.width}
-              height={dimensions.height}
-              isDataCube={dimensions.isDataCube}
-              depth={dimensions.depth}
-              min={stats.min}
-              max={stats.max}
-              mean={stats.mean}
-              median={stats.median}
-              stddev={stats.stddev}
-              bitpix={metadata?.bitpix ?? file.bitpix}
-              currentHDU={currentHDU}
-              currentFrame={currentFrame}
-              totalFrames={totalFrames}
+            {/* Pixel Inspector */}
+            <PixelInspector
+              x={cursorX}
+              y={cursorY}
+              value={pixelValue}
+              visible={showPixelInfo}
+              decimalPlaces={pixelInfoDecimalPlaces}
+              ra={pixelWcs?.ra}
+              dec={pixelWcs?.dec}
             />
-          )}
 
-          {/* Astrometry status badge */}
-          {activeAstrometryJob && (
-            <AstrometryBadge
-              status={activeAstrometryJob.status}
-              progress={activeAstrometryJob.progress}
+            {/* Minimap */}
+            <Minimap
+              rgbaData={rgbaData}
+              imgWidth={displayWidth || dimensions.width}
+              imgHeight={displayHeight || dimensions.height}
+              visible={showMinimap}
+              viewportScale={canvasTransform.scale}
+              viewportTranslateX={canvasTransform.translateX}
+              viewportTranslateY={canvasTransform.translateY}
+              canvasWidth={canvasTransform.canvasWidth}
+              canvasHeight={canvasTransform.canvasHeight}
+              onNavigate={(tx: number, ty: number) => canvasRef.current?.setTransform(tx, ty)}
             />
-          )}
 
-          {/* Zoom controls */}
-          <ZoomControls
-            scale={canvasTransform.scale}
-            translateX={canvasTransform.translateX}
-            translateY={canvasTransform.translateY}
-            canvasWidth={canvasTransform.canvasWidth}
-            canvasHeight={canvasTransform.canvasHeight}
-            imageWidth={displayWidth || dimensions.width}
-            imageHeight={displayHeight || dimensions.height}
-            bottomOffset={zoomControlsBottomOffset}
-            onSetTransform={(tx, ty, s) => canvasRef.current?.setTransform(tx, ty, s)}
-          />
+            {/* Astrometry Annotation Overlay */}
+            {latestSolvedJob?.result && showAnnotations && dimensions && (
+              <View className="absolute inset-0" pointerEvents="none">
+                <AstrometryAnnotationOverlay
+                  annotations={latestSolvedJob.result.annotations}
+                  renderWidth={displayWidth || dimensions.width}
+                  renderHeight={displayHeight || dimensions.height}
+                  sourceWidth={dimensions.width}
+                  sourceHeight={dimensions.height}
+                  transform={canvasTransform}
+                  visible={showAnnotations}
+                  visibleTypes={visibleAnnotationTypes}
+                />
+              </View>
+            )}
 
-          {/* Compass Indicator */}
-          {latestSolvedJob?.result?.calibration && showAnnotations && (
-            <View className="absolute" style={{ top: 8, right: 8 }}>
-              <CompassIndicator calibration={latestSolvedJob.result.calibration} />
-            </View>
-          )}
+            {/* Coordinate Grid Overlay */}
+            {latestSolvedJob?.result && showCoordinateGrid && dimensions && (
+              <View className="absolute inset-0" pointerEvents="none">
+                <CoordinateGridOverlay
+                  calibration={latestSolvedJob.result.calibration}
+                  renderWidth={displayWidth || dimensions.width}
+                  renderHeight={displayHeight || dimensions.height}
+                  sourceWidth={dimensions.width}
+                  sourceHeight={dimensions.height}
+                  transform={canvasTransform}
+                  visible={showCoordinateGrid}
+                />
+              </View>
+            )}
 
-          {/* Annotation Detail Sheet */}
-          {selectedAnnotation && latestSolvedJob?.result?.calibration && (
-            <AnnotationDetailSheet
-              annotation={selectedAnnotation}
-              calibration={latestSolvedJob.result.calibration}
-              onClose={() => setSelectedAnnotation(null)}
+            {/* Constellation Lines Overlay */}
+            {latestSolvedJob?.result && showConstellations && dimensions && (
+              <View className="absolute inset-0" pointerEvents="none">
+                <ConstellationOverlay
+                  calibration={latestSolvedJob.result.calibration}
+                  renderWidth={displayWidth || dimensions.width}
+                  renderHeight={displayHeight || dimensions.height}
+                  sourceWidth={dimensions.width}
+                  sourceHeight={dimensions.height}
+                  transform={canvasTransform}
+                  visible={showConstellations}
+                />
+              </View>
+            )}
+
+            {/* Region selection overlay */}
+            {isRegionSelectActive && dimensions && (
+              <RegionSelectOverlay
+                renderWidth={displayWidth || dimensions.width}
+                renderHeight={displayHeight || dimensions.height}
+                sourceWidth={dimensions.width}
+                sourceHeight={dimensions.height}
+                containerWidth={canvasTransform.canvasWidth || 300}
+                containerHeight={canvasTransform.canvasHeight || 300}
+                transform={canvasTransform}
+                onRegionChange={handleRegionChange}
+                onClear={handleRegionClear}
+              />
+            )}
+
+            {/* Stats overlay */}
+            {stats && (
+              <StatsOverlay
+                width={dimensions.width}
+                height={dimensions.height}
+                isDataCube={dimensions.isDataCube}
+                depth={dimensions.depth}
+                min={stats.min}
+                max={stats.max}
+                mean={stats.mean}
+                median={stats.median}
+                stddev={stats.stddev}
+                bitpix={metadata?.bitpix ?? file.bitpix}
+                currentHDU={currentHDU}
+                currentFrame={currentFrame}
+                totalFrames={totalFrames}
+              />
+            )}
+
+            {/* Astrometry status badge */}
+            {activeAstrometryJob && (
+              <AstrometryBadge
+                status={activeAstrometryJob.status}
+                progress={activeAstrometryJob.progress}
+              />
+            )}
+
+            {/* Zoom controls */}
+            <ZoomControls
+              scale={canvasTransform.scale}
+              translateX={canvasTransform.translateX}
+              translateY={canvasTransform.translateY}
+              canvasWidth={canvasTransform.canvasWidth}
+              canvasHeight={canvasTransform.canvasHeight}
+              imageWidth={displayWidth || dimensions.width}
+              imageHeight={displayHeight || dimensions.height}
+              bottomOffset={zoomControlsBottomOffset}
+              onSetTransform={(tx, ty, s) => canvasRef.current?.setTransform(tx, ty, s)}
             />
-          )}
 
-          {/* Exit fullscreen button */}
-          {isFullscreen && (
-            <View
-              className="absolute"
-              style={{
-                top: Math.max(insets.top + 8, 12),
-                right: Math.max(insets.right + 8, 12),
-              }}
-            >
-              <Button
-                size="sm"
-                variant="ghost"
-                isIconOnly
-                onPress={toggleFullscreen}
-                className="h-8 w-8 bg-black/50 rounded-full"
+            {/* Compass Indicator */}
+            {latestSolvedJob?.result?.calibration && showAnnotations && (
+              <View className="absolute" style={{ top: 8, right: 8 }}>
+                <CompassIndicator calibration={latestSolvedJob.result.calibration} />
+              </View>
+            )}
+
+            {/* Annotation Detail Sheet */}
+            {selectedAnnotation && latestSolvedJob?.result?.calibration && (
+              <AnnotationDetailSheet
+                annotation={selectedAnnotation}
+                calibration={latestSolvedJob.result.calibration}
+                onClose={() => setSelectedAnnotation(null)}
+              />
+            )}
+
+            {/* Exit fullscreen button */}
+            {isFullscreen && (
+              <View
+                className="absolute"
+                style={{
+                  top: Math.max(insets.top + 8, 12),
+                  right: Math.max(insets.right + 8, 12),
+                }}
               >
-                <Ionicons name="contract-outline" size={16} color="#fff" />
-              </Button>
-            </View>
-          )}
-        </Animated.View>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  isIconOnly
+                  onPress={toggleFullscreen}
+                  className="h-8 w-8 bg-black/50 rounded-full"
+                >
+                  <Ionicons name="contract-outline" size={16} color="#fff" />
+                </Button>
+              </View>
+            )}
+          </Animated.View>
+        </ViewerErrorBoundary>
       ) : (
         <View className="flex-1 items-center justify-center px-6">
           <Animated.View entering={FadeIn.duration(300)} className="w-full max-w-sm items-center">
@@ -1485,7 +1495,7 @@ export default function ViewerDetailScreen() {
               />
               {/* Centered icon on skeleton */}
               <View className="absolute inset-0 items-center justify-center">
-                <View className="opacity-25">
+                <View style={{ opacity: 0.25 }}>
                   <Ionicons
                     name={
                       loadingPhase === 0
@@ -1540,10 +1550,10 @@ export default function ViewerDetailScreen() {
                     key={step}
                     className={isActive ? "bg-success" : "bg-muted/25"}
                     style={{
-                      width: withTiming(isCurrent ? 16 : 6, { duration: 300 }),
+                      width: isCurrent ? 16 : 6,
                       height: 6,
                       borderRadius: 3,
-                      opacity: withTiming(isCurrent ? 1 : isActive ? 0.5 : 0.3, { duration: 300 }),
+                      opacity: isCurrent ? 1 : isActive ? 0.5 : 0.3,
                     }}
                   />
                 );
@@ -1603,9 +1613,11 @@ export default function ViewerDetailScreen() {
           onToggleFavorite={() => file && toggleFavorite(file.id)}
           onOpenHeader={() => router.push(`/header/${id}`)}
           onOpenEditor={() => router.push(`/editor/${id}`)}
-          onCompare={() =>
-            router.push(`/compare?ids=${[id, nextId ?? prevId].filter(Boolean).join(",")}`)
-          }
+          canCompare={canCompare}
+          onCompare={() => {
+            if (compareIds.length < 2) return;
+            router.push(`/compare?ids=${compareIds.join(",")}`);
+          }}
           onExport={() => setShowExport(true)}
           onAstrometry={
             latestSolvedJob

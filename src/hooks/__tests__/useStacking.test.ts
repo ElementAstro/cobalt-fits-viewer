@@ -11,25 +11,28 @@ type StackResultLike = {
   }>;
 };
 
-jest.mock("../../lib/utils/fileManager", () => ({
-  readFileAsArrayBuffer: jest.fn(),
-}));
-jest.mock("../../lib/fits/parser", () => ({
-  loadScientificFitsFromBuffer: jest.fn(),
-  getImagePixels: jest.fn(),
-  getImageDimensions: jest.fn(),
-  getHeaderValue: jest.fn(),
+jest.mock("../../lib/image/scientificImageLoader", () => ({
+  loadScientificImageFromPath: jest.fn(),
 }));
 jest.mock("../../lib/utils/pixelMath", () => ({
-  stackAverage: jest.fn(),
-  stackMedian: jest.fn(),
-  stackSigmaClip: jest.fn(),
-  stackMin: jest.fn(),
-  stackMax: jest.fn(),
-  stackWinsorizedSigmaClip: jest.fn(),
-  stackWeightedAverage: jest.fn(),
   computeAutoStretch: jest.fn(),
 }));
+jest.mock("../../lib/stacking/integration", () => {
+  const actual = jest.requireActual("../../lib/stacking/integration") as Record<string, unknown>;
+  return {
+    ...actual,
+    integrateFrames: jest.fn(
+      (_frames: Float32Array[], options: { strategy: { name: string } }) => ({
+        pixels: new Float32Array([10, 10, 10, 10]),
+        stats: { totalRejectedLow: 0, totalRejectedHigh: 0, pixelCount: 4 },
+      }),
+    ),
+  };
+});
+jest.mock("../../lib/stacking/normalization", () => {
+  const actual = jest.requireActual("../../lib/stacking/normalization") as Record<string, unknown>;
+  return { ...actual };
+});
 jest.mock("../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(),
 }));
@@ -103,20 +106,14 @@ jest.mock("../../lib/logger", () => {
   };
 });
 
-const fileLib = jest.requireMock("../../lib/utils/fileManager") as {
-  readFileAsArrayBuffer: jest.Mock;
-};
-const parserLib = jest.requireMock("../../lib/fits/parser") as {
-  loadScientificFitsFromBuffer: jest.Mock;
-  getImagePixels: jest.Mock;
-  getImageDimensions: jest.Mock;
-  getHeaderValue: jest.Mock;
+const loaderLib = jest.requireMock("../../lib/image/scientificImageLoader") as {
+  loadScientificImageFromPath: jest.Mock;
 };
 const mathLib = jest.requireMock("../../lib/utils/pixelMath") as {
-  stackAverage: jest.Mock;
-  stackWeightedAverage: jest.Mock;
   computeAutoStretch: jest.Mock;
-  evaluateFrameQuality?: jest.Mock;
+};
+const integrationLib = jest.requireMock("../../lib/stacking/integration") as {
+  integrateFrames: jest.Mock;
 };
 const converterLib = jest.requireMock("../../lib/converter/formatConverter") as {
   fitsToRGBA: jest.Mock;
@@ -135,16 +132,18 @@ const calibrationLib = jest.requireMock("../../lib/stacking/calibration") as {
 describe("useStacking", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    fileLib.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
-    parserLib.loadScientificFitsFromBuffer.mockResolvedValue({ fits: true });
-    parserLib.getImageDimensions.mockReturnValue({ width: 2, height: 2 });
-    parserLib.getHeaderValue.mockReturnValue(30);
-    parserLib.getImagePixels
-      .mockResolvedValueOnce(new Float32Array([1, 2, 3, 4]))
-      .mockResolvedValueOnce(new Float32Array([5, 6, 7, 8]))
-      .mockResolvedValue(new Float32Array([1, 1, 1, 1]));
-    mathLib.stackAverage.mockReturnValue(new Float32Array([10, 10, 10, 10]));
-    mathLib.stackWeightedAverage.mockReturnValue(new Float32Array([11, 11, 11, 11]));
+    loaderLib.loadScientificImageFromPath.mockResolvedValue({
+      pixels: new Float32Array([1, 2, 3, 4]),
+      width: 2,
+      height: 2,
+      exposure: 30,
+      sourceType: "fits",
+      sourceFormat: "fits",
+    });
+    integrationLib.integrateFrames.mockReturnValue({
+      pixels: new Float32Array([10, 10, 10, 10]),
+      stats: { totalRejectedLow: 0, totalRejectedHigh: 0, pixelCount: 4 },
+    });
     mathLib.computeAutoStretch.mockReturnValue({ blackPoint: 0.1, whitePoint: 0.9 });
     converterLib.fitsToRGBA.mockReturnValue(new Uint8ClampedArray([255, 255, 255, 255]));
   });
@@ -166,14 +165,16 @@ describe("useStacking", () => {
     await act(async () => {
       stackResult = (await result.current.stackFiles(
         [
-          { filepath: "/tmp/a.fits", filename: "a.fits" },
+          { filepath: "/tmp/a.dng", filename: "a.dng" },
           { filepath: "/tmp/b.fits", filename: "b.fits" },
         ],
         "average",
       )) as StackResultLike | null;
     });
 
-    expect(mathLib.stackAverage).toHaveBeenCalled();
+    expect(integrationLib.integrateFrames).toHaveBeenCalled();
+    const callArgs = integrationLib.integrateFrames.mock.calls[0];
+    expect(callArgs[1].strategy.name).toBe("average");
     expect(stackResult).toEqual(
       expect.objectContaining({
         method: "average",
@@ -197,9 +198,23 @@ describe("useStacking", () => {
   });
 
   it("handles dimension mismatch as error", async () => {
-    parserLib.getImageDimensions
-      .mockReturnValueOnce({ width: 2, height: 2 })
-      .mockReturnValueOnce({ width: 3, height: 3 });
+    loaderLib.loadScientificImageFromPath
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([1, 2, 3, 4]),
+        width: 2,
+        height: 2,
+        exposure: 30,
+        sourceType: "fits",
+        sourceFormat: "fits",
+      })
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([5, 6, 7, 8]),
+        width: 3,
+        height: 3,
+        exposure: 30,
+        sourceType: "raster",
+        sourceFormat: "dng",
+      });
     const { result } = renderHook(() => useStacking());
 
     await act(async () => {
@@ -216,18 +231,39 @@ describe("useStacking", () => {
   });
 
   it("generates EXPTIME warnings and keeps stacking running with scale=1 fallback", async () => {
-    parserLib.getHeaderValue
-      .mockReset()
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce(30)
-      .mockReturnValueOnce(null)
-      .mockReturnValueOnce(60);
-    parserLib.getImagePixels
-      .mockReset()
-      .mockResolvedValueOnce(new Float32Array([1, 1, 1, 1]))
-      .mockResolvedValueOnce(new Float32Array([2, 2, 2, 2]))
-      .mockResolvedValueOnce(new Float32Array([5, 6, 7, 8]))
-      .mockResolvedValueOnce(new Float32Array([9, 10, 11, 12]));
+    loaderLib.loadScientificImageFromPath
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([1, 1, 1, 1]),
+        width: 2,
+        height: 2,
+        exposure: null,
+        sourceType: "fits",
+        sourceFormat: "fits",
+      })
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([2, 2, 2, 2]),
+        width: 2,
+        height: 2,
+        exposure: 30,
+        sourceType: "fits",
+        sourceFormat: "fits",
+      })
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([5, 6, 7, 8]),
+        width: 2,
+        height: 2,
+        exposure: null,
+        sourceType: "raster",
+        sourceFormat: "dng",
+      })
+      .mockResolvedValueOnce({
+        pixels: new Float32Array([9, 10, 11, 12]),
+        width: 2,
+        height: 2,
+        exposure: 60,
+        sourceType: "fits",
+        sourceFormat: "fits",
+      });
 
     const { result } = renderHook(() => useStacking());
     let stackResult: StackResultLike | null = null;
@@ -283,7 +319,9 @@ describe("useStacking", () => {
     expect(qualityLib.evaluateFrameQualityAsync).toHaveBeenCalled();
     expect(qualityLib.qualityToWeights).toHaveBeenCalled();
     expect(alignLib.alignFrameAsync).toHaveBeenCalled();
-    expect(mathLib.stackWeightedAverage).toHaveBeenCalledWith(expect.any(Array), [0.7, 0.3]);
+    expect(integrationLib.integrateFrames).toHaveBeenCalled();
+    const intCallArgs = integrationLib.integrateFrames.mock.calls[0];
+    expect(intCallArgs[1].strategy.name).toBe("weighted");
 
     act(() => {
       result.current.cancel();
@@ -299,10 +337,21 @@ describe("useStacking", () => {
   });
 
   it("cancels in-flight request without publishing result", async () => {
-    parserLib.getImagePixels.mockImplementation(
+    loaderLib.loadScientificImageFromPath.mockImplementation(
       () =>
-        new Promise<Float32Array>((resolve) => {
-          setTimeout(() => resolve(new Float32Array([1, 2, 3, 4])), 30);
+        new Promise((resolve) => {
+          setTimeout(
+            () =>
+              resolve({
+                pixels: new Float32Array([1, 2, 3, 4]),
+                width: 2,
+                height: 2,
+                exposure: 30,
+                sourceType: "fits",
+                sourceFormat: "fits",
+              }),
+            30,
+          );
         }),
     );
 
@@ -548,12 +597,23 @@ describe("useStacking", () => {
 
   it("prioritizes manual anchors and annotation stars in stacking pipeline", async () => {
     const { result } = renderHook(() => useStacking());
-    parserLib.getImageDimensions
-      .mockReturnValueOnce({ width: 40, height: 40 })
-      .mockReturnValueOnce({ width: 40, height: 40 });
-    parserLib.getImagePixels
-      .mockResolvedValueOnce(new Float32Array(40 * 40).fill(1))
-      .mockResolvedValueOnce(new Float32Array(40 * 40).fill(1));
+    loaderLib.loadScientificImageFromPath
+      .mockResolvedValueOnce({
+        pixels: new Float32Array(40 * 40).fill(1),
+        width: 40,
+        height: 40,
+        exposure: 60,
+        sourceType: "fits",
+        sourceFormat: "fits",
+      })
+      .mockResolvedValueOnce({
+        pixels: new Float32Array(40 * 40).fill(1),
+        width: 40,
+        height: 40,
+        exposure: 60,
+        sourceType: "raster",
+        sourceFormat: "dng",
+      });
     const snapshot = {
       profile: "balanced" as const,
       sigmaThreshold: 5,

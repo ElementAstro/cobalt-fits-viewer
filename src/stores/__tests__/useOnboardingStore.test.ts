@@ -6,7 +6,7 @@ import { useOnboardingStore, ONBOARDING_TOTAL_STEPS } from "../useOnboardingStor
 
 // Mock storage
 jest.mock("../../lib/storage", () => ({
-  zustandMMKVStorage: {
+  zustandAsyncStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
     removeItem: jest.fn(),

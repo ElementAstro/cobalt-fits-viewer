@@ -2,7 +2,7 @@ import { useTargetStore } from "../useTargetStore";
 import type { Target } from "../../lib/fits/types";
 
 jest.mock("../../lib/storage", () => ({
-  zustandMMKVStorage: {
+  zustandAsyncStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),
     removeItem: jest.fn(),

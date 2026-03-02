@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { Album, SmartAlbumRule } from "../lib/fits/types";
 import {
   computeAlbumFileConsistencyPatches,
@@ -283,7 +283,7 @@ export const useAlbumStore = create<AlbumStoreState>()(
     }),
     {
       name: "album-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         albums: state.albums,
         albumSortBy: state.albumSortBy,

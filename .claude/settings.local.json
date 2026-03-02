@@ -7,7 +7,10 @@
       "WebFetch(domain:heroui.com)",
       "WebFetch(domain:github.com)",
       "Bash(node:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "WebFetch(domain:news.sina.com.cn)",
+      "WebFetch(domain:news.yahoo.com)",
+      "Bash(curl -s \"https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXlnQVAB?hl=zh-CN&gl=CN\")"
     ]
   }
 }

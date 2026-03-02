@@ -37,6 +37,9 @@ describe("fileFormat", () => {
     expect(detectSupportedImageFormat("preview.jfif")?.id).toBe("jpeg");
     expect(detectSupportedImageFormat("preview.tiff")?.id).toBe("tiff");
     expect(detectSupportedImageFormat("preview.tif")?.id).toBe("tiff");
+    expect(detectSupportedImageFormat("preview.dng")?.id).toBe("dng");
+    expect(detectSupportedImageFormat("preview.cr3")?.id).toBe("cr3");
+    expect(detectSupportedImageFormat("preview.nef")?.id).toBe("nef");
     expect(detectSupportedImageFormat("preview.gif")?.id).toBe("gif");
     expect(detectSupportedImageFormat("preview.heic")?.id).toBe("heic");
     expect(detectSupportedImageFormat("preview.heif")?.id).toBe("heic");
@@ -73,6 +76,9 @@ describe("fileFormat", () => {
     expect(toImageSourceFormat(detectSupportedImageFormat("x.ser"))).toBe("ser");
     expect(toImageSourceFormat(detectSupportedImageFormat("x.jpg"))).toBe("jpeg");
     expect(toImageSourceFormat(detectSupportedImageFormat("x.tiff"))).toBe("tiff");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.dng"))).toBe("dng");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.cr3"))).toBe("cr3");
+    expect(toImageSourceFormat(detectSupportedImageFormat("x.nef"))).toBe("nef");
     expect(toImageSourceFormat(detectSupportedImageFormat("x.gif"))).toBe("gif");
     expect(toImageSourceFormat(detectSupportedImageFormat("x.heic"))).toBe("heic");
     expect(toImageSourceFormat(detectSupportedImageFormat("x.avif"))).toBe("avif");
@@ -96,6 +102,9 @@ describe("fileFormat", () => {
     expect(detectSupportedImageFormatByMimeType("application/fits")?.id).toBe("fits");
     expect(detectSupportedImageFormatByMimeType("application/xisf")?.id).toBe("xisf");
     expect(detectSupportedImageFormatByMimeType("application/x-ser")?.id).toBe("ser");
+    expect(detectSupportedImageFormatByMimeType("image/x-adobe-dng")?.id).toBe("dng");
+    expect(detectSupportedImageFormatByMimeType("image/x-canon-cr3")?.id).toBe("cr3");
+    expect(detectSupportedImageFormatByMimeType("image/x-nikon-nef")?.id).toBe("nef");
     expect(detectSupportedImageFormatByMimeType("video/mp4")?.id).toBe("mp4");
     expect(detectSupportedImageFormatByMimeType("video/quicktime")?.id).toBe("mov");
     expect(detectSupportedImageFormatByMimeType("video/x-m4v")?.id).toBe("m4v");
@@ -193,6 +202,29 @@ describe("fileFormat", () => {
       filename: "frame.fit.gz",
     });
     expect(byFilename?.id).toBe("fit_gz");
+  });
+
+  it("resolves RAW aliases when content/mime points to container formats", () => {
+    const tiffHeader = new Uint8Array([0x49, 0x49, 0x2a, 0x00, 0x08]).buffer;
+    const isoBmffMp4 = new TextEncoder().encode("\u0000\u0000\u0000\u0018ftypisom").buffer;
+
+    const dngByContent = detectPreferredSupportedImageFormat({
+      filename: "frame.dng",
+      payload: tiffHeader,
+    });
+    expect(dngByContent?.id).toBe("dng");
+
+    const cr3ByContent = detectPreferredSupportedImageFormat({
+      filename: "frame.cr3",
+      payload: isoBmffMp4,
+    });
+    expect(cr3ByContent?.id).toBe("cr3");
+
+    const nefByMime = detectPreferredSupportedImageFormat({
+      filename: "frame.nef",
+      mimeType: "image/tiff",
+    });
+    expect(nefByMime?.id).toBe("nef");
   });
 
   it("handles multi-part extension split and replacement", () => {

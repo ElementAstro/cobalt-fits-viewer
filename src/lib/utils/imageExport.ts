@@ -261,10 +261,11 @@ export function cleanExportDir(): void {
 }
 
 /**
- * 清理超过指定时间的导出文件
- * @param maxAgeMs 最大文件年龄（毫秒），默认 24 小时
+ * 清理导出缓存中的所有文件。
+ * 注意：expo-file-system File 不暴露修改时间，因此无法实现基于文件年龄的过期清理。
+ * @returns 删除的文件数量
  */
-export function cleanExpiredExports(_maxAgeMs: number = 24 * 60 * 60 * 1000): number {
+export function cleanExpiredExports(): number {
   const dir = new Directory(Paths.cache, EXPORT_SUBDIR);
   if (!dir.exists) return 0;
 
@@ -290,13 +291,6 @@ export function cleanExpiredExports(_maxAgeMs: number = 24 * 60 * 60 * 1000): nu
   }
 
   return cleaned;
-}
-
-/**
- * @deprecated Use cleanExpiredExports instead
- */
-export function cleanOldExports(): void {
-  cleanExpiredExports(0);
 }
 
 /**

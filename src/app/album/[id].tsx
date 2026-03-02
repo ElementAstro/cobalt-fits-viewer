@@ -26,6 +26,7 @@ import { AlbumStatisticsSheet } from "../../components/gallery/AlbumStatisticsSh
 import { calculateAlbumStatistics } from "../../lib/gallery/albumStatistics";
 import { formatDate } from "../../lib/utils/format";
 import { routeForMedia } from "../../lib/media/routing";
+import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 import type { FitsMetadata, AlbumStatistics } from "../../lib/fits/types";
 import type { ThumbnailLoadingSummary } from "../../components/gallery/thumbnailLoading";
 
@@ -76,6 +77,10 @@ export default function AlbumDetailScreen() {
   const [showNotesEdit, setShowNotesEdit] = useState(false);
   const [showStatistics, setShowStatistics] = useState(false);
   const [notesValue, setNotesValue] = useState("");
+  const selectedImageIds = useMemo(
+    () => pickImageLikeIds(selectedIds, albumFiles, 2),
+    [selectedIds, albumFiles],
+  );
   const allAlbumSelected =
     albumFiles.length > 0 && albumFiles.every((file) => selectedIds.includes(file.id));
 
@@ -147,6 +152,12 @@ export default function AlbumDetailScreen() {
     }
     selectAll(albumFiles.map((file) => file.id));
   }, [albumFiles, allAlbumSelected, selectAll]);
+
+  const handleCompare = useCallback(() => {
+    if (selectedImageIds.length < 2) return;
+    router.push(`/compare?ids=${selectedImageIds.join(",")}`);
+    exitSelectionMode();
+  }, [exitSelectionMode, router, selectedImageIds]);
 
   const handleDeleteAlbum = useCallback(() => {
     if (!album) return;
@@ -378,6 +389,16 @@ export default function AlbumDetailScreen() {
                 <Ionicons name="remove-circle-outline" size={12} color="#ef4444" />
                 <Button.Label className="text-[10px]">{t("gallery.removeFromAlbum")}</Button.Label>
               </Button>
+              <Button
+                testID="e2e-action-album__param_id-open-compare"
+                size="sm"
+                variant="outline"
+                onPress={handleCompare}
+                isDisabled={selectedImageIds.length < 2}
+              >
+                <Ionicons name="git-compare-outline" size={12} color={mutedColor} />
+                <Button.Label className="text-[10px]">{t("gallery.compare")}</Button.Label>
+              </Button>
               <Button size="sm" variant="outline" onPress={exitSelectionMode}>
                 <Ionicons name="close-outline" size={14} color={mutedColor} />
               </Button>
@@ -399,6 +420,8 @@ export default function AlbumDetailScreen() {
     handleSelectAllToggle,
     handleSetCover,
     handleRemoveSelected,
+    handleCompare,
+    selectedImageIds.length,
     handleEditNotes,
     statistics,
     isLandscape,

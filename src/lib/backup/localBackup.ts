@@ -527,6 +527,33 @@ export async function importLocalBackup(
 }
 
 /**
+ * 清理过期的备份临时文件
+ * 在 app 启动或备份页打开时调用，清理超过 1 小时的 backup_* / lan-backup-* 临时文件
+ */
+export function cleanupStaleBackupTempFiles(): void {
+  const STALE_THRESHOLD_MS = 60 * 60 * 1000;
+  const now = Date.now();
+  try {
+    const cacheDir = new Directory(Paths.cache);
+    for (const entry of cacheDir.list()) {
+      const name = entry instanceof File ? entry.name : (entry as Directory).name;
+      if (
+        !name.startsWith("backup_") &&
+        !name.startsWith("lan-backup-") &&
+        !name.startsWith("cobalt-backup-")
+      )
+        continue;
+      const tsMatch = name.match(/(\d{13})/);
+      if (tsMatch && now - parseInt(tsMatch[1], 10) > STALE_THRESHOLD_MS) {
+        cleanupPath(entry as File | Directory);
+      }
+    }
+  } catch {
+    // ignore cleanup errors
+  }
+}
+
+/**
  * 预览本地备份文件内容（不执行恢复）
  */
 export async function previewLocalBackup(): Promise<{

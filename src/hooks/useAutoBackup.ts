@@ -81,6 +81,26 @@ export function useAutoBackup() {
           setLastAutoBackupResult("failed", result.error);
           Logger.warn(TAG, `Auto backup failed: ${result.error}`);
         }
+
+        if (AppState.currentState !== "active") {
+          try {
+            const Notifications = await import("expo-notifications");
+            const { status } = await Notifications.getPermissionsAsync();
+            if (status === "granted") {
+              await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: result.success ? "Auto backup complete" : "Auto backup failed",
+                  body: result.success
+                    ? `Backed up to ${providerType}`
+                    : (result.error ?? "Unknown error"),
+                },
+                trigger: null,
+              });
+            }
+          } catch {
+            // notification unavailable
+          }
+        }
       } catch (error) {
         setLastAutoBackupResult("failed", error instanceof Error ? error.message : String(error));
         Logger.error(TAG, "Auto backup error", { error });

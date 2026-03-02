@@ -20,6 +20,7 @@ interface EditorToolParamPanelProps {
   onCancel: () => void;
   onQuickAction: (op: ImageEditOperation) => void;
   onReset?: () => void;
+  onParamChange?: (op: ImageEditOperation | null) => void;
 }
 
 export const EditorToolParamPanel = React.memo(function EditorToolParamPanel({
@@ -30,6 +31,7 @@ export const EditorToolParamPanel = React.memo(function EditorToolParamPanel({
   onCancel,
   onQuickAction,
   onReset,
+  onParamChange,
 }: EditorToolParamPanelProps) {
   const { t } = useI18n();
 
@@ -61,7 +63,12 @@ export const EditorToolParamPanel = React.memo(function EditorToolParamPanel({
             </View>
           </View>
 
-          <ToolParams activeTool={activeTool} params={params} onQuickAction={onQuickAction} />
+          <ToolParams
+            activeTool={activeTool}
+            params={params}
+            onQuickAction={onQuickAction}
+            onParamChange={onParamChange}
+          />
         </Card.Body>
       </Card>
     </View>
@@ -79,17 +86,20 @@ const PARAM_SLIDER_TOOLS = new Set([
   "levels",
   "mtf",
   "curves",
+  "ghs",
 ]);
-const PARAM_MASK_TOOLS = new Set(["starMask", "rangeMask", "binarize"]);
+const PARAM_MASK_TOOLS = new Set(["starMask", "rangeMask", "binarize", "edgeMask"]);
 
 function ToolParams({
   activeTool,
   params,
   onQuickAction,
+  onParamChange: _onParamChange,
 }: {
   activeTool: EditorTool & string;
   params: EditorToolParams;
   onQuickAction: (op: ImageEditOperation) => void;
+  onParamChange?: (op: ImageEditOperation | null) => void;
 }) {
   if (PARAM_GEOMETRY_TOOLS.has(activeTool)) {
     return (

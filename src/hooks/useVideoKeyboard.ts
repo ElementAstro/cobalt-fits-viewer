@@ -4,11 +4,14 @@ import { Platform } from "react-native";
 interface VideoKeyboardHandlers {
   onPlayPause: () => void;
   onSeekBy: (sec: number) => void;
+  onSeekTo?: (sec: number) => void;
   onToggleMute: () => void;
   onToggleLoop: () => void;
+  onCycleRate?: () => void;
   onVolumeChange: (v: number) => void;
   onFullscreen: () => void;
   volume: number;
+  durationSec?: number;
 }
 
 export function useVideoKeyboard(handlers: VideoKeyboardHandlers) {
@@ -25,6 +28,7 @@ export function useVideoKeyboard(handlers: VideoKeyboardHandlers) {
       const h = ref.current;
       switch (e.code) {
         case "Space":
+        case "KeyK":
           e.preventDefault();
           h.onPlayPause();
           break;
@@ -33,6 +37,16 @@ export function useVideoKeyboard(handlers: VideoKeyboardHandlers) {
           break;
         case "ArrowRight":
           h.onSeekBy(5);
+          break;
+        case "KeyJ":
+          h.onSeekBy(-10);
+          break;
+        case "KeyL":
+          if (e.shiftKey) {
+            h.onToggleLoop();
+          } else {
+            h.onSeekBy(10);
+          }
           break;
         case "ArrowUp":
           e.preventDefault();
@@ -45,12 +59,23 @@ export function useVideoKeyboard(handlers: VideoKeyboardHandlers) {
         case "KeyM":
           h.onToggleMute();
           break;
-        case "KeyL":
-          h.onToggleLoop();
-          break;
         case "KeyF":
           h.onFullscreen();
           break;
+        case "Period":
+          if (e.shiftKey) h.onCycleRate?.();
+          break;
+        case "Comma":
+          // < key (Shift+Comma) — no reverse cycle yet, but reserved
+          break;
+        default: {
+          const digitMatch = e.code.match(/^Digit(\d)$/);
+          if (digitMatch && h.onSeekTo && h.durationSec && h.durationSec > 0) {
+            const pct = Number(digitMatch[1]) / 10;
+            h.onSeekTo(pct * h.durationSec);
+          }
+          break;
+        }
       }
     };
 

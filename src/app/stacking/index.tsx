@@ -39,7 +39,8 @@ import { isFitsFamilyFilename, splitFilenameExtension } from "../../lib/import/f
 import { getFitsDir, generateFileId } from "../../lib/utils/fileManager";
 import { writeFitsImage } from "../../lib/fits/writer";
 import { extractMetadata, loadFitsFromBufferAuto } from "../../lib/fits/parser";
-import { generateAndSaveThumbnail } from "../../lib/gallery/thumbnailCache";
+import { saveThumbnailFromRGBA } from "../../lib/gallery/thumbnailWorkflow";
+import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 
 const METHODS: { key: StackMethod; icon: keyof typeof Ionicons.glyphMap; labelKey: string }[] = [
   { key: "average", icon: "calculator-outline", labelKey: "editor.average" },
@@ -73,9 +74,14 @@ const DETECTION_PROFILES: {
 ];
 
 function isStackableFile(file: FitsMetadata): boolean {
-  if (file.mediaKind === "video" || file.mediaKind === "audio") return false;
+  if (file.mediaKind && file.mediaKind !== "image") return false;
   if (file.sourceType === "video" || file.sourceType === "audio") return false;
-  return file.sourceType === "fits" || isFitsFamilyFilename(file.filename);
+  if (file.decodeStatus === "failed") return false;
+  return (
+    file.sourceType === "fits" ||
+    file.sourceType === "raster" ||
+    isFitsFamilyFilename(file.filename)
+  );
 }
 
 function parseIdsParam(idsParam: string | string[] | undefined): string[] {
@@ -269,6 +275,15 @@ export default function StackingScreen() {
   const { saveImage, shareImage } = useExport();
 
   const selectedFiles = stackableFiles.filter((f) => selectedIds.includes(f.id));
+  const selectedCompareIds = useMemo(
+    () =>
+      pickImageLikeIds(
+        selectedFiles.map((file) => file.id),
+        selectedFiles,
+        2,
+      ),
+    [selectedFiles],
+  );
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const calibrationCandidates = useMemo(
     () => stackableFiles.filter((file) => !selectedIdSet.has(file.id)),
@@ -628,13 +643,15 @@ export default function StackingScreen() {
         location,
       });
 
-      const thumbUri = generateAndSaveThumbnail(
+      const thumbUri = saveThumbnailFromRGBA(
         id,
         stackResult.rgbaData,
         stackResult.width,
         stackResult.height,
-        thumbnailSize,
-        thumbnailQuality,
+        {
+          thumbnailSize,
+          thumbnailQuality,
+        },
       );
 
       if (thumbUri) {
@@ -843,6 +860,11 @@ export default function StackingScreen() {
       Alert.alert(t("common.error"), t("share.failed"));
     }
   }, [stacking.result, shareImage, exportFormat, t]);
+
+  const handleCompareSelected = useCallback(() => {
+    if (selectedCompareIds.length < 2) return;
+    router.push(`/compare?ids=${selectedCompareIds.join(",")}`);
+  }, [router, selectedCompareIds]);
 
   const handleSelectByFilter = useCallback(
     (filter: string) => {
@@ -1664,6 +1686,16 @@ export default function StackingScreen() {
 
         {/* Stack Button */}
         <View className="mt-6">
+          <Button
+            testID="e2e-action-stacking__index-open-compare"
+            variant="outline"
+            onPress={handleCompareSelected}
+            isDisabled={selectedCompareIds.length < 2}
+            className="mb-2"
+          >
+            <Ionicons name="git-compare-outline" size={16} color={successColor} />
+            <Button.Label>{t("gallery.compare")}</Button.Label>
+          </Button>
           <Button
             testID="e2e-action-stacking__index-start"
             variant="primary"

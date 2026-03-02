@@ -4,12 +4,7 @@
  */
 
 import { useState, useCallback } from "react";
-import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import {
-  loadScientificFitsFromBuffer,
-  getImagePixels,
-  getImageDimensions,
-} from "../lib/fits/parser";
+import { loadScientificImageFromPath } from "../lib/image/scientificImageLoader";
 import { composeRGB, type ChannelData } from "../lib/utils/rgbCompose";
 import {
   applyColorBalanceRGBA,
@@ -125,14 +120,9 @@ export function useCompose(options: UseComposeOptions = {}) {
       setError(null);
 
       try {
-        const buffer = await readFileAsArrayBuffer(filepath);
-        const fits = await loadScientificFitsFromBuffer(buffer, { filename });
-        const dims = getImageDimensions(fits);
-        const pixels = await getImagePixels(fits);
-
-        if (!dims || !pixels) {
-          throw new Error(`Failed to read image data from ${filename}`);
-        }
+        const loaded = await loadScientificImageFromPath(filepath, { filename });
+        const dims = { width: loaded.width, height: loaded.height };
+        const pixels = loaded.pixels;
 
         // Validate dimensions against reference
         if (refDimensions) {

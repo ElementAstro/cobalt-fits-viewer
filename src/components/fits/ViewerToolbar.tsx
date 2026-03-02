@@ -22,6 +22,7 @@ interface ViewerToolbarProps {
   onToggleFavorite: () => void;
   onOpenHeader: () => void;
   onOpenEditor: () => void;
+  canCompare: boolean;
   onCompare: () => void;
   onExport: () => void;
   onAstrometry: () => void;
@@ -44,6 +45,7 @@ export function ViewerToolbar({
   onToggleFavorite,
   onOpenHeader,
   onOpenEditor,
+  canCompare,
   onCompare,
   onExport,
   onAstrometry,
@@ -59,6 +61,7 @@ export function ViewerToolbar({
     icon: keyof typeof Ionicons.glyphMap;
     onPress: () => void;
     colorClass?: string;
+    disabled?: boolean;
   }[] = [
     {
       label: isFavorite ? t("common.unfavorite") : t("common.favorite"),
@@ -80,6 +83,7 @@ export function ViewerToolbar({
       label: t("gallery.compare"),
       icon: "git-compare-outline",
       onPress: onCompare,
+      disabled: !canCompare,
     },
     {
       label: t("common.share"),
@@ -114,8 +118,8 @@ export function ViewerToolbar({
             size="sm"
             variant="ghost"
             isIconOnly
-            isDisabled={!prevId}
             onPress={onPrev}
+            isDisabled={!prevId}
             className="h-8 w-8"
           >
             <Ionicons name="chevron-back" size={16} className="text-muted" />
@@ -124,8 +128,8 @@ export function ViewerToolbar({
             size="sm"
             variant="ghost"
             isIconOnly
-            isDisabled={!nextId}
             onPress={onNext}
+            isDisabled={!nextId}
             className="h-8 w-8"
           >
             <Ionicons name="chevron-forward" size={16} className="text-muted" />
@@ -241,19 +245,23 @@ export function ViewerToolbar({
                     ? "e2e-action-viewer__param_id-export"
                     : undefined
                 }
+                disabled={action.disabled}
                 onPress={() => {
+                  if (action.disabled) return;
                   haptics.selection();
                   setShowMoreMenu(false);
                   action.onPress();
                 }}
-                className="flex-row items-center gap-3 px-4 py-3.5"
+                className={`flex-row items-center gap-3 px-4 py-3.5 ${action.disabled ? "opacity-40" : ""}`}
               >
                 <Ionicons
                   name={action.icon}
                   size={18}
-                  className={action.colorClass ?? "text-muted"}
+                  className={action.disabled ? "text-muted" : (action.colorClass ?? "text-muted")}
                 />
-                <Text className="text-sm text-foreground">{action.label}</Text>
+                <Text className={`text-sm ${action.disabled ? "text-muted" : "text-foreground"}`}>
+                  {action.label}
+                </Text>
               </Pressable>
             ))}
             <Separator className="my-1" />

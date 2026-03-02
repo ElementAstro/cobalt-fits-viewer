@@ -22,6 +22,8 @@ interface EditorHeaderProps {
   onUndo: () => void;
   onRedo: () => void;
   onExport: () => void;
+  canCompare: boolean;
+  onCompare: () => void;
   onToggleOriginal: () => void;
   onClearError: () => void;
 }
@@ -44,6 +46,8 @@ export const EditorHeader = React.memo(function EditorHeader({
   onUndo,
   onRedo,
   onExport,
+  canCompare,
+  onCompare,
   onToggleOriginal,
   onClearError,
 }: EditorHeaderProps) {
@@ -118,6 +122,19 @@ export const EditorHeader = React.memo(function EditorHeader({
             isDisabled={!hasData}
           >
             <Ionicons name="share-outline" size={14} color={hasData ? successColor : mutedColor} />
+          </Button>
+          <Button
+            testID="e2e-action-editor__param_id-open-compare"
+            size="sm"
+            variant="outline"
+            onPress={onCompare}
+            isDisabled={!canCompare}
+          >
+            <Ionicons
+              name="git-compare-outline"
+              size={14}
+              color={canCompare ? successColor : mutedColor}
+            />
           </Button>
         </View>
       </View>

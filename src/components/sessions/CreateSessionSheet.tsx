@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { View, Text, Alert, ScrollView } from "react-native";
+import { View, Text, Alert, ScrollView, useWindowDimensions } from "react-native";
 import {
   BottomSheet,
   Button,
@@ -20,6 +20,7 @@ import { toLocalDateKey } from "../../lib/sessions/planUtils";
 import { resolveManualSessionTimeRange } from "../../lib/sessions/sessionTimeRange";
 import { useChipInput } from "../../hooks/useChipInput";
 import { useEquipmentFields } from "../../hooks/useEquipmentFields";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { ChipInputField } from "./ChipInputField";
 import { EquipmentFields } from "./EquipmentFields";
 import { RatingSelector } from "./RatingSelector";
@@ -34,6 +35,9 @@ interface CreateSessionSheetProps {
 export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSessionSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
+  const { isLandscape } = useScreenOrientation();
+  const { height: screenHeight } = useWindowDimensions();
+  const compact = isLandscape;
   const addSession = useSessionStore((s) => s.addSession);
   const targetCatalog = useTargetStore((s) => s.targets);
 
@@ -139,14 +143,20 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
     >
       <BottomSheet.Portal>
         <BottomSheet.Overlay />
-        <BottomSheet.Content>
+        <BottomSheet.Content
+          snapPoints={compact ? ["95%"] : undefined}
+          enableDynamicSizing={!compact}
+        >
           {/* Header */}
           <View className="mb-4 flex-row items-center justify-between">
             <BottomSheet.Title>{t("sessions.addSession")}</BottomSheet.Title>
             <BottomSheet.Close />
           </View>
 
-          <ScrollView className="max-h-[70vh]" showsVerticalScrollIndicator={false}>
+          <ScrollView
+            style={{ maxHeight: screenHeight * (compact ? 0.82 : 0.7) }}
+            showsVerticalScrollIndicator={false}
+          >
             {/* Date */}
             <TextField className="mb-3">
               <Label>{t("sessions.calendar")}</Label>
@@ -268,44 +278,45 @@ export function CreateSessionSheet({ visible, onClose, initialDate }: CreateSess
 
             <Separator className="mb-3" />
 
-            {/* Equipment */}
-            <EquipmentFields
-              telescope={equip.telescope}
-              camera={equip.camera}
-              mount={equip.mount}
-              onTelescopeChange={equip.setTelescope}
-              onCameraChange={equip.setCamera}
-              onMountChange={equip.setMount}
-            />
+            {/* Equipment & Conditions */}
+            <View className={compact ? "flex-row gap-3" : ""}>
+              <View className={compact ? "flex-1" : ""}>
+                <EquipmentFields
+                  telescope={equip.telescope}
+                  camera={equip.camera}
+                  mount={equip.mount}
+                  onTelescopeChange={equip.setTelescope}
+                  onCameraChange={equip.setCamera}
+                  onMountChange={equip.setMount}
+                />
 
-            {/* Filters */}
-            <ChipInputField
-              label={t("sessions.filters")}
-              items={equip.filters}
-              inputValue={equip.filterInput}
-              onInputChange={equip.setFilterInput}
-              onAdd={equip.addFilter}
-              onRemove={equip.removeFilter}
-              placeholder="e.g. Ha, OIII, SII..."
-            />
+                <ChipInputField
+                  label={t("sessions.filters")}
+                  items={equip.filters}
+                  inputValue={equip.filterInput}
+                  onInputChange={equip.setFilterInput}
+                  onAdd={equip.addFilter}
+                  onRemove={equip.removeFilter}
+                  placeholder="e.g. Ha, OIII, SII..."
+                />
+              </View>
 
-            <Separator className="mb-3" />
+              {!compact && <Separator className="mb-3" />}
 
-            {/* Weather & Seeing */}
-            <TextField className="mb-3">
-              <Label>{t("sessions.weather")}</Label>
-              <Input value={weather} onChangeText={setWeather} placeholder="e.g. Clear, 15°C" />
-            </TextField>
-            <TextField className="mb-3">
-              <Label>{t("sessions.seeing")}</Label>
-              <Input value={seeing} onChangeText={setSeeing} placeholder='e.g. 2.5", Good' />
-            </TextField>
+              <View className={compact ? "flex-1" : ""}>
+                <TextField className="mb-3">
+                  <Label>{t("sessions.weather")}</Label>
+                  <Input value={weather} onChangeText={setWeather} placeholder="e.g. Clear, 15°C" />
+                </TextField>
+                <TextField className="mb-3">
+                  <Label>{t("sessions.seeing")}</Label>
+                  <Input value={seeing} onChangeText={setSeeing} placeholder='e.g. 2.5", Good' />
+                </TextField>
 
-            {/* Rating */}
-            <RatingSelector value={rating} onChange={setRating} />
-
-            {/* Bortle */}
-            <BortleSelector value={bortle} onChange={setBortle} />
+                <RatingSelector value={rating} onChange={setRating} />
+                <BortleSelector value={bortle} onChange={setBortle} />
+              </View>
+            </View>
 
             {/* Tags */}
             <ChipInputField

@@ -192,18 +192,50 @@ export async function downloadFromLAN(
       return { success: false, error: `Download failed: ${backupRes.status}` };
     }
 
-    const data = new Uint8Array(await backupRes.arrayBuffer());
-    destFile.write(data);
+    const contentLength =
+      parseInt(backupRes.headers.get("content-length") ?? "0", 10) || info.estimatedSize;
+    const reader = backupRes.body?.getReader();
+
+    let totalReceived = 0;
+    if (reader) {
+      const chunks: Uint8Array[] = [];
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (value) {
+          chunks.push(value);
+          totalReceived += value.length;
+          onProgress?.({
+            phase: "downloading",
+            current: 0,
+            total: 1,
+            bytesTotal: contentLength,
+            bytesTransferred: totalReceived,
+          });
+        }
+      }
+      const merged = new Uint8Array(totalReceived);
+      let offset = 0;
+      for (const chunk of chunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      destFile.write(merged);
+    } else {
+      const data = new Uint8Array(await backupRes.arrayBuffer());
+      totalReceived = data.length;
+      destFile.write(data);
+    }
 
     onProgress?.({
       phase: "downloading",
       current: 1,
       total: 1,
-      bytesTotal: data.length,
-      bytesTransferred: data.length,
+      bytesTotal: totalReceived,
+      bytesTransferred: totalReceived,
     });
 
-    Logger.info(TAG, `LAN backup downloaded: ${data.length} bytes`);
+    Logger.info(TAG, `LAN backup downloaded: ${totalReceived} bytes`);
     return { success: true, zipPath: destFile.uri };
   } catch (error) {
     const msg = error instanceof Error ? error.message : "LAN download failed";

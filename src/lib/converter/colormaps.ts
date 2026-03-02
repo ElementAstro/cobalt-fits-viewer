@@ -42,6 +42,10 @@ export function getColormapLUT(
   return lut;
 }
 
+export function clearColormapLutCache(): void {
+  lutCache.clear();
+}
+
 /**
  * 将归一化的灰度值映射为 RGBA 颜色
  * 使用预计算 LUT（4096 档位）提升精度和性能

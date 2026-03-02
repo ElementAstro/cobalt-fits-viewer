@@ -803,6 +803,70 @@ export function applyThemeVariables(variables: {
 }
 
 /**
+ * HeroUI Native 的 @theme inline static 在构建时将 calc(var(--radius) * N)
+ * 编译为 JavaScript getter: `function() { return this["--radius"] * N }`。
+ *
+ * Metro 转换器在构建时将 `0.5rem` 转换为数字 `8`（0.5 × 16px）。
+ * 但 Uniwind.updateCSSVariables 对非颜色字符串（如 "0.75rem"）直接透传，
+ * 导致 `"0.75rem" * 3 = NaN`，React Native 会忽略 NaN 值。
+ *
+ * 此函数将 rem/px 字符串转换为数字（像素值），确保运行时乘法正确。
+ * Uniwind 默认 1rem = 16px（见 metro-transformer.mjs: --uniwind-em = 16）。
+ */
+const REM_PX = 16;
+
+const RADIUS_SCALE: ReadonlyArray<[string, number]> = [
+  ["--radius-xs", 0.25],
+  ["--radius-sm", 0.5],
+  ["--radius-md", 0.75],
+  ["--radius-lg", 1],
+  ["--radius-xl", 1.5],
+  ["--radius-2xl", 2],
+  ["--radius-3xl", 3],
+  ["--radius-4xl", 4],
+];
+
+function cssLengthToPx(value: string): number {
+  const num = parseFloat(value);
+  if (Number.isNaN(num)) return 0;
+  if (value.endsWith("rem")) return num * REM_PX;
+  // px or unitless
+  return num;
+}
+
+export function expandLayoutVariables(
+  radiusValue: string,
+  borderWidth: string,
+  fieldBorderWidth: string,
+): Record<string, number> {
+  const vars: Record<string, number> = {};
+
+  const radiusPx = cssLengthToPx(radiusValue);
+  const bwPx = cssLengthToPx(borderWidth);
+  const fbwPx = cssLengthToPx(fieldBorderWidth);
+
+  // Base variables (numeric px)
+  vars["--radius"] = radiusPx;
+  vars["--border-width"] = bwPx;
+  vars["--field-border-width"] = fbwPx;
+
+  // Derived radius values matching HeroUI theme.css multipliers
+  for (const [varName, multiplier] of RADIUS_SCALE) {
+    vars[varName] = radiusPx * multiplier;
+  }
+
+  // Field radius = radius * 1.5
+  const fieldRadiusPx = radiusPx * 1.5;
+  vars["--field-radius"] = fieldRadiusPx;
+  vars["--radius-field"] = fieldRadiusPx;
+
+  // Border width field
+  vars["--border-width-field"] = fbwPx;
+
+  return vars;
+}
+
+/**
  * 将强调色 CSS 变量应用到 Uniwind 运行时
  */
 export function applyAccentColor(key: AccentColorKey) {

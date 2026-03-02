@@ -6,6 +6,7 @@ import {
   applyStylePreset,
   applyThemeVariables,
   buildCustomThemeVariables,
+  expandLayoutVariables,
   getThemeVariables,
   isHexColor,
   normalizeHexColor,
@@ -268,5 +269,57 @@ describe("theme presets", () => {
     applyAccentColor("blue");
     applyStylePreset("forest");
     expect(Uniwind.updateCSSVariables).toHaveBeenCalled();
+  });
+
+  describe("expandLayoutVariables", () => {
+    it("converts rem to px numbers (1rem = 16px) for all derived radius variables", () => {
+      const vars = expandLayoutVariables("0.5rem", "1px", "0px");
+      // 0.5rem = 8px
+      expect(vars["--radius"]).toBe(8);
+      expect(vars["--radius-xs"]).toBe(2); // 8 * 0.25
+      expect(vars["--radius-sm"]).toBe(4); // 8 * 0.5
+      expect(vars["--radius-md"]).toBe(6); // 8 * 0.75
+      expect(vars["--radius-lg"]).toBe(8); // 8 * 1
+      expect(vars["--radius-xl"]).toBe(12); // 8 * 1.5
+      expect(vars["--radius-2xl"]).toBe(16); // 8 * 2
+      expect(vars["--radius-3xl"]).toBe(24); // 8 * 3
+      expect(vars["--radius-4xl"]).toBe(32); // 8 * 4
+    });
+
+    it("handles none preset (0rem) correctly", () => {
+      const vars = expandLayoutVariables("0rem", "1px", "0px");
+      expect(vars["--radius"]).toBe(0);
+      expect(vars["--radius-xs"]).toBe(0);
+      expect(vars["--radius-lg"]).toBe(0);
+      expect(vars["--radius-4xl"]).toBe(0);
+    });
+
+    it("handles pill preset (1rem = 16px) correctly", () => {
+      const vars = expandLayoutVariables("1rem", "1px", "0px");
+      expect(vars["--radius-lg"]).toBe(16); // 16 * 1
+      expect(vars["--radius-3xl"]).toBe(48); // 16 * 3
+      expect(vars["--radius-4xl"]).toBe(64); // 16 * 4
+    });
+
+    it("pre-computes field radius as radiusPx * 1.5", () => {
+      const vars = expandLayoutVariables("0.75rem", "1px", "0px");
+      // 0.75rem = 12px, field = 12 * 1.5 = 18
+      expect(vars["--field-radius"]).toBe(18);
+      expect(vars["--radius-field"]).toBe(18);
+    });
+
+    it("converts border-width px strings to numbers", () => {
+      const vars = expandLayoutVariables("0.5rem", "2px", "1px");
+      expect(vars["--border-width"]).toBe(2);
+      expect(vars["--field-border-width"]).toBe(1);
+      expect(vars["--border-width-field"]).toBe(1);
+    });
+
+    it("returns all values as numbers, not strings", () => {
+      const vars = expandLayoutVariables("0.5rem", "1px", "0px");
+      for (const [, value] of Object.entries(vars)) {
+        expect(typeof value).toBe("number");
+      }
+    });
   });
 });

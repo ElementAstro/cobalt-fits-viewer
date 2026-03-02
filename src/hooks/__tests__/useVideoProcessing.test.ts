@@ -94,31 +94,42 @@ jest.mock("../../lib/import/fileFormat", () => ({
   toImageSourceFormat: () => "mp4",
 }));
 
-jest.mock("../../lib/gallery/thumbnailCache", () => ({
-  copyThumbnailToCache: () => "file:///thumb.jpg",
-  generateAndSaveThumbnail: () => "file:///thumb.jpg",
+jest.mock("../../lib/gallery/thumbnailWorkflow", () => ({
+  saveThumbnailFromExternalUri: () => "file:///thumb.jpg",
+  saveThumbnailFromRGBA: () => "file:///thumb.jpg",
 }));
 
-jest.mock("../../lib/image/rasterParser", () => ({
-  parseRasterFromBufferAsync: jest.fn(async () => ({
-    width: 2,
-    height: 2,
-    depth: 1,
-    isMultiFrame: false,
-    frameIndex: 0,
-    bitDepth: 8,
-    rgba: new Uint8Array([0, 1, 2, 255]),
+jest.mock("../../lib/import/imageParsePipeline", () => ({
+  parseImageBuffer: jest.fn(async () => ({
+    detectedFormat: { id: "jpeg", sourceType: "raster" },
+    sourceType: "raster",
+    sourceFormat: "jpeg",
+    fits: null,
+    rasterFrameProvider: null,
     pixels: new Float32Array([0, 0, 0, 0]),
-    channels: null,
+    rgbChannels: null,
+    dimensions: { width: 2, height: 2, depth: 1, isDataCube: false },
     headers: [],
+    comments: [],
+    history: [],
+    metadataBase: {
+      filename: "cover.jpg",
+      filepath: "file:///managed/cover.jpg",
+      fileSize: 100,
+      frameType: "light",
+      frameTypeSource: "filename",
+      bitpix: 8,
+      naxis: 2,
+      naxis1: 2,
+      naxis2: 2,
+      naxis3: 1,
+      decodeStatus: "ready",
+      decodeError: undefined,
+    },
     decodeStatus: "ready",
+    decodeError: undefined,
+    rgba: new Uint8Array([0, 1, 2, 255]),
   })),
-  extractRasterMetadata: () => ({
-    filename: "cover.jpg",
-    filepath: "file:///managed/cover.jpg",
-    fileSize: 100,
-    frameType: "light",
-  }),
 }));
 
 jest.mock("expo-video-thumbnails", () => ({
@@ -142,6 +153,10 @@ jest.mock("expo-file-system", () => ({
     }
   },
 }));
+
+const imageParsePipelineMock = require("../../lib/import/imageParsePipeline") as {
+  parseImageBuffer: jest.Mock;
+};
 
 const baseRequest: VideoProcessingRequest = {
   sourceId: "source-video",
@@ -332,6 +347,45 @@ describe("useVideoProcessing", () => {
       .files.find((file) => file.derivedFromId === "source-video");
     expect(derived?.mediaKind).toBe("audio");
     expect(derived?.sourceType).toBe("audio");
+  });
+
+  it("imports cover outputs as raster media and keeps decode metadata", async () => {
+    mockEngine.run.mockResolvedValueOnce({
+      outputUri: "file:///cache/cover.jpg",
+      operation: "cover",
+      sourceId: "source-video",
+      processingTag: "cover",
+    });
+
+    const { result } = await renderReadyHook();
+    let taskId: string | null = null;
+    await act(async () => {
+      taskId = result.current.enqueueProcessingTask({
+        ...baseRequest,
+        operation: "cover",
+        cover: { timeMs: 1000 },
+      }).taskId;
+    });
+
+    await waitFor(() => {
+      const task = useVideoTaskStore.getState().tasks.find((item) => item.id === taskId);
+      expect(task?.status).toBe("completed");
+    });
+
+    const derived = useFitsStore
+      .getState()
+      .files.find(
+        (file) => file.derivedFromId === "source-video" && file.processingTag === "cover",
+      );
+    expect(derived).toEqual(
+      expect.objectContaining({
+        sourceType: "raster",
+        mediaKind: "image",
+        decodeStatus: "ready",
+        bitpix: 8,
+      }),
+    );
+    expect(imageParsePipelineMock.parseImageBuffer).toHaveBeenCalled();
   });
 
   it("checkDiskSpaceForTask returns null when estimate is unavailable", async () => {

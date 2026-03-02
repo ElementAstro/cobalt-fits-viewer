@@ -35,6 +35,7 @@ import { GuideTarget } from "../../components/common/GuideTarget";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 import { routeForMedia } from "../../lib/media/routing";
+import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 import type { FitsMetadata } from "../../lib/fits/types";
 
 interface FilesFilterState {
@@ -163,6 +164,11 @@ export default function FilesScreen() {
     () => allFiles.filter((file) => selectedIdSet.has(file.id)),
     [allFiles, selectedIdSet],
   );
+  const selectedImageIds = useMemo(
+    () => pickImageLikeIds(selectedIds, allFiles, 2),
+    [selectedIds, allFiles],
+  );
+  const selectedImageCount = selectedImageIds.length;
 
   const metadataIndex = useMemo(() => buildMetadataIndex(allFiles), [allFiles]);
   const frameTypeDefinitions = useMemo(
@@ -641,6 +647,11 @@ export default function FilesScreen() {
     router.push(`/convert?tab=batch&ids=${encodeURIComponent(idsParam)}`);
   }, [selectedIds, router]);
 
+  const goToCompare = useCallback(() => {
+    if (selectedImageIds.length < 2) return;
+    router.push(`/compare?ids=${selectedImageIds.join(",")}`);
+  }, [router, selectedImageIds]);
+
   const goToStacking = useCallback(() => {
     const idsParam = selectedIds.join(",");
     if (!idsParam) {
@@ -731,7 +742,9 @@ export default function FilesScreen() {
         {isSelectionMode && (
           <FilesSelectionBar
             selectedCount={selectedIds.length}
+            selectedImageCount={selectedImageCount}
             isLandscape={isLandscape}
+            onCompare={goToCompare}
             onBatchConvert={goToBatchConvert}
             onStacking={goToStacking}
           />
@@ -801,7 +814,9 @@ export default function FilesScreen() {
       router,
       handleSelectAllVisible,
       goToBatchConvert,
+      goToCompare,
       goToStacking,
+      selectedImageCount,
       handleBatchDelete,
       clearSelection,
       sortBy,
@@ -959,6 +974,7 @@ export default function FilesScreen() {
         visible={showSelectionActions}
         onOpenChange={setShowSelectionActions}
         selectedCount={selectedIds.length}
+        selectedImageCount={selectedImageCount}
         displayCount={displayFiles.length}
         isLandscape={isLandscape}
         onSelectAllVisible={handleSelectAllVisible}
@@ -970,6 +986,7 @@ export default function FilesScreen() {
         onGroupSheet={() => setShowGroupSheet(true)}
         onBatchExport={handleBatchExport}
         onBatchConvert={goToBatchConvert}
+        onCompare={goToCompare}
         onStacking={goToStacking}
       />
 

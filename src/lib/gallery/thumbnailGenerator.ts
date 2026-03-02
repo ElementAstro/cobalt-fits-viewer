@@ -4,12 +4,15 @@
  */
 
 import { File } from "expo-file-system";
-import { generateAndSaveThumbnail, generateVideoThumbnailToCache } from "./thumbnailCache";
+import {
+  saveThumbnailFromRGBA,
+  saveThumbnailFromVideo,
+  type ThumbnailPolicyOverrides,
+} from "./thumbnailWorkflow";
 import { useSettingsStore } from "../../stores/useSettingsStore";
-import { loadScientificFitsFromBuffer, getImageDimensions, getImagePixels } from "../fits/parser";
 import { fitsToRGBA } from "../converter/formatConverter";
-import { parseRasterFromBufferAsync } from "../image/rasterParser";
 import type { FitsMetadata } from "../fits/types";
+import { parseImageBuffer } from "../import/imageParsePipeline";
 
 /**
  * 为单个文件重新生成缩略图。
@@ -18,6 +21,7 @@ import type { FitsMetadata } from "../fits/types";
  */
 export async function regenerateFileThumbnail(
   file: FitsMetadata,
+  policyOverrides: ThumbnailPolicyOverrides = {},
 ): Promise<{ fileId: string; uri: string | null }> {
   const {
     thumbnailSize,
@@ -36,88 +40,85 @@ export async function regenerateFileThumbnail(
       return { fileId: file.id, uri: null };
     }
 
+    const tryVideo = async () => {
+      return saveThumbnailFromVideo(
+        file.id,
+        file.filepath,
+        file.thumbnailAtMs ?? videoThumbnailTimeMs,
+        {
+          thumbnailSize,
+          thumbnailQuality,
+          videoThumbnailTimeMs,
+          ...policyOverrides,
+        },
+      );
+    };
+
+    if (file.sourceType === "video") {
+      try {
+        const uri = await tryVideo();
+        return { fileId: file.id, uri };
+      } catch {
+        return { fileId: file.id, uri: null };
+      }
+    }
+
+    if (file.sourceType === "audio") {
+      return { fileId: file.id, uri: null };
+    }
+
     const buffer = await source.arrayBuffer();
+    const parsed = await parseImageBuffer({
+      buffer,
+      filename: file.filename,
+      filepath: file.filepath,
+      fileSize: file.fileSize,
+    });
+
+    if (!parsed.dimensions || parsed.dimensions.width <= 0 || parsed.dimensions.height <= 0) {
+      return { fileId: file.id, uri: null };
+    }
+
     let uri: string | null = null;
-
-    const tryFits = async () => {
-      const fitsObj = await loadScientificFitsFromBuffer(buffer, {
-        filename: file.filename,
-      });
-      const dims = getImageDimensions(fitsObj);
-      const pixels = await getImagePixels(fitsObj);
-      if (!dims || !pixels) return null;
-
-      const rgba = fitsToRGBA(pixels, dims.width, dims.height, {
+    if (parsed.sourceType === "fits") {
+      if (!parsed.pixels) {
+        return { fileId: file.id, uri: null };
+      }
+      const rgba = fitsToRGBA(parsed.pixels, parsed.dimensions.width, parsed.dimensions.height, {
         stretch: defaultStretch,
         colormap: defaultColormap,
         blackPoint: defaultBlackPoint,
         whitePoint: defaultWhitePoint,
         gamma: defaultGamma,
       });
-
-      return generateAndSaveThumbnail(
+      uri = saveThumbnailFromRGBA(
         file.id,
         rgba,
-        dims.width,
-        dims.height,
-        thumbnailSize,
-        thumbnailQuality,
+        parsed.dimensions.width,
+        parsed.dimensions.height,
+        {
+          thumbnailSize,
+          thumbnailQuality,
+          ...policyOverrides,
+        },
       );
-    };
-
-    const tryRaster = async () => {
-      const parsed = await parseRasterFromBufferAsync(buffer, {
-        frameIndex: 0,
-        cacheSize: 1,
-        preferTiffDecoder: true,
-        sourceUri: file.filepath,
-        filename: file.filename,
-      });
+    } else if (parsed.rgba) {
       const rgba = new Uint8ClampedArray(
         parsed.rgba.buffer,
         parsed.rgba.byteOffset,
         parsed.rgba.byteLength,
       );
-
-      return generateAndSaveThumbnail(
+      uri = saveThumbnailFromRGBA(
         file.id,
         rgba,
-        parsed.width,
-        parsed.height,
-        thumbnailSize,
-        thumbnailQuality,
+        parsed.dimensions.width,
+        parsed.dimensions.height,
+        {
+          thumbnailSize,
+          thumbnailQuality,
+          ...policyOverrides,
+        },
       );
-    };
-
-    const tryVideo = async () => {
-      return generateVideoThumbnailToCache(
-        file.id,
-        file.filepath,
-        file.thumbnailAtMs ?? videoThumbnailTimeMs,
-        thumbnailQuality,
-      );
-    };
-
-    if (file.sourceType === "fits") {
-      try {
-        uri = await tryFits();
-      } catch {
-        uri = await tryRaster().catch(() => null);
-      }
-    } else if (file.sourceType === "video") {
-      try {
-        uri = await tryVideo();
-      } catch {
-        uri = null;
-      }
-    } else if (file.sourceType === "audio") {
-      uri = null;
-    } else {
-      try {
-        uri = await tryRaster();
-      } catch {
-        uri = await tryFits().catch(() => null);
-      }
     }
 
     return { fileId: file.id, uri };

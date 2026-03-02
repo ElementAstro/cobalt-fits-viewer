@@ -26,7 +26,9 @@ import {
   type BackupOptionsSheetMode,
 } from "../../components/backup/BackupOptionsSheet";
 import type { CloudProvider, BackupOptions, BackupInfo } from "../../lib/backup/types";
+import { PROVIDER_DISPLAY } from "../../lib/backup/types";
 import type { LocalBackupPreview } from "../../lib/backup/localBackup";
+import { cleanupStaleBackupTempFiles } from "../../lib/backup/localBackup";
 
 export default function BackupScreen() {
   const { t } = useI18n();
@@ -67,9 +69,11 @@ export default function BackupScreen() {
     getBackupInfo,
     quickBackup,
     quickLocalExport,
+    verifyBackup,
   } = useBackup();
 
   const lastError = useBackupStore((s) => s.lastError);
+  const lastSuccessfulBackupAt = useBackupStore((s) => s.lastSuccessfulBackupAt);
   const autoBackupEnabled = useBackupStore((s) => s.autoBackupEnabled);
   const autoBackupIntervalHours = useBackupStore((s) => s.autoBackupIntervalHours);
   const autoBackupNetwork = useBackupStore((s) => s.autoBackupNetwork);
@@ -87,6 +91,10 @@ export default function BackupScreen() {
   const fetchedProviders = useRef(new Set<string>());
 
   useEffect(() => {
+    cleanupStaleBackupTempFiles();
+  }, []);
+
+  useEffect(() => {
     for (const conn of connections) {
       if (conn.connected && !fetchedProviders.current.has(conn.provider)) {
         fetchedProviders.current.add(conn.provider);
@@ -99,6 +107,7 @@ export default function BackupScreen() {
     }
   }, [connections, getBackupInfo]);
 
+  const [historyLimit, setHistoryLimit] = useState(10);
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [showWebDAVConfig, setShowWebDAVConfig] = useState(false);
   const [showSFTPConfig, setShowSFTPConfig] = useState(false);
@@ -236,6 +245,38 @@ export default function BackupScreen() {
     [disconnectProvider, t, showConfirm, closeConfirm],
   );
 
+  const handleVerify = useCallback(
+    async (provider: CloudProvider) => {
+      const result = await verifyBackup(provider);
+      if (!result) {
+        showConfirm({
+          title: t("backup.verifyBackup"),
+          description: t("backup.connectionFailed"),
+          onConfirm: closeConfirm,
+        });
+        return;
+      }
+      if (result.valid) {
+        showConfirm({
+          title: t("backup.verifyBackup"),
+          description: t("backup.verifyPassed", {
+            files: result.totalFiles,
+            thumbnails: result.totalThumbnails,
+          }),
+          onConfirm: closeConfirm,
+        });
+      } else {
+        showConfirm({
+          title: t("backup.verifyBackup"),
+          description: t("backup.verifyFailed", { count: result.missingFiles.length }),
+          destructive: true,
+          onConfirm: closeConfirm,
+        });
+      }
+    },
+    [verifyBackup, t, showConfirm, closeConfirm],
+  );
+
   const handleLocalExport = useCallback(() => {
     setOptionsSheet({ visible: true, mode: "local-export", provider: null, localPreview: null });
   }, []);
@@ -327,6 +368,7 @@ export default function BackupScreen() {
         const provider = optionsSheet.provider;
         if (!provider) return;
         const result = await restore(provider, options);
+        if (result.success) setLastUsedBackupOptions(options);
         showConfirm({
           title: result.success ? t("backup.restoreComplete") : t("backup.restoreFailed"),
           description: result.success ? "" : (result.error ?? ""),
@@ -359,6 +401,7 @@ export default function BackupScreen() {
         if (!preview) return;
         const result = await localImport(options, preview);
         if (result.success) {
+          setLastUsedBackupOptions(options);
           showConfirm({
             title: t("backup.importComplete"),
             description: "",
@@ -411,6 +454,22 @@ export default function BackupScreen() {
         contentContainerStyle={{ paddingHorizontal: horizontalPadding, paddingBottom: 24 }}
         showsVerticalScrollIndicator={false}
       >
+        {/* Backup reminder */}
+        {!autoBackupEnabled &&
+          lastSuccessfulBackupAt > 0 &&
+          Date.now() - lastSuccessfulBackupAt > 7 * 24 * 60 * 60 * 1000 && (
+            <Alert status="warning" className="mt-4">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Description>
+                  {t("backup.backupReminder", {
+                    days: Math.floor((Date.now() - lastSuccessfulBackupAt) / (24 * 60 * 60 * 1000)),
+                  })}
+                </Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
+
         {/* Quick backup */}
         <View className="mt-4">
           <Text className="mb-2 text-xs font-semibold uppercase text-muted">
@@ -466,6 +525,7 @@ export default function BackupScreen() {
                 backupInfo={backupInfoMap[conn.provider]}
                 onBackup={() => handleBackup(conn.provider)}
                 onRestore={() => handleRestore(conn.provider)}
+                onVerify={() => handleVerify(conn.provider)}
                 onDisconnect={() => handleDisconnect(conn.provider)}
                 disabled={isOperating}
               />
@@ -730,30 +790,65 @@ export default function BackupScreen() {
             </View>
             <Card>
               <Card.Body className="gap-2">
-                {history.slice(0, 10).map((entry) => (
-                  <View key={entry.id} className="flex-row items-center gap-3 py-1">
-                    <Ionicons
-                      name={entry.result === "success" ? "checkmark-circle" : "alert-circle"}
-                      size={16}
-                      color={entry.result === "success" ? "#22c55e" : "#ef4444"}
-                    />
-                    <View className="flex-1">
-                      <Text className="text-sm text-foreground">
-                        {entry.type === "backup"
-                          ? t("backup.historyTypeBackup")
-                          : entry.type === "restore"
-                            ? t("backup.historyTypeRestore")
-                            : entry.type === "local-export"
-                              ? t("backup.historyTypeLocalExport")
-                              : t("backup.historyTypeLocalImport")}
-                      </Text>
-                      <Text className="text-xs text-muted">
-                        {new Date(entry.timestamp).toLocaleString()}
-                        {entry.error ? ` · ${entry.error}` : ""}
-                      </Text>
+                {history.slice(0, historyLimit).map((entry) => {
+                  const providerDisplay =
+                    entry.provider !== "local" ? PROVIDER_DISPLAY[entry.provider] : null;
+                  const historyLabel =
+                    entry.type === "backup"
+                      ? t("backup.historyTypeBackup")
+                      : entry.type === "restore"
+                        ? t("backup.historyTypeRestore")
+                        : entry.type === "local-export"
+                          ? t("backup.historyTypeLocalExport")
+                          : entry.type === "local-import"
+                            ? t("backup.historyTypeLocalImport")
+                            : entry.type === "lan-send"
+                              ? t("backup.historyTypeLanSend")
+                              : t("backup.historyTypeLanReceive");
+                  return (
+                    <View key={entry.id} className="flex-row items-center gap-3 py-1">
+                      {providerDisplay ? (
+                        <Ionicons
+                          name={providerDisplay.icon}
+                          size={16}
+                          color={providerDisplay.color}
+                        />
+                      ) : (
+                        <Ionicons
+                          name={entry.result === "success" ? "checkmark-circle" : "alert-circle"}
+                          size={16}
+                          color={entry.result === "success" ? "#22c55e" : "#ef4444"}
+                        />
+                      )}
+                      <View className="flex-1">
+                        <Text className="text-sm text-foreground">{historyLabel}</Text>
+                        <Text className="text-xs text-muted">
+                          {new Date(entry.timestamp).toLocaleString()}
+                          {entry.durationMs != null && entry.durationMs > 0
+                            ? ` · ${Math.round(entry.durationMs / 1000)}s`
+                            : ""}
+                          {entry.error ? ` · ${entry.error}` : ""}
+                        </Text>
+                      </View>
+                      {providerDisplay && (
+                        <Ionicons
+                          name={entry.result === "success" ? "checkmark-circle" : "alert-circle"}
+                          size={14}
+                          color={entry.result === "success" ? "#22c55e" : "#ef4444"}
+                        />
+                      )}
                     </View>
-                  </View>
-                ))}
+                  );
+                })}
+                {history.length > historyLimit && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onPress={() => setHistoryLimit((prev) => prev + 20)}
+                  >
+                    <Button.Label className="text-xs text-muted">{t("common.more")}</Button.Label>
+                  </Button>
+                )}
               </Card.Body>
             </Card>
           </View>
@@ -830,6 +925,8 @@ export default function BackupScreen() {
         visible={optionsSheet.visible}
         mode={optionsSheet.mode}
         localPreview={optionsSheet.localPreview}
+        estimatedBytes={summary.estimatedBytes}
+        fileCount={summary.fileCount}
         onConfirm={handleRunWithOptions}
         onClose={() =>
           setOptionsSheet((prev) => ({

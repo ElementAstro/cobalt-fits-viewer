@@ -132,6 +132,11 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     null,
   );
   const pendingOperationEventRef = useRef<PendingOperationEvent | null>(null);
+  const previewBackupRef = useRef<{
+    current: ImageState | null;
+    rgbaData: Uint8ClampedArray | null;
+    recipe: ProcessingPipelineSnapshot | null;
+  } | null>(null);
 
   const queueOperationEvent = useCallback(
     (
@@ -392,6 +397,111 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     [executeRecipe, options, recipe],
   );
 
+  const previewEdit = useCallback(
+    (operation: ImageEditOperation) => {
+      const currentRecipe = recipe ?? historyRef.current[historyIndexRef.current];
+      const original = originalRef.current;
+      if (!currentRecipe || !original) return;
+
+      const node = buildNodeFromOperation(operation);
+      const schema = getProcessingOperation(node.operationId);
+      if (!schema) return;
+
+      // Skip preview for heavy operations
+      if (schema.complexity === "heavy") return;
+
+      // Backup current state on first preview call
+      if (!previewBackupRef.current) {
+        previewBackupRef.current = {
+          current,
+          rgbaData,
+          recipe: currentRecipe,
+        };
+      }
+
+      const nextRecipe = cloneRecipe(currentRecipe);
+      nextRecipe.profile = profileRef.current;
+      if (schema.stage === "color") nextRecipe.colorNodes.push(node);
+      else nextRecipe.scientificNodes.push(node);
+
+      try {
+        const normalized = normalizeProcessingPipelineSnapshot(nextRecipe, profileRef.current);
+        const result = executeProcessingPipeline({
+          input: original,
+          snapshot: normalized,
+          renderOptions: {
+            stretch: stretchRef.current,
+            colormap: colormapRef.current,
+            blackPoint: 0,
+            whitePoint: 1,
+            gamma: 1,
+            profile: normalized.profile,
+          },
+          options: {
+            mode: "preview",
+            previewMaxDimension: 512,
+          },
+        });
+        setCurrent(result.scientificOutput);
+        setRgbaData(result.colorOutput.rgbaData);
+      } catch {
+        // Silently fail preview — user can still Apply for full execution
+      }
+    },
+    [current, rgbaData, recipe],
+  );
+
+  const cancelPreview = useCallback(() => {
+    const backup = previewBackupRef.current;
+    if (!backup) return;
+    setCurrent(backup.current);
+    setRgbaData(backup.rgbaData);
+    previewBackupRef.current = null;
+  }, []);
+
+  const commitPreview = useCallback(
+    (operation: ImageEditOperation) => {
+      previewBackupRef.current = null;
+      applyEdit(operation);
+    },
+    [applyEdit],
+  );
+
+  const isPreviewActive = previewBackupRef.current !== null;
+
+  const toggleNode = useCallback(
+    (nodeId: string) => {
+      const currentRecipe = recipe ?? historyRef.current[historyIndexRef.current];
+      if (!currentRecipe) return;
+      const nextRecipe = cloneRecipe(currentRecipe);
+      nextRecipe.savedAt = Date.now();
+      const sci = nextRecipe.scientificNodes.find((n) => n.id === nodeId);
+      const col = nextRecipe.colorNodes.find((n) => n.id === nodeId);
+      if (sci) sci.enabled = !sci.enabled;
+      else if (col) col.enabled = !col.enabled;
+      else return;
+      intermediatesRef.current = [];
+      lastRecipeScientificCountRef.current = 0;
+      executeRecipe(nextRecipe, { pushHistory: true });
+    },
+    [executeRecipe, recipe],
+  );
+
+  const removeNode = useCallback(
+    (nodeId: string) => {
+      const currentRecipe = recipe ?? historyRef.current[historyIndexRef.current];
+      if (!currentRecipe) return;
+      const nextRecipe = cloneRecipe(currentRecipe);
+      nextRecipe.savedAt = Date.now();
+      nextRecipe.scientificNodes = nextRecipe.scientificNodes.filter((n) => n.id !== nodeId);
+      nextRecipe.colorNodes = nextRecipe.colorNodes.filter((n) => n.id !== nodeId);
+      intermediatesRef.current = [];
+      lastRecipeScientificCountRef.current = 0;
+      executeRecipe(nextRecipe, { pushHistory: true });
+    },
+    [executeRecipe, recipe],
+  );
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -418,5 +528,11 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     updateDisplay,
     setProfile,
     clearError,
+    previewEdit,
+    cancelPreview,
+    commitPreview,
+    isPreviewActive,
+    toggleNode,
+    removeNode,
   };
 }

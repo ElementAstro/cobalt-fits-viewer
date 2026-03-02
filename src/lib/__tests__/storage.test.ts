@@ -11,7 +11,7 @@ function loadStorageAdapter() {
     default: mockAsyncStorage,
   }));
 
-  return require("../storage").zustandMMKVStorage as {
+  return require("../storage").zustandAsyncStorage as {
     getItem: (name: string) => Promise<string | null>;
     setItem: (name: string, value: string) => Promise<void>;
     removeItem: (name: string) => Promise<void>;

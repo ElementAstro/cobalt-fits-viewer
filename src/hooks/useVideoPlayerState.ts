@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { VideoPlayer, AudioTrack, SubtitleTrack } from "expo-video";
 
-const RATE_OPTIONS = [0.5, 1, 1.5, 2] as const;
+export const RATE_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 3] as const;
+const QUICK_RATE_OPTIONS = [1, 1.5, 2] as const;
 
 interface UseVideoPlayerStateOptions {
   abLoopA: number | null;
@@ -11,6 +12,7 @@ interface UseVideoPlayerStateOptions {
 
 export interface VideoPlayerState {
   isPlayerReady: boolean;
+  isBuffering: boolean;
   playerStatus: string;
   playerError: string | null;
   durationSec: number;
@@ -36,6 +38,7 @@ export interface VideoPlayerHandlers {
   handleSelectAudioTrack: (trackId: string | null) => void;
   handleSelectSubtitleTrack: (trackId: string | null) => void;
   handleRetryPlayback: () => void;
+  handleSetRate: (rate: number) => void;
 }
 
 export function useVideoPlayerState(
@@ -71,6 +74,7 @@ export function useVideoPlayerState(
   const [availableSubtitleTracks, setAvailableSubtitleTracks] = useState<SubtitleTrack[]>([]);
   const [activeAudioTrackId, setActiveAudioTrackId] = useState<string | null>(null);
   const [activeSubtitleTrackId, setActiveSubtitleTrackId] = useState<string | null>(null);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
 
   useEffect(() => {
     setIsMuted(player.muted);
@@ -101,6 +105,7 @@ export function useVideoPlayerState(
         setAvailableAudioTracks(availableAudioTracks);
         setAvailableSubtitleTracks(availableSubtitleTracks);
         setIsPlayerReady(true);
+        setHasLoadedOnce(true);
         setPlayerStatus("readyToPlay");
         setPlayerError(null);
       },
@@ -125,6 +130,7 @@ export function useVideoPlayerState(
     });
     const subSource = player.addListener("sourceChange", () => {
       setIsPlayerReady(false);
+      setHasLoadedOnce(false);
       setPlayerStatus("loading");
       setPlayerError(null);
       setCurrentTimeSec(0);
@@ -197,8 +203,8 @@ export function useVideoPlayerState(
 
   const handleCycleRate = useCallback(() => {
     haptics.selection();
-    const current = RATE_OPTIONS.findIndex((value) => value === playbackRate);
-    const next = RATE_OPTIONS[(current + 1) % RATE_OPTIONS.length];
+    const current = QUICK_RATE_OPTIONS.findIndex((value) => value === playbackRate);
+    const next = QUICK_RATE_OPTIONS[(current + 1) % QUICK_RATE_OPTIONS.length];
     player.playbackRate = next;
   }, [playbackRate, player, haptics]);
 
@@ -243,6 +249,14 @@ export function useVideoPlayerState(
     [availableSubtitleTracks, player],
   );
 
+  const handleSetRate = useCallback(
+    (rate: number) => {
+      const clamped = Math.max(0.25, Math.min(4, rate));
+      player.playbackRate = clamped;
+    },
+    [player],
+  );
+
   const handleRetryPlayback = useCallback(() => {
     setPlayerError(null);
     setPlayerStatus("loading");
@@ -252,6 +266,7 @@ export function useVideoPlayerState(
 
   return {
     isPlayerReady,
+    isBuffering: hasLoadedOnce && playerStatus === "loading",
     playerStatus,
     playerError,
     durationSec,
@@ -274,5 +289,6 @@ export function useVideoPlayerState(
     handleSelectAudioTrack,
     handleSelectSubtitleTrack,
     handleRetryPlayback,
+    handleSetRate,
   };
 }

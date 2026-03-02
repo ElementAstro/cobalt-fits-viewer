@@ -13,6 +13,11 @@ jest.mock("../../../i18n/useI18n", () => ({
         "files.restore": "Restore",
         "files.restoreAll": "Restore All",
         "files.emptyTrash": "Empty Trash",
+        "common.date": "Date",
+        "common.name": "Name",
+        "common.size": "Size",
+        "common.cancel": "Cancel",
+        "common.delete": "Delete",
       };
       let result = map[key] ?? key;
       if (params) {
@@ -28,6 +33,15 @@ jest.mock("../../../i18n/useI18n", () => ({
 jest.mock("../../../lib/utils/fileManager", () => ({
   formatFileSize: (b: number) => `${(b / 1024).toFixed(0)} KB`,
 }));
+
+jest.mock("../../../lib/gallery/thumbnailCache", () => ({
+  resolveThumbnailUri: (_id: string, uri?: string) => uri ?? null,
+}));
+
+jest.mock("expo-image", () => {
+  const { View } = require("react-native");
+  return { Image: (props: any) => <View testID="thumb-image" {...props} /> };
+});
 
 jest.mock("heroui-native", () => {
   const React = require("react");
@@ -45,11 +59,15 @@ jest.mock("heroui-native", () => {
   );
   Button.Label = ({ children }: any) => <Text>{children}</Text>;
 
+  const Chip = ({ onPress, children }: any) => <Pressable onPress={onPress}>{children}</Pressable>;
+  Chip.Label = ({ children, className: _className }: any) => <Text>{children}</Text>;
+
   return {
     BottomSheet,
     Button,
+    Chip,
     Separator: () => null,
-    useThemeColor: () => ["#999", "#f00"],
+    useThemeColor: () => ["#999", "#f00", "#0f0"],
   };
 });
 
@@ -232,5 +250,108 @@ describe("TrashSheet", () => {
     );
 
     expect(screen.queryByText("Trash")).toBeNull();
+  });
+
+  it("renders sort chips when items are present", () => {
+    render(
+      <TrashSheet
+        visible
+        items={[makeTrashItem("t1")]}
+        onClose={onClose}
+        onRestore={onRestore}
+        onDeleteForever={onDeleteForever}
+      />,
+    );
+
+    expect(screen.getByText("Date")).toBeTruthy();
+    expect(screen.getByText("Name")).toBeTruthy();
+    expect(screen.getByText("Size")).toBeTruthy();
+  });
+
+  it("does not render sort chips when trash is empty", () => {
+    render(
+      <TrashSheet
+        visible
+        items={[]}
+        onClose={onClose}
+        onRestore={onRestore}
+        onDeleteForever={onDeleteForever}
+      />,
+    );
+
+    expect(screen.queryByText("Date")).toBeNull();
+    expect(screen.queryByText("Name")).toBeNull();
+    expect(screen.queryByText("Size")).toBeNull();
+  });
+
+  it("enters selection mode on long press and shows selection count", () => {
+    render(
+      <TrashSheet
+        visible
+        items={[makeTrashItem("t1"), makeTrashItem("t2")]}
+        onClose={onClose}
+        onRestore={onRestore}
+        onDeleteForever={onDeleteForever}
+      />,
+    );
+
+    // Long press on first item to enter selection mode
+    const firstItem = screen.getByText("t1.fits");
+    fireEvent(firstItem, "onLongPress");
+
+    // Should show cancel chip with selection count
+    expect(screen.getByText(/Cancel/)).toBeTruthy();
+  });
+
+  it("sorts items by name when Name chip is pressed", () => {
+    const items = [
+      makeTrashItem("b-item", {
+        file: {
+          id: "file-b",
+          filename: "beta.fits",
+          filepath: "file:///tmp/beta.fits",
+          fileSize: 1024,
+          importDate: Date.now(),
+          frameType: "light" as const,
+          isFavorite: false,
+          tags: [],
+          albumIds: [],
+        },
+      }),
+      makeTrashItem("a-item", {
+        file: {
+          id: "file-a",
+          filename: "alpha.fits",
+          filepath: "file:///tmp/alpha.fits",
+          fileSize: 2048,
+          importDate: Date.now(),
+          frameType: "light" as const,
+          isFavorite: false,
+          tags: [],
+          albumIds: [],
+        },
+      }),
+    ];
+
+    render(
+      <TrashSheet
+        visible
+        items={items}
+        onClose={onClose}
+        onRestore={onRestore}
+        onDeleteForever={onDeleteForever}
+      />,
+    );
+
+    // Press Name chip to sort by filename
+    fireEvent.press(screen.getByText("Name"));
+
+    const allTexts = screen.getAllByText(/\.fits/);
+    const filenames = allTexts
+      .map((el) => el.props.children)
+      .filter((t: string) => typeof t === "string" && t.endsWith(".fits"));
+    // alpha.fits should come before beta.fits after name sort
+    expect(filenames[0]).toBe("alpha.fits");
+    expect(filenames[1]).toBe("beta.fits");
   });
 });

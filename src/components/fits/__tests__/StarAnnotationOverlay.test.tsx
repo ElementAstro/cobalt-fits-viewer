@@ -2,6 +2,25 @@ import React from "react";
 import { render } from "@testing-library/react-native";
 import { StarAnnotationOverlay } from "../StarAnnotationOverlay";
 
+jest.mock("@shopify/react-native-skia", () => {
+  const React = require("react");
+  const { View, Text } = require("react-native");
+  return {
+    Canvas: ({ children, ...props }: { children?: React.ReactNode; [k: string]: unknown }) =>
+      React.createElement(View, { testID: "skia-canvas", ...props }, children),
+    Circle: (props: Record<string, unknown>) =>
+      React.createElement(View, { testID: `circle-${props.cx}-${props.cy}` }),
+    Group: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(View, null, children),
+    RoundedRect: (props: Record<string, unknown>) =>
+      React.createElement(View, { testID: `rect-${props.x}` }),
+    Text: (props: { text?: string; [k: string]: unknown }) =>
+      React.createElement(Text, { testID: `skia-text-${props.text}` }, props.text),
+    useFont: () => ({ measureText: () => ({ width: 10 }) }),
+    vec: (x: number, y: number) => ({ x, y }),
+  };
+});
+
 describe("StarAnnotationOverlay", () => {
   const baseProps = {
     renderWidth: 100,

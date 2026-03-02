@@ -5,6 +5,7 @@ import { useI18n } from "../../i18n/useI18n";
 
 interface GallerySelectionToolbarProps {
   selectedCount: number;
+  selectedImageCount: number;
   allDisplaySelected: boolean;
   isLandscape: boolean;
   onSelectAllToggle: () => void;
@@ -18,6 +19,7 @@ interface GallerySelectionToolbarProps {
 
 export function GallerySelectionToolbar({
   selectedCount,
+  selectedImageCount,
   allDisplaySelected,
   isLandscape,
   onSelectAllToggle,
@@ -71,7 +73,7 @@ export function GallerySelectionToolbar({
           size="sm"
           variant="outline"
           onPress={onCompare}
-          isDisabled={selectedCount < 2}
+          isDisabled={selectedImageCount < 2}
         >
           <Ionicons name="git-compare-outline" size={12} color={mutedColor} />
         </Button>

@@ -129,7 +129,7 @@ function loadImageExportModule() {
     getExtension: (format: string) => string;
     getUTI: (format: string) => string;
     cleanExportDir: () => void;
-    cleanOldExports: () => void;
+    cleanExpiredExports: () => number;
   };
 }
 
@@ -257,7 +257,7 @@ describe("imageExport", () => {
     mockFiles.set("/cache/fits_exports/a.png", {});
     mockFiles.set("/cache/fits_exports/b.png", { throwOnDelete: true });
 
-    mod.cleanOldExports();
+    mod.cleanExpiredExports();
 
     expect(mockFiles.has("/cache/fits_exports/a.png")).toBe(false);
     expect(mockFiles.has("/cache/fits_exports/b.png")).toBe(true);
@@ -270,7 +270,7 @@ describe("imageExport", () => {
     mockFiles.set("/cache/fits_exports/a.png", {});
     mockListShouldThrow.value = true;
 
-    mod.cleanOldExports();
+    mod.cleanExpiredExports();
 
     expect(mockDirs.has("/cache/fits_exports")).toBe(false);
     expect(mockFiles.has("/cache/fits_exports/a.png")).toBe(false);

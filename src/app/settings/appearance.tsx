@@ -323,23 +323,28 @@ export default function AppearanceSettingsScreen() {
       const normalized = normalizeHexColor(value);
       const isOptional = OPTIONAL_CUSTOM_TOKENS.has(token);
       const canApply = isOptional ? value.trim().length === 0 || !!normalized : !!normalized;
+      const swatches = isOptional ? QUICK_BASE_SWATCHES : QUICK_SEMANTIC_SWATCHES;
       return (
         <View key={`${mode}-${token}`}>
-          <View className="mb-2 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2">
-              <View
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 999,
-                  backgroundColor: normalized ?? "#6b7280",
-                }}
-              />
-              <Text className="text-sm text-foreground">{t(labelKey)}</Text>
+          {/* Header: color dot + label + hex value */}
+          <View className="mb-2 flex-row items-center gap-3">
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 999,
+                backgroundColor: normalized ?? "#6b7280",
+                borderWidth: 1.5,
+                borderColor: normalized ? "transparent" : mutedColor,
+              }}
+            />
+            <View className="flex-1">
+              <Text className="text-sm font-medium text-foreground">{t(labelKey)}</Text>
+              {value.length > 0 && <Text className="text-[11px] text-muted">{value}</Text>}
             </View>
-            <Text className="text-xs text-muted">{value}</Text>
           </View>
-          <View className="mb-2 flex-row items-center gap-2">
+          {/* Input row */}
+          <View className="mb-2.5 flex-row items-center gap-2">
             <Input
               className="flex-1"
               placeholder={isOptional ? "#111827 / (auto)" : "#4F6BED"}
@@ -348,17 +353,18 @@ export default function AppearanceSettingsScreen() {
               autoCapitalize="characters"
               autoCorrect={false}
             />
-            <Button
-              size="sm"
-              variant="secondary"
-              onPress={() => applyCustomToken(mode, token)}
-              isDisabled={!canApply}
-            >
+            <Button size="sm" onPress={() => applyCustomToken(mode, token)} isDisabled={!canApply}>
               <Button.Label>{t("common.confirm")}</Button.Label>
             </Button>
           </View>
-          <View className="mb-2 flex-row flex-wrap gap-2">
-            {(isOptional ? QUICK_BASE_SWATCHES : QUICK_SEMANTIC_SWATCHES).map((color) => {
+          {/* Swatch strip */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mb-1"
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {swatches.map((color) => {
               const isSelected = normalized === color;
               return (
                 <PressableFeedback
@@ -370,22 +376,22 @@ export default function AppearanceSettingsScreen() {
                 >
                   <View
                     style={{
-                      width: 28,
-                      height: 28,
+                      width: 32,
+                      height: 32,
                       borderRadius: 999,
                       backgroundColor: color,
                       borderWidth: isSelected ? 2.5 : 1,
-                      borderColor: isSelected ? accentPreview : mutedColor,
+                      borderColor: isSelected ? accentPreview : `${mutedColor}44`,
                     }}
                   />
                 </PressableFeedback>
               );
             })}
-          </View>
+          </ScrollView>
           {!normalized && value.length > 0 && (
-            <Text className="mb-2 text-xs text-danger">{t("settings.invalidHexHint")}</Text>
+            <Text className="mt-1 text-xs text-danger">{t("settings.invalidHexHint")}</Text>
           )}
-          {index !== tokens.length - 1 && <Separator className="my-2" />}
+          {index !== tokens.length - 1 && <Separator className="my-3" />}
         </View>
       );
     });
@@ -780,7 +786,13 @@ export default function AppearanceSettingsScreen() {
         {/* Custom Theme */}
         {themeColorMode === "custom" && (
           <SettingsSection title={t("settings.customTheme")}>
-            <View className="mb-3 flex-row flex-wrap gap-2">
+            {/* Template presets — horizontal scroll */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              className="mb-3"
+              contentContainerStyle={{ gap: 8 }}
+            >
               {CUSTOM_THEME_TEMPLATE_KEYS.map((key) => {
                 const tmpl = CUSTOM_THEME_TEMPLATES[key];
                 return (
@@ -801,9 +813,9 @@ export default function AppearanceSettingsScreen() {
                   >
                     <View
                       style={{
-                        width: 12,
-                        height: 12,
-                        borderRadius: 6,
+                        width: 14,
+                        height: 14,
+                        borderRadius: 999,
                         backgroundColor: tmpl.swatch,
                       }}
                     />
@@ -811,8 +823,9 @@ export default function AppearanceSettingsScreen() {
                   </Button>
                 );
               })}
-            </View>
+            </ScrollView>
 
+            {/* Link toggle */}
             <Card variant="secondary" className="mb-3">
               <Card.Body className="px-4 py-3">
                 <SettingsToggleRow
@@ -824,29 +837,48 @@ export default function AppearanceSettingsScreen() {
               </Card.Body>
             </Card>
 
+            {/* Light / Dark editors */}
             {(["light", "dark"] as const)
               .filter((mode) => mode === "light" || !customThemeColors.linked)
               .map((mode) => (
                 <Card key={mode} variant="secondary" className="mb-3">
                   <Card.Body className="px-4 py-3">
-                    <Text className="mb-2 text-xs font-semibold uppercase text-muted">
-                      {mode === "light"
-                        ? t("settings.customThemeLight")
-                        : t("settings.customThemeDark")}
+                    {/* Mode header */}
+                    <View className="mb-3 flex-row items-center gap-2">
+                      <Ionicons
+                        name={mode === "light" ? "sunny-outline" : "moon-outline"}
+                        size={14}
+                        color={accentPreview}
+                      />
+                      <Text className="text-xs font-semibold uppercase text-foreground">
+                        {mode === "light"
+                          ? t("settings.customThemeLight")
+                          : t("settings.customThemeDark")}
+                      </Text>
+                    </View>
+
+                    {/* Base tokens section */}
+                    <Text className="mb-1 text-[11px] font-medium text-muted">
+                      {t("settings.customThemeBase")}
                     </Text>
-                    <Text className="mb-2 text-xs text-muted">{t("settings.customThemeBase")}</Text>
-                    <Text className="mb-2 text-xs text-muted">
+                    <Text className="mb-3 text-[11px] text-muted">
                       {t("settings.customThemeOptionalHint")}
                     </Text>
                     {renderTokenEditors(mode, CUSTOM_BASE_TOKEN_KEYS)}
-                    <Separator className="my-2" />
+
+                    <Separator className="my-3" />
+
+                    {/* Semantic tokens section */}
                     {renderTokenEditors(mode, CUSTOM_SEMANTIC_TOKEN_KEYS)}
-                    <Separator className="my-2" />
+
+                    <Separator className="my-3" />
+
+                    {/* Advanced tokens */}
                     <Accordion selectionMode="single" variant="surface">
                       <Accordion.Item value="advanced">
                         <Accordion.Trigger>
                           <View className="flex-1 flex-row items-center gap-2">
-                            <Ionicons name="color-palette-outline" size={14} color={mutedColor} />
+                            <Ionicons name="options-outline" size={14} color={mutedColor} />
                             <Text className="flex-1 text-sm text-foreground">
                               {t("settings.customThemeAdvanced")}
                             </Text>
@@ -854,7 +886,7 @@ export default function AppearanceSettingsScreen() {
                           <Accordion.Indicator />
                         </Accordion.Trigger>
                         <Accordion.Content>
-                          <Text className="mb-2 text-xs text-muted">
+                          <Text className="mb-3 text-[11px] text-muted">
                             {t("settings.customThemeOptionalHint")}
                           </Text>
                           {renderTokenEditors(mode, CUSTOM_ADVANCED_TOKEN_KEYS)}

@@ -5,34 +5,18 @@
 import { useReducer, useCallback } from "react";
 import { FITS } from "fitsjs-ng";
 import {
-  loadScientificFitsFromBuffer,
-  extractMetadata,
-  getHeaderKeywords,
   getImagePixels,
   getImageDimensions,
   getHDUList,
-  getCommentsAndHistory,
   getImageChannels,
   isRgbCube,
-  getSerMetadata,
 } from "../lib/fits/parser";
 import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
 import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
 import { generateFileId } from "../lib/utils/fileManager";
 import { LOG_TAGS, Logger } from "../lib/logger";
-import {
-  detectPreferredSupportedImageFormat,
-  detectSupportedImageFormat,
-  isDistributedXisfFilename,
-  type SupportedMediaFormatId,
-  toImageSourceFormat,
-} from "../lib/import/fileFormat";
-import {
-  extractRasterMetadata,
-  parseRasterFromBufferAsync,
-  type RasterDecodeResult,
-} from "../lib/image/rasterParser";
 import type { RasterFrameProvider } from "../lib/image/tiff/decoder";
+import { parseImageBuffer, type ImageParseResult } from "../lib/import/imageParsePipeline";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { buildPixelCacheKey, getPixelCache, setPixelCache } from "../lib/cache/pixelCache";
 
@@ -168,135 +152,65 @@ export function useFitsFile(): UseFitsFileReturn {
   const [state, dispatch] = useReducer(fitsFileReducer, initialFitsState);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
 
-  const processFits = useCallback(
-    (
-      fitsObj: FITS,
-      filename: string,
-      filepath: string,
-      fileSize: number,
-      originalBuffer: ArrayBuffer,
-      sourceFormat?: FitsMetadata["sourceFormat"],
-    ) => {
-      const meta = extractMetadata(
-        fitsObj,
-        { filename, filepath, fileSize },
-        frameClassificationConfig,
-      );
-      const serInfo = getSerMetadata(fitsObj);
-      const fullMeta: FitsMetadata = {
-        ...meta,
-        id: generateFileId(),
-        importDate: Date.now(),
-        isFavorite: false,
-        tags: [],
-        albumIds: [],
-        sourceType: "fits",
-        sourceFormat: sourceFormat ?? "unknown",
-        mediaKind: "image",
-        decodeStatus: "ready",
-        ...(serInfo ? { serInfo } : {}),
-      };
-      const ch = getCommentsAndHistory(fitsObj);
-      dispatch({
-        type: "LOAD_FITS",
-        payload: {
-          fits: fitsObj,
-          metadata: fullMeta,
-          headers: getHeaderKeywords(fitsObj),
-          comments: ch.comments,
-          history: ch.history,
-          sourceBuffer: originalBuffer,
-          dimensions: getImageDimensions(fitsObj),
-          hduList: getHDUList(fitsObj),
-          rasterFrameProvider: null,
-        },
-      });
+  const toFullMetadata = useCallback((parsed: ImageParseResult): FitsMetadata => {
+    return {
+      ...parsed.metadataBase,
+      id: generateFileId(),
+      importDate: Date.now(),
+      isFavorite: false,
+      tags: [],
+      albumIds: [],
+      sourceType: parsed.sourceType,
+      sourceFormat: parsed.sourceFormat,
+      mediaKind: "image",
+      decodeStatus: parsed.decodeStatus,
+      decodeError: parsed.decodeError,
+      ...(parsed.serInfo ? { serInfo: parsed.serInfo } : {}),
+    };
+  }, []);
 
-      return { fitsObj, fullMeta };
-    },
-    [frameClassificationConfig],
-  );
+  const applyParsedResult = useCallback(
+    (parsed: ImageParseResult, sourceBuffer: ArrayBuffer) => {
+      const fullMeta = toFullMetadata(parsed);
 
-  const applyRasterDecoded = useCallback(
-    (
-      decoded: RasterDecodeResult,
-      filename: string,
-      filepath: string,
-      fileSize: number,
-      originalBuffer: ArrayBuffer,
-      sourceFormat?: FitsMetadata["sourceFormat"],
-    ) => {
-      const detectedFormat = detectSupportedImageFormat(filename);
-      const meta = extractRasterMetadata(
-        { filename, filepath, fileSize },
-        {
-          width: decoded.width,
-          height: decoded.height,
-          depth: decoded.depth,
-          bitDepth: decoded.bitDepth,
-        },
-        frameClassificationConfig,
-        {
-          decodeStatus: decoded.decodeStatus ?? "ready",
-          decodeError: decoded.decodeError,
-        },
-      );
-      const fullMeta: FitsMetadata = {
-        ...meta,
-        id: generateFileId(),
-        importDate: Date.now(),
-        isFavorite: false,
-        tags: [],
-        albumIds: [],
-        sourceType: "raster",
-        sourceFormat: sourceFormat ?? toImageSourceFormat(detectedFormat),
-        mediaKind: "image",
-      };
+      if (parsed.sourceType === "fits") {
+        if (!parsed.fits) {
+          throw new Error("Failed to decode image data");
+        }
+        dispatch({
+          type: "LOAD_FITS",
+          payload: {
+            fits: parsed.fits,
+            metadata: fullMeta,
+            headers: parsed.headers,
+            comments: parsed.comments,
+            history: parsed.history,
+            sourceBuffer,
+            dimensions: parsed.dimensions,
+            hduList: getHDUList(parsed.fits),
+            rasterFrameProvider: null,
+          },
+        });
+        return;
+      }
+
       dispatch({
         type: "LOAD_RASTER",
         payload: {
           metadata: fullMeta,
-          headers: decoded.headers ?? [],
-          comments: [],
-          history: [],
-          pixels: decoded.pixels,
-          rgbChannels: decoded.channels,
-          sourceBuffer: originalBuffer,
-          dimensions: {
-            width: decoded.width,
-            height: decoded.height,
-            depth: Math.max(1, decoded.depth ?? 1),
-            isDataCube: (decoded.depth ?? 1) > 1,
-          },
+          headers: parsed.headers,
+          comments: parsed.comments,
+          history: parsed.history,
+          pixels: parsed.pixels,
+          rgbChannels: parsed.rgbChannels,
+          sourceBuffer,
+          dimensions: parsed.dimensions,
           hduList: [],
-          rasterFrameProvider: decoded.frameProvider ?? null,
+          rasterFrameProvider: parsed.rasterFrameProvider,
         },
       });
     },
-    [frameClassificationConfig],
-  );
-
-  const processRaster = useCallback(
-    async (
-      buffer: ArrayBuffer,
-      filename: string,
-      filepath: string,
-      fileSize: number,
-      originalBuffer: ArrayBuffer,
-      sourceFormat?: FitsMetadata["sourceFormat"],
-      formatHint?: SupportedMediaFormatId,
-    ) => {
-      const decoded = await parseRasterFromBufferAsync(buffer, {
-        frameIndex: 0,
-        cacheSize: 3,
-        preferTiffDecoder: true,
-        sourceUri: filepath,
-        filename,
-        formatHint,
-      });
-      applyRasterDecoded(decoded, filename, filepath, fileSize, originalBuffer, sourceFormat);
-    },
-    [applyRasterDecoded],
+    [toFullMetadata],
   );
 
   const loadFromPath = useCallback(
@@ -308,74 +222,38 @@ export function useFitsFile(): UseFitsFileReturn {
         const cached = getPixelCache(cacheKey);
 
         const buffer = await readFileAsArrayBuffer(filepath);
-        const detectedFormat = detectPreferredSupportedImageFormat({ filename, payload: buffer });
-        if (!detectedFormat) {
-          if (isDistributedXisfFilename(filename)) {
-            throw new Error(
-              "Distributed XISF (.xish + .xisb) is not supported. Please import a monolithic .xisf file.",
-            );
-          }
-          throw new Error("Unsupported image format");
-        }
+        const parsed = await parseImageBuffer({
+          buffer,
+          filename,
+          filepath,
+          fileSize,
+          frameClassificationConfig,
+        });
+        applyParsedResult(parsed, buffer);
 
-        if (detectedFormat.sourceType === "fits") {
-          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
-            filename,
-            detectedFormat,
-          });
-          const sourceFormat = toImageSourceFormat(detectedFormat);
-          const { fitsObj: f } = processFits(
-            fitsObj,
-            filename,
-            filepath,
-            fileSize,
-            buffer,
-            sourceFormat,
-          );
-
-          // Use cached pixels if available, otherwise extract from FITS
-          let px: Float32Array | null;
-          let channels: { r: Float32Array; g: Float32Array; b: Float32Array } | null = null;
+        if (parsed.sourceType === "fits") {
+          let pixels = parsed.pixels;
+          let channels = parsed.rgbChannels;
           if (cached) {
-            px = cached.pixels;
+            pixels = cached.pixels;
             channels = cached.rgbChannels;
             Logger.info(LOG_TAGS.FitsFile, `Pixel cache hit: ${filename}`, { fileSize });
-          } else {
-            px = await getImagePixels(f);
-            const rgb = isRgbCube(f);
-            if (rgb.isRgb) {
-              const ch = await getImageChannels(f);
-              channels = ch ? { r: ch.r, g: ch.g, b: ch.b } : null;
-            }
-            if (px) {
-              const dims = getImageDimensions(f);
-              setPixelCache(cacheKey, {
-                pixels: px,
-                width: dims?.width ?? 0,
-                height: dims?.height ?? 0,
-                depth: dims?.depth ?? 1,
-                rgbChannels: channels,
-                timestamp: Date.now(),
-              });
-            }
+          } else if (pixels) {
+            setPixelCache(cacheKey, {
+              pixels,
+              width: parsed.dimensions?.width ?? 0,
+              height: parsed.dimensions?.height ?? 0,
+              depth: parsed.dimensions?.depth ?? 1,
+              rgbChannels: channels,
+              timestamp: Date.now(),
+            });
           }
-          dispatch({ type: "SET_PIXELS", pixels: px, rgbChannels: channels });
-        } else if (detectedFormat.sourceType === "raster") {
-          await processRaster(
-            buffer,
-            filename,
-            filepath,
-            fileSize,
-            buffer,
-            toImageSourceFormat(detectedFormat),
-            detectedFormat.id,
-          );
-        } else {
-          throw new Error("Video files are not supported in FITS viewer");
+          dispatch({ type: "SET_PIXELS", pixels, rgbChannels: channels });
         }
+
         Logger.info(LOG_TAGS.FitsFile, `Loaded: ${filename}`, {
           fileSize,
-          format: detectedFormat.id,
+          format: parsed.detectedFormat.id,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to load image file";
@@ -385,7 +263,7 @@ export function useFitsFile(): UseFitsFileReturn {
         dispatch({ type: "LOAD_END" });
       }
     },
-    [processFits, processRaster],
+    [applyParsedResult, frameClassificationConfig],
   );
 
   const loadFromBuffer = useCallback(
@@ -393,53 +271,23 @@ export function useFitsFile(): UseFitsFileReturn {
       dispatch({ type: "LOAD_START" });
       try {
         await yieldToMain();
-        const detectedFormat = detectPreferredSupportedImageFormat({ filename, payload: buffer });
-        if (!detectedFormat) {
-          if (isDistributedXisfFilename(filename)) {
-            throw new Error(
-              "Distributed XISF (.xish + .xisb) is not supported. Please import a monolithic .xisf file.",
-            );
-          }
-          throw new Error("Unsupported image format");
-        }
-
-        if (detectedFormat.sourceType === "fits") {
-          const fitsObj = await loadScientificFitsFromBuffer(buffer, {
-            filename,
-            detectedFormat,
+        const parsed = await parseImageBuffer({
+          buffer,
+          filename,
+          filepath: `memory://${filename}`,
+          fileSize,
+          frameClassificationConfig,
+        });
+        applyParsedResult(parsed, buffer);
+        if (parsed.sourceType === "fits") {
+          dispatch({
+            type: "SET_PIXELS",
+            pixels: parsed.pixels,
+            rgbChannels: parsed.rgbChannels,
           });
-          const sourceFormat = toImageSourceFormat(detectedFormat);
-          const { fitsObj: f } = processFits(
-            fitsObj,
-            filename,
-            `memory://${filename}`,
-            fileSize,
-            buffer,
-            sourceFormat,
-          );
-          const px = await getImagePixels(f);
-          const rgb = isRgbCube(f);
-          let channels: { r: Float32Array; g: Float32Array; b: Float32Array } | null = null;
-          if (rgb.isRgb) {
-            const ch = await getImageChannels(f);
-            channels = ch ? { r: ch.r, g: ch.g, b: ch.b } : null;
-          }
-          dispatch({ type: "SET_PIXELS", pixels: px, rgbChannels: channels });
-        } else if (detectedFormat.sourceType === "raster") {
-          await processRaster(
-            buffer,
-            filename,
-            `memory://${filename}`,
-            fileSize,
-            buffer,
-            toImageSourceFormat(detectedFormat),
-            detectedFormat.id,
-          );
-        } else {
-          throw new Error("Video files are not supported in FITS viewer");
         }
         Logger.info(LOG_TAGS.FitsFile, `Loaded from buffer: ${filename}`, {
-          format: detectedFormat.id,
+          format: parsed.detectedFormat.id,
         });
       } catch (e) {
         const msg = e instanceof Error ? e.message : "Failed to parse image data";
@@ -449,7 +297,7 @@ export function useFitsFile(): UseFitsFileReturn {
         dispatch({ type: "LOAD_END" });
       }
     },
-    [processFits, processRaster],
+    [applyParsedResult, frameClassificationConfig],
   );
 
   const loadFrame = useCallback(

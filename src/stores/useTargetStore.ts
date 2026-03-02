@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { Target, TargetType, TargetStatus } from "../lib/fits/types";
 import { mergeTargets } from "../lib/targets/targetMatcher";
 import { createLogEntry } from "../lib/targets/changeLogger";
@@ -398,7 +398,7 @@ export const useTargetStore = create<TargetStoreState>()(
     }),
     {
       name: "target-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({ targets: state.targets }),
       migrate: (persistedState, _version) => {
         const state = persistedState as { targets: Target[] };

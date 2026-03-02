@@ -4,7 +4,7 @@ import { useSessionStore } from "../../stores/useSessionStore";
 import type { ObservationPlan, ObservationSession } from "../../lib/fits/types";
 
 jest.mock("../../lib/storage", () => ({
-  zustandMMKVStorage: {
+  zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
     removeItem: jest.fn().mockResolvedValue(undefined),

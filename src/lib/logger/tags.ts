@@ -35,6 +35,7 @@ export const LOG_TAGS = {
   SyncToTarget: "SyncToTarget",
   WCSExport: "WCSExport",
   useAstrometry: "useAstrometry",
+  Viewer: "Viewer",
 } as const;
 
 export type LogTag = (typeof LOG_TAGS)[keyof typeof LOG_TAGS];

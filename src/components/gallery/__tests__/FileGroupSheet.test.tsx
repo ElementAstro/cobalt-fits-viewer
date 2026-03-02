@@ -32,7 +32,7 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 jest.mock("../../../lib/storage", () => ({
-  zustandMMKVStorage: {
+  zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
     removeItem: jest.fn().mockResolvedValue(undefined),

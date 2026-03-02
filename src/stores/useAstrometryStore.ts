@@ -4,7 +4,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { AstrometryJob, AstrometryConfig } from "../lib/astrometry/types";
 import { DEFAULT_ASTROMETRY_CONFIG } from "../lib/astrometry/types";
 
@@ -81,7 +81,7 @@ export const useAstrometryStore = create<AstrometryStoreState>()(
     }),
     {
       name: "astrometry-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         config: state.config,
         jobs: state.jobs,

@@ -3,8 +3,10 @@ import {
   clampTranslation,
   clampImagePoint,
   computeIncrementalPinchTranslation,
+  computePinchTranslationFromStart,
   computeOneToOneScale,
   computeTranslateBounds,
+  computeTranslationRange,
   computeFitGeometry,
   imageToScreenPoint,
   remapPointBetweenSpaces,
@@ -72,16 +74,24 @@ describe("viewer transform helpers", () => {
     expect(next.y).toBeCloseTo(expectedFromZoomOnly.y + 8, 6);
   });
 
+  it("computes pinch translation from gesture start anchor", () => {
+    const next = computePinchTranslationFromStart(132, 102, 140, 110, 1.2, 1.6, -20, 30);
+    const expectedFromZoomOnly = zoomAroundPoint(132, 102, 1.2, 1.6, -20, 30);
+    expect(next.x).toBeCloseTo(expectedFromZoomOnly.x + 8, 6);
+    expect(next.y).toBeCloseTo(expectedFromZoomOnly.y + 8, 6);
+  });
+
   it("computes translate bounds and clamps translation", () => {
     const bounds = computeTranslateBounds(2, 1000, 500, 500, 500);
+    const range = computeTranslationRange(2, 1000, 500, 500, 500);
     expect(bounds.maxX).toBeGreaterThan(0);
     expect(bounds.maxY).toBeGreaterThanOrEqual(0);
 
     const clamped = clampTranslation(9999, -9999, 2, 1000, 500, 500, 500);
-    expect(clamped.x).toBeLessThanOrEqual(bounds.maxX);
-    expect(clamped.x).toBeGreaterThanOrEqual(-bounds.maxX);
-    expect(clamped.y).toBeLessThanOrEqual(bounds.maxY);
-    expect(clamped.y).toBeGreaterThanOrEqual(-bounds.maxY);
+    expect(clamped.x).toBeLessThanOrEqual(range.maxX);
+    expect(clamped.x).toBeGreaterThanOrEqual(range.minX);
+    expect(clamped.y).toBeLessThanOrEqual(range.maxY);
+    expect(clamped.y).toBeGreaterThanOrEqual(range.minY);
   });
 
   it("remaps points and regions between source and preview spaces", () => {
@@ -118,10 +128,19 @@ describe("viewer transform helpers", () => {
     expect(Number.isFinite(next.y)).toBe(true);
   });
 
-  it("clamps translation when scale < 1 (image smaller than canvas)", () => {
+  it("clamps translation to centered baseline when scale < 1", () => {
     const clamped = clampTranslation(100, 100, 0.5, 100, 100, 200, 200);
-    expect(clamped.x).toBe(0);
-    expect(clamped.y).toBe(0);
+    expect(clamped.x).toBe(50);
+    expect(clamped.y).toBe(50);
+  });
+
+  it("keeps centered baseline when scaled image is still smaller than canvas", () => {
+    const range = computeTranslationRange(1.65, 3705, 2007, 864, 1600);
+    expect(range.minY).toBeCloseTo(((1 - 1.65) * 1600) / 2, 6);
+    expect(range.maxY).toBeCloseTo(((1 - 1.65) * 1600) / 2, 6);
+
+    const clamped = clampTranslation(0, 0, 1.65, 3705, 2007, 864, 1600);
+    expect(clamped.y).toBeCloseTo(range.minY, 6);
   });
 
   it("zooms around canvas center with zoomAroundCenter", () => {

@@ -1,21 +1,8 @@
-function clampFinite(value: number, fallback: number) {
-  return Number.isFinite(value) ? value : fallback;
-}
-
-function percentile(values: number[], p: number): number {
-  if (values.length === 0) return 0;
-  const idx = Math.max(0, Math.min(values.length - 1, Math.round((values.length - 1) * p)));
-  return values[idx];
-}
-
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const mid = Math.floor(values.length / 2);
-  if (values.length % 2 === 0) {
-    return (values[mid - 1] + values[mid]) * 0.5;
-  }
-  return values[mid];
-}
+import {
+  clampFinite,
+  percentileByRatio as percentile,
+  robustMedian as median,
+} from "../stacking/robustStats";
 
 export interface LinearMatchResult {
   scale: number;

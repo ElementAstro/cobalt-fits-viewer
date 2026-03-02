@@ -16,6 +16,7 @@ interface ProviderCardProps {
   backupInfo?: BackupInfo | null;
   onBackup: () => void;
   onRestore: () => void;
+  onVerify?: () => void;
   onDisconnect: () => void;
   disabled?: boolean;
 }
@@ -26,6 +27,7 @@ export function ProviderCard({
   backupInfo,
   onBackup,
   onRestore,
+  onVerify,
   onDisconnect,
   disabled,
 }: ProviderCardProps) {
@@ -116,6 +118,17 @@ export function ProviderCard({
             <Button.Label>{t("backup.restoreNow")}</Button.Label>
           </Button>
         </View>
+        {onVerify && (
+          <Button
+            variant="ghost"
+            size="sm"
+            isIconOnly
+            onPress={onVerify}
+            isDisabled={isActionDisabled}
+          >
+            <Ionicons name="shield-checkmark-outline" size={16} color={mutedColor} />
+          </Button>
+        )}
         <Button variant="ghost" size="sm" isIconOnly onPress={onDisconnect}>
           <Ionicons name="log-out-outline" size={16} color={mutedColor} />
         </Button>

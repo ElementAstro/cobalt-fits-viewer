@@ -6,7 +6,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 
 interface OnboardingStoreState {
   hasCompletedOnboarding: boolean;
@@ -102,7 +102,7 @@ export const useOnboardingStore = create<OnboardingStoreState>()(
     }),
     {
       name: "onboarding-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         hasCompletedOnboarding: state.hasCompletedOnboarding,
         hasCompletedTooltipGuide: state.hasCompletedTooltipGuide,

@@ -24,6 +24,8 @@ const defaultProps = {
   onUndo: jest.fn(),
   onRedo: jest.fn(),
   onExport: jest.fn(),
+  canCompare: true,
+  onCompare: jest.fn(),
   onToggleOriginal: jest.fn(),
   onClearError: jest.fn(),
 };
@@ -93,6 +95,13 @@ describe("EditorHeader", () => {
     expect(onExport).toHaveBeenCalledTimes(1);
   });
 
+  it("calls onCompare when compare button is pressed", () => {
+    const onCompare = jest.fn();
+    const { getByTestId } = render(<EditorHeader {...defaultProps} onCompare={onCompare} />);
+    fireEvent.press(getByTestId("e2e-action-editor__param_id-open-compare"));
+    expect(onCompare).toHaveBeenCalledTimes(1);
+  });
+
   it("calls onUndo when undo button is pressed", () => {
     const onUndo = jest.fn();
     const { getByTestId } = render(
@@ -134,6 +143,12 @@ describe("EditorHeader", () => {
   it("disables export when hasData is false", () => {
     const { getByTestId } = render(<EditorHeader {...defaultProps} hasData={false} />);
     const btn = getByTestId("e2e-action-editor__param_id-open-export");
+    expect(btn.props.isDisabled).toBe(true);
+  });
+
+  it("disables compare when canCompare is false", () => {
+    const { getByTestId } = render(<EditorHeader {...defaultProps} canCompare={false} />);
+    const btn = getByTestId("e2e-action-editor__param_id-open-compare");
     expect(btn.props.isDisabled).toBe(true);
   });
 

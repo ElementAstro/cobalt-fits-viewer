@@ -14,6 +14,8 @@ interface ObservationCalendarProps {
   onMonthChange: (year: number, month: number) => void;
   onDatePress?: (date: number) => void;
   onDateLongPress?: (date: number) => void;
+  /** Compact layout for landscape mode */
+  compact?: boolean;
 }
 
 const WEEKDAY_KEYS = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"] as const;
@@ -42,6 +44,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
   onMonthChange,
   onDatePress,
   onDateLongPress,
+  compact = false,
 }: ObservationCalendarProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
@@ -82,7 +85,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
   return (
     <View className="rounded-xl bg-surface-secondary p-3">
       {/* Month Navigation */}
-      <View className="flex-row items-center justify-between mb-3">
+      <View className={`flex-row items-center justify-between ${compact ? "mb-2" : "mb-3"}`}>
         <PressableFeedback onPress={goToPrevMonth} className="rounded-full p-1">
           <PressableFeedback.Highlight />
           <Ionicons name="chevron-back" size={18} color={mutedColor} />
@@ -104,7 +107,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
       </View>
 
       {/* Weekday Headers */}
-      <View className="flex-row mb-1">
+      <View className={`flex-row ${compact ? "mb-0.5" : "mb-1"}`}>
         {weekdayLabels.map((label, idx) => (
           <View key={idx} className="flex-1 items-center">
             <Text className="text-[9px] font-semibold text-muted">{label}</Text>
@@ -113,7 +116,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
       </View>
 
       {/* Legend */}
-      <View className="flex-row items-center gap-3 mb-2 px-1">
+      <View className={`flex-row items-center ${compact ? "gap-2 mb-1" : "gap-3 mb-2"} px-1`}>
         <View className="flex-row items-center gap-1">
           <View className="h-2 w-2 rounded-full bg-success" />
           <Text className="text-[8px] text-muted">{t("sessions.session")}</Text>
@@ -145,7 +148,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
           return (
             <PressableFeedback
               key={i}
-              className="w-[14.28%] items-center py-1.5"
+              className={`w-[14.28%] items-center ${compact ? "py-1" : "py-1.5"}`}
               isDisabled={day === null}
               onPress={() => day !== null && onDatePress?.(day)}
               onLongPress={() => day !== null && onDateLongPress?.(day)}
@@ -153,7 +156,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
               <PressableFeedback.Highlight />
               {day !== null ? (
                 <View
-                  className={`h-7 w-7 items-center justify-center rounded-full ${
+                  className={`${compact ? "h-6 w-6" : "h-7 w-7"} items-center justify-center rounded-full ${
                     isSelected
                       ? "bg-primary"
                       : hasData
@@ -166,7 +169,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
                   }`}
                 >
                   <Text
-                    className={`text-xs ${
+                    className={`${compact ? "text-[10px]" : "text-xs"} ${
                       isSelected
                         ? "font-bold text-primary-foreground"
                         : hasData
@@ -189,7 +192,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
                   </View>
                 </View>
               ) : (
-                <View className="h-7 w-7" />
+                <View className={compact ? "h-6 w-6" : "h-7 w-7"} />
               )}
             </PressableFeedback>
           );

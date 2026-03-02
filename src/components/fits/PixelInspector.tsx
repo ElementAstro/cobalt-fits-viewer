@@ -53,7 +53,7 @@ export function PixelInspector({
   return (
     <GestureDetector gesture={dragGesture}>
       <Animated.View className="absolute bottom-16 left-3" style={animatedStyle}>
-        <Card variant="secondary" className="opacity-90">
+        <Card variant="secondary" style={{ opacity: 0.9 }}>
           <Card.Body className="px-3 py-2">
             <View className="flex-row items-center gap-1">
               <Text className="text-[10px] font-semibold text-foreground">

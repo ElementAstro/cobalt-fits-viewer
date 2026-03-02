@@ -1,11 +1,12 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
 import Screen from "../[id]";
 import type { Album, FitsMetadata } from "../../../lib/fits/types";
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 const mockReconcileSelection = jest.fn();
+const mockExitSelectionMode = jest.fn();
 
 const mockAlbum: Album = {
   id: "album-1",
@@ -16,7 +17,7 @@ const mockAlbum: Album = {
   isSmart: false,
 };
 
-const mockFiles: FitsMetadata[] = [
+let mockFiles: FitsMetadata[] = [
   {
     id: "file-1",
     filename: "file-1.fits",
@@ -32,6 +33,16 @@ const mockFiles: FitsMetadata[] = [
     thumbnailUri: "https://example.com/file-1.jpg",
   },
 ];
+
+const mockSelectionState = {
+  isSelectionMode: false,
+  selectedIds: [] as string[],
+  toggleSelection: jest.fn(),
+  enterSelectionMode: jest.fn(),
+  exitSelectionMode: mockExitSelectionMode,
+  selectAll: jest.fn(),
+  reconcileSelection: mockReconcileSelection,
+};
 
 jest.mock("expo-router", () => ({
   useLocalSearchParams: () => ({ id: "album-1" }),
@@ -83,19 +94,12 @@ jest.mock("../../../hooks/useHapticFeedback", () => ({
 }));
 
 jest.mock("../../../hooks/useSelectionMode", () => ({
-  useSelectionMode: () => ({
-    isSelectionMode: false,
-    selectedIds: [],
-    toggleSelection: jest.fn(),
-    enterSelectionMode: jest.fn(),
-    exitSelectionMode: jest.fn(),
-    selectAll: jest.fn(),
-    reconcileSelection: mockReconcileSelection,
-  }),
+  useSelectionMode: () => mockSelectionState,
 }));
 
 jest.mock("../../../components/gallery/ThumbnailGrid", () => ({
-  ThumbnailGrid: () => null,
+  ThumbnailGrid: (props: { ListHeaderComponent?: React.ReactNode }) =>
+    props.ListHeaderComponent ?? null,
 }));
 
 jest.mock("../../../components/gallery/ThumbnailLoadingBanner", () => ({
@@ -113,6 +117,25 @@ jest.mock("../../../components/gallery/AlbumStatisticsSheet", () => ({
 describe("album/[id].tsx", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockAlbum.imageIds = ["file-1"];
+    mockFiles = [
+      {
+        id: "file-1",
+        filename: "file-1.fits",
+        filepath: "file:///file-1.fits",
+        fileSize: 100,
+        importDate: Date.now(),
+        frameType: "light",
+        isFavorite: false,
+        tags: [],
+        albumIds: ["album-1"],
+        sourceType: "fits",
+        mediaKind: "image",
+        thumbnailUri: "https://example.com/file-1.jpg",
+      },
+    ];
+    mockSelectionState.isSelectionMode = false;
+    mockSelectionState.selectedIds = [];
   });
 
   it("renders tabs and reconciles selection to visible album files", () => {
@@ -120,5 +143,34 @@ describe("album/[id].tsx", () => {
     expect(screen.getByTestId("album-tab-photos")).toBeTruthy();
     expect(screen.getByTestId("album-tab-info")).toBeTruthy();
     expect(mockReconcileSelection).toHaveBeenCalled();
+  });
+
+  it("routes selected album images to compare and exits selection mode", () => {
+    mockSelectionState.isSelectionMode = true;
+    mockSelectionState.selectedIds = ["file-1", "file-2"];
+    mockAlbum.imageIds = ["file-1", "file-2"];
+    mockFiles = [
+      ...mockFiles,
+      {
+        id: "file-2",
+        filename: "file-2.fits",
+        filepath: "file:///file-2.fits",
+        fileSize: 100,
+        importDate: Date.now(),
+        frameType: "light",
+        isFavorite: false,
+        tags: [],
+        albumIds: ["album-1"],
+        sourceType: "fits",
+        mediaKind: "image",
+        thumbnailUri: "https://example.com/file-2.jpg",
+      },
+    ];
+
+    render(<Screen />);
+    expect(screen.getByTestId("e2e-action-album__param_id-open-compare")).toBeTruthy();
+    fireEvent.press(screen.getByTestId("e2e-action-album__param_id-open-compare"));
+    expect(mockPush).toHaveBeenCalledWith("/compare?ids=file-1,file-2");
+    expect(mockExitSelectionMode).toHaveBeenCalled();
   });
 });

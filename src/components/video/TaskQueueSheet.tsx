@@ -96,7 +96,7 @@ export function TaskQueueSheet({
                         <Accordion.Item value="logs">
                           <Accordion.Trigger>
                             <Text className="flex-1 text-[10px] text-muted">
-                              FFmpeg Log ({task.logLines.length})
+                              {t("settings.videoFfmpegLog", { count: task.logLines.length })}
                             </Text>
                             <Accordion.Indicator />
                           </Accordion.Trigger>

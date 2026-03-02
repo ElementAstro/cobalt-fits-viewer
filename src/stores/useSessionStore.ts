@@ -5,7 +5,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { useShallow } from "zustand/shallow";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import { LOG_TAGS, Logger } from "../lib/logger";
 import type {
   GeoLocation,
@@ -564,7 +564,7 @@ export const useSessionStore = create<SessionStoreState>()(
     }),
     {
       name: "session-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         sessions: state.sessions,
         logEntries: state.logEntries,

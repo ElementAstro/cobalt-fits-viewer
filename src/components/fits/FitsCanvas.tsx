@@ -32,6 +32,7 @@ import Animated, {
   withTiming,
   withSpring,
   withDecay,
+  cancelAnimation,
   runOnJS,
   FadeIn,
   FadeOut,
@@ -39,9 +40,9 @@ import Animated, {
 import {
   clampScale,
   clampTranslation,
-  computeIncrementalPinchTranslation,
+  computePinchTranslationFromStart,
   computeFitGeometry,
-  computeTranslateBounds,
+  computeTranslationRange,
   screenToSourcePixel,
   zoomAroundPoint,
 } from "../../lib/viewer/transform";
@@ -55,6 +56,11 @@ const PINCH_OVERZOOM_FACTOR = 1.25;
 const PAN_RUBBER_BAND_FACTOR = 0.55;
 const WHEEL_ZOOM_SENSITIVITY = 0.0015;
 const SPRING_CONFIG = { damping: 20, stiffness: 250, mass: 0.5, overshootClamping: false };
+const TRANSFORM_NOTIFY_INTERVAL_MS = 48;
+const TRANSFORM_NOTIFY_ACTIVE_INTERVAL_MS = 72;
+const TRANSFORM_NOTIFY_MIN_SCALE_DELTA = 0.008;
+const TRANSFORM_NOTIFY_MIN_TRANSLATE_DELTA = 1.5;
+const ZOOM_INDICATOR_UPDATE_INTERVAL_MS = 90;
 
 // --- Worklet helpers ---
 function rubberBand(
@@ -90,10 +96,10 @@ function applyRubberBandTranslation(
   rubberBandFactor: number,
 ): { x: number; y: number } {
   "worklet";
-  const { maxX, maxY } = computeTranslateBounds(currentScale, imgW, imgH, cw, ch);
+  const { minX, maxX, minY, maxY } = computeTranslationRange(currentScale, imgW, imgH, cw, ch);
   return {
-    x: rubberBand(tx, -maxX, maxX, cw, rubberBandFactor),
-    y: rubberBand(ty, -maxY, maxY, ch, rubberBandFactor),
+    x: rubberBand(tx, minX, maxX, cw, rubberBandFactor),
+    y: rubberBand(ty, minY, maxY, ch, rubberBandFactor),
   };
 }
 
@@ -192,10 +198,13 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   const panStartTranslateX = useSharedValue(0);
   const panStartTranslateY = useSharedValue(0);
   const pinchStartScale = useSharedValue(1);
-  const pinchPrevFocalX = useSharedValue(0);
-  const pinchPrevFocalY = useSharedValue(0);
+  const pinchStartTranslateX = useSharedValue(0);
+  const pinchStartTranslateY = useSharedValue(0);
+  const pinchStartFocalX = useSharedValue(0);
+  const pinchStartFocalY = useSharedValue(0);
 
   const isPinching = useSharedValue(false);
+  const isPanning = useSharedValue(false);
 
   const pinchSensitivity = useMemo(
     () => clampScale(gestureConfig?.pinchSensitivity ?? PINCH_SENSITIVITY, 0.6, 1.8),
@@ -217,24 +226,38 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   // Zoom level for indicator overlay
   const [zoomText, setZoomText] = useState("");
   const zoomTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastZoomIndicatorPctRef = useRef<number | null>(null);
+  const lastTransformNotifyAt = useSharedValue(0);
+  const lastNotifiedScale = useSharedValue(1);
+  const lastNotifiedTranslateX = useSharedValue(0);
+  const lastNotifiedTranslateY = useSharedValue(0);
+  const lastZoomIndicatorNotifyAt = useSharedValue(0);
 
-  // Notify parent of transform changes
-  const notifyTransform = useCallback(() => {
-    onTransformChange?.({
-      scale: scale.value,
-      translateX: translateX.value,
-      translateY: translateY.value,
-      canvasWidth: canvasWidth.value,
-      canvasHeight: canvasHeight.value,
-    });
-  }, [onTransformChange, scale, translateX, translateY, canvasWidth, canvasHeight]);
+  // Notify parent of transform changes (kept on JS side only, called from worklets via runOnJS).
+  const emitTransformChange = useCallback(
+    (s: number, tx: number, ty: number, cw: number, ch: number) => {
+      onTransformChange?.({
+        scale: s,
+        translateX: tx,
+        translateY: ty,
+        canvasWidth: cw,
+        canvasHeight: ch,
+      });
+    },
+    [onTransformChange],
+  );
 
   // Show zoom indicator temporarily
   const showZoomIndicator = useCallback((s: number) => {
     const pct = Math.round(s * 100);
+    if (lastZoomIndicatorPctRef.current === pct) return;
+    lastZoomIndicatorPctRef.current = pct;
     setZoomText(`${pct}%`);
     if (zoomTimerRef.current) clearTimeout(zoomTimerRef.current);
-    zoomTimerRef.current = setTimeout(() => setZoomText(""), 1200);
+    zoomTimerRef.current = setTimeout(() => {
+      setZoomText("");
+      lastZoomIndicatorPctRef.current = null;
+    }, 1200);
   }, []);
 
   useEffect(
@@ -244,18 +267,7 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     [],
   );
 
-  // Track scale changes to show zoom indicator
-  useAnimatedReaction(
-    () => scale.value,
-    (curr, prev) => {
-      if (prev !== null && Math.abs(curr - prev) > 0.01) {
-        runOnJS(showZoomIndicator)(curr);
-      }
-    },
-    [showZoomIndicator],
-  );
-
-  // Track scale/translate changes to notify parent
+  // Track transform changes on UI thread and notify JS at a controlled cadence.
   useAnimatedReaction(
     () => ({
       s: Math.round(scale.value * 1000) / 1000,
@@ -265,18 +277,58 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       ch: Math.round(canvasHeight.value),
     }),
     (curr, prev) => {
-      if (
-        prev === null ||
+      if (prev === null) return;
+      if (!onTransformChange) return;
+      const transformChanged =
         curr.s !== prev.s ||
         curr.tx !== prev.tx ||
         curr.ty !== prev.ty ||
         curr.cw !== prev.cw ||
-        curr.ch !== prev.ch
-      ) {
-        runOnJS(notifyTransform)();
+        curr.ch !== prev.ch;
+      if (!transformChanged) return;
+
+      const now = Date.now();
+      const force = curr.cw !== prev.cw || curr.ch !== prev.ch;
+      const active = isPinching.value || isPanning.value;
+      const notifyInterval = active
+        ? TRANSFORM_NOTIFY_ACTIVE_INTERVAL_MS
+        : TRANSFORM_NOTIFY_INTERVAL_MS;
+      const deltaS = Math.abs(curr.s - lastNotifiedScale.value);
+      const deltaTx = Math.abs(curr.tx - lastNotifiedTranslateX.value);
+      const deltaTy = Math.abs(curr.ty - lastNotifiedTranslateY.value);
+      const exceedsDelta =
+        deltaS >= TRANSFORM_NOTIFY_MIN_SCALE_DELTA ||
+        deltaTx >= TRANSFORM_NOTIFY_MIN_TRANSLATE_DELTA ||
+        deltaTy >= TRANSFORM_NOTIFY_MIN_TRANSLATE_DELTA;
+      if (force || (exceedsDelta && now - lastTransformNotifyAt.value >= notifyInterval)) {
+        lastTransformNotifyAt.value = now;
+        lastNotifiedScale.value = curr.s;
+        lastNotifiedTranslateX.value = curr.tx;
+        lastNotifiedTranslateY.value = curr.ty;
+        runOnJS(emitTransformChange)(
+          scale.value,
+          translateX.value,
+          translateY.value,
+          canvasWidth.value,
+          canvasHeight.value,
+        );
       }
     },
-    [notifyTransform],
+    [emitTransformChange, onTransformChange],
+  );
+
+  // Throttle zoom label updates to avoid heavy JS re-renders while pinching.
+  useAnimatedReaction(
+    () => Math.round(scale.value * 1000) / 1000,
+    (curr, prev) => {
+      if (prev === null || Math.abs(curr - prev) < 0.01) return;
+      const now = Date.now();
+      if (now - lastZoomIndicatorNotifyAt.value >= ZOOM_INDICATOR_UPDATE_INTERVAL_MS) {
+        lastZoomIndicatorNotifyAt.value = now;
+        runOnJS(showZoomIndicator)(curr);
+      }
+    },
+    [showZoomIndicator],
   );
 
   // Expose imperative handle for programmatic navigation
@@ -312,6 +364,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       panStartTranslateX.value = clamped.x;
       panStartTranslateY.value = clamped.y;
       pinchStartScale.value = targetScale;
+      pinchStartTranslateX.value = clamped.x;
+      pinchStartTranslateY.value = clamped.y;
     },
     [
       canvasHeight,
@@ -320,6 +374,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       imgWidth,
       panStartTranslateX,
       panStartTranslateY,
+      pinchStartTranslateX,
+      pinchStartTranslateY,
       pinchStartScale,
       propMaxScale,
       propMinScale,
@@ -360,8 +416,15 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     panStartTranslateX.value = 0;
     panStartTranslateY.value = 0;
     pinchStartScale.value = 1;
-    pinchPrevFocalX.value = 0;
-    pinchPrevFocalY.value = 0;
+    pinchStartTranslateX.value = 0;
+    pinchStartTranslateY.value = 0;
+    pinchStartFocalX.value = 0;
+    pinchStartFocalY.value = 0;
+    isPinching.value = false;
+    isPanning.value = false;
+    lastNotifiedScale.value = 1;
+    lastNotifiedTranslateX.value = 0;
+    lastNotifiedTranslateY.value = 0;
     // Reset all transform state when image dimensions change.
     // Shared value refs (scale, translateX, etc.) are stable — only dimensions trigger this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -392,31 +455,37 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       panStartTranslateX.value = clamped.x;
       panStartTranslateY.value = clamped.y;
       pinchStartScale.value = nextScale;
-      pinchPrevFocalX.value = nextCanvasWidth / 2;
-      pinchPrevFocalY.value = nextCanvasHeight / 2;
+      pinchStartTranslateX.value = clamped.x;
+      pinchStartTranslateY.value = clamped.y;
+      pinchStartFocalX.value = nextCanvasWidth / 2;
+      pinchStartFocalY.value = nextCanvasHeight / 2;
 
-      onTransformChange?.({
-        scale: nextScale,
-        translateX: clamped.x,
-        translateY: clamped.y,
-        canvasWidth: nextCanvasWidth,
-        canvasHeight: nextCanvasHeight,
-      });
+      lastTransformNotifyAt.value = Date.now();
+      lastNotifiedScale.value = nextScale;
+      lastNotifiedTranslateX.value = Math.round(clamped.x);
+      lastNotifiedTranslateY.value = Math.round(clamped.y);
+      emitTransformChange(nextScale, clamped.x, clamped.y, nextCanvasWidth, nextCanvasHeight);
     },
     [
+      emitTransformChange,
       canvasHeight,
       canvasWidth,
       imgHeight,
       imgWidth,
-      onTransformChange,
       propMaxScale,
       propMinScale,
       panStartTranslateX,
       panStartTranslateY,
-      pinchPrevFocalX,
-      pinchPrevFocalY,
+      pinchStartFocalX,
+      pinchStartFocalY,
+      pinchStartTranslateX,
+      pinchStartTranslateY,
       pinchStartScale,
       scale,
+      lastNotifiedScale,
+      lastNotifiedTranslateX,
+      lastNotifiedTranslateY,
+      lastTransformNotifyAt,
       translateX,
       translateY,
     ],
@@ -442,6 +511,10 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       const nativeEvent = evt.nativeEvent ?? {};
       const deltaY = nativeEvent.deltaY ?? 0;
       if (Math.abs(deltaY) < 0.01) return;
+
+      cancelAnimation(scale);
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
 
       const currentScale = scale.value;
       const rawScale = currentScale * Math.exp(-deltaY * wheelZoomSensitivity);
@@ -479,6 +552,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       panStartTranslateX.value = clamped.x;
       panStartTranslateY.value = clamped.y;
       pinchStartScale.value = targetScale;
+      pinchStartTranslateX.value = clamped.x;
+      pinchStartTranslateY.value = clamped.y;
     },
     [
       wheelZoomEnabled,
@@ -488,6 +563,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       translateY,
       panStartTranslateX,
       panStartTranslateY,
+      pinchStartTranslateX,
+      pinchStartTranslateY,
       pinchStartScale,
       canvasWidth,
       canvasHeight,
@@ -503,7 +580,11 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
   const panGesture = Gesture.Pan()
     .enabled(interactionEnabled)
+    .averageTouches(true)
     .onStart(() => {
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
+      isPanning.value = true;
       panStartTranslateX.value = translateX.value;
       panStartTranslateY.value = translateY.value;
     })
@@ -530,7 +611,10 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       translateY.value = rb.y;
     })
     .onEnd((e) => {
-      if (isPinching.value) return;
+      if (isPinching.value) {
+        isPanning.value = false;
+        return;
+      }
 
       // Detect horizontal swipe for file navigation when not zoomed in
       const SWIPE_VELOCITY_THRESHOLD = 800;
@@ -540,10 +624,12 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         Math.abs(e.velocityX) > Math.abs(e.velocityY) * 2
       ) {
         if (e.velocityX > 0 && onSwipeRight) {
+          isPanning.value = false;
           runOnJS(onSwipeRight)();
           return;
         }
         if (e.velocityX < 0 && onSwipeLeft) {
+          isPanning.value = false;
           runOnJS(onSwipeLeft)();
           return;
         }
@@ -551,10 +637,16 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
 
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
-      const { maxX, maxY } = computeTranslateBounds(scale.value, imgWidth, imgHeight, cw, ch);
+      const { minX, maxX, minY, maxY } = computeTranslationRange(
+        scale.value,
+        imgWidth,
+        imgHeight,
+        cw,
+        ch,
+      );
 
       // Apply momentum with decay, clamped to bounds
-      translateX.value = withDecay({ velocity: e.velocityX, clamp: [-maxX, maxX] }, () => {
+      translateX.value = withDecay({ velocity: e.velocityX, clamp: [minX, maxX] }, () => {
         // Spring snap-back if beyond bounds after decay
         const clamped = clampTranslation(
           translateX.value,
@@ -568,8 +660,9 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         if (Math.abs(translateX.value - clamped.x) > 0.5) {
           translateX.value = withSpring(clamped.x, SPRING_CONFIG);
         }
+        isPanning.value = false;
       });
-      translateY.value = withDecay({ velocity: e.velocityY, clamp: [-maxY, maxY] }, () => {
+      translateY.value = withDecay({ velocity: e.velocityY, clamp: [minY, maxY] }, () => {
         const clamped = clampTranslation(
           translateX.value,
           translateY.value,
@@ -582,7 +675,11 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         if (Math.abs(translateY.value - clamped.y) > 0.5) {
           translateY.value = withSpring(clamped.y, SPRING_CONFIG);
         }
+        isPanning.value = false;
       });
+    })
+    .onFinalize(() => {
+      isPanning.value = false;
     })
     .minPointers(1)
     .maxPointers(2);
@@ -590,10 +687,15 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
   const pinchGesture = Gesture.Pinch()
     .enabled(interactionEnabled)
     .onStart((e) => {
+      cancelAnimation(scale);
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
       isPinching.value = true;
       pinchStartScale.value = scale.value;
-      pinchPrevFocalX.value = e.focalX;
-      pinchPrevFocalY.value = e.focalY;
+      pinchStartTranslateX.value = translateX.value;
+      pinchStartTranslateY.value = translateY.value;
+      pinchStartFocalX.value = e.focalX;
+      pinchStartFocalY.value = e.focalY;
     })
     .onUpdate((e) => {
       // Allow slight over-zoom with rubber band feel, hard clamp at extremes
@@ -602,15 +704,15 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       const overzoomMax = propMaxScale * pinchOverzoomFactor;
       const targetScale = clampScale(rawScale, overzoomMin, overzoomMax);
 
-      const rawTranslate = computeIncrementalPinchTranslation(
+      const rawTranslate = computePinchTranslationFromStart(
+        pinchStartFocalX.value,
+        pinchStartFocalY.value,
         e.focalX,
         e.focalY,
-        pinchPrevFocalX.value,
-        pinchPrevFocalY.value,
-        scale.value,
+        pinchStartScale.value,
         targetScale,
-        translateX.value,
-        translateY.value,
+        pinchStartTranslateX.value,
+        pinchStartTranslateY.value,
       );
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
@@ -628,8 +730,6 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       scale.value = targetScale;
       translateX.value = rb.x;
       translateY.value = rb.y;
-      pinchPrevFocalX.value = e.focalX;
-      pinchPrevFocalY.value = e.focalY;
     })
     .onEnd(() => {
       // Snap scale back to valid range with spring
@@ -655,11 +755,17 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
       panStartTranslateX.value = clamped.x;
       panStartTranslateY.value = clamped.y;
       pinchStartScale.value = clampedScale;
+      pinchStartTranslateX.value = clamped.x;
+      pinchStartTranslateY.value = clamped.y;
+      pinchStartFocalX.value = canvasWidth.value / 2;
+      pinchStartFocalY.value = canvasHeight.value / 2;
       isPinching.value = false;
     })
     .onFinalize(() => {
       panStartTranslateX.value = translateX.value;
       panStartTranslateY.value = translateY.value;
+      pinchStartTranslateX.value = translateX.value;
+      pinchStartTranslateY.value = translateY.value;
       isPinching.value = false;
     });
 
@@ -668,6 +774,9 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
     .numberOfTaps(2)
     .maxDistance(18)
     .onEnd((e) => {
+      cancelAnimation(scale);
+      cancelAnimation(translateX);
+      cancelAnimation(translateY);
       const cw = canvasWidth.value;
       const ch = canvasHeight.value;
       if (scale.value > 1.1) {
@@ -678,6 +787,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         panStartTranslateX.value = 0;
         panStartTranslateY.value = 0;
         pinchStartScale.value = 1;
+        pinchStartTranslateX.value = 0;
+        pinchStartTranslateY.value = 0;
       } else {
         // Zoom to DOUBLE_TAP_SCALE at tap point, clamped to bounds
         const targetScale = clampScale(propDoubleTapScale, propMinScale, propMaxScale);
@@ -704,6 +815,8 @@ export const FitsCanvas = forwardRef<FitsCanvasHandle, FitsCanvasProps>(function
         panStartTranslateX.value = clamped.x;
         panStartTranslateY.value = clamped.y;
         pinchStartScale.value = targetScale;
+        pinchStartTranslateX.value = clamped.x;
+        pinchStartTranslateY.value = clamped.y;
       }
     });
 

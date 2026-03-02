@@ -4,6 +4,7 @@
  */
 
 import type { FitsMetadata } from "../fits/types";
+import { sanitizeFilename } from "../utils/fileManager";
 
 /**
  * 支持的模板变量:
@@ -97,6 +98,5 @@ export { DEFAULT_TEMPLATE };
  * 清理文件名中的非法字符
  */
 function sanitize(value: string): string {
-  // eslint-disable-next-line no-control-regex
-  return value.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").trim() || "_";
+  return sanitizeFilename(value, "_");
 }

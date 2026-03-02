@@ -16,6 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
+import { useScreenOrientation } from "../../hooks/useScreenOrientation";
 import { formatTimeHHMM } from "../../lib/sessions/format";
 import { toLocalDateKey } from "../../lib/sessions/planUtils";
 import { useCalendar } from "../../hooks/useCalendar";
@@ -54,6 +55,8 @@ export function PlanObservationSheet({
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const mutedColor = useThemeColor("muted");
+  const { isLandscape } = useScreenOrientation();
+  const compact = isLandscape;
   const { createObservationPlan, updateObservationPlan, syncing } = useCalendar();
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
   const targetCatalog = useTargetStore((s) => s.targets);
@@ -261,8 +264,8 @@ export function PlanObservationSheet({
       <BottomSheet.Portal>
         <BottomSheet.Overlay />
         <BottomSheet.Content
-          snapPoints={["82%", "96%"]}
-          index={1}
+          snapPoints={compact ? ["95%"] : ["82%", "96%"]}
+          index={compact ? 0 : 1}
           enableDynamicSizing={false}
           enableOverDrag={false}
           enableContentPanningGesture={false}
@@ -283,7 +286,7 @@ export function PlanObservationSheet({
             style={{ flex: 1 }}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + (compact ? 8 : 16) }}
           >
             {/* Target Name */}
             <TextField isRequired className="mb-3">
@@ -434,114 +437,120 @@ export function PlanObservationSheet({
               </Card.Body>
             </Card>
 
-            {/* Equipment */}
-            <Card variant="secondary" className="mb-3">
-              <Card.Body className="gap-3 p-3">
-                <Text className="text-xs font-semibold text-foreground">
-                  {t("sessions.equipment")}
-                </Text>
-                <EquipmentFields
-                  telescope={equip.telescope}
-                  camera={equip.camera}
-                  mount={equip.mount}
-                  onTelescopeChange={equip.setTelescope}
-                  onCameraChange={equip.setCamera}
-                  onMountChange={equip.setMount}
-                />
-                <ChipInputField
-                  label={t("sessions.filters")}
-                  items={equip.filters}
-                  inputValue={equip.filterInput}
-                  onInputChange={equip.setFilterInput}
-                  onAdd={equip.addFilter}
-                  onRemove={equip.removeFilter}
-                  placeholder={t("sessions.filterPlaceholder")}
-                />
-              </Card.Body>
-            </Card>
-
-            {/* Location */}
-            <Card variant="secondary" className="mb-3">
-              <Card.Body className="gap-3 p-3">
-                <View className="flex-row items-center justify-between">
+            {/* Equipment & Location */}
+            <View className={compact ? "flex-row gap-3 mb-3" : ""}>
+              <Card variant="secondary" className={compact ? "flex-1" : "mb-3"}>
+                <Card.Body className={compact ? "gap-2 p-2" : "gap-3 p-3"}>
                   <Text className="text-xs font-semibold text-foreground">
-                    {t("sessions.location")}
+                    {t("sessions.equipment")}
                   </Text>
-                  <Button size="sm" variant="ghost" onPress={handleUseCurrentLocation}>
-                    <Ionicons name="locate-outline" size={14} color={mutedColor} />
-                    <Button.Label>{t("sessions.useCurrentLocation")}</Button.Label>
-                  </Button>
-                </View>
-                <TextField>
-                  <Label>{t("sessions.locationName")}</Label>
-                  <Input
-                    value={loc.locationName}
-                    onChangeText={loc.setLocationName}
-                    placeholder={t("sessions.locationNamePlaceholder")}
+                  <EquipmentFields
+                    telescope={equip.telescope}
+                    camera={equip.camera}
+                    mount={equip.mount}
+                    onTelescopeChange={equip.setTelescope}
+                    onCameraChange={equip.setCamera}
+                    onMountChange={equip.setMount}
                   />
-                </TextField>
-                <View className="flex-row gap-2">
-                  <TextField className="flex-1">
-                    <Label>{t("sessions.latitude")}</Label>
-                    <Input
-                      value={loc.latitudeInput}
-                      onChangeText={loc.setLatitudeInput}
-                      placeholder="e.g. 39.9042"
-                      keyboardType="decimal-pad"
-                    />
-                  </TextField>
-                  <TextField className="flex-1">
-                    <Label>{t("sessions.longitude")}</Label>
-                    <Input
-                      value={loc.longitudeInput}
-                      onChangeText={loc.setLongitudeInput}
-                      placeholder="e.g. 116.4074"
-                      keyboardType="decimal-pad"
-                    />
-                  </TextField>
-                </View>
-              </Card.Body>
-            </Card>
+                  <ChipInputField
+                    label={t("sessions.filters")}
+                    items={equip.filters}
+                    inputValue={equip.filterInput}
+                    onInputChange={equip.setFilterInput}
+                    onAdd={equip.addFilter}
+                    onRemove={equip.removeFilter}
+                    placeholder={t("sessions.filterPlaceholder")}
+                  />
+                </Card.Body>
+              </Card>
 
-            {/* Reminder */}
-            <Text className="mb-1.5 text-xs font-medium text-muted">
-              {t("sessions.reminderTime")}
-            </Text>
-            <View className="mb-3 flex-row flex-wrap gap-2">
-              {REMINDER_OPTIONS.map((opt) => {
-                const isActive = reminderMinutes === opt.value;
-                return (
-                  <Chip
-                    key={opt.value}
-                    size="sm"
-                    variant={isActive ? "primary" : "secondary"}
-                    color={isActive ? "accent" : "default"}
-                    onPress={() => setReminderMinutes(opt.value)}
-                  >
-                    <Chip.Label>{t(`sessions.reminderOptions.${opt.labelKey}`)}</Chip.Label>
-                  </Chip>
-                );
-              })}
+              <Card variant="secondary" className={compact ? "flex-1" : "mb-3"}>
+                <Card.Body className={compact ? "gap-2 p-2" : "gap-3 p-3"}>
+                  <View className="flex-row items-center justify-between">
+                    <Text className="text-xs font-semibold text-foreground">
+                      {t("sessions.location")}
+                    </Text>
+                    <Button size="sm" variant="ghost" onPress={handleUseCurrentLocation}>
+                      <Ionicons name="locate-outline" size={14} color={mutedColor} />
+                      {!compact && <Button.Label>{t("sessions.useCurrentLocation")}</Button.Label>}
+                    </Button>
+                  </View>
+                  <TextField>
+                    <Label>{t("sessions.locationName")}</Label>
+                    <Input
+                      value={loc.locationName}
+                      onChangeText={loc.setLocationName}
+                      placeholder={t("sessions.locationNamePlaceholder")}
+                    />
+                  </TextField>
+                  <View className="flex-row gap-2">
+                    <TextField className="flex-1">
+                      <Label>{t("sessions.latitude")}</Label>
+                      <Input
+                        value={loc.latitudeInput}
+                        onChangeText={loc.setLatitudeInput}
+                        placeholder="e.g. 39.9042"
+                        keyboardType="decimal-pad"
+                      />
+                    </TextField>
+                    <TextField className="flex-1">
+                      <Label>{t("sessions.longitude")}</Label>
+                      <Input
+                        value={loc.longitudeInput}
+                        onChangeText={loc.setLongitudeInput}
+                        placeholder="e.g. 116.4074"
+                        keyboardType="decimal-pad"
+                      />
+                    </TextField>
+                  </View>
+                </Card.Body>
+              </Card>
             </View>
 
-            {/* Status */}
-            <Text className="mb-1.5 text-xs font-medium text-muted">
-              {t("sessions.planStatus")}
-            </Text>
-            <View className="mb-3 flex-row flex-wrap gap-2">
-              {(["planned", "completed", "cancelled"] as const).map((s) => {
-                const isActive = status === s;
-                return (
-                  <Chip
-                    key={s}
-                    size="sm"
-                    variant={isActive ? "primary" : "secondary"}
-                    onPress={() => setStatus(s)}
-                  >
-                    <Chip.Label>{t(`sessions.status.${s}`)}</Chip.Label>
-                  </Chip>
-                );
-              })}
+            {/* Reminder & Status */}
+            <View className={compact ? "flex-row gap-4 mb-3" : ""}>
+              <View className={compact ? "flex-1" : ""}>
+                <Text className="mb-1.5 text-xs font-medium text-muted">
+                  {t("sessions.reminderTime")}
+                </Text>
+                <View className={`${compact ? "mb-0" : "mb-3"} flex-row flex-wrap gap-2`}>
+                  {REMINDER_OPTIONS.map((opt) => {
+                    const isActive = reminderMinutes === opt.value;
+                    return (
+                      <Chip
+                        key={opt.value}
+                        size="sm"
+                        variant={isActive ? "primary" : "secondary"}
+                        color={isActive ? "accent" : "default"}
+                        onPress={() => setReminderMinutes(opt.value)}
+                      >
+                        <Chip.Label>{t(`sessions.reminderOptions.${opt.labelKey}`)}</Chip.Label>
+                      </Chip>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View className={compact ? "flex-1" : ""}>
+                <Text className="mb-1.5 text-xs font-medium text-muted">
+                  {t("sessions.planStatus")}
+                </Text>
+                <View className={`${compact ? "mb-0" : "mb-3"} flex-row flex-wrap gap-2`}>
+                  {(["planned", "completed", "cancelled"] as const).map((s) => {
+                    const isActive = status === s;
+                    return (
+                      <Chip
+                        key={s}
+                        size="sm"
+                        variant={isActive ? "primary" : "secondary"}
+                        onPress={() => setStatus(s)}
+                      >
+                        <Chip.Label>{t(`sessions.status.${s}`)}</Chip.Label>
+                      </Chip>
+                    );
+                  })}
+                </View>
+              </View>
             </View>
 
             {/* Notes */}

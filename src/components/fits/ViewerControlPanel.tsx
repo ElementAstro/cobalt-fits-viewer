@@ -205,32 +205,32 @@ export function ViewerControlPanel({
         </Accordion.Trigger>
         <Accordion.Content>
           <View className="flex-row flex-wrap gap-1 px-3 py-2">
-            {file.object && (
+            {file?.object && (
               <Chip size="sm" variant="primary">
                 <Chip.Label className="text-[9px]">{file.object}</Chip.Label>
               </Chip>
             )}
-            {file.filter && (
+            {file?.filter && (
               <Chip size="sm" variant="secondary">
                 <Chip.Label className="text-[9px]">{file.filter}</Chip.Label>
               </Chip>
             )}
-            {file.exptime != null && (
+            {file?.exptime != null && (
               <Chip size="sm" variant="secondary">
                 <Chip.Label className="text-[9px]">{file.exptime}s</Chip.Label>
               </Chip>
             )}
-            {file.telescope && (
+            {file?.telescope && (
               <Chip size="sm" variant="secondary">
                 <Chip.Label className="text-[9px]">{file.telescope}</Chip.Label>
               </Chip>
             )}
-            {file.instrument && (
+            {file?.instrument && (
               <Chip size="sm" variant="secondary">
                 <Chip.Label className="text-[9px]">{file.instrument}</Chip.Label>
               </Chip>
             )}
-            {file.dateObs && (
+            {file?.dateObs && (
               <Chip size="sm" variant="secondary">
                 <Chip.Label className="text-[9px]">{file.dateObs}</Chip.Label>
               </Chip>
@@ -244,7 +244,7 @@ export function ViewerControlPanel({
                 imageDimensions={imageDimensions}
                 regionSelection={regionSelection}
                 histogramDiagnostics={histogramDiagnostics}
-                bitpix={file.bitpix}
+                bitpix={file?.bitpix}
                 currentHDU={currentHDU}
                 currentFrame={currentFrame}
                 totalFrames={totalFrames}

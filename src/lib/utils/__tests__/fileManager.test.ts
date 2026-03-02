@@ -7,6 +7,11 @@ import {
   listImportedImageFiles,
   getStorageStats,
   scanDirectoryForSupportedImages,
+  sanitizeFilename,
+  formatFileSize,
+  importFile,
+  fileExists,
+  getFileSize,
 } from "../fileManager";
 import type { Directory as ExpoDirectory } from "expo-file-system";
 
@@ -338,5 +343,168 @@ describe("fileManager image format support", () => {
       .map((f) => f.name)
       .sort();
     expect(names).toEqual(["M31.jpg", "M42.fits", "archive.fit.gz", "preview.avif"]);
+  });
+});
+
+describe("sanitizeFilename", () => {
+  it("replaces illegal characters with underscores", () => {
+    expect(sanitizeFilename("bad:name?.fits")).toBe("bad_name_.fits");
+  });
+
+  it("replaces control characters with underscores", () => {
+    expect(sanitizeFilename("a\x01b\x1Fc")).toBe("a_b_c");
+  });
+
+  it("collapses multiple spaces into one", () => {
+    expect(sanitizeFilename("hello   world")).toBe("hello world");
+  });
+
+  it("trims leading and trailing whitespace", () => {
+    expect(sanitizeFilename("  spaced  ")).toBe("spaced");
+  });
+
+  it("returns default fallback for empty string", () => {
+    expect(sanitizeFilename("")).toBe("untitled");
+  });
+
+  it("returns custom fallback for empty string", () => {
+    expect(sanitizeFilename("", "custom")).toBe("custom");
+  });
+
+  it("returns custom fallback when result is only whitespace after sanitization", () => {
+    // All characters become underscores, which is a valid result (not empty)
+    expect(sanitizeFilename(':<>"|', "fallback")).toBe("_____");
+    // Truly empty input uses fallback
+    expect(sanitizeFilename("", "fallback")).toBe("fallback");
+    // Only whitespace after sanitization
+    expect(sanitizeFilename("   ", "fallback")).toBe("fallback");
+  });
+
+  it("preserves valid filenames unchanged", () => {
+    expect(sanitizeFilename("M42_Ha_300s.fits")).toBe("M42_Ha_300s.fits");
+  });
+});
+
+describe("formatFileSize", () => {
+  it("formats bytes", () => {
+    expect(formatFileSize(500)).toBe("500 B");
+  });
+
+  it("formats kilobytes", () => {
+    expect(formatFileSize(1536)).toBe("1.5 KB");
+  });
+
+  it("formats megabytes", () => {
+    expect(formatFileSize(2 * 1024 * 1024)).toBe("2.0 MB");
+  });
+
+  it("formats gigabytes", () => {
+    expect(formatFileSize(1.5 * 1024 * 1024 * 1024)).toBe("1.50 GB");
+  });
+
+  it("formats zero", () => {
+    expect(formatFileSize(0)).toBe("0 B");
+  });
+});
+
+describe("importFile", () => {
+  const fsMock = require("expo-file-system") as {
+    __mock: {
+      reset: () => void;
+      seedFile: (uri: string, size?: number) => void;
+      hasFile: (uri: string) => boolean;
+    };
+  };
+
+  beforeEach(() => {
+    fsMock.__mock.reset();
+  });
+
+  it("copies file to fits directory", () => {
+    fsMock.__mock.seedFile("file:///source/image.fits", 100);
+    const result = importFile("file:///source/image.fits", "image.fits");
+    expect(fsMock.__mock.hasFile("file:///document/fits_files/image.fits")).toBe(true);
+    expect(result.uri).toContain("image.fits");
+  });
+
+  it("appends timestamp when destination already exists", () => {
+    fsMock.__mock.seedFile("file:///source/image.fits", 100);
+    fsMock.__mock.seedFile("file:///document/fits_files/image.fits", 50);
+    const nowSpy = jest.spyOn(Date, "now").mockReturnValue(1700000000000);
+    const result = importFile("file:///source/image.fits", "image.fits");
+    nowSpy.mockRestore();
+    expect(result.uri).toContain("image_1700000000000");
+  });
+});
+
+describe("fileExists", () => {
+  const fsMock = require("expo-file-system") as {
+    __mock: {
+      reset: () => void;
+      seedFile: (uri: string, size?: number) => void;
+    };
+  };
+
+  beforeEach(() => {
+    fsMock.__mock.reset();
+  });
+
+  it("returns true when file exists", () => {
+    fsMock.__mock.seedFile("file:///document/fits_files/present.fits", 10);
+    expect(fileExists("file:///document/fits_files/present.fits")).toBe(true);
+  });
+
+  it("returns false when file does not exist", () => {
+    expect(fileExists("file:///document/fits_files/missing.fits")).toBe(false);
+  });
+});
+
+describe("getFileSize", () => {
+  const fsMock = require("expo-file-system") as {
+    __mock: {
+      reset: () => void;
+      seedFile: (uri: string, size?: number) => void;
+    };
+  };
+
+  beforeEach(() => {
+    fsMock.__mock.reset();
+  });
+
+  it("returns file size when file exists", () => {
+    fsMock.__mock.seedFile("file:///document/fits_files/test.fits", 42);
+    expect(getFileSize("file:///document/fits_files/test.fits")).toBe(42);
+  });
+
+  it("returns 0 when file does not exist", () => {
+    expect(getFileSize("file:///document/fits_files/missing.fits")).toBe(0);
+  });
+});
+
+describe("safeCopyAndDelete via moveFileToTrash", () => {
+  const fsMock = require("expo-file-system") as {
+    __mock: {
+      reset: () => void;
+      seedFile: (uri: string, size?: number) => void;
+      hasFile: (uri: string) => boolean;
+    };
+  };
+
+  beforeEach(() => {
+    fsMock.__mock.reset();
+  });
+
+  it("successfully moves file to trash with size verification", () => {
+    fsMock.__mock.seedFile("file:///document/fits_files/valid.fits", 100);
+    const result = moveFileToTrash("file:///document/fits_files/valid.fits", "valid.fits");
+    expect(result.success).toBe(true);
+    expect(fsMock.__mock.hasFile("file:///document/fits_files/valid.fits")).toBe(false);
+    expect(fsMock.__mock.hasFile("file:///document/fits_trash/valid.fits")).toBe(true);
+  });
+
+  it("returns failure when source does not exist", () => {
+    const result = moveFileToTrash("file:///document/fits_files/gone.fits", "gone.fits");
+    expect(result.success).toBe(false);
+    expect(result.error).toBeTruthy();
   });
 });

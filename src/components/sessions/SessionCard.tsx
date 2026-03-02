@@ -14,6 +14,8 @@ interface SessionCardProps {
   onPress?: () => void;
   onLongPress?: () => void;
   isSelected?: boolean;
+  /** Compact layout for landscape mode */
+  compact?: boolean;
 }
 
 export const SessionCard = memo(function SessionCard({
@@ -21,6 +23,7 @@ export const SessionCard = memo(function SessionCard({
   onPress,
   onLongPress,
   isSelected,
+  compact = false,
 }: SessionCardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
@@ -34,7 +37,7 @@ export const SessionCard = memo(function SessionCard({
     <PressableFeedback onPress={onPress} onLongPress={onLongPress}>
       <PressableFeedback.Highlight />
       <Card variant="secondary" className={isSelected ? "border border-primary" : ""}>
-        <Card.Body className="gap-2 p-4">
+        <Card.Body className={compact ? "gap-1.5 p-3" : "gap-2 p-4"}>
           <View className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <Ionicons name="moon-outline" size={16} color={mutedColor} />
@@ -46,11 +49,16 @@ export const SessionCard = memo(function SessionCard({
 
           {targetNames.length > 0 && (
             <View className="flex-row flex-wrap gap-1.5">
-              {targetNames.map((target) => (
+              {(compact ? targetNames.slice(0, 2) : targetNames).map((target) => (
                 <Chip key={target} size="sm" variant="secondary">
                   <Chip.Label className="text-[9px]">{target}</Chip.Label>
                 </Chip>
               ))}
+              {compact && targetNames.length > 2 && (
+                <Chip size="sm" variant="secondary">
+                  <Chip.Label className="text-[9px]">+{targetNames.length - 2}</Chip.Label>
+                </Chip>
+              )}
             </View>
           )}
 
@@ -100,7 +108,7 @@ export const SessionCard = memo(function SessionCard({
             )}
           </View>
 
-          {session.notes && (
+          {!compact && session.notes && (
             <Text className="text-[10px] text-muted" numberOfLines={2}>
               {session.notes}
             </Text>

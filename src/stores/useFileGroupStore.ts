@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import { zustandMMKVStorage } from "../lib/storage";
+import { zustandAsyncStorage } from "../lib/storage";
 import type { FileGroup } from "../lib/fits/types";
 
 interface FileGroupStoreState {
@@ -121,7 +121,7 @@ export const useFileGroupStore = create<FileGroupStoreState>()(
     }),
     {
       name: "file-group-store",
-      storage: createJSONStorage(() => zustandMMKVStorage),
+      storage: createJSONStorage(() => zustandAsyncStorage),
       partialize: (state) => ({
         groups: state.groups,
         fileGroupMap: state.fileGroupMap,
