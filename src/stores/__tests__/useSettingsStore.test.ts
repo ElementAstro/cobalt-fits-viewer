@@ -72,6 +72,12 @@ describe("useSettingsStore — orientationLock", () => {
       const s = useSettingsStore.getState();
       expect(s.imageProcessingProfile).toBe("standard");
       expect(s.viewerApplyEditorRecipe).toBe(true);
+      expect(s.pixelCacheMaxEntries).toBe(3);
+      expect(s.pixelCacheMaxSizeMB).toBe(512);
+      expect(s.imageLoadCacheMaxEntries).toBe(2);
+      expect(s.imageLoadCacheMaxSizeMB).toBe(512);
+      expect(s.viewerPreloadNeighbors).toBe(true);
+      expect(s.viewerPreloadRadius).toBe(1);
     });
 
     it("has file list grid column default", () => {
@@ -161,6 +167,24 @@ describe("useSettingsStore — orientationLock", () => {
       expect(useSettingsStore.getState().viewerApplyEditorRecipe).toBe(false);
       store.setViewerApplyEditorRecipe(true);
       expect(useSettingsStore.getState().viewerApplyEditorRecipe).toBe(true);
+    });
+
+    it("updates advanced cache controls", () => {
+      const store = useSettingsStore.getState();
+      store.setPixelCacheMaxEntries(6);
+      store.setPixelCacheMaxSizeMB(1024);
+      store.setImageLoadCacheMaxEntries(4);
+      store.setImageLoadCacheMaxSizeMB(768);
+      store.setViewerPreloadNeighbors(false);
+      store.setViewerPreloadRadius(3);
+
+      const s = useSettingsStore.getState();
+      expect(s.pixelCacheMaxEntries).toBe(6);
+      expect(s.pixelCacheMaxSizeMB).toBe(1024);
+      expect(s.imageLoadCacheMaxEntries).toBe(4);
+      expect(s.imageLoadCacheMaxSizeMB).toBe(768);
+      expect(s.viewerPreloadNeighbors).toBe(false);
+      expect(s.viewerPreloadRadius).toBe(3);
     });
   });
 
@@ -404,6 +428,23 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.canvasPanRubberBandFactor).toBe(0);
       expect(s.canvasWheelZoomSensitivity).toBe(0.004);
       expect(s.defaultWhitePoint).toBeGreaterThan(s.defaultBlackPoint);
+    });
+
+    it("applySettingsPatch sanitizes advanced cache controls", () => {
+      useSettingsStore.getState().applySettingsPatch({
+        pixelCacheMaxEntries: 99,
+        pixelCacheMaxSizeMB: 1,
+        imageLoadCacheMaxEntries: 0,
+        imageLoadCacheMaxSizeMB: 99999,
+        viewerPreloadRadius: 99,
+      });
+
+      const s = useSettingsStore.getState();
+      expect(s.pixelCacheMaxEntries).toBe(12);
+      expect(s.pixelCacheMaxSizeMB).toBe(64);
+      expect(s.imageLoadCacheMaxEntries).toBe(1);
+      expect(s.imageLoadCacheMaxSizeMB).toBe(4096);
+      expect(s.viewerPreloadRadius).toBe(3);
     });
 
     it("applySettingsPatch sanitizes stacking detection numeric range and area consistency", () => {
@@ -921,6 +962,12 @@ describe("useSettingsStore — orientationLock", () => {
       store.setImageProcessingDebounce(500);
       store.setUseHighQualityPreview(true);
       store.setViewerApplyEditorRecipe(false);
+      store.setPixelCacheMaxEntries(10);
+      store.setPixelCacheMaxSizeMB(2048);
+      store.setImageLoadCacheMaxEntries(6);
+      store.setImageLoadCacheMaxSizeMB(1536);
+      store.setViewerPreloadNeighbors(false);
+      store.setViewerPreloadRadius(3);
 
       store.resetSection("performance");
 
@@ -928,6 +975,12 @@ describe("useSettingsStore — orientationLock", () => {
       expect(s.imageProcessingDebounce).toBe(150);
       expect(s.useHighQualityPreview).toBe(true);
       expect(s.viewerApplyEditorRecipe).toBe(true);
+      expect(s.pixelCacheMaxEntries).toBe(3);
+      expect(s.pixelCacheMaxSizeMB).toBe(512);
+      expect(s.imageLoadCacheMaxEntries).toBe(2);
+      expect(s.imageLoadCacheMaxSizeMB).toBe(512);
+      expect(s.viewerPreloadNeighbors).toBe(true);
+      expect(s.viewerPreloadRadius).toBe(1);
     });
 
     it("resetSection handles video section", () => {

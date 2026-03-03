@@ -15,6 +15,7 @@ import { useThumbnail } from "../../hooks/useThumbnail";
 import { pruneThumbnailCacheWithPolicy } from "../../lib/gallery/thumbnailWorkflow";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
+import { SettingsSliderRow } from "../../components/common/SettingsSliderRow";
 import { formatBytes } from "../../lib/utils/format";
 import { useStorageStats } from "../../hooks/useStorageStats";
 import { checkAndRepairFileSystemIntegrity } from "../../lib/utils/fileSystemIntegrity";
@@ -29,11 +30,12 @@ export default function StorageSettingsScreen() {
   // Storage info
   const allFiles = useFitsStore((s) => s.files);
   const updateFile = useFitsStore((s) => s.updateFile);
+  const batchUpdateFiles = useFitsStore((s) => s.batchUpdateFiles);
   const filesCount = allFiles.length;
   const confirmDestructiveActions = useSettingsStore((s) => s.confirmDestructiveActions);
   const thumbnailCacheMaxSizeMB = useSettingsStore((s) => s.thumbnailCacheMaxSizeMB);
-  const { clearCache, getCacheSize, regenerateThumbnails, isGenerating, regenerateProgress } =
-    useThumbnail();
+  const setThumbnailCacheMaxSizeMB = useSettingsStore((s) => s.setThumbnailCacheMaxSizeMB);
+  const { clearCache, regenerateThumbnails, isGenerating, regenerateProgress } = useThumbnail();
 
   // Astrometry status
   const astrometryConfig = useAstrometryStore((s) => s.config);
@@ -57,10 +59,6 @@ export default function StorageSettingsScreen() {
     (j) => j.status === "success" || j.status === "failure" || j.status === "cancelled",
   ).length;
 
-  const formatCacheSize = () => {
-    return formatBytes(getCacheSize());
-  };
-
   const runDestructiveAction = (
     title: string,
     message: string,
@@ -83,13 +81,22 @@ export default function StorageSettingsScreen() {
     ]);
   };
 
+  const clearThumbnailUris = () => {
+    if (allFiles.length === 0) return;
+    batchUpdateFiles(
+      allFiles.map((file) => file.id),
+      { thumbnailUri: undefined },
+    );
+  };
+
   const handleClearCache = () => {
-    runDestructiveAction(t("settings.clearCache"), t("settings.clearCacheConfirm"), () => {
+    runDestructiveAction(t("settings.clearCache"), t("settings.clearCacheConfirm"), async () => {
       clearCache();
-      for (const file of allFiles) {
-        updateFile(file.id, { thumbnailUri: undefined });
-      }
-      void refreshStorageStats();
+      clearThumbnailUris();
+      clearExportCache();
+      clearVideoCache();
+      clearPixelCache();
+      await refreshStorageStats();
       haptics.notify(Haptics.NotificationFeedbackType.Success);
       Alert.alert(t("common.success"), t("settings.cacheCleared"));
     });
@@ -135,7 +142,6 @@ export default function StorageSettingsScreen() {
       t("settings.clearVideoProcessingCacheConfirm"),
       () => {
         clearVideoCache();
-        void refreshStorageStats();
         haptics.notify(Haptics.NotificationFeedbackType.Success);
       },
     );
@@ -147,7 +153,6 @@ export default function StorageSettingsScreen() {
       t("settings.clearExportCacheConfirm"),
       () => {
         clearExportCache();
-        void refreshStorageStats();
         haptics.notify(Haptics.NotificationFeedbackType.Success);
       },
     );
@@ -159,7 +164,6 @@ export default function StorageSettingsScreen() {
       t("settings.clearPixelCacheConfirm"),
       () => {
         clearPixelCache();
-        void refreshStorageStats();
         haptics.notify(Haptics.NotificationFeedbackType.Success);
       },
     );
@@ -173,9 +177,7 @@ export default function StorageSettingsScreen() {
       t("settings.regenerateConfirm"),
       async () => {
         clearCache();
-        for (const file of allFiles) {
-          updateFile(file.id, { thumbnailUri: undefined });
-        }
+        clearThumbnailUris();
 
         const result = await regenerateThumbnails(allFiles);
         pruneThumbnailCacheWithPolicy({ thumbnailCacheMaxSizeMB }, { force: true });
@@ -235,20 +237,31 @@ export default function StorageSettingsScreen() {
           <SettingsRow
             icon="folder-outline"
             label={t("settings.cacheSize")}
-            value={formatCacheSize()}
+            value={formatBytes(breakdown.thumbnailCacheBytes)}
           />
           <Separator />
-          <SettingsRow
+          <SettingsSliderRow
+            testID="e2e-action-settings__storage-slider-thumbnail-cache-size"
             icon="resize-outline"
             label={t("settings.thumbnailCacheMaxSize")}
-            value={`${thumbnailCacheMaxSizeMB} MB`}
+            value={thumbnailCacheMaxSizeMB}
+            format={(value) => `${value} MB`}
+            min={50}
+            max={2000}
+            step={50}
+            debounceMs={0}
+            onValueChange={(value) => {
+              setThumbnailCacheMaxSizeMB(value);
+              pruneThumbnailCacheWithPolicy({ thumbnailCacheMaxSizeMB: value }, { force: true });
+              void refreshStorageStats();
+            }}
           />
           <Separator />
           <SettingsRow
             icon="trash-outline"
             label={t("settings.clearCache")}
             onPress={handleClearCache}
-            disabled={isGenerating}
+            disabled={isGenerating || hasActiveVideoTasks}
           />
           <Separator />
           <SettingsRow
@@ -301,10 +314,36 @@ export default function StorageSettingsScreen() {
           />
           <Separator />
           <SettingsRow
+            icon="layers-outline"
+            label={t("settings.imageLoadCache")}
+            value={
+              breakdown.imageLoadCacheEntries > 0
+                ? `${breakdown.imageLoadCacheEntries} · ${formatBytes(breakdown.imageLoadCacheBytes)}`
+                : formatBytes(0)
+            }
+          />
+          <Separator />
+          <SettingsRow
+            icon="save-outline"
+            label={t("settings.runtimeDiskCache")}
+            value={
+              breakdown.runtimeDiskCacheEntries > 0
+                ? `${breakdown.runtimeDiskCacheEntries} · ${formatBytes(
+                    breakdown.runtimeDiskCacheBytes,
+                  )}`
+                : formatBytes(0)
+            }
+          />
+          <Separator />
+          <SettingsRow
             icon="trash-outline"
             label={t("settings.clearPixelCache")}
             onPress={handleClearPixelCache}
-            disabled={breakdown.pixelCacheEntries === 0}
+            disabled={
+              breakdown.pixelCacheEntries === 0 &&
+              breakdown.imageLoadCacheEntries === 0 &&
+              breakdown.runtimeDiskCacheEntries === 0
+            }
           />
           {breakdown.freeDiskBytes !== null && (
             <>

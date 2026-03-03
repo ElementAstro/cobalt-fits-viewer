@@ -158,4 +158,19 @@ describe("ToolParamsSlider", () => {
     fireEvent.press(getByTestId("slider-editor.paramGamma"));
     expect(mockParamsRaw.setGammaValue).toHaveBeenCalledWith(5.7);
   });
+
+  it("calls onParamChange when slider params are updated", () => {
+    const onParamChange = jest.fn();
+    const { getByTestId, getByText, rerender } = render(
+      <ToolParamsSlider activeTool="blur" params={mockParams} onParamChange={onParamChange} />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramSigma"));
+    expect(onParamChange).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ToolParamsSlider activeTool="curves" params={mockParams} onParamChange={onParamChange} />,
+    );
+    fireEvent.press(getByText("editor.paramLinear"));
+    expect(onParamChange).toHaveBeenCalledTimes(2);
+  });
 });

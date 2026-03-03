@@ -470,6 +470,39 @@ describe("ExportDialog", () => {
     expect(opts.webpLossless).toBe(true);
   });
 
+  it("prevents targetSize mode when webp lossless is enabled", async () => {
+    const onExport = jest.fn();
+
+    render(
+      <ExportDialog
+        visible
+        filename="test.webp"
+        format="webp"
+        width={100}
+        height={100}
+        onFormatChange={jest.fn()}
+        onExport={onExport}
+        onShare={jest.fn()}
+        onSaveToDevice={jest.fn()}
+        onClose={jest.fn()}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("converter.webpLossless"));
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("converter.targetSizeMode"));
+    });
+    await act(async () => {
+      screen.getByTestId("e2e-action-export-dialog-export").props.onPress();
+    });
+
+    const [_q, opts] = onExport.mock.calls[0] as [number, any];
+    expect(opts.webpLossless).toBe(true);
+    expect(opts.targetFileSize).toBeUndefined();
+  });
+
   it("toggles annotations and propagates into action options", async () => {
     const onExport = jest.fn();
 

@@ -85,6 +85,51 @@ export function getFileSize(filepath: string): number {
   return file.size ?? 0;
 }
 
+export interface FileCacheFingerprint {
+  fileSize: number;
+  mtimeMs: number | null;
+  cacheKey: string;
+  strictUsable: boolean;
+}
+
+function normalizeMtimeMs(raw: unknown): number | null {
+  const value =
+    typeof raw === "number"
+      ? raw
+      : typeof raw === "string" && raw.trim().length > 0
+        ? Number(raw)
+        : NaN;
+  if (!Number.isFinite(value) || value <= 0) return null;
+  // Some platforms return seconds; normalize to milliseconds.
+  return value < 1_000_000_000_000 ? Math.round(value * 1000) : Math.round(value);
+}
+
+/**
+ * Strict cache fingerprint:
+ * - cacheKey = filepath::size::mtime
+ * - strictUsable=false means mtime is unavailable and fast cache path should be disabled.
+ */
+export function getFileCacheFingerprint(
+  filepath: string,
+  fallbackFileSize?: number,
+): FileCacheFingerprint {
+  const file = new File(filepath);
+  const fileSize = file.exists ? (file.size ?? fallbackFileSize ?? 0) : (fallbackFileSize ?? 0);
+  const rawMtime = (file as File & { modificationTime?: unknown }).modificationTime;
+  const mtimeMs = normalizeMtimeMs(rawMtime);
+  const strictUsable = mtimeMs !== null;
+  const cacheKey = strictUsable
+    ? `${filepath}::${fileSize}::${mtimeMs}`
+    : `${filepath}::${fileSize}`;
+
+  return {
+    fileSize,
+    mtimeMs,
+    cacheKey,
+    strictUsable,
+  };
+}
+
 /**
  * 读取 FITS 文件为 ArrayBuffer
  */

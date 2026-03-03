@@ -31,8 +31,16 @@ export type EditorTool =
   | "localContrast"
   | "starReduction"
   | "deconvolutionAuto"
+  | "cosmeticCorrection"
+  | "mmt"
+  | "integerBin"
+  | "resample"
   | "scnr"
   | "colorCalibration"
+  | "backgroundNeutralize"
+  | "photometricCC"
+  | "perHueSaturation"
+  | "selectiveColor"
   | "saturation"
   | "colorBalance"
   | "pixelMath"
@@ -48,6 +56,8 @@ export type EditorTool =
 export type EditorToolGroup = "geometry" | "adjust" | "process" | "mask";
 
 export type CurvesPreset = "linear" | "sCurve" | "brighten" | "darken" | "highContrast";
+export type RotateMode = "rotate90cw" | "rotate90ccw" | "rotate180";
+export type FlipMode = "flipH" | "flipV";
 
 const CURVE_PRESETS: Record<string, { x: number; y: number }[]> = {
   linear: [
@@ -91,6 +101,10 @@ export interface EditorToolDefaults {
 }
 
 export interface EditorToolParams {
+  rotateMode: RotateMode;
+  setRotateMode: (v: RotateMode) => void;
+  flipMode: FlipMode;
+  setFlipMode: (v: FlipMode) => void;
   blurSigma: number;
   setBlurSigma: (v: number) => void;
   sharpenAmount: number;
@@ -125,6 +139,8 @@ export interface EditorToolParams {
   setClaheTileSize: (v: number) => void;
   claheClipLimit: number;
   setClaheClipLimit: (v: number) => void;
+  claheAmount: number;
+  setClaheAmount: (v: number) => void;
   hdrLayers: number;
   setHdrLayers: (v: number) => void;
   hdrAmount: number;
@@ -137,6 +153,10 @@ export interface EditorToolParams {
   setStarMaskScale: (v: number) => void;
   starMaskInvert: boolean;
   setStarMaskInvert: (v: boolean) => void;
+  starMaskGrowth: number;
+  setStarMaskGrowth: (v: number) => void;
+  starMaskSoftness: number;
+  setStarMaskSoftness: (v: number) => void;
   rangeMaskLow: number;
   setRangeMaskLow: (v: number) => void;
   rangeMaskHigh: number;
@@ -173,12 +193,58 @@ export interface EditorToolParams {
   setDeconvAutoIterations: (v: number) => void;
   deconvAutoRegularization: number;
   setDeconvAutoRegularization: (v: number) => void;
+  cosmeticHotSigma: number;
+  setCosmeticHotSigma: (v: number) => void;
+  cosmeticColdSigma: number;
+  setCosmeticColdSigma: (v: number) => void;
+  cosmeticUseMedian: boolean;
+  setCosmeticUseMedian: (v: boolean) => void;
+  mmtLayers: number;
+  setMmtLayers: (v: number) => void;
+  mmtNoiseThreshold: number;
+  setMmtNoiseThreshold: (v: number) => void;
+  mmtNoiseReduction: number;
+  setMmtNoiseReduction: (v: number) => void;
+  mmtBias: number;
+  setMmtBias: (v: number) => void;
+  integerBinFactor: number;
+  setIntegerBinFactor: (v: number) => void;
+  integerBinMode: "average" | "sum" | "median";
+  setIntegerBinMode: (v: "average" | "sum" | "median") => void;
+  resampleTargetScale: number;
+  setResampleTargetScale: (v: number) => void;
+  resampleMethod: "bilinear" | "bicubic" | "lanczos3";
+  setResampleMethod: (v: "bilinear" | "bicubic" | "lanczos3") => void;
   scnrMethod: "averageNeutral" | "maximumNeutral";
   setScnrMethod: (v: "averageNeutral" | "maximumNeutral") => void;
   scnrAmount: number;
   setScnrAmount: (v: number) => void;
   colorCalibrationPercentile: number;
   setColorCalibrationPercentile: (v: number) => void;
+  backgroundNeutralizeUpperLimit: number;
+  setBackgroundNeutralizeUpperLimit: (v: number) => void;
+  backgroundNeutralizeShadowsClip: number;
+  setBackgroundNeutralizeShadowsClip: (v: number) => void;
+  photometricMinStars: number;
+  setPhotometricMinStars: (v: number) => void;
+  photometricPercentileLow: number;
+  setPhotometricPercentileLow: (v: number) => void;
+  photometricPercentileHigh: number;
+  setPhotometricPercentileHigh: (v: number) => void;
+  perHueSaturationAmount: number;
+  setPerHueSaturationAmount: (v: number) => void;
+  selectiveColorTargetHue: number;
+  setSelectiveColorTargetHue: (v: number) => void;
+  selectiveColorHueRange: number;
+  setSelectiveColorHueRange: (v: number) => void;
+  selectiveColorHueShift: number;
+  setSelectiveColorHueShift: (v: number) => void;
+  selectiveColorSatShift: number;
+  setSelectiveColorSatShift: (v: number) => void;
+  selectiveColorLumShift: number;
+  setSelectiveColorLumShift: (v: number) => void;
+  selectiveColorFeather: number;
+  setSelectiveColorFeather: (v: number) => void;
   saturationAmount: number;
   setSaturationAmount: (v: number) => void;
   colorBalanceRedGain: number;
@@ -263,6 +329,8 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
   // Geometry params
   const [rotateAngle, setRotateAngle] = useState(0);
   const [bgGridSize, setBgGridSize] = useState(8);
+  const [rotateMode, setRotateMode] = useState<RotateMode>("rotate90cw");
+  const [flipMode, setFlipMode] = useState<FlipMode>("flipH");
 
   // Basic adjust params
   const [blurSigma, setBlurSigma] = useState(defaults.blurSigma ?? 2);
@@ -285,6 +353,7 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
   // Process params
   const [claheTileSize, setClaheTileSize] = useState(8);
   const [claheClipLimit, setClaheClipLimit] = useState(3.0);
+  const [claheAmount, setClaheAmount] = useState(1.0);
   const [hdrLayers, setHdrLayers] = useState(5);
   const [hdrAmount, setHdrAmount] = useState(0.7);
   const [morphOp, setMorphOp] = useState<"erode" | "dilate" | "open" | "close">("dilate");
@@ -303,10 +372,25 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
   const [starReductionStrength, setStarReductionStrength] = useState(0.6);
   const [deconvAutoIterations, setDeconvAutoIterations] = useState(20);
   const [deconvAutoRegularization, setDeconvAutoRegularization] = useState(0.1);
+  const [cosmeticHotSigma, setCosmeticHotSigma] = useState(5);
+  const [cosmeticColdSigma, setCosmeticColdSigma] = useState(5);
+  const [cosmeticUseMedian, setCosmeticUseMedian] = useState(true);
+  const [mmtLayers, setMmtLayers] = useState(4);
+  const [mmtNoiseThreshold, setMmtNoiseThreshold] = useState(3);
+  const [mmtNoiseReduction, setMmtNoiseReduction] = useState(0.5);
+  const [mmtBias, setMmtBias] = useState(0);
+  const [integerBinFactor, setIntegerBinFactor] = useState(2);
+  const [integerBinMode, setIntegerBinMode] = useState<"average" | "sum" | "median">("average");
+  const [resampleTargetScale, setResampleTargetScale] = useState(1);
+  const [resampleMethod, setResampleMethod] = useState<"bilinear" | "bicubic" | "lanczos3">(
+    "lanczos3",
+  );
 
   // Mask params
   const [starMaskScale, setStarMaskScale] = useState(1.5);
   const [starMaskInvert, setStarMaskInvert] = useState(false);
+  const [starMaskGrowth, setStarMaskGrowth] = useState(0);
+  const [starMaskSoftness, setStarMaskSoftness] = useState(0);
   const [rangeMaskLow, setRangeMaskLow] = useState(0);
   const [rangeMaskHigh, setRangeMaskHigh] = useState(1);
   const [rangeMaskFuzz, setRangeMaskFuzz] = useState(0.1);
@@ -319,6 +403,18 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
   );
   const [scnrAmount, setScnrAmount] = useState(0.5);
   const [colorCalibrationPercentile, setColorCalibrationPercentile] = useState(0.92);
+  const [backgroundNeutralizeUpperLimit, setBackgroundNeutralizeUpperLimit] = useState(0.2);
+  const [backgroundNeutralizeShadowsClip, setBackgroundNeutralizeShadowsClip] = useState(0.01);
+  const [photometricMinStars, setPhotometricMinStars] = useState(20);
+  const [photometricPercentileLow, setPhotometricPercentileLow] = useState(0.25);
+  const [photometricPercentileHigh, setPhotometricPercentileHigh] = useState(0.75);
+  const [perHueSaturationAmount, setPerHueSaturationAmount] = useState(1);
+  const [selectiveColorTargetHue, setSelectiveColorTargetHue] = useState(120);
+  const [selectiveColorHueRange, setSelectiveColorHueRange] = useState(60);
+  const [selectiveColorHueShift, setSelectiveColorHueShift] = useState(0);
+  const [selectiveColorSatShift, setSelectiveColorSatShift] = useState(0);
+  const [selectiveColorLumShift, setSelectiveColorLumShift] = useState(0);
+  const [selectiveColorFeather, setSelectiveColorFeather] = useState(0.3);
   const [saturationAmount, setSaturationAmount] = useState(0);
   const [colorBalanceRedGain, setColorBalanceRedGain] = useState(1);
   const [colorBalanceGreenGain, setColorBalanceGreenGain] = useState(1);
@@ -368,9 +464,9 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
 
     switch (activeTool) {
       case "rotate":
-        return { type: "rotate90cw" };
+        return { type: rotateMode };
       case "flip":
-        return { type: "flipH" };
+        return { type: flipMode };
       case "invert":
         return { type: "invert" };
       case "blur":
@@ -410,7 +506,12 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
           highlightsClip: mtfHighlights,
         };
       case "clahe":
-        return { type: "clahe", tileSize: claheTileSize, clipLimit: claheClipLimit };
+        return {
+          type: "clahe",
+          tileSize: claheTileSize,
+          clipLimit: claheClipLimit,
+          amount: claheAmount,
+        };
       case "curves":
         return {
           type: "curves",
@@ -421,7 +522,13 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
       case "morphology":
         return { type: "morphology", operation: morphOp, radius: morphRadius };
       case "starMask":
-        return { type: "starMask", scale: starMaskScale, invert: starMaskInvert };
+        return {
+          type: "starMask",
+          scale: starMaskScale,
+          invert: starMaskInvert,
+          growth: starMaskGrowth,
+          softness: starMaskSoftness,
+        };
       case "rangeMask":
         return {
           type: "rangeMask",
@@ -462,10 +569,62 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
           iterations: deconvAutoIterations,
           regularization: deconvAutoRegularization,
         };
+      case "cosmeticCorrection":
+        return {
+          type: "cosmeticCorrection",
+          hotSigma: cosmeticHotSigma,
+          coldSigma: cosmeticColdSigma,
+          useMedian: cosmeticUseMedian,
+        };
+      case "mmt":
+        return {
+          type: "mmt",
+          layers: mmtLayers,
+          noiseThreshold: mmtNoiseThreshold,
+          noiseReduction: mmtNoiseReduction,
+          bias: mmtBias,
+        };
+      case "integerBin":
+        return {
+          type: "integerBin",
+          factor: integerBinFactor,
+          mode: integerBinMode,
+        };
+      case "resample":
+        return {
+          type: "resample",
+          targetScale: resampleTargetScale,
+          method: resampleMethod,
+        };
       case "scnr":
         return { type: "scnr", method: scnrMethod, amount: scnrAmount };
       case "colorCalibration":
         return { type: "colorCalibration", percentile: colorCalibrationPercentile };
+      case "backgroundNeutralize":
+        return {
+          type: "backgroundNeutralize",
+          upperLimit: backgroundNeutralizeUpperLimit,
+          shadowsClip: backgroundNeutralizeShadowsClip,
+        } as ImageEditOperation;
+      case "photometricCC":
+        return {
+          type: "photometricCC",
+          minStars: photometricMinStars,
+          percentileLow: photometricPercentileLow,
+          percentileHigh: photometricPercentileHigh,
+        } as ImageEditOperation;
+      case "perHueSaturation":
+        return { type: "perHueSaturation", amount: perHueSaturationAmount } as ImageEditOperation;
+      case "selectiveColor":
+        return {
+          type: "selectiveColor",
+          targetHue: selectiveColorTargetHue,
+          hueRange: selectiveColorHueRange,
+          hueShift: selectiveColorHueShift,
+          satShift: selectiveColorSatShift,
+          lumShift: selectiveColorLumShift,
+          feather: selectiveColorFeather,
+        } as ImageEditOperation;
       case "saturation":
         return { type: "saturation", amount: saturationAmount };
       case "colorBalance":
@@ -528,6 +687,8 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     }
   }, [
     activeTool,
+    rotateMode,
+    flipMode,
     blurSigma,
     sharpenAmount,
     sharpenSigma,
@@ -545,12 +706,15 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     mtfHighlights,
     claheTileSize,
     claheClipLimit,
+    claheAmount,
     hdrLayers,
     hdrAmount,
     morphOp,
     morphRadius,
     starMaskScale,
     starMaskInvert,
+    starMaskGrowth,
+    starMaskSoftness,
     rangeMaskLow,
     rangeMaskHigh,
     rangeMaskFuzz,
@@ -569,9 +733,32 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     starReductionStrength,
     deconvAutoIterations,
     deconvAutoRegularization,
+    cosmeticHotSigma,
+    cosmeticColdSigma,
+    cosmeticUseMedian,
+    mmtLayers,
+    mmtNoiseThreshold,
+    mmtNoiseReduction,
+    mmtBias,
+    integerBinFactor,
+    integerBinMode,
+    resampleTargetScale,
+    resampleMethod,
     scnrMethod,
     scnrAmount,
     colorCalibrationPercentile,
+    backgroundNeutralizeUpperLimit,
+    backgroundNeutralizeShadowsClip,
+    photometricMinStars,
+    photometricPercentileLow,
+    photometricPercentileHigh,
+    perHueSaturationAmount,
+    selectiveColorTargetHue,
+    selectiveColorHueRange,
+    selectiveColorHueShift,
+    selectiveColorSatShift,
+    selectiveColorLumShift,
+    selectiveColorFeather,
     saturationAmount,
     colorBalanceRedGain,
     colorBalanceGreenGain,
@@ -606,6 +793,10 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
   ]);
 
   const params: EditorToolParams = {
+    rotateMode,
+    setRotateMode,
+    flipMode,
+    setFlipMode,
     blurSigma,
     setBlurSigma,
     sharpenAmount,
@@ -640,6 +831,8 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setClaheTileSize,
     claheClipLimit,
     setClaheClipLimit,
+    claheAmount,
+    setClaheAmount,
     hdrLayers,
     setHdrLayers,
     hdrAmount,
@@ -652,6 +845,10 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setStarMaskScale,
     starMaskInvert,
     setStarMaskInvert,
+    starMaskGrowth,
+    setStarMaskGrowth,
+    starMaskSoftness,
+    setStarMaskSoftness,
     rangeMaskLow,
     setRangeMaskLow,
     rangeMaskHigh,
@@ -688,12 +885,58 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setDeconvAutoIterations,
     deconvAutoRegularization,
     setDeconvAutoRegularization,
+    cosmeticHotSigma,
+    setCosmeticHotSigma,
+    cosmeticColdSigma,
+    setCosmeticColdSigma,
+    cosmeticUseMedian,
+    setCosmeticUseMedian,
+    mmtLayers,
+    setMmtLayers,
+    mmtNoiseThreshold,
+    setMmtNoiseThreshold,
+    mmtNoiseReduction,
+    setMmtNoiseReduction,
+    mmtBias,
+    setMmtBias,
+    integerBinFactor,
+    setIntegerBinFactor,
+    integerBinMode,
+    setIntegerBinMode,
+    resampleTargetScale,
+    setResampleTargetScale,
+    resampleMethod,
+    setResampleMethod,
     scnrMethod,
     setScnrMethod,
     scnrAmount,
     setScnrAmount,
     colorCalibrationPercentile,
     setColorCalibrationPercentile,
+    backgroundNeutralizeUpperLimit,
+    setBackgroundNeutralizeUpperLimit,
+    backgroundNeutralizeShadowsClip,
+    setBackgroundNeutralizeShadowsClip,
+    photometricMinStars,
+    setPhotometricMinStars,
+    photometricPercentileLow,
+    setPhotometricPercentileLow,
+    photometricPercentileHigh,
+    setPhotometricPercentileHigh,
+    perHueSaturationAmount,
+    setPerHueSaturationAmount,
+    selectiveColorTargetHue,
+    setSelectiveColorTargetHue,
+    selectiveColorHueRange,
+    setSelectiveColorHueRange,
+    selectiveColorHueShift,
+    setSelectiveColorHueShift,
+    selectiveColorSatShift,
+    setSelectiveColorSatShift,
+    selectiveColorLumShift,
+    setSelectiveColorLumShift,
+    selectiveColorFeather,
+    setSelectiveColorFeather,
     saturationAmount,
     setSaturationAmount,
     colorBalanceRedGain,
@@ -761,6 +1004,8 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
   const resetToolParams = useCallback(() => {
     setRotateAngle(0);
     setBgGridSize(8);
+    setRotateMode("rotate90cw");
+    setFlipMode("flipH");
     setBlurSigma(defaults.blurSigma ?? 2);
     setSharpenAmount(defaults.sharpenAmount ?? 1.5);
     setSharpenSigma(1.0);
@@ -777,6 +1022,7 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setCurvesPreset("sCurve");
     setClaheTileSize(8);
     setClaheClipLimit(3.0);
+    setClaheAmount(1.0);
     setHdrLayers(5);
     setHdrAmount(0.7);
     setMorphOp("dilate");
@@ -795,8 +1041,21 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setStarReductionStrength(0.6);
     setDeconvAutoIterations(20);
     setDeconvAutoRegularization(0.1);
+    setCosmeticHotSigma(5);
+    setCosmeticColdSigma(5);
+    setCosmeticUseMedian(true);
+    setMmtLayers(4);
+    setMmtNoiseThreshold(3);
+    setMmtNoiseReduction(0.5);
+    setMmtBias(0);
+    setIntegerBinFactor(2);
+    setIntegerBinMode("average");
+    setResampleTargetScale(1);
+    setResampleMethod("lanczos3");
     setStarMaskScale(1.5);
     setStarMaskInvert(false);
+    setStarMaskGrowth(0);
+    setStarMaskSoftness(0);
     setRangeMaskLow(0);
     setRangeMaskHigh(1);
     setRangeMaskFuzz(0.1);
@@ -805,6 +1064,18 @@ export function useEditorToolState(defaults: EditorToolDefaults = {}): UseEditor
     setScnrMethod("averageNeutral");
     setScnrAmount(0.5);
     setColorCalibrationPercentile(0.92);
+    setBackgroundNeutralizeUpperLimit(0.2);
+    setBackgroundNeutralizeShadowsClip(0.01);
+    setPhotometricMinStars(20);
+    setPhotometricPercentileLow(0.25);
+    setPhotometricPercentileHigh(0.75);
+    setPerHueSaturationAmount(1);
+    setSelectiveColorTargetHue(120);
+    setSelectiveColorHueRange(60);
+    setSelectiveColorHueShift(0);
+    setSelectiveColorSatShift(0);
+    setSelectiveColorLumShift(0);
+    setSelectiveColorFeather(0.3);
     setSaturationAmount(0);
     setColorBalanceRedGain(1);
     setColorBalanceGreenGain(1);

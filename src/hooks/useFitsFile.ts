@@ -12,13 +12,22 @@ import {
   isRgbCube,
 } from "../lib/fits/parser";
 import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
-import { readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import { generateFileId } from "../lib/utils/fileManager";
+import {
+  readFileAsArrayBuffer,
+  generateFileId,
+  getFileCacheFingerprint,
+} from "../lib/utils/fileManager";
 import { LOG_TAGS, Logger } from "../lib/logger";
 import type { RasterFrameProvider } from "../lib/image/tiff/decoder";
 import { parseImageBuffer, type ImageParseResult } from "../lib/import/imageParsePipeline";
 import { useSettingsStore } from "../stores/useSettingsStore";
-import { buildPixelCacheKey, getPixelCache, setPixelCache } from "../lib/cache/pixelCache";
+import { getPixelCache } from "../lib/cache/pixelCache";
+import { getImageLoadCache, type ImageLoadCacheEntry } from "../lib/cache/imageLoadCache";
+import {
+  hydratePixelCacheFromImageSnapshot,
+  warmImageCachesFromFile,
+  writeImageCachesFromParsed,
+} from "../lib/cache/imageLoadWorkflow";
 
 function yieldToMain(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));
@@ -152,26 +161,43 @@ export function useFitsFile(): UseFitsFileReturn {
   const [state, dispatch] = useReducer(fitsFileReducer, initialFitsState);
   const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
 
-  const toFullMetadata = useCallback((parsed: ImageParseResult): FitsMetadata => {
-    return {
-      ...parsed.metadataBase,
-      id: generateFileId(),
-      importDate: Date.now(),
-      isFavorite: false,
-      tags: [],
-      albumIds: [],
-      sourceType: parsed.sourceType,
-      sourceFormat: parsed.sourceFormat,
-      mediaKind: "image",
-      decodeStatus: parsed.decodeStatus,
-      decodeError: parsed.decodeError,
-      ...(parsed.serInfo ? { serInfo: parsed.serInfo } : {}),
-    };
-  }, []);
+  const toFullMetadata = useCallback(
+    (source: {
+      metadataBase: ImageParseResult["metadataBase"];
+      sourceType: ImageParseResult["sourceType"];
+      sourceFormat: ImageParseResult["sourceFormat"];
+      decodeStatus: FitsMetadata["decodeStatus"];
+      decodeError?: string;
+      serInfo?: FitsMetadata["serInfo"];
+    }): FitsMetadata => {
+      return {
+        ...source.metadataBase,
+        id: generateFileId(),
+        importDate: Date.now(),
+        isFavorite: false,
+        tags: [],
+        albumIds: [],
+        sourceType: source.sourceType,
+        sourceFormat: source.sourceFormat,
+        mediaKind: "image",
+        decodeStatus: source.decodeStatus,
+        decodeError: source.decodeError,
+        ...(source.serInfo ? { serInfo: source.serInfo } : {}),
+      };
+    },
+    [],
+  );
 
   const applyParsedResult = useCallback(
     (parsed: ImageParseResult, sourceBuffer: ArrayBuffer) => {
-      const fullMeta = toFullMetadata(parsed);
+      const fullMeta = toFullMetadata({
+        metadataBase: parsed.metadataBase,
+        sourceType: parsed.sourceType,
+        sourceFormat: parsed.sourceFormat,
+        decodeStatus: parsed.decodeStatus,
+        decodeError: parsed.decodeError,
+        serInfo: parsed.serInfo,
+      });
 
       if (parsed.sourceType === "fits") {
         if (!parsed.fits) {
@@ -213,42 +239,146 @@ export function useFitsFile(): UseFitsFileReturn {
     [toFullMetadata],
   );
 
+  const applyImageLoadCacheSnapshot = useCallback(
+    async (snapshot: ImageLoadCacheEntry, cacheKey: string, filename: string, fileSize: number) => {
+      const fullMeta = toFullMetadata({
+        metadataBase: snapshot.metadataBase,
+        sourceType: snapshot.sourceType,
+        sourceFormat: snapshot.sourceFormat,
+        decodeStatus: snapshot.decodeStatus,
+        decodeError: snapshot.decodeError,
+        serInfo: snapshot.serInfo,
+      });
+
+      if (snapshot.sourceType === "fits") {
+        if (!snapshot.fits) {
+          throw new Error("Failed to decode image data");
+        }
+
+        dispatch({
+          type: "LOAD_FITS",
+          payload: {
+            fits: snapshot.fits,
+            metadata: fullMeta,
+            headers: snapshot.headers,
+            comments: snapshot.comments,
+            history: snapshot.history,
+            sourceBuffer: snapshot.sourceBuffer,
+            dimensions: snapshot.dimensions,
+            hduList: snapshot.hduList,
+            rasterFrameProvider: null,
+          },
+        });
+
+        const pixelCached = getPixelCache(cacheKey);
+        if (pixelCached) {
+          Logger.info(LOG_TAGS.FitsFile, `Pixel cache hit: ${filename}`, { fileSize });
+          dispatch({
+            type: "SET_PIXELS",
+            pixels: pixelCached.pixels,
+            rgbChannels: pixelCached.rgbChannels,
+          });
+          return;
+        }
+
+        const hydrated = await hydratePixelCacheFromImageSnapshot(cacheKey, snapshot);
+        dispatch({
+          type: "SET_PIXELS",
+          pixels: hydrated?.pixels ?? null,
+          rgbChannels: hydrated?.rgbChannels ?? null,
+        });
+        return;
+      }
+
+      let pixels: Float32Array | null = null;
+      let rgbChannels: { r: Float32Array; g: Float32Array; b: Float32Array } | null = null;
+      let headers = snapshot.headers;
+      let dimensions = snapshot.dimensions;
+      let metadata = fullMeta;
+
+      if (snapshot.rasterFrameProvider) {
+        const loaded = await snapshot.rasterFrameProvider.getFrame(0);
+        pixels = loaded.pixels;
+        rgbChannels = loaded.channels;
+        headers = loaded.headers;
+        dimensions = {
+          width: loaded.width,
+          height: loaded.height,
+          depth: snapshot.rasterFrameProvider.pageCount,
+          isDataCube: snapshot.rasterFrameProvider.pageCount > 1,
+        };
+        metadata = {
+          ...fullMeta,
+          naxis1: loaded.width,
+          naxis2: loaded.height,
+          naxis3: snapshot.rasterFrameProvider.pageCount,
+          bitpix: loaded.bitDepth,
+          decodeStatus: "ready",
+          decodeError: undefined,
+        };
+      }
+
+      dispatch({
+        type: "LOAD_RASTER",
+        payload: {
+          metadata,
+          headers,
+          comments: snapshot.comments,
+          history: snapshot.history,
+          pixels,
+          rgbChannels,
+          sourceBuffer: snapshot.sourceBuffer,
+          dimensions,
+          hduList: snapshot.hduList,
+          rasterFrameProvider: snapshot.rasterFrameProvider,
+        },
+      });
+    },
+    [toFullMetadata],
+  );
+
   const loadFromPath = useCallback(
     async (filepath: string, filename: string, fileSize: number) => {
       dispatch({ type: "LOAD_START" });
       try {
         await yieldToMain();
-        const cacheKey = buildPixelCacheKey(filepath, fileSize);
-        const cached = getPixelCache(cacheKey);
+        const fingerprint = getFileCacheFingerprint(filepath, fileSize);
+        const cacheKey = fingerprint.cacheKey;
+        if (fingerprint.strictUsable) {
+          const warmedKey = await warmImageCachesFromFile(
+            {
+              filepath,
+              filename,
+              fileSize: fingerprint.fileSize || fileSize,
+            },
+            frameClassificationConfig,
+          );
+          const imageLoadCached = warmedKey
+            ? getImageLoadCache(warmedKey)
+            : getImageLoadCache(cacheKey);
+          if (imageLoadCached) {
+            await applyImageLoadCacheSnapshot(imageLoadCached, cacheKey, filename, fileSize);
+            Logger.info(LOG_TAGS.FitsFile, `Loaded from image cache: ${filename}`, { fileSize });
+            return;
+          }
+        }
 
+        const resolvedFileSize = fingerprint.fileSize || fileSize;
         const buffer = await readFileAsArrayBuffer(filepath);
         const parsed = await parseImageBuffer({
           buffer,
           filename,
           filepath,
-          fileSize,
+          fileSize: resolvedFileSize,
           frameClassificationConfig,
         });
         applyParsedResult(parsed, buffer);
 
+        writeImageCachesFromParsed(cacheKey, parsed, buffer, fingerprint.strictUsable);
+
         if (parsed.sourceType === "fits") {
-          let pixels = parsed.pixels;
-          let channels = parsed.rgbChannels;
-          if (cached) {
-            pixels = cached.pixels;
-            channels = cached.rgbChannels;
-            Logger.info(LOG_TAGS.FitsFile, `Pixel cache hit: ${filename}`, { fileSize });
-          } else if (pixels) {
-            setPixelCache(cacheKey, {
-              pixels,
-              width: parsed.dimensions?.width ?? 0,
-              height: parsed.dimensions?.height ?? 0,
-              depth: parsed.dimensions?.depth ?? 1,
-              rgbChannels: channels,
-              timestamp: Date.now(),
-            });
-          }
-          dispatch({ type: "SET_PIXELS", pixels, rgbChannels: channels });
+          const pixels = parsed.pixels;
+          dispatch({ type: "SET_PIXELS", pixels, rgbChannels: parsed.rgbChannels });
         }
 
         Logger.info(LOG_TAGS.FitsFile, `Loaded: ${filename}`, {
@@ -263,7 +393,7 @@ export function useFitsFile(): UseFitsFileReturn {
         dispatch({ type: "LOAD_END" });
       }
     },
-    [applyParsedResult, frameClassificationConfig],
+    [applyImageLoadCacheSnapshot, applyParsedResult, frameClassificationConfig],
   );
 
   const loadFromBuffer = useCallback(

@@ -50,6 +50,7 @@ export function EditSessionSheet({
     mount: session.equipment.mount,
     filters: session.equipment.filters,
   });
+  const { resetEquipment } = equip;
   const [targets, setTargets] = useState<string[]>(
     (session.targetRefs ?? []).map((ref) => ref.name),
   );
@@ -63,7 +64,7 @@ export function EditSessionSheet({
     setNotes(session.notes ?? "");
     setWeather(session.weather ?? "");
     setSeeing(session.seeing ?? "");
-    equip.resetEquipment({
+    resetEquipment({
       telescope: session.equipment.telescope,
       camera: session.equipment.camera,
       mount: session.equipment.mount,
@@ -88,7 +89,7 @@ export function EditSessionSheet({
     session.rating,
     session.bortle,
     session.tags,
-    equip.resetEquipment,
+    resetEquipment,
   ]);
 
   const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();

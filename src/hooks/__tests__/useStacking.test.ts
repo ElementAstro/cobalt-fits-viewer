@@ -22,7 +22,7 @@ jest.mock("../../lib/stacking/integration", () => {
   return {
     ...actual,
     integrateFrames: jest.fn(
-      (_frames: Float32Array[], options: { strategy: { name: string } }) => ({
+      (_frames: Float32Array[], _options: { strategy: { name: string } }) => ({
         pixels: new Float32Array([10, 10, 10, 10]),
         stats: { totalRejectedLow: 0, totalRejectedHigh: 0, pixelCount: 4 },
       }),

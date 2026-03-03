@@ -8,21 +8,15 @@ import { useToast } from "heroui-native";
 import { useI18n } from "../i18n/useI18n";
 import { useExport } from "./useExport";
 import { useSettingsStore } from "../stores/useSettingsStore";
-import type { ExportRenderOptions } from "../lib/converter/exportDecorations";
 import type {
   ExportFormat,
-  FitsTargetOptions,
   ImageSourceType,
   ImageSourceFormat,
   StarAnnotationPoint,
-  TiffTargetOptions,
 } from "../lib/fits/types";
+import type { ExportActionOptions } from "../lib/converter/exportActionOptions";
 
-type EditorExportOptions = {
-  fits?: Partial<FitsTargetOptions>;
-  tiff?: Partial<TiffTargetOptions>;
-  render?: ExportRenderOptions;
-};
+type EditorExportOptions = ExportActionOptions;
 
 interface EditorImageData {
   rgbaData: Uint8ClampedArray;
@@ -79,6 +73,9 @@ export function useEditorExport({
         fits: { ...options?.fits, mode: "rendered" as const },
         tiff: options?.tiff,
         renderOptions: options?.render,
+        outputSize: options?.outputSize,
+        targetFileSize: options?.targetFileSize,
+        webpLossless: options?.webpLossless,
         source: {
           sourceType: fileInfo?.sourceType,
           sourceFormat: fileInfo?.sourceFormat,

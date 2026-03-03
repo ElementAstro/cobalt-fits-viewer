@@ -11,6 +11,7 @@ import { useFitsStore } from "../../stores/useFitsStore";
 import { useImageComparison, type CompareMode } from "../../hooks/useImageComparison";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
+import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
 import {
   FitsCanvas,
   type CanvasTransform,
@@ -31,8 +32,9 @@ import {
 import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";
 import { syncCompareTransform } from "../../lib/viewer/compareTransformSync";
 import { computeAutoStretch } from "../../lib/utils/pixelMath";
-import { isImageLikeMedia } from "../../lib/import/imageParsePipeline";
+import { isProcessableImageMedia } from "../../lib/import/imageParsePipeline";
 import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
+import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
 
 const MODES: { key: CompareMode; labelKey: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "blink", labelKey: "compare.modeBlink", icon: "eye-outline" },
@@ -83,7 +85,7 @@ export default function CompareScreen() {
   const { horizontalPadding } = useResponsiveLayout();
 
   const files = useFitsStore((s) => s.files);
-  const imageFiles = useMemo(() => files.filter((file) => isImageLikeMedia(file)), [files]);
+  const imageFiles = useMemo(() => files.filter((file) => isProcessableImageMedia(file)), [files]);
   const updateFile = useFitsStore((s) => s.updateFile);
   const defaultStretch = useSettingsStore((s) => s.defaultStretch);
   const defaultColormap = useSettingsStore((s) => s.defaultColormap);
@@ -99,6 +101,11 @@ export default function CompareScreen() {
   const defaultCompareSplitPosition = useSettingsStore((s) => s.compareSplitPosition);
   const debounceMs = useSettingsStore((s) => s.imageProcessingDebounce);
   const useHighQualityPreview = useSettingsStore((s) => s.useHighQualityPreview);
+  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
+  const viewerApplyEditorRecipe = useSettingsStore((s) => s.viewerApplyEditorRecipe);
+  const viewerPreloadNeighbors = useSettingsStore((s) => s.viewerPreloadNeighbors);
+  const viewerPreloadRadius = useSettingsStore((s) => s.viewerPreloadRadius);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
   const settingsMinScale = useSettingsStore((s) => s.canvasMinScale);
   const settingsMaxScale = useSettingsStore((s) => s.canvasMaxScale);
   const settingsDoubleTapScale = useSettingsStore((s) => s.canvasDoubleTapScale);
@@ -182,14 +189,30 @@ export default function CompareScreen() {
   const fitsB = useFitsFile();
   const procA = useImageProcessing();
   const procB = useImageProcessing();
-  const { pixels: pixelsA, dimensions: dimensionsA, loadFromPath: loadFromPathA } = fitsA;
-  const { pixels: pixelsB, dimensions: dimensionsB, loadFromPath: loadFromPathB } = fitsB;
+  const {
+    metadata: metadataA,
+    pixels: pixelsA,
+    dimensions: dimensionsA,
+    isLoading: fitsLoadingA,
+    error: fitsErrorA,
+    loadFromPath: loadFromPathA,
+  } = fitsA;
+  const {
+    metadata: metadataB,
+    pixels: pixelsB,
+    dimensions: dimensionsB,
+    isLoading: fitsLoadingB,
+    error: fitsErrorB,
+    loadFromPath: loadFromPathB,
+  } = fitsB;
   const {
     rgbaData: rgbaDataA,
     displayWidth: displayWidthA,
     displayHeight: displayHeightA,
     processImage: processImageA,
     processImagePreview: processImagePreviewA,
+    isProcessing: isProcessingA,
+    processingError: processingErrorA,
   } = procA;
   const {
     rgbaData: rgbaDataB,
@@ -197,7 +220,26 @@ export default function CompareScreen() {
     displayHeight: displayHeightB,
     processImage: processImageB,
     processImagePreview: processImagePreviewB,
+    isProcessing: isProcessingB,
+    processingError: processingErrorB,
   } = procB;
+
+  const activeRecipeA = useMemo(() => {
+    if (!viewerApplyEditorRecipe || !fileA?.editorRecipe) return null;
+    return normalizeProcessingPipelineSnapshot(
+      fileA.editorRecipe,
+      fileA.editorRecipe.profile ?? "legacy",
+    );
+  }, [fileA?.editorRecipe, viewerApplyEditorRecipe]);
+  const activeRecipeB = useMemo(() => {
+    if (!viewerApplyEditorRecipe || !fileB?.editorRecipe) return null;
+    return normalizeProcessingPipelineSnapshot(
+      fileB.editorRecipe,
+      fileB.editorRecipe.profile ?? "legacy",
+    );
+  }, [fileB?.editorRecipe, viewerApplyEditorRecipe]);
+  const pipelineProfileA = activeRecipeA ? undefined : imageProcessingProfile;
+  const pipelineProfileB = activeRecipeB ? undefined : imageProcessingProfile;
 
   const [adjustmentsA, setAdjustmentsA] = useState(defaultAdjustments);
   const [adjustmentsB, setAdjustmentsB] = useState(defaultAdjustments);
@@ -296,6 +338,24 @@ export default function CompareScreen() {
     loadFromPathB(fileB.filepath, fileB.filename, fileB.fileSize);
   }, [fileB?.id, fileB?.filepath, fileB?.filename, fileB?.fileSize, loadFromPathB]);
 
+  useImageCacheWarmup({
+    enabled: viewerPreloadNeighbors,
+    currentFile: fileA,
+    allFiles: imageFiles,
+    radius: viewerPreloadRadius,
+    frameClassificationConfig,
+    startWhen: !!fileA && !fitsLoadingA && !!metadataA,
+  });
+
+  useImageCacheWarmup({
+    enabled: viewerPreloadNeighbors,
+    currentFile: fileB,
+    allFiles: imageFiles,
+    radius: viewerPreloadRadius,
+    frameClassificationConfig,
+    startWhen: !!fileB && !fitsLoadingB && !!metadataB,
+  });
+
   useEffect(() => {
     setAdjustmentsB(resolveAdjustmentsFromPreset(fileB?.viewerPreset, defaultAdjustments));
   }, [fileB?.id, fileB?.viewerPreset, defaultAdjustments]);
@@ -330,6 +390,10 @@ export default function CompareScreen() {
         adjustmentsA.contrast,
         adjustmentsA.mtfMidtone,
         adjustmentsA.curvePreset,
+        {
+          profile: pipelineProfileA,
+          recipe: activeRecipeA,
+        },
       );
       return;
     }
@@ -349,6 +413,10 @@ export default function CompareScreen() {
         adjustmentsA.contrast,
         adjustmentsA.mtfMidtone,
         adjustmentsA.curvePreset,
+        {
+          profile: pipelineProfileA,
+          recipe: activeRecipeA,
+        },
       );
     }, debounceMs);
     return () => clearTimeout(timer);
@@ -360,6 +428,8 @@ export default function CompareScreen() {
     processImagePreviewA,
     debounceMs,
     useHighQualityPreview,
+    pipelineProfileA,
+    activeRecipeA,
   ]);
 
   useEffect(() => {
@@ -383,6 +453,10 @@ export default function CompareScreen() {
         adjustmentsB.contrast,
         adjustmentsB.mtfMidtone,
         adjustmentsB.curvePreset,
+        {
+          profile: pipelineProfileB,
+          recipe: activeRecipeB,
+        },
       );
       return;
     }
@@ -402,6 +476,10 @@ export default function CompareScreen() {
         adjustmentsB.contrast,
         adjustmentsB.mtfMidtone,
         adjustmentsB.curvePreset,
+        {
+          profile: pipelineProfileB,
+          recipe: activeRecipeB,
+        },
       );
     }, debounceMs);
     return () => clearTimeout(timer);
@@ -413,6 +491,8 @@ export default function CompareScreen() {
     processImagePreviewB,
     debounceMs,
     useHighQualityPreview,
+    pipelineProfileB,
+    activeRecipeB,
   ]);
 
   const activeAdjustments = activeSide === "A" ? adjustmentsA : adjustmentsB;
@@ -673,11 +753,31 @@ export default function CompareScreen() {
       const displayWidth = side === "A" ? displayWidthA : displayWidthB;
       const displayHeight = side === "A" ? displayHeightA : displayHeightB;
       const dimensions = side === "A" ? dimensionsA : dimensionsB;
+      const fitsLoading = side === "A" ? fitsLoadingA : fitsLoadingB;
+      const fitsError = side === "A" ? fitsErrorA : fitsErrorB;
+      const isProcessing = side === "A" ? isProcessingA : isProcessingB;
+      const processingError = side === "A" ? processingErrorA : processingErrorB;
       const transform = side === "A" ? canvasA : canvasB;
       const ref = side === "A" ? canvasARef : canvasBRef;
       const cursor = side === "A" ? cursorA : cursorB;
       const setCursor = side === "A" ? setCursorA : setCursorB;
       const interactive = forceInteractive || activeSide === side;
+
+      if (fitsError || processingError) {
+        return (
+          <View className="flex-1 items-center justify-center bg-black px-4">
+            <Text className="text-xs text-danger text-center">{fitsError || processingError}</Text>
+          </View>
+        );
+      }
+
+      if ((fitsLoading || isProcessing) && !rgbaData) {
+        return (
+          <View className="flex-1 items-center justify-center bg-black">
+            <Text className="text-xs text-muted">{t("common.loading")}</Text>
+          </View>
+        );
+      }
 
       if (!rgbaData || !dimensions) {
         return (
@@ -739,6 +839,14 @@ export default function CompareScreen() {
       displayHeightB,
       dimensionsA,
       dimensionsB,
+      fitsLoadingA,
+      fitsLoadingB,
+      fitsErrorA,
+      fitsErrorB,
+      isProcessingA,
+      isProcessingB,
+      processingErrorA,
+      processingErrorB,
       canvasA,
       canvasB,
       cursorA,
@@ -752,6 +860,7 @@ export default function CompareScreen() {
       settingsMaxScale,
       settingsDoubleTapScale,
       canvasGestureConfig,
+      t,
     ],
   );
 

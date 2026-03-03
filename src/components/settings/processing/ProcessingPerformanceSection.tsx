@@ -6,6 +6,7 @@ import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
 import { useSettingsStore } from "../../../stores/useSettingsStore";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../../common/SettingsRow";
+import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
 import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
 
@@ -35,10 +36,22 @@ export function ProcessingPerformanceSection() {
     imageProcessingProfile,
     viewerApplyEditorRecipe,
     imageProcessingDebounce,
+    pixelCacheMaxEntries,
+    pixelCacheMaxSizeMB,
+    imageLoadCacheMaxEntries,
+    imageLoadCacheMaxSizeMB,
+    viewerPreloadNeighbors,
+    viewerPreloadRadius,
     useHighQualityPreview,
     setImageProcessingProfile,
     setViewerApplyEditorRecipe,
     setImageProcessingDebounce,
+    setPixelCacheMaxEntries,
+    setPixelCacheMaxSizeMB,
+    setImageLoadCacheMaxEntries,
+    setImageLoadCacheMaxSizeMB,
+    setViewerPreloadNeighbors,
+    setViewerPreloadRadius,
     setUseHighQualityPreview,
     resetSection,
   } = useSettingsStore(
@@ -46,10 +59,22 @@ export function ProcessingPerformanceSection() {
       imageProcessingProfile: s.imageProcessingProfile,
       viewerApplyEditorRecipe: s.viewerApplyEditorRecipe,
       imageProcessingDebounce: s.imageProcessingDebounce,
+      pixelCacheMaxEntries: s.pixelCacheMaxEntries,
+      pixelCacheMaxSizeMB: s.pixelCacheMaxSizeMB,
+      imageLoadCacheMaxEntries: s.imageLoadCacheMaxEntries,
+      imageLoadCacheMaxSizeMB: s.imageLoadCacheMaxSizeMB,
+      viewerPreloadNeighbors: s.viewerPreloadNeighbors,
+      viewerPreloadRadius: s.viewerPreloadRadius,
       useHighQualityPreview: s.useHighQualityPreview,
       setImageProcessingProfile: s.setImageProcessingProfile,
       setViewerApplyEditorRecipe: s.setViewerApplyEditorRecipe,
       setImageProcessingDebounce: s.setImageProcessingDebounce,
+      setPixelCacheMaxEntries: s.setPixelCacheMaxEntries,
+      setPixelCacheMaxSizeMB: s.setPixelCacheMaxSizeMB,
+      setImageLoadCacheMaxEntries: s.setImageLoadCacheMaxEntries,
+      setImageLoadCacheMaxSizeMB: s.setImageLoadCacheMaxSizeMB,
+      setViewerPreloadNeighbors: s.setViewerPreloadNeighbors,
+      setViewerPreloadRadius: s.setViewerPreloadRadius,
       setUseHighQualityPreview: s.setUseHighQualityPreview,
       resetSection: s.resetSection,
     })),
@@ -94,6 +119,71 @@ export function ProcessingPerformanceSection() {
           label={t("settings.imageProcessingDebounce")}
           value={`${imageProcessingDebounce}ms`}
           onPress={() => openPicker("debounce")}
+        />
+        <Separator />
+        <SettingsSliderRow
+          testID="e2e-action-settings__processing-slider-pixel-cache-entries"
+          icon="layers-outline"
+          label={t("settings.pixelCacheMaxEntries")}
+          value={pixelCacheMaxEntries}
+          min={1}
+          max={12}
+          step={1}
+          onValueChange={setPixelCacheMaxEntries}
+        />
+        <Separator />
+        <SettingsSliderRow
+          testID="e2e-action-settings__processing-slider-pixel-cache-size"
+          icon="cube-outline"
+          label={t("settings.pixelCacheMaxSizeMB")}
+          value={pixelCacheMaxSizeMB}
+          format={(v) => `${v} MB`}
+          min={64}
+          max={4096}
+          step={64}
+          onValueChange={setPixelCacheMaxSizeMB}
+        />
+        <Separator />
+        <SettingsSliderRow
+          testID="e2e-action-settings__processing-slider-image-load-cache-entries"
+          icon="albums-outline"
+          label={t("settings.imageLoadCacheMaxEntries")}
+          value={imageLoadCacheMaxEntries}
+          min={1}
+          max={8}
+          step={1}
+          onValueChange={setImageLoadCacheMaxEntries}
+        />
+        <Separator />
+        <SettingsSliderRow
+          testID="e2e-action-settings__processing-slider-image-load-cache-size"
+          icon="archive-outline"
+          label={t("settings.imageLoadCacheMaxSizeMB")}
+          value={imageLoadCacheMaxSizeMB}
+          format={(v) => `${v} MB`}
+          min={64}
+          max={4096}
+          step={64}
+          onValueChange={setImageLoadCacheMaxSizeMB}
+        />
+        <Separator />
+        <SettingsToggleRow
+          testID="e2e-action-settings__processing-toggle-preload-neighbors"
+          icon="shuffle-outline"
+          label={t("settings.viewerPreloadNeighbors")}
+          isSelected={viewerPreloadNeighbors}
+          onSelectedChange={setViewerPreloadNeighbors}
+        />
+        <Separator />
+        <SettingsSliderRow
+          testID="e2e-action-settings__processing-slider-preload-radius"
+          icon="swap-horizontal-outline"
+          label={t("settings.viewerPreloadRadius")}
+          value={viewerPreloadRadius}
+          min={1}
+          max={3}
+          step={1}
+          onValueChange={setViewerPreloadRadius}
         />
         <Separator />
         <SettingsToggleRow

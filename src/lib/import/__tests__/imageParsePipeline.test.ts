@@ -1,4 +1,9 @@
-import { isImageLikeMedia, parseImageBuffer, parseImageFile } from "../imageParsePipeline";
+import {
+  isImageLikeMedia,
+  isProcessableImageMedia,
+  parseImageBuffer,
+  parseImageFile,
+} from "../imageParsePipeline";
 
 jest.mock("../../fits/parser", () => ({
   loadScientificFitsFromBuffer: jest.fn(),
@@ -350,5 +355,12 @@ describe("imageParsePipeline", () => {
     expect(isImageLikeMedia({ sourceType: "fits" })).toBe(true);
     expect(isImageLikeMedia({ filename: "clip.mp4" })).toBe(false);
     expect(isImageLikeMedia({ filename: "frame.png" })).toBe(true);
+  });
+
+  it("filters processable image-like media records", () => {
+    expect(isProcessableImageMedia({ mediaKind: "image", decodeStatus: "ready" })).toBe(true);
+    expect(isProcessableImageMedia({ sourceType: "fits" })).toBe(true);
+    expect(isProcessableImageMedia({ sourceType: "raster", decodeStatus: "failed" })).toBe(false);
+    expect(isProcessableImageMedia({ mediaKind: "video" })).toBe(false);
   });
 });

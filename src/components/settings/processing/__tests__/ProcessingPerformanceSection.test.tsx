@@ -52,4 +52,27 @@ describe("ProcessingPerformanceSection", () => {
 
     expect(screen.getByTestId("e2e-action-settings__processing-toggle-hq-preview")).toBeTruthy();
   });
+
+  it("renders cache and preload controls", () => {
+    render(<ProcessingPerformanceSection />);
+
+    expect(
+      screen.getByTestId("e2e-action-settings__processing-slider-pixel-cache-entries"),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("e2e-action-settings__processing-slider-pixel-cache-size"),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("e2e-action-settings__processing-slider-image-load-cache-entries"),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("e2e-action-settings__processing-slider-image-load-cache-size"),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("e2e-action-settings__processing-toggle-preload-neighbors"),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("e2e-action-settings__processing-slider-preload-radius"),
+    ).toBeTruthy();
+  });
 });

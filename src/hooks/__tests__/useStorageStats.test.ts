@@ -9,6 +9,8 @@ const mockCleanExpiredExports = jest.fn();
 const mockGetVideoProcessingCacheSize = jest.fn();
 const mockClearVideoProcessingCache = jest.fn();
 const mockGetPixelCacheStats = jest.fn();
+const mockGetImageLoadCacheStats = jest.fn();
+const mockGetRuntimeDiskCacheStats = jest.fn();
 const mockClearRuntimeCaches = jest.fn();
 
 let mockFiles = [{ id: "f1", fileSize: 100 }];
@@ -40,6 +42,14 @@ jest.mock("../../lib/cache/pixelCache", () => ({
   getPixelCacheStats: () => mockGetPixelCacheStats(),
 }));
 
+jest.mock("../../lib/cache/imageLoadCache", () => ({
+  getImageLoadCacheStats: () => mockGetImageLoadCacheStats(),
+}));
+
+jest.mock("../../lib/cache/runtimeDiskCache", () => ({
+  getRuntimeDiskCacheStats: () => mockGetRuntimeDiskCacheStats(),
+}));
+
 jest.mock("../../lib/cache/runtimeCaches", () => ({
   clearRuntimeCaches: () => mockClearRuntimeCaches(),
 }));
@@ -65,6 +75,8 @@ describe("useStorageStats", () => {
     mockGetExportCacheSize.mockReturnValue({ totalBytes: 20, fileCount: 1 });
     mockGetVideoProcessingCacheSize.mockResolvedValue(30);
     mockGetPixelCacheStats.mockReturnValue({ entries: 1, totalBytes: 40 });
+    mockGetImageLoadCacheStats.mockReturnValue({ entries: 2, totalBytes: 50 });
+    mockGetRuntimeDiskCacheStats.mockReturnValue({ entries: 3, totalBytes: 60 });
   });
 
   it("refreshes when files and trash items change", async () => {
@@ -103,6 +115,16 @@ describe("useStorageStats", () => {
     expect(mockClearRuntimeCaches).toHaveBeenCalledTimes(1);
     await waitFor(() => {
       expect(mockGetStorageStats).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("includes image load and runtime disk cache stats in breakdown", async () => {
+    const { result } = renderHook(() => useStorageStats());
+    await waitFor(() => {
+      expect(result.current.breakdown.imageLoadCacheEntries).toBe(2);
+      expect(result.current.breakdown.imageLoadCacheBytes).toBe(50);
+      expect(result.current.breakdown.runtimeDiskCacheEntries).toBe(3);
+      expect(result.current.breakdown.runtimeDiskCacheBytes).toBe(60);
     });
   });
 });

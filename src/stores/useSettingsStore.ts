@@ -247,6 +247,12 @@ export interface SettingsStoreState {
   imageProcessingProfile: ProcessingAlgorithmProfile;
   viewerApplyEditorRecipe: boolean;
   imageProcessingDebounce: number;
+  pixelCacheMaxEntries: number;
+  pixelCacheMaxSizeMB: number;
+  imageLoadCacheMaxEntries: number;
+  imageLoadCacheMaxSizeMB: number;
+  viewerPreloadNeighbors: boolean;
+  viewerPreloadRadius: number;
   useHighQualityPreview: boolean;
   videoAutoplay: boolean;
   videoLoopByDefault: boolean;
@@ -352,6 +358,12 @@ export interface SettingsStoreState {
   setImageProcessingProfile: (profile: ProcessingAlgorithmProfile) => void;
   setViewerApplyEditorRecipe: (value: boolean) => void;
   setImageProcessingDebounce: (ms: number) => void;
+  setPixelCacheMaxEntries: (value: number) => void;
+  setPixelCacheMaxSizeMB: (value: number) => void;
+  setImageLoadCacheMaxEntries: (value: number) => void;
+  setImageLoadCacheMaxSizeMB: (value: number) => void;
+  setViewerPreloadNeighbors: (value: boolean) => void;
+  setViewerPreloadRadius: (value: number) => void;
   setUseHighQualityPreview: (value: boolean) => void;
   setVideoAutoplay: (value: boolean) => void;
   setVideoLoopByDefault: (value: boolean) => void;
@@ -603,6 +615,12 @@ const SECTION_KEYS: Record<SettingsSection, Array<keyof SettingsDataState>> = {
     "imageProcessingProfile",
     "viewerApplyEditorRecipe",
     "imageProcessingDebounce",
+    "pixelCacheMaxEntries",
+    "pixelCacheMaxSizeMB",
+    "imageLoadCacheMaxEntries",
+    "imageLoadCacheMaxSizeMB",
+    "viewerPreloadNeighbors",
+    "viewerPreloadRadius",
     "useHighQualityPreview",
   ],
   observation: [
@@ -754,6 +772,12 @@ const DEFAULT_SETTINGS: SettingsDataState = {
   imageProcessingProfile: "standard",
   viewerApplyEditorRecipe: true,
   imageProcessingDebounce: 150,
+  pixelCacheMaxEntries: 3,
+  pixelCacheMaxSizeMB: 512,
+  imageLoadCacheMaxEntries: 2,
+  imageLoadCacheMaxSizeMB: 512,
+  viewerPreloadNeighbors: true,
+  viewerPreloadRadius: 1,
   useHighQualityPreview: true,
   videoAutoplay: false,
   videoLoopByDefault: false,
@@ -944,6 +968,11 @@ function sanitizeSettingsPatch(
     { key: "composeBlueWeight", min: 0, max: 4 },
     { key: "advancedComposePreviewScale", min: 0.1, max: 1 },
     { key: "imageProcessingDebounce", min: 0, max: 2000, integer: true },
+    { key: "pixelCacheMaxEntries", min: 1, max: 12, integer: true },
+    { key: "pixelCacheMaxSizeMB", min: 64, max: 4096, integer: true },
+    { key: "imageLoadCacheMaxEntries", min: 1, max: 8, integer: true },
+    { key: "imageLoadCacheMaxSizeMB", min: 64, max: 4096, integer: true },
+    { key: "viewerPreloadRadius", min: 1, max: 3, integer: true },
     { key: "videoThumbnailTimeMs", min: 0, max: 300000, integer: true },
     { key: "videoProcessingConcurrency", min: 1, max: 6, integer: true },
     { key: "logMaxEntries", min: 100, max: 10000, integer: true },
@@ -1551,6 +1580,14 @@ export const useSettingsStore = create<SettingsStoreState>()(
       setImageProcessingProfile: (profile) => set({ imageProcessingProfile: profile }),
       setViewerApplyEditorRecipe: (value) => set({ viewerApplyEditorRecipe: value }),
       setImageProcessingDebounce: (ms) => get().applySettingsPatch({ imageProcessingDebounce: ms }),
+      setPixelCacheMaxEntries: (value) => get().applySettingsPatch({ pixelCacheMaxEntries: value }),
+      setPixelCacheMaxSizeMB: (value) => get().applySettingsPatch({ pixelCacheMaxSizeMB: value }),
+      setImageLoadCacheMaxEntries: (value) =>
+        get().applySettingsPatch({ imageLoadCacheMaxEntries: value }),
+      setImageLoadCacheMaxSizeMB: (value) =>
+        get().applySettingsPatch({ imageLoadCacheMaxSizeMB: value }),
+      setViewerPreloadNeighbors: (value) => set({ viewerPreloadNeighbors: value }),
+      setViewerPreloadRadius: (value) => get().applySettingsPatch({ viewerPreloadRadius: value }),
       setUseHighQualityPreview: (value) => set({ useHighQualityPreview: value }),
       setVideoAutoplay: (value) => set({ videoAutoplay: value }),
       setVideoLoopByDefault: (value) => set({ videoLoopByDefault: value }),

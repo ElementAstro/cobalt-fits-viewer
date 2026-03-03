@@ -99,6 +99,8 @@ export function PlanObservationSheet({
     filters: existingPlan?.equipment?.filters,
   });
   const loc = useLocationFields(existingPlan?.location);
+  const { resetEquipment } = equip;
+  const { resetLocation, useCurrentLocation: applyCurrentLocation, validateAndBuild } = loc;
 
   useEffect(() => {
     if (existingPlan) {
@@ -110,13 +112,13 @@ export function PlanObservationSheet({
       setReminderMinutes(existingPlan.reminderMinutes);
       setStartDate(new Date(existingPlan.startDate));
       setEndDate(new Date(existingPlan.endDate));
-      equip.resetEquipment({
+      resetEquipment({
         telescope: existingPlan.equipment?.telescope,
         camera: existingPlan.equipment?.camera,
         mount: existingPlan.equipment?.mount,
         filters: existingPlan.equipment?.filters,
       });
-      loc.resetLocation(existingPlan.location);
+      resetLocation(existingPlan.location);
     } else {
       const s = makeDefaultStart(initialDate);
       setTargetName(initialTargetName ?? "");
@@ -127,8 +129,8 @@ export function PlanObservationSheet({
       setReminderMinutes(defaultReminderMinutes);
       setStartDate(s);
       setEndDate(makeDefaultEnd(s));
-      equip.resetEquipment();
-      loc.resetLocation();
+      resetEquipment();
+      resetLocation();
     }
   }, [
     initialDate,
@@ -137,6 +139,8 @@ export function PlanObservationSheet({
     makeDefaultStart,
     makeDefaultEnd,
     defaultReminderMinutes,
+    resetEquipment,
+    resetLocation,
   ]);
 
   const adjustTime = useCallback(
@@ -162,13 +166,13 @@ export function PlanObservationSheet({
     const s = makeDefaultStart(initialDate);
     setStartDate(s);
     setEndDate(makeDefaultEnd(s));
-    equip.resetEquipment();
-    loc.resetLocation();
+    resetEquipment();
+    resetLocation();
   };
 
   const handleUseCurrentLocation = useCallback(() => {
-    loc.useCurrentLocation(t);
-  }, [loc, t]);
+    applyCurrentLocation(t);
+  }, [applyCurrentLocation, t]);
 
   const handleCreate = async () => {
     if (!targetName.trim()) {
@@ -180,7 +184,7 @@ export function PlanObservationSheet({
       return;
     }
 
-    const location = loc.validateAndBuild(t);
+    const location = validateAndBuild(t);
     if (location === null) return;
 
     const equipment = equip.buildEquipmentObject();

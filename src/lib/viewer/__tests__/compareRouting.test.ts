@@ -2,8 +2,13 @@ import { pickImageLikeIds, resolveComparePair } from "../compareRouting";
 import type { FitsMetadata } from "../../fits/types";
 
 jest.mock("../../import/imageParsePipeline", () => ({
-  isImageLikeMedia: (file: { mediaKind?: string; sourceType?: string }) =>
-    file?.mediaKind === "image" || file?.sourceType === "fits" || file?.sourceType === "raster",
+  isProcessableImageMedia: (file: {
+    mediaKind?: string;
+    sourceType?: string;
+    decodeStatus?: "ready" | "failed";
+  }) =>
+    (file?.mediaKind === "image" || file?.sourceType === "fits" || file?.sourceType === "raster") &&
+    file?.decodeStatus !== "failed",
 }));
 
 function makeFile(partial: Partial<FitsMetadata>): FitsMetadata {
@@ -41,6 +46,11 @@ describe("compareRouting", () => {
       expect(pickImageLikeIds(["a", "b", "c"], files)).toEqual(["a", "b"]);
     });
 
+    it("skips decode-failed images", () => {
+      const files = [makeFile({ id: "a", decodeStatus: "failed" }), makeFile({ id: "b" })];
+      expect(pickImageLikeIds(["a", "b"], files)).toEqual(["b"]);
+    });
+
     it("returns empty for non-positive limit", () => {
       const files = [makeFile({ id: "a" })];
       expect(pickImageLikeIds(["a"], files, 0)).toEqual([]);
@@ -69,6 +79,15 @@ describe("compareRouting", () => {
 
     it("falls back to previous image-like neighbor when next is unavailable", () => {
       expect(resolveComparePair("img-3", files)).toEqual(["img-3", "img-2"]);
+    });
+
+    it("skips decode-failed candidates for pairing", () => {
+      const candidates = [
+        makeFile({ id: "img-1" }),
+        makeFile({ id: "img-2", decodeStatus: "failed" }),
+        makeFile({ id: "img-3" }),
+      ];
+      expect(resolveComparePair("img-1", candidates)).toEqual(["img-1", "img-3"]);
     });
 
     it("returns only primary when no candidate exists", () => {

@@ -133,7 +133,15 @@ function applyLegacyOperation(
       return withPixels(applyMTF(input.pixels, op.midtone, op.shadowsClip, op.highlightsClip));
     case "starMask":
       return withPixels(
-        applyStarMask(input.pixels, input.width, input.height, op.scale, op.invert),
+        applyStarMask(
+          input.pixels,
+          input.width,
+          input.height,
+          op.scale,
+          op.invert,
+          op.growth ?? 0,
+          op.softness ?? 0,
+        ),
       );
     case "binarize":
       return withPixels(binarize(input.pixels, op.threshold));

@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { usePageLogger } from "../../hooks/useLogger";
 import { useSelectionMode } from "../../hooks/useSelectionMode";
 import { useTargets } from "../../hooks/useTargets";
 import { useTargetStatistics } from "../../hooks/useTargetStatistics";
@@ -31,6 +32,9 @@ import { resolveTargetInteractionUi } from "../../lib/targets/targetInteractionU
 export default function TargetsScreen() {
   const router = useRouter();
   const { t } = useI18n();
+  const { logAction, logSuccess, logFailure } = usePageLogger("TargetsScreen", {
+    screen: "targets",
+  });
   const { width: screenWidth, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { isLandscapeTablet, contentPaddingTop, horizontalPadding, sidePanelWidth } =
@@ -184,6 +188,10 @@ export default function TargetsScreen() {
     tags?: string[];
     isFavorite?: boolean;
   }) => {
+    logAction("add_target", {
+      type: data.type,
+      hasCoordinates: data.ra !== undefined && data.dec !== undefined,
+    });
     addTarget(data.name, data.type, {
       ra: data.ra,
       dec: data.dec,
@@ -192,6 +200,7 @@ export default function TargetsScreen() {
       tags: data.tags,
       isFavorite: data.isFavorite,
     });
+    logSuccess("add_target", { type: data.type });
     setShowAddSheet(false);
   };
 
@@ -210,18 +219,30 @@ export default function TargetsScreen() {
   );
 
   const handleBatchDelete = useCallback(() => {
+    if (selectedIds.length > 0) {
+      logAction("batch_delete", { selectedCount: selectedIds.length });
+    }
     for (const id of selectedIds) {
       removeTarget(id);
     }
+    if (selectedIds.length > 0) {
+      logSuccess("batch_delete", { selectedCount: selectedIds.length });
+    }
     exitSelectionMode();
-  }, [selectedIds, removeTarget, exitSelectionMode]);
+  }, [exitSelectionMode, logAction, logSuccess, removeTarget, selectedIds]);
 
   const handleBatchFavorite = useCallback(() => {
+    if (selectedIds.length > 0) {
+      logAction("batch_toggle_favorite", { selectedCount: selectedIds.length });
+    }
     for (const id of selectedIds) {
       toggleFavorite(id);
     }
+    if (selectedIds.length > 0) {
+      logSuccess("batch_toggle_favorite", { selectedCount: selectedIds.length });
+    }
     exitSelectionMode();
-  }, [selectedIds, toggleFavorite, exitSelectionMode]);
+  }, [exitSelectionMode, logAction, logSuccess, selectedIds, toggleFavorite]);
 
   const handleSelectAll = useCallback(() => {
     selectAll(filteredTargets.map((t) => t.id));
@@ -261,19 +282,23 @@ export default function TargetsScreen() {
 
   const handleAdvancedSearch = useCallback(
     (conditions: SearchConditions) => {
+      logAction("advanced_search_apply", {
+        hasQuery: Boolean(conditions.query?.trim()),
+      });
       setAdvancedConditions(conditions);
       setIsAdvancedMode(true);
       if (conditions.query) {
         setSearchQuery(conditions.query);
       }
     },
-    [setAdvancedConditions, setIsAdvancedMode, setSearchQuery],
+    [logAction, setAdvancedConditions, setIsAdvancedMode, setSearchQuery],
   );
 
   const handleScanTargets = useCallback(() => {
     setIsScanning(true);
     try {
       const result = scanAndAutoDetect();
+      logSuccess("scan_targets", result);
       setSummaryDialog({
         title: t("targets.scanSummaryTitle"),
         icon: "scan-outline",
@@ -305,10 +330,13 @@ export default function TargetsScreen() {
           },
         ],
       });
+    } catch (error) {
+      logFailure("scan_targets", error);
+      throw error;
     } finally {
       setIsScanning(false);
     }
-  }, [scanAndAutoDetect, t]);
+  }, [logFailure, logSuccess, scanAndAutoDetect, t]);
 
   const renderTargetItem = useCallback(
     ({ item: target }: { item: import("../../lib/fits/types").Target }) => {
@@ -353,9 +381,10 @@ export default function TargetsScreen() {
   );
 
   const handleShowDuplicateMerge = useCallback(() => {
+    logAction("open_duplicate_merge");
     detect();
     setShowDuplicateMerge(true);
-  }, [detect]);
+  }, [detect, logAction]);
 
   const handleShowStats = useCallback(() => setShowStats(true), []);
   const handleShowAdvancedSearch = useCallback(() => setShowAdvancedSearch(true), []);

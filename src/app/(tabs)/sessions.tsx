@@ -25,6 +25,7 @@ import { SessionDateSummary } from "../../components/sessions/SessionDateSummary
 import { useCalendar } from "../../hooks/useCalendar";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useSessions } from "../../hooks/useSessions";
+import { usePageLogger } from "../../hooks/useLogger";
 import { useI18n } from "../../i18n/useI18n";
 import type { ObservationPlan, ObservationSession } from "../../lib/fits/types";
 import { formatDuration } from "../../lib/sessions/format";
@@ -47,6 +48,9 @@ const PLAN_SORT_OPTIONS: PlanSortBy[] = ["startAsc", "startDesc", "target", "sta
 export default function SessionsScreen() {
   const router = useRouter();
   const { t } = useI18n();
+  const { logAction, logSuccess, logFailure } = usePageLogger("SessionsScreen", {
+    screen: "sessions",
+  });
   const mutedColor = useThemeColor("muted");
   const { isLandscape, isLandscapeTablet, contentPaddingTop, sidePanelWidth } =
     useResponsiveLayout();
@@ -147,6 +151,7 @@ export default function SessionsScreen() {
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
+    logAction("batch_delete_open_confirm", { selectedCount: selectedIds.size });
     Alert.alert(t("common.delete"), `${t("sessions.deleteSessionConfirm")} (${selectedIds.size})`, [
       { text: t("common.cancel"), style: "cancel" },
       {
@@ -154,14 +159,22 @@ export default function SessionsScreen() {
         style: "destructive",
         onPress: () => {
           removeMultipleSessions([...selectedIds]);
+          logSuccess("batch_delete", { selectedCount: selectedIds.size });
           exitSelectionMode();
         },
       },
     ]);
-  }, [selectedIds, t, removeMultipleSessions, exitSelectionMode]);
+  }, [exitSelectionMode, logAction, logSuccess, removeMultipleSessions, selectedIds, t]);
 
   const handleDetectSessions = useCallback(() => {
     const result = autoDetectSessions();
+    logSuccess("detect_sessions", {
+      totalDetected: result.totalDetected,
+      newCount: result.newCount,
+      updatedCount: result.updatedCount,
+      mergedCount: result.mergedCount,
+      skippedCount: result.skippedCount,
+    });
     setSummaryDialog({
       title: t("sessions.detectSummaryTitle"),
       icon: "scan-outline",
@@ -199,10 +212,19 @@ export default function SessionsScreen() {
         },
       ],
     });
-  }, [autoDetectSessions, t]);
+  }, [autoDetectSessions, logSuccess, t]);
 
   const handleReconcileSessions = useCallback(() => {
     const summary = reconcileSessionsFromLinkedFiles();
+    logSuccess("reconcile_sessions", {
+      processed: summary.processed,
+      updated: summary.updated,
+      cleared: summary.cleared,
+      logsAdded: summary.logsAdded,
+      logsRemoved: summary.logsRemoved,
+      unchanged: summary.unchanged,
+      changed: summary.changed,
+    });
     setSummaryDialog({
       title: t("sessions.reconcileSummaryTitle"),
       icon: "construct-outline",
@@ -247,7 +269,7 @@ export default function SessionsScreen() {
       ],
       footnote: !summary.changed ? t("sessions.reconcileNoChanges") : undefined,
     });
-  }, [reconcileSessionsFromLinkedFiles, t]);
+  }, [logSuccess, reconcileSessionsFromLinkedFiles, t]);
 
   const observationDates = getObservationDates(calYear, calMonth);
   const plannedDates = getPlannedDates(calYear, calMonth);
@@ -326,11 +348,14 @@ export default function SessionsScreen() {
         {
           text: t("common.delete"),
           style: "destructive",
-          onPress: () => removeSession(session.id),
+          onPress: () => {
+            removeSession(session.id);
+            logSuccess("delete_session", { sessionId: session.id });
+          },
         },
       ]);
     },
-    [t, removeSession],
+    [logSuccess, removeSession, t],
   );
 
   const handleDeletePlan = useCallback(
@@ -340,76 +365,100 @@ export default function SessionsScreen() {
         {
           text: t("common.delete"),
           style: "destructive",
-          onPress: () => deleteObservationPlan(plan.id),
+          onPress: () => {
+            deleteObservationPlan(plan.id);
+            logSuccess("delete_plan", { planId: plan.id });
+          },
         },
       ]);
     },
-    [deleteObservationPlan, t],
+    [deleteObservationPlan, logSuccess, t],
   );
 
   const handleSyncAll = useCallback(async () => {
     if (!calendarSyncEnabled) return;
     const unsyncedCount = sessions.filter((s) => !s.calendarEventId).length;
+    logAction("sync_all_sessions", { unsyncedCount });
     if (unsyncedCount === 0) {
+      logSuccess("sync_all_sessions", { unsyncedCount, synced: 0 });
       Alert.alert(t("common.success"), t("sessions.synced"));
       return;
     }
     const count = await syncAllSessions(sessions);
     if (count > 0) {
+      logSuccess("sync_all_sessions", { unsyncedCount, synced: count });
       Alert.alert(t("common.success"), `${t("sessions.syncSuccess")} (${count})`);
     }
-  }, [calendarSyncEnabled, sessions, syncAllSessions, t]);
+  }, [calendarSyncEnabled, logAction, logSuccess, sessions, syncAllSessions, t]);
 
   const handleSyncAllPlans = useCallback(async () => {
     if (!calendarSyncEnabled) return;
     const unsyncedCount = plans.filter((p) => !p.calendarEventId).length;
+    logAction("sync_all_plans", { unsyncedCount });
     if (unsyncedCount === 0) {
+      logSuccess("sync_all_plans", { unsyncedCount, synced: 0 });
       Alert.alert(t("common.success"), t("sessions.noUnsyncedPlans"));
       return;
     }
     const count = await syncAllObservationPlans(plans);
     if (count > 0) {
+      logSuccess("sync_all_plans", { unsyncedCount, synced: count });
       Alert.alert(t("common.success"), `${t("sessions.syncPlansSuccess")} (${count})`);
     }
-  }, [calendarSyncEnabled, plans, syncAllObservationPlans, t]);
+  }, [calendarSyncEnabled, logAction, logSuccess, plans, syncAllObservationPlans, t]);
 
   const handleCleanupCalendarLinks = useCallback(async () => {
     if (!calendarSyncEnabled) return;
     const result = await cleanupMissingCalendarLinks(sessions, plans);
+    logSuccess("cleanup_calendar_links", result);
     Alert.alert(
       t("common.success"),
       `${t("sessions.cleanupCalendarLinksDone")} (${result.sessionsCleared + result.plansCleared})`,
     );
-  }, [calendarSyncEnabled, cleanupMissingCalendarLinks, sessions, plans, t]);
+  }, [calendarSyncEnabled, cleanupMissingCalendarLinks, logSuccess, plans, sessions, t]);
 
   const handleRefreshFromCalendar = useCallback(async () => {
     if (!calendarSyncEnabled) return;
     const linkedCount =
       sessions.filter((s) => !!s.calendarEventId).length +
       plans.filter((p) => !!p.calendarEventId).length;
+    logAction("refresh_from_calendar", { linkedCount });
     if (linkedCount === 0) {
+      logSuccess("refresh_from_calendar", { linkedCount, affected: 0 });
       Alert.alert(t("common.success"), t("sessions.noLinkedCalendarItems"));
       return;
     }
 
     const result = await refreshAllFromCalendar(sessions, plans);
     if (result.permissionDenied) {
+      logFailure("refresh_from_calendar", new Error("permissionDenied"), { linkedCount });
       return;
     }
     const affected =
       result.sessionsUpdated + result.plansUpdated + result.sessionsCleared + result.plansCleared;
 
     if (affected === 0 && result.errors === 0) {
+      logSuccess("refresh_from_calendar", { linkedCount, affected, errors: result.errors });
       Alert.alert(t("common.success"), t("sessions.noChangesFromCalendar"));
       return;
     }
 
+    logSuccess("refresh_from_calendar", { linkedCount, affected, errors: result.errors });
     const suffix = result.errors > 0 ? `, ${t("common.error")}: ${result.errors}` : "";
     Alert.alert(
       t("common.success"),
       `${t("sessions.refreshFromCalendarDone")} (${affected}${suffix})`,
     );
-  }, [calendarSyncEnabled, plans, refreshAllFromCalendar, sessions, t]);
+  }, [
+    calendarSyncEnabled,
+    logAction,
+    logFailure,
+    logSuccess,
+    plans,
+    refreshAllFromCalendar,
+    sessions,
+    t,
+  ]);
 
   const handleDatePress = useCallback(
     (day: number) => {
@@ -434,12 +483,14 @@ export default function SessionsScreen() {
         const session = buildSessionFromPlan(plan);
         addSession(session);
         await updateObservationPlan(plan.id, { status: "completed" });
+        logSuccess("create_session_from_plan", { planId: plan.id, sessionId: session.id });
         Alert.alert(t("common.success"), t("sessions.planConverted"));
-      } catch {
+      } catch (error) {
+        logFailure("create_session_from_plan", error, { planId: plan.id });
         Alert.alert(t("common.error"), t("sessions.invalidTimeRange"));
       }
     },
-    [addSession, updateObservationPlan, t],
+    [addSession, logFailure, logSuccess, t, updateObservationPlan],
   );
 
   const sortedSessions = useMemo(() => {
@@ -466,11 +517,17 @@ export default function SessionsScreen() {
       return;
     }
 
+    logAction("batch_sync_selected_sessions", { selectedCount: selectedSessions.length });
     const summary = await syncSessionsBatch(selectedSessions);
     if (summary.permissionDenied) {
+      logFailure("batch_sync_selected_sessions", new Error("permissionDenied"), {
+        selectedCount: selectedSessions.length,
+      });
       Alert.alert(t("common.error"), t("sessions.permissionDenied"));
       return;
     }
+
+    logSuccess("batch_sync_selected_sessions", { ...summary });
 
     setSummaryDialog({
       title: t("sessions.batchSyncSessions"),
@@ -483,7 +540,7 @@ export default function SessionsScreen() {
         { label: t("sessions.batchSummaryFailed"), value: summary.failed, color: "danger" },
       ],
     });
-  }, [selectedSessions, syncSessionsBatch, t]);
+  }, [logAction, logFailure, logSuccess, selectedSessions, syncSessionsBatch, t]);
 
   const handleBatchUnsyncSelected = useCallback(async () => {
     if (selectedSessions.length === 0) {
@@ -491,7 +548,9 @@ export default function SessionsScreen() {
       return;
     }
 
+    logAction("batch_unsync_selected_sessions", { selectedCount: selectedSessions.length });
     const summary = await unsyncSessionsBatch(selectedSessions);
+    logSuccess("batch_unsync_selected_sessions", { ...summary });
     setSummaryDialog({
       title: t("sessions.batchUnsyncSessions"),
       icon: "unlink-outline",
@@ -503,7 +562,7 @@ export default function SessionsScreen() {
         { label: t("sessions.batchSummaryFailed"), value: summary.failed, color: "danger" },
       ],
     });
-  }, [selectedSessions, t, unsyncSessionsBatch]);
+  }, [logAction, logSuccess, selectedSessions, t, unsyncSessionsBatch]);
 
   const handleBatchRefreshSelected = useCallback(async () => {
     if (selectedSessions.length === 0) {
@@ -511,11 +570,17 @@ export default function SessionsScreen() {
       return;
     }
 
+    logAction("batch_refresh_selected_sessions", { selectedCount: selectedSessions.length });
     const summary = await refreshSessionsBatch(selectedSessions);
     if (summary.permissionDenied) {
+      logFailure("batch_refresh_selected_sessions", new Error("permissionDenied"), {
+        selectedCount: selectedSessions.length,
+      });
       Alert.alert(t("common.error"), t("sessions.permissionDenied"));
       return;
     }
+
+    logSuccess("batch_refresh_selected_sessions", { ...summary });
 
     setSummaryDialog({
       title: t("sessions.batchRefreshSessions"),
@@ -530,7 +595,7 @@ export default function SessionsScreen() {
         { label: t("sessions.batchSummaryErrors"), value: summary.errors, color: "danger" },
       ],
     });
-  }, [refreshSessionsBatch, selectedSessions, t]);
+  }, [logAction, logFailure, logSuccess, refreshSessionsBatch, selectedSessions, t]);
 
   const renderSessionItem = useCallback(
     ({ item: session }: { item: ObservationSession }) => (

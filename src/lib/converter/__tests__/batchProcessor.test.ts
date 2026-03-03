@@ -102,6 +102,10 @@ const defaultOptions: ConvertOptions = {
   includeAnnotations: false,
   includeWatermark: true,
   watermarkText: "Test Watermark",
+  outputSize: { maxWidth: 1600, maxHeight: 1600 },
+  compressionMode: "targetSize",
+  targetFileSize: 320 * 1024,
+  webpLossless: false,
 };
 
 describe("batchProcessor", () => {
@@ -181,6 +185,15 @@ describe("batchProcessor", () => {
         sourceType: "fits",
         sourceFormat: "fits",
         metadata: expect.objectContaining({ bitpix: 16 }),
+      }),
+    );
+    expect(request).toEqual(
+      expect.objectContaining({
+        xisf: defaultOptions.xisf,
+        ser: defaultOptions.ser,
+        outputSize: defaultOptions.outputSize,
+        targetFileSize: defaultOptions.targetFileSize,
+        webpLossless: false,
       }),
     );
     expect(mockWrittenFiles.get("/exports/m42.jpg")).toEqual(new Uint8Array([9, 8, 7]));
@@ -290,6 +303,27 @@ describe("batchProcessor", () => {
       "task-4",
       expect.objectContaining({ status: "cancelled" }),
     );
+  });
+
+  it("suppresses targetFileSize when webp lossless is enabled", async () => {
+    const onProgress = jest.fn();
+
+    await executeBatchConvert(
+      "task-webp",
+      [{ id: "w1", filepath: "/fits/web.fits", filename: "web.fits", sourceType: "fits" }],
+      {
+        ...defaultOptions,
+        format: "webp",
+        compressionMode: "targetSize",
+        targetFileSize: 150 * 1024,
+        webpLossless: true,
+      },
+      onProgress,
+    );
+
+    const request = mockEncodeExportRequest.mock.calls[0]?.[0];
+    expect(request?.targetFileSize).toBeUndefined();
+    expect(request?.webpLossless).toBe(true);
   });
 
   it("builds output filename by rule and calculates progress", () => {

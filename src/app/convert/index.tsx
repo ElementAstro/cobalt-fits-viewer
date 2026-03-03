@@ -20,6 +20,7 @@ import { useConverter } from "../../hooks/useConverter";
 import { useExport } from "../../hooks/useExport";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useImageProcessing } from "../../hooks/useImageProcessing";
+import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
 import { useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useAstrometryStore } from "../../stores/useAstrometryStore";
@@ -42,6 +43,11 @@ import {
   type ProcessingAlgorithmProfile,
 } from "../../lib/fits/types";
 import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
+import {
+  isTargetSizeAllowed,
+  normalizeTargetFileSize,
+} from "../../lib/converter/compressionPolicy";
+import { isProcessableImageMedia } from "../../lib/import/imageParsePipeline";
 import { FitsExportOptions } from "../../components/common/FitsExportOptions";
 import { TiffExportOptions } from "../../components/common/TiffExportOptions";
 import { XisfExportOptions } from "../../components/common/XisfExportOptions";
@@ -85,12 +91,7 @@ export default function ConvertScreen() {
   const files = useFitsStore((s) => s.files);
   const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
   const convertibleFiles = useMemo(
-    () =>
-      files.filter((file) => {
-        if (file.mediaKind && file.mediaKind !== "image") return false;
-        if (file.sourceType === "video" || file.sourceType === "audio") return false;
-        return true;
-      }),
+    () => files.filter((file) => isProcessableImageMedia(file)),
     [files],
   );
   const selectedFile = useMemo(
@@ -172,7 +173,19 @@ export default function ConvertScreen() {
   const { rgbaData, processImage } = useImageProcessing();
   const { isExporting, exportProgress, exportImageDetailed } = useExport();
   const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
+  const viewerPreloadNeighbors = useSettingsStore((s) => s.viewerPreloadNeighbors);
+  const viewerPreloadRadius = useSettingsStore((s) => s.viewerPreloadRadius);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
   const effectiveProcessingProfile = currentOptions.profile ?? imageProcessingProfile;
+
+  useImageCacheWarmup({
+    enabled: viewerPreloadNeighbors,
+    currentFile: selectedFile,
+    allFiles: convertibleFiles,
+    radius: viewerPreloadRadius,
+    frameClassificationConfig,
+    startWhen: !!selectedFile && !isFitsLoading,
+  });
 
   const exportSource = useMemo(
     () => ({
@@ -206,6 +219,7 @@ export default function ConvertScreen() {
 
   const showQuality = checkSupportsQuality(currentOptions.format);
   const bitDepths = checkBitDepths(currentOptions.format);
+  const targetSizeAllowed = isTargetSizeAllowed(currentOptions.format, currentOptions.webpLossless);
 
   const clamp01 = useCallback((value: number) => Math.max(0, Math.min(1, value)), []);
   const handleBlackPointChange = useCallback(
@@ -319,8 +333,12 @@ export default function ConvertScreen() {
       },
       source: exportSource,
       outputSize: currentOptions.outputSize,
-      targetFileSize:
-        currentOptions.compressionMode === "targetSize" ? currentOptions.targetFileSize : undefined,
+      targetFileSize: normalizeTargetFileSize(
+        currentOptions.format,
+        currentOptions.compressionMode,
+        currentOptions.targetFileSize,
+        currentOptions.webpLossless,
+      ),
       webpLossless: currentOptions.webpLossless || undefined,
     });
     if (detailed.path) {
@@ -644,12 +662,15 @@ export default function ConvertScreen() {
                                   ? "primary"
                                   : "secondary"
                               }
-                              onPress={() =>
-                                setOptions({
-                                  compressionMode: "targetSize",
-                                  targetFileSize:
-                                    (currentOptions.targetFileSize ?? 500) * 1024 || 500 * 1024,
-                                })
+                              className={targetSizeAllowed ? undefined : "opacity-50"}
+                              onPress={
+                                targetSizeAllowed
+                                  ? () =>
+                                      setOptions({
+                                        compressionMode: "targetSize",
+                                        targetFileSize: currentOptions.targetFileSize ?? 500 * 1024,
+                                      })
+                                  : undefined
                               }
                             >
                               <Chip.Label className="text-[9px]">
@@ -657,7 +678,7 @@ export default function ConvertScreen() {
                               </Chip.Label>
                             </Chip>
                           </View>
-                          {currentOptions.compressionMode === "targetSize" && (
+                          {currentOptions.compressionMode === "targetSize" && targetSizeAllowed && (
                             <View className="mt-2">
                               <TextField>
                                 <Input
@@ -689,9 +710,18 @@ export default function ConvertScreen() {
                             <Chip
                               size="sm"
                               variant={currentOptions.webpLossless ? "primary" : "secondary"}
-                              onPress={() =>
-                                setOptions({ webpLossless: !currentOptions.webpLossless })
-                              }
+                              onPress={() => {
+                                const next = !currentOptions.webpLossless;
+                                if (next && currentOptions.compressionMode === "targetSize") {
+                                  setOptions({
+                                    webpLossless: true,
+                                    compressionMode: "quality",
+                                    targetFileSize: undefined,
+                                  });
+                                  return;
+                                }
+                                setOptions({ webpLossless: next });
+                              }}
                             >
                               <Chip.Label className="text-[9px]">
                                 {t("converter.webpLossless")}

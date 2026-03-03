@@ -3,11 +3,12 @@
  * 基于非破坏式 recipe（scientific + color）管理编辑状态与撤销/重做
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { InteractionManager } from "react-native";
 import type {
   ColormapType,
   ProcessingAlgorithmProfile,
+  ProcessingMaskConfig,
   ProcessingNode,
   ProcessingPipelineSnapshot,
   ProcessingParamValue,
@@ -75,12 +76,15 @@ function resolveMaxHistory(maxHistory: number | undefined) {
   return Math.max(1, Math.min(200, Math.round(maxHistory)));
 }
 
+const INTERACTION_FALLBACK_DELAY_MS = 180;
+
 function cloneNode(node: ProcessingNode): ProcessingNode {
   return {
     id: node.id,
     operationId: node.operationId,
     enabled: node.enabled !== false,
     params: { ...node.params },
+    ...(node.maskConfig ? { maskConfig: { ...node.maskConfig } } : {}),
   };
 }
 
@@ -131,12 +135,24 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
   const pendingTask = useRef<ReturnType<typeof InteractionManager.runAfterInteractions> | null>(
     null,
   );
+  const pendingFallbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingOperationEventRef = useRef<PendingOperationEvent | null>(null);
   const previewBackupRef = useRef<{
     current: ImageState | null;
     rgbaData: Uint8ClampedArray | null;
     recipe: ProcessingPipelineSnapshot | null;
   } | null>(null);
+
+  const clearPendingExecution = useCallback(() => {
+    if (pendingTask.current) {
+      pendingTask.current.cancel();
+      pendingTask.current = null;
+    }
+    if (pendingFallbackTimer.current) {
+      clearTimeout(pendingFallbackTimer.current);
+      pendingFallbackTimer.current = null;
+    }
+  }, []);
 
   const queueOperationEvent = useCallback(
     (
@@ -183,16 +199,19 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
       const original = originalRef.current;
       if (!original) return;
 
-      if (pendingTask.current) {
-        pendingTask.current.cancel();
-        pendingTask.current = null;
+      const hadPendingExecution = !!pendingTask.current || !!pendingFallbackTimer.current;
+      if (hadPendingExecution) {
+        clearPendingExecution();
         pendingOperationEventRef.current = null;
       }
 
       setIsProcessing(true);
       setError(null);
 
-      pendingTask.current = InteractionManager.runAfterInteractions(() => {
+      let hasExecuted = false;
+      const runExecution = () => {
+        if (hasExecuted) return;
+        hasExecuted = true;
         try {
           const normalized = normalizeProcessingPipelineSnapshot(nextRecipe, profileRef.current);
           const prevCount = lastRecipeScientificCountRef.current;
@@ -251,12 +270,24 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
           pendingOperationEventRef.current = null;
         } finally {
           setIsProcessing(false);
-          pendingTask.current = null;
+          clearPendingExecution();
         }
-      });
+      };
+
+      pendingTask.current = InteractionManager.runAfterInteractions(runExecution);
+      pendingFallbackTimer.current = setTimeout(() => {
+        runExecution();
+      }, INTERACTION_FALLBACK_DELAY_MS);
     },
-    [commitRecipeToHistory, options],
+    [clearPendingExecution, commitRecipeToHistory, options],
   );
+
+  useEffect(() => {
+    return () => {
+      clearPendingExecution();
+      pendingOperationEventRef.current = null;
+    };
+  }, [clearPendingExecution]);
 
   const initialize = useCallback(
     (
@@ -407,8 +438,8 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
       const schema = getProcessingOperation(node.operationId);
       if (!schema) return;
 
-      // Skip preview for heavy operations
-      if (schema.complexity === "heavy") return;
+      // Respect registry-level preview capability.
+      if (!schema.supportsPreview) return;
 
       // Backup current state on first preview call
       if (!previewBackupRef.current) {
@@ -502,6 +533,47 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     [executeRecipe, recipe],
   );
 
+  const setNodeMaskConfig = useCallback(
+    (nodeId: string, maskConfig: ProcessingMaskConfig | null) => {
+      const currentRecipe = recipe ?? historyRef.current[historyIndexRef.current];
+      if (!currentRecipe) return;
+
+      const nextRecipe = cloneRecipe(currentRecipe);
+      nextRecipe.savedAt = Date.now();
+      const targetIndex = nextRecipe.scientificNodes.findIndex((node) => node.id === nodeId);
+      if (targetIndex <= 0) return;
+      const targetNode = nextRecipe.scientificNodes[targetIndex];
+      if (!targetNode) return;
+
+      if (!maskConfig) {
+        if (!targetNode.maskConfig) return;
+        delete targetNode.maskConfig;
+      } else {
+        const sourceIndex = nextRecipe.scientificNodes.findIndex(
+          (node) => node.id === maskConfig.sourceNodeId,
+        );
+        if (sourceIndex < 0 || sourceIndex >= targetIndex) return;
+        targetNode.maskConfig = {
+          sourceNodeId: maskConfig.sourceNodeId,
+          invert: !!maskConfig.invert,
+          blendStrength: Math.max(0, Math.min(1, maskConfig.blendStrength)),
+        };
+      }
+
+      intermediatesRef.current = [];
+      lastRecipeScientificCountRef.current = 0;
+      executeRecipe(nextRecipe, { pushHistory: true });
+    },
+    [executeRecipe, recipe],
+  );
+
+  const clearNodeMaskConfig = useCallback(
+    (nodeId: string) => {
+      setNodeMaskConfig(nodeId, null);
+    },
+    [setNodeMaskConfig],
+  );
+
   const clearError = useCallback(() => {
     setError(null);
   }, []);
@@ -534,5 +606,7 @@ export function useImageEditor(options: UseImageEditorOptions = {}) {
     isPreviewActive,
     toggleNode,
     removeNode,
+    setNodeMaskConfig,
+    clearNodeMaskConfig,
   };
 }

@@ -24,6 +24,10 @@ const mockParamsRaw = {
   setStarMaskScale: jest.fn(),
   starMaskInvert: false,
   setStarMaskInvert: jest.fn(),
+  starMaskGrowth: 0,
+  setStarMaskGrowth: jest.fn(),
+  starMaskSoftness: 0,
+  setStarMaskSoftness: jest.fn(),
   rangeMaskLow: 0,
   setRangeMaskLow: jest.fn(),
   rangeMaskHigh: 1,
@@ -32,6 +36,12 @@ const mockParamsRaw = {
   setRangeMaskFuzz: jest.fn(),
   binarizeThreshold: 0.5,
   setBinarizeThreshold: jest.fn(),
+  edgeMaskPreBlur: 1,
+  setEdgeMaskPreBlur: jest.fn(),
+  edgeMaskThreshold: 0.1,
+  setEdgeMaskThreshold: jest.fn(),
+  edgeMaskPostBlur: 1,
+  setEdgeMaskPostBlur: jest.fn(),
 };
 const mockParams = mockParamsRaw as never;
 
@@ -43,6 +53,8 @@ describe("ToolParamsMask", () => {
       <ToolParamsMask activeTool="starMask" params={mockParams} />,
     );
     expect(getByTestId("slider-editor.paramScale")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramGrowth")).toBeTruthy();
+    expect(getByTestId("slider-editor.paramSoftness")).toBeTruthy();
     expect(getByText("editor.paramIsolateStars")).toBeTruthy();
     expect(getByText("editor.paramRemoveStars")).toBeTruthy();
   });
@@ -84,6 +96,14 @@ describe("ToolParamsMask", () => {
     expect(mockParamsRaw.setStarMaskScale).toHaveBeenCalledWith(5.7);
   });
 
+  it("calls growth and softness setters via starMask sliders", () => {
+    const { getByTestId } = render(<ToolParamsMask activeTool="starMask" params={mockParams} />);
+    fireEvent.press(getByTestId("slider-editor.paramGrowth"));
+    fireEvent.press(getByTestId("slider-editor.paramSoftness"));
+    expect(mockParamsRaw.setStarMaskGrowth).toHaveBeenCalledWith(6);
+    expect(mockParamsRaw.setStarMaskSoftness).toHaveBeenCalledWith(5.7);
+  });
+
   it("calls setRangeMaskLow via rangeMask low slider", () => {
     const { getByTestId } = render(<ToolParamsMask activeTool="rangeMask" params={mockParams} />);
     fireEvent.press(getByTestId("slider-editor.paramLow"));
@@ -94,5 +114,15 @@ describe("ToolParamsMask", () => {
     const { getByTestId } = render(<ToolParamsMask activeTool="binarize" params={mockParams} />);
     fireEvent.press(getByTestId("slider-editor.paramThreshold"));
     expect(mockParamsRaw.setBinarizeThreshold).toHaveBeenCalledWith(5.7);
+  });
+
+  it("calls onParamChange when mask params are updated", () => {
+    const onParamChange = jest.fn();
+    const { getByTestId, getByText } = render(
+      <ToolParamsMask activeTool="starMask" params={mockParams} onParamChange={onParamChange} />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramScale"));
+    fireEvent.press(getByText("editor.paramRemoveStars"));
+    expect(onParamChange).toHaveBeenCalledTimes(2);
   });
 });

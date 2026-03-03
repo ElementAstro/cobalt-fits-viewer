@@ -10,6 +10,7 @@ import { readFileAsArrayBuffer } from "../utils/fileManager";
 import { fitsToRGBA } from "./formatConverter";
 import { getExportDir } from "../utils/imageExport";
 import { LOG_TAGS, Logger } from "../logger";
+import { normalizeTargetFileSize } from "./compressionPolicy";
 import { encodeExportRequest, type ExportRequest } from "./exportCore";
 
 /**
@@ -106,6 +107,12 @@ async function buildExportRequest(
   if (parsed.sourceType !== "fits" && parsed.sourceType !== "raster") {
     throw new Error("non-image-source");
   }
+  const targetFileSize = normalizeTargetFileSize(
+    options.format,
+    options.compressionMode,
+    options.targetFileSize,
+    options.webpLossless,
+  );
 
   const width = parsed.dimensions?.width ?? 0;
   const height = parsed.dimensions?.height ?? 0;
@@ -160,6 +167,11 @@ async function buildExportRequest(
     bitDepth: options.bitDepth,
     fits: options.fits,
     tiff: options.tiff,
+    xisf: options.xisf,
+    ser: options.ser,
+    outputSize: options.outputSize,
+    targetFileSize,
+    webpLossless: options.webpLossless,
     source: {
       sourceFileId: file.id,
       sourceType: parsed.sourceType,

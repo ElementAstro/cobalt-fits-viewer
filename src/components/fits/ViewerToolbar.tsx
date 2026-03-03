@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, BottomSheet, Separator } from "heroui-native";
@@ -55,6 +55,11 @@ export function ViewerToolbar({
   const haptics = useHapticFeedback();
   const insets = useSafeAreaInsets();
   const [showMoreMenu, setShowMoreMenu] = useState(false);
+  const [internalMoreMenuOpen, setInternalMoreMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setInternalMoreMenuOpen(showMoreMenu);
+  }, [showMoreMenu]);
 
   const moreActions: {
     label: string;
@@ -227,9 +232,12 @@ export function ViewerToolbar({
 
       {/* More actions sheet */}
       <BottomSheet
-        isOpen={showMoreMenu}
+        isOpen={internalMoreMenuOpen}
         onOpenChange={(open) => {
-          if (!open) setShowMoreMenu(false);
+          setInternalMoreMenuOpen(open);
+          if (!open) {
+            setShowMoreMenu(false);
+          }
         }}
       >
         <BottomSheet.Portal>

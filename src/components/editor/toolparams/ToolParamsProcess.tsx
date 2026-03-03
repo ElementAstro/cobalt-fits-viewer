@@ -12,17 +12,35 @@ const MORPH_OP_KEYS: Record<EditorToolParams["morphOp"], string> = {
   close: "editor.paramMorphClose",
 };
 
+const INTEGER_BIN_MODE_KEYS: Record<EditorToolParams["integerBinMode"], string> = {
+  average: "editor.paramAverage",
+  sum: "editor.paramSum",
+  median: "editor.paramMedian",
+};
+
+const RESAMPLE_METHOD_KEYS: Record<EditorToolParams["resampleMethod"], string> = {
+  bilinear: "editor.paramBilinear",
+  bicubic: "editor.paramBicubic",
+  lanczos3: "editor.paramLanczos3",
+};
+
 interface ToolParamsProcessProps {
   activeTool: EditorTool & string;
   params: EditorToolParams;
+  onParamChange?: () => void;
 }
 
 export const ToolParamsProcess = React.memo(function ToolParamsProcess({
   activeTool,
   params,
+  onParamChange,
 }: ToolParamsProcessProps) {
   const { t } = useI18n();
   const [mutedColor] = useThemeColor(["muted"]);
+  const setAndPreview = <T,>(setter: (value: T) => void, value: T) => {
+    setter(value);
+    onParamChange?.();
+  };
 
   switch (activeTool) {
     case "clahe":
@@ -35,7 +53,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={16}
             step={1}
             defaultValue={8}
-            onValueChange={(v) => params.setClaheTileSize(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setClaheTileSize, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramClipLimit")}
@@ -44,7 +62,16 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={10.0}
             step={0.5}
             defaultValue={3.0}
-            onValueChange={params.setClaheClipLimit}
+            onValueChange={(v) => setAndPreview(params.setClaheClipLimit, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramAmount")}
+            value={params.claheAmount}
+            min={0}
+            max={1}
+            step={0.05}
+            defaultValue={1}
+            onValueChange={(v) => setAndPreview(params.setClaheAmount, v)}
           />
         </View>
       );
@@ -59,7 +86,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={8}
             step={1}
             defaultValue={5}
-            onValueChange={(v) => params.setHdrLayers(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setHdrLayers, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramAmount")}
@@ -68,7 +95,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.7}
-            onValueChange={params.setHdrAmount}
+            onValueChange={(v) => setAndPreview(params.setHdrAmount, v)}
           />
         </View>
       );
@@ -82,7 +109,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
                 key={op}
                 size="sm"
                 variant={params.morphOp === op ? "primary" : "outline"}
-                onPress={() => params.setMorphOp(op)}
+                onPress={() => setAndPreview(params.setMorphOp, op)}
               >
                 <Button.Label className="text-[9px]">{t(MORPH_OP_KEYS[op])}</Button.Label>
               </Button>
@@ -95,7 +122,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={5}
             step={1}
             defaultValue={1}
-            onValueChange={(v) => params.setMorphRadius(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setMorphRadius, Math.round(v))}
           />
         </View>
       );
@@ -110,7 +137,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={5}
             step={0.1}
             defaultValue={2.0}
-            onValueChange={params.setDeconvPsfSigma}
+            onValueChange={(v) => setAndPreview(params.setDeconvPsfSigma, v)}
           />
           <SimpleSlider
             label={t("editor.paramIterations")}
@@ -119,7 +146,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={80}
             step={1}
             defaultValue={20}
-            onValueChange={(v) => params.setDeconvIterations(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setDeconvIterations, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramRegularization")}
@@ -128,7 +155,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.1}
-            onValueChange={params.setDeconvRegularization}
+            onValueChange={(v) => setAndPreview(params.setDeconvRegularization, v)}
           />
         </View>
       );
@@ -143,7 +170,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={24}
             step={1}
             defaultValue={12}
-            onValueChange={(v) => params.setDbeSamplesX(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setDbeSamplesX, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramSamplesY")}
@@ -152,7 +179,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={16}
             step={1}
             defaultValue={8}
-            onValueChange={(v) => params.setDbeSamplesY(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setDbeSamplesY, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramSigma")}
@@ -161,7 +188,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={5}
             step={0.1}
             defaultValue={2.5}
-            onValueChange={params.setDbeSigma}
+            onValueChange={(v) => setAndPreview(params.setDbeSigma, v)}
           />
         </View>
       );
@@ -176,7 +203,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={8}
             step={1}
             defaultValue={4}
-            onValueChange={(v) => params.setMultiscaleLayers(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setMultiscaleLayers, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramThreshold")}
@@ -185,7 +212,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={6}
             step={0.1}
             defaultValue={2.5}
-            onValueChange={params.setMultiscaleThreshold}
+            onValueChange={(v) => setAndPreview(params.setMultiscaleThreshold, v)}
           />
         </View>
       );
@@ -200,7 +227,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={20}
             step={0.5}
             defaultValue={8}
-            onValueChange={params.setLocalContrastSigma}
+            onValueChange={(v) => setAndPreview(params.setLocalContrastSigma, v)}
           />
           <SimpleSlider
             label={t("editor.paramAmount")}
@@ -209,7 +236,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.35}
-            onValueChange={params.setLocalContrastAmount}
+            onValueChange={(v) => setAndPreview(params.setLocalContrastAmount, v)}
           />
         </View>
       );
@@ -224,7 +251,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={4}
             step={0.1}
             defaultValue={1.2}
-            onValueChange={params.setStarReductionScale}
+            onValueChange={(v) => setAndPreview(params.setStarReductionScale, v)}
           />
           <SimpleSlider
             label={t("editor.paramStrength")}
@@ -233,7 +260,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.6}
-            onValueChange={params.setStarReductionStrength}
+            onValueChange={(v) => setAndPreview(params.setStarReductionStrength, v)}
           />
         </View>
       );
@@ -248,7 +275,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={80}
             step={1}
             defaultValue={20}
-            onValueChange={(v) => params.setDeconvAutoIterations(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setDeconvAutoIterations, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramRegularization")}
@@ -257,8 +284,139 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.1}
-            onValueChange={params.setDeconvAutoRegularization}
+            onValueChange={(v) => setAndPreview(params.setDeconvAutoRegularization, v)}
           />
+        </View>
+      );
+
+    case "cosmeticCorrection":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramHotSigma")}
+            value={params.cosmeticHotSigma}
+            min={2}
+            max={10}
+            step={0.5}
+            defaultValue={5}
+            onValueChange={(v) => setAndPreview(params.setCosmeticHotSigma, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramColdSigma")}
+            value={params.cosmeticColdSigma}
+            min={2}
+            max={10}
+            step={0.5}
+            defaultValue={5}
+            onValueChange={(v) => setAndPreview(params.setCosmeticColdSigma, v)}
+          />
+          <View className="flex-row gap-2 mt-1">
+            <Button
+              size="sm"
+              variant={params.cosmeticUseMedian ? "primary" : "outline"}
+              onPress={() => setAndPreview(params.setCosmeticUseMedian, !params.cosmeticUseMedian)}
+            >
+              <Button.Label className="text-[9px]">{t("editor.paramUseMedian")}</Button.Label>
+            </Button>
+          </View>
+        </View>
+      );
+
+    case "mmt":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramLayers")}
+            value={params.mmtLayers}
+            min={1}
+            max={8}
+            step={1}
+            defaultValue={4}
+            onValueChange={(v) => setAndPreview(params.setMmtLayers, Math.round(v))}
+          />
+          <SimpleSlider
+            label={t("editor.paramNoiseThreshold")}
+            value={params.mmtNoiseThreshold}
+            min={0.5}
+            max={10}
+            step={0.5}
+            defaultValue={3}
+            onValueChange={(v) => setAndPreview(params.setMmtNoiseThreshold, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramNoiseReduction")}
+            value={params.mmtNoiseReduction}
+            min={0}
+            max={1}
+            step={0.05}
+            defaultValue={0.5}
+            onValueChange={(v) => setAndPreview(params.setMmtNoiseReduction, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramBias")}
+            value={params.mmtBias}
+            min={-1}
+            max={1}
+            step={0.05}
+            defaultValue={0}
+            onValueChange={(v) => setAndPreview(params.setMmtBias, v)}
+          />
+        </View>
+      );
+
+    case "integerBin":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramBinFactor")}
+            value={params.integerBinFactor}
+            min={2}
+            max={4}
+            step={1}
+            defaultValue={2}
+            onValueChange={(v) => setAndPreview(params.setIntegerBinFactor, Math.round(v))}
+          />
+          <View className="flex-row gap-2 mt-1 flex-wrap">
+            {(["average", "sum", "median"] as const).map((mode) => (
+              <Button
+                key={mode}
+                size="sm"
+                variant={params.integerBinMode === mode ? "primary" : "outline"}
+                onPress={() => setAndPreview(params.setIntegerBinMode, mode)}
+              >
+                <Button.Label className="text-[9px]">{t(INTEGER_BIN_MODE_KEYS[mode])}</Button.Label>
+              </Button>
+            ))}
+          </View>
+        </View>
+      );
+
+    case "resample":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramScale")}
+            value={params.resampleTargetScale}
+            min={0.25}
+            max={4}
+            step={0.25}
+            defaultValue={1}
+            onValueChange={(v) => setAndPreview(params.setResampleTargetScale, v)}
+          />
+          <View className="flex-row gap-2 mt-1 flex-wrap">
+            {(["bilinear", "bicubic", "lanczos3"] as const).map((method) => (
+              <Button
+                key={method}
+                size="sm"
+                variant={params.resampleMethod === method ? "primary" : "outline"}
+                onPress={() => setAndPreview(params.setResampleMethod, method)}
+              >
+                <Button.Label className="text-[9px]">
+                  {t(RESAMPLE_METHOD_KEYS[method])}
+                </Button.Label>
+              </Button>
+            ))}
+          </View>
         </View>
       );
 
@@ -272,20 +430,20 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.5}
-            onValueChange={params.setScnrAmount}
+            onValueChange={(v) => setAndPreview(params.setScnrAmount, v)}
           />
           <View className="flex-row gap-2 mt-1">
             <Button
               size="sm"
               variant={params.scnrMethod === "averageNeutral" ? "primary" : "outline"}
-              onPress={() => params.setScnrMethod("averageNeutral")}
+              onPress={() => setAndPreview(params.setScnrMethod, "averageNeutral")}
             >
               <Button.Label className="text-[9px]">{t("editor.paramAverage")}</Button.Label>
             </Button>
             <Button
               size="sm"
               variant={params.scnrMethod === "maximumNeutral" ? "primary" : "outline"}
-              onPress={() => params.setScnrMethod("maximumNeutral")}
+              onPress={() => setAndPreview(params.setScnrMethod, "maximumNeutral")}
             >
               <Button.Label className="text-[9px]">{t("editor.paramMaximum")}</Button.Label>
             </Button>
@@ -302,8 +460,138 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
           max={0.99}
           step={0.01}
           defaultValue={0.92}
-          onValueChange={params.setColorCalibrationPercentile}
+          onValueChange={(v) => setAndPreview(params.setColorCalibrationPercentile, v)}
         />
+      );
+
+    case "backgroundNeutralize":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramUpperLimit")}
+            value={params.backgroundNeutralizeUpperLimit}
+            min={0.05}
+            max={0.5}
+            step={0.01}
+            defaultValue={0.2}
+            onValueChange={(v) => setAndPreview(params.setBackgroundNeutralizeUpperLimit, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramShadowsClip")}
+            value={params.backgroundNeutralizeShadowsClip}
+            min={0}
+            max={0.1}
+            step={0.005}
+            defaultValue={0.01}
+            onValueChange={(v) => setAndPreview(params.setBackgroundNeutralizeShadowsClip, v)}
+          />
+        </View>
+      );
+
+    case "photometricCC":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramMinStars")}
+            value={params.photometricMinStars}
+            min={5}
+            max={100}
+            step={5}
+            defaultValue={20}
+            onValueChange={(v) => setAndPreview(params.setPhotometricMinStars, Math.round(v))}
+          />
+          <SimpleSlider
+            label={t("editor.paramLowPercentile")}
+            value={params.photometricPercentileLow}
+            min={0}
+            max={0.5}
+            step={0.05}
+            defaultValue={0.25}
+            onValueChange={(v) => setAndPreview(params.setPhotometricPercentileLow, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramHighPercentile")}
+            value={params.photometricPercentileHigh}
+            min={0.5}
+            max={1}
+            step={0.05}
+            defaultValue={0.75}
+            onValueChange={(v) => setAndPreview(params.setPhotometricPercentileHigh, v)}
+          />
+        </View>
+      );
+
+    case "perHueSaturation":
+      return (
+        <SimpleSlider
+          label={t("editor.paramAmount")}
+          value={params.perHueSaturationAmount}
+          min={0}
+          max={3}
+          step={0.05}
+          defaultValue={1}
+          onValueChange={(v) => setAndPreview(params.setPerHueSaturationAmount, v)}
+        />
+      );
+
+    case "selectiveColor":
+      return (
+        <View>
+          <SimpleSlider
+            label={t("editor.paramTargetHue")}
+            value={params.selectiveColorTargetHue}
+            min={0}
+            max={360}
+            step={5}
+            defaultValue={120}
+            onValueChange={(v) => setAndPreview(params.setSelectiveColorTargetHue, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramHueRange")}
+            value={params.selectiveColorHueRange}
+            min={10}
+            max={180}
+            step={5}
+            defaultValue={60}
+            onValueChange={(v) => setAndPreview(params.setSelectiveColorHueRange, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramHueShift")}
+            value={params.selectiveColorHueShift}
+            min={-180}
+            max={180}
+            step={5}
+            defaultValue={0}
+            onValueChange={(v) => setAndPreview(params.setSelectiveColorHueShift, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramSaturationShift")}
+            value={params.selectiveColorSatShift}
+            min={-1}
+            max={1}
+            step={0.05}
+            defaultValue={0}
+            onValueChange={(v) => setAndPreview(params.setSelectiveColorSatShift, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramLuminanceShift")}
+            value={params.selectiveColorLumShift}
+            min={-1}
+            max={1}
+            step={0.05}
+            defaultValue={0}
+            onValueChange={(v) => setAndPreview(params.setSelectiveColorLumShift, v)}
+          />
+          <SimpleSlider
+            label={t("editor.paramFeather")}
+            value={params.selectiveColorFeather}
+            min={0}
+            max={1}
+            step={0.05}
+            defaultValue={0.3}
+            onValueChange={(v) => setAndPreview(params.setSelectiveColorFeather, v)}
+          />
+        </View>
       );
 
     case "saturation":
@@ -315,7 +603,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
           max={2}
           step={0.05}
           defaultValue={0}
-          onValueChange={params.setSaturationAmount}
+          onValueChange={(v) => setAndPreview(params.setSaturationAmount, v)}
         />
       );
 
@@ -329,7 +617,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={4}
             step={0.05}
             defaultValue={1}
-            onValueChange={params.setColorBalanceRedGain}
+            onValueChange={(v) => setAndPreview(params.setColorBalanceRedGain, v)}
           />
           <SimpleSlider
             label={t("editor.paramGreenGain")}
@@ -338,7 +626,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={4}
             step={0.05}
             defaultValue={1}
-            onValueChange={params.setColorBalanceGreenGain}
+            onValueChange={(v) => setAndPreview(params.setColorBalanceGreenGain, v)}
           />
           <SimpleSlider
             label={t("editor.paramBlueGain")}
@@ -347,7 +635,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={4}
             step={0.05}
             defaultValue={1}
-            onValueChange={params.setColorBalanceBlueGain}
+            onValueChange={(v) => setAndPreview(params.setColorBalanceBlueGain, v)}
           />
         </View>
       );
@@ -359,7 +647,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
           <TextInput
             className="h-8 px-2 text-xs text-foreground bg-background rounded border border-separator"
             value={params.pixelMathExpr}
-            onChangeText={params.setPixelMathExpr}
+            onChangeText={(v) => setAndPreview(params.setPixelMathExpr, v)}
             placeholder="($T - $min) / ($max - $min)"
             placeholderTextColor={mutedColor}
             autoCapitalize="none"
@@ -378,23 +666,26 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={6}
             step={1}
             defaultValue={3}
-            onValueChange={(v) => params.setWaveletSharpenLayers(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setWaveletSharpenLayers, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramAmount")}
             value={params.waveletSharpenAmount}
             min={0}
-            max={5}
+            max={3}
             step={0.1}
             defaultValue={1.5}
-            onValueChange={params.setWaveletSharpenAmount}
+            onValueChange={(v) => setAndPreview(params.setWaveletSharpenAmount, v)}
           />
           <View className="flex-row gap-2 mt-1">
             <Button
               size="sm"
               variant={params.waveletSharpenProtectStars ? "primary" : "outline"}
               onPress={() =>
-                params.setWaveletSharpenProtectStars(!params.waveletSharpenProtectStars)
+                setAndPreview(
+                  params.setWaveletSharpenProtectStars,
+                  !params.waveletSharpenProtectStars,
+                )
               }
             >
               <Button.Label className="text-[9px]">{t("editor.paramProtectStars")}</Button.Label>
@@ -413,7 +704,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={10}
             step={0.1}
             defaultValue={2}
-            onValueChange={params.setTgvStrength}
+            onValueChange={(v) => setAndPreview(params.setTgvStrength, v)}
           />
           <SimpleSlider
             label={t("editor.paramSmoothness")}
@@ -422,7 +713,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={5}
             step={0.5}
             defaultValue={2}
-            onValueChange={params.setTgvSmoothness}
+            onValueChange={(v) => setAndPreview(params.setTgvSmoothness, v)}
           />
           <SimpleSlider
             label={t("editor.paramIterations")}
@@ -431,7 +722,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={500}
             step={10}
             defaultValue={200}
-            onValueChange={(v) => params.setTgvIterations(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setTgvIterations, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramEdgeProtection")}
@@ -440,7 +731,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.5}
-            onValueChange={params.setTgvEdgeProtection}
+            onValueChange={(v) => setAndPreview(params.setTgvEdgeProtection, v)}
           />
         </View>
       );
@@ -455,7 +746,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={10}
             step={0.5}
             defaultValue={2}
-            onValueChange={params.setBilateralSpatialSigma}
+            onValueChange={(v) => setAndPreview(params.setBilateralSpatialSigma, v)}
           />
           <SimpleSlider
             label={t("editor.paramRangeSigmaLabel")}
@@ -464,7 +755,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={0.5}
             step={0.01}
             defaultValue={0.1}
-            onValueChange={params.setBilateralRangeSigma}
+            onValueChange={(v) => setAndPreview(params.setBilateralRangeSigma, v)}
           />
         </View>
       );
@@ -479,7 +770,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={10}
             step={0.1}
             defaultValue={2}
-            onValueChange={params.setWienerPsfSigma}
+            onValueChange={(v) => setAndPreview(params.setWienerPsfSigma, v)}
           />
           <SimpleSlider
             label={t("editor.paramNoiseRatio")}
@@ -488,7 +779,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={0.5}
             step={0.001}
             defaultValue={0.01}
-            onValueChange={params.setWienerNoiseRatio}
+            onValueChange={(v) => setAndPreview(params.setWienerNoiseRatio, v)}
           />
         </View>
       );
@@ -503,7 +794,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={8}
             step={1}
             defaultValue={4}
-            onValueChange={(v) => params.setMltLayers(Math.round(v))}
+            onValueChange={(v) => setAndPreview(params.setMltLayers, Math.round(v))}
           />
           <SimpleSlider
             label={t("editor.paramNoiseThreshold")}
@@ -512,7 +803,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={10}
             step={0.5}
             defaultValue={3}
-            onValueChange={params.setMltNoiseThreshold}
+            onValueChange={(v) => setAndPreview(params.setMltNoiseThreshold, v)}
           />
           <SimpleSlider
             label={t("editor.paramNoiseReduction")}
@@ -521,7 +812,7 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0.5}
-            onValueChange={params.setMltNoiseReduction}
+            onValueChange={(v) => setAndPreview(params.setMltNoiseReduction, v)}
           />
           <SimpleSlider
             label={t("editor.paramBias")}
@@ -530,8 +821,17 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1}
             step={0.05}
             defaultValue={0}
-            onValueChange={params.setMltBias}
+            onValueChange={(v) => setAndPreview(params.setMltBias, v)}
           />
+          <View className="flex-row gap-2 mt-1">
+            <Button
+              size="sm"
+              variant={params.mltUseLinearMask ? "primary" : "outline"}
+              onPress={() => setAndPreview(params.setMltUseLinearMask, !params.mltUseLinearMask)}
+            >
+              <Button.Label className="text-[9px]">{t("editor.paramLinearMask")}</Button.Label>
+            </Button>
+          </View>
           <SimpleSlider
             label={t("editor.paramMaskAmplification")}
             value={params.mltLinearMaskAmplification}
@@ -539,7 +839,9 @@ export const ToolParamsProcess = React.memo(function ToolParamsProcess({
             max={1000}
             step={10}
             defaultValue={200}
-            onValueChange={(v) => params.setMltLinearMaskAmplification(Math.round(v))}
+            onValueChange={(v) =>
+              setAndPreview(params.setMltLinearMaskAmplification, Math.round(v))
+            }
           />
         </View>
       );

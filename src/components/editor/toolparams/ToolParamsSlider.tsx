@@ -8,11 +8,13 @@ import type { EditorTool, EditorToolParams, CurvesPreset } from "../../../hooks/
 interface ToolParamsSliderProps {
   activeTool: EditorTool & string;
   params: EditorToolParams;
+  onParamChange?: () => void;
 }
 
 export const ToolParamsSlider = React.memo(function ToolParamsSlider({
   activeTool,
   params,
+  onParamChange,
 }: ToolParamsSliderProps) {
   const { t } = useI18n();
 
@@ -24,9 +26,12 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
           value={params.blurSigma}
           min={0.5}
           max={10}
-          step={0.5}
+          step={0.1}
           defaultValue={2}
-          onValueChange={params.setBlurSigma}
+          onValueChange={(v) => {
+            params.setBlurSigma(v);
+            onParamChange?.();
+          }}
         />
       );
 
@@ -36,20 +41,26 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
           <SimpleSlider
             label={t("editor.paramAmount")}
             value={params.sharpenAmount}
-            min={0.5}
+            min={0.1}
             max={5}
             step={0.1}
             defaultValue={1.5}
-            onValueChange={params.setSharpenAmount}
+            onValueChange={(v) => {
+              params.setSharpenAmount(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramSigma")}
             value={params.sharpenSigma}
             min={0.5}
             max={5}
-            step={0.5}
+            step={0.1}
             defaultValue={1.0}
-            onValueChange={params.setSharpenSigma}
+            onValueChange={(v) => {
+              params.setSharpenSigma(v);
+              onParamChange?.();
+            }}
           />
         </View>
       );
@@ -63,7 +74,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
           max={5}
           step={1}
           defaultValue={1}
-          onValueChange={(v) => params.setDenoiseRadius(Math.round(v))}
+          onValueChange={(v) => {
+            params.setDenoiseRadius(Math.round(v));
+            onParamChange?.();
+          }}
         />
       );
 
@@ -76,7 +90,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
           max={0.5}
           step={0.01}
           defaultValue={0}
-          onValueChange={params.setBrightnessAmount}
+          onValueChange={(v) => {
+            params.setBrightnessAmount(v);
+            onParamChange?.();
+          }}
         />
       );
 
@@ -89,7 +106,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
           max={3.0}
           step={0.1}
           defaultValue={1.0}
-          onValueChange={params.setContrastFactor}
+          onValueChange={(v) => {
+            params.setContrastFactor(v);
+            onParamChange?.();
+          }}
         />
       );
 
@@ -102,7 +122,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
           max={5.0}
           step={0.1}
           defaultValue={1.0}
-          onValueChange={params.setGammaValue}
+          onValueChange={(v) => {
+            params.setGammaValue(v);
+            onParamChange?.();
+          }}
         />
       );
 
@@ -116,7 +139,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={0.5}
             step={0.01}
             defaultValue={0}
-            onValueChange={params.setLevelsInputBlack}
+            onValueChange={(v) => {
+              params.setLevelsInputBlack(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramInputWhite")}
@@ -125,7 +151,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={1}
             step={0.01}
             defaultValue={1}
-            onValueChange={params.setLevelsInputWhite}
+            onValueChange={(v) => {
+              params.setLevelsInputWhite(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramGamma")}
@@ -134,7 +163,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={5.0}
             step={0.1}
             defaultValue={1.0}
-            onValueChange={params.setLevelsGamma}
+            onValueChange={(v) => {
+              params.setLevelsGamma(v);
+              onParamChange?.();
+            }}
           />
         </View>
       );
@@ -149,7 +181,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={0.99}
             step={0.01}
             defaultValue={0.25}
-            onValueChange={params.setMtfMidtone}
+            onValueChange={(v) => {
+              params.setMtfMidtone(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramShadowsClip")}
@@ -158,7 +193,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={0.5}
             step={0.01}
             defaultValue={0}
-            onValueChange={params.setMtfShadows}
+            onValueChange={(v) => {
+              params.setMtfShadows(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramHighlightsClip")}
@@ -167,7 +205,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={1}
             step={0.01}
             defaultValue={1}
-            onValueChange={params.setMtfHighlights}
+            onValueChange={(v) => {
+              params.setMtfHighlights(v);
+              onParamChange?.();
+            }}
           />
         </View>
       );
@@ -188,7 +229,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
               key={p.key}
               size="sm"
               variant={params.curvesPreset === p.key ? "primary" : "outline"}
-              onPress={() => params.setCurvesPreset(p.key)}
+              onPress={() => {
+                params.setCurvesPreset(p.key);
+                onParamChange?.();
+              }}
             >
               <Button.Label className="text-[9px]">{t(p.labelKey)}</Button.Label>
             </Button>
@@ -206,7 +250,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={10}
             step={0.1}
             defaultValue={1}
-            onValueChange={params.setGhsD}
+            onValueChange={(v) => {
+              params.setGhsD(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramB")}
@@ -215,7 +262,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={1}
             step={0.01}
             defaultValue={0.25}
-            onValueChange={params.setGhsB}
+            onValueChange={(v) => {
+              params.setGhsB(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramSP")}
@@ -224,7 +274,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={1}
             step={0.01}
             defaultValue={0}
-            onValueChange={params.setGhsSP}
+            onValueChange={(v) => {
+              params.setGhsSP(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramHP")}
@@ -233,7 +286,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={1}
             step={0.01}
             defaultValue={0}
-            onValueChange={params.setGhsHP}
+            onValueChange={(v) => {
+              params.setGhsHP(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramLP")}
@@ -242,7 +298,10 @@ export const ToolParamsSlider = React.memo(function ToolParamsSlider({
             max={1}
             step={0.01}
             defaultValue={0}
-            onValueChange={params.setGhsLP}
+            onValueChange={(v) => {
+              params.setGhsLP(v);
+              onParamChange?.();
+            }}
           />
         </View>
       );

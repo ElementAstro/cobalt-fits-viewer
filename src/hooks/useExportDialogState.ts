@@ -16,9 +16,10 @@ import {
 } from "../lib/fits/types";
 import { supportsQuality } from "../lib/converter/convertPresets";
 import { estimateFileSize } from "../lib/converter/formatConverter";
+import { isTargetSizeAllowed, normalizeTargetFileSize } from "../lib/converter/compressionPolicy";
 import type { ExportRenderOptions } from "../lib/converter/exportDecorations";
+import type { ExportActionOptions } from "../lib/converter/exportActionOptions";
 import { useSettingsStore } from "../stores/useSettingsStore";
-import type { ExportDialogActionOptions } from "../components/common/ExportDialog";
 
 interface UseExportDialogStateArgs {
   filename: string;
@@ -90,6 +91,12 @@ export function useExportDialogState({
     }
   }, [fitsScientificAvailable, fitsMode]);
 
+  useEffect(() => {
+    if (compressionMode !== "targetSize") return;
+    if (isTargetSizeAllowed(format, webpLossless)) return;
+    setCompressionMode("quality");
+  }, [compressionMode, format, webpLossless]);
+
   // --- Derived values ---
   const showQuality = supportsQuality(format);
   const showFitsOptions = format === "fits";
@@ -128,10 +135,12 @@ export function useExportDialogState({
     ? { maxWidth: outputMaxDim, maxHeight: outputMaxDim }
     : undefined;
 
-  const resolvedTargetFileSize =
-    compressionMode === "targetSize" && (format === "jpeg" || format === "webp")
-      ? targetFileSizeKB * 1024
-      : undefined;
+  const resolvedTargetFileSize = normalizeTargetFileSize(
+    format,
+    compressionMode,
+    targetFileSizeKB * 1024,
+    webpLossless,
+  );
 
   const estimatedSize =
     width && height
@@ -163,7 +172,7 @@ export function useExportDialogState({
         })
       : null;
 
-  const buildActionOptions = (): ExportDialogActionOptions => ({
+  const buildActionOptions = (): ExportActionOptions => ({
     fits: fitsOptions,
     tiff: tiffOptions,
     render: renderOptions,

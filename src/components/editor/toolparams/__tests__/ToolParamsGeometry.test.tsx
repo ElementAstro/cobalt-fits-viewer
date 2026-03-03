@@ -20,6 +20,10 @@ jest.mock("../../../common/SimpleSlider", () => ({
 }));
 
 const mockParamsRaw = {
+  rotateMode: "rotate90cw" as const,
+  setRotateMode: jest.fn(),
+  flipMode: "flipH" as const,
+  setFlipMode: jest.fn(),
   rotateAngle: 0,
   setRotateAngle: jest.fn(),
   bgGridSize: 8,
@@ -98,7 +102,7 @@ describe("ToolParamsGeometry", () => {
     expect(mockParamsRaw.setBgGridSize).toHaveBeenCalledWith(6);
   });
 
-  it("calls onQuickAction with rotate90cw when CW button is pressed", () => {
+  it("sets rotateMode to rotate90cw when CW button is pressed", () => {
     const { getByTestId } = render(
       <ToolParamsGeometry
         activeTool="rotate"
@@ -107,10 +111,10 @@ describe("ToolParamsGeometry", () => {
       />,
     );
     fireEvent.press(getByTestId("e2e-action-editor__param_id-rotate90cw"));
-    expect(mockQuickAction).toHaveBeenCalledWith({ type: "rotate90cw" });
+    expect(mockParamsRaw.setRotateMode).toHaveBeenCalledWith("rotate90cw");
   });
 
-  it("calls onQuickAction with rotate90ccw when CCW button is pressed", () => {
+  it("sets rotateMode to rotate90ccw when CCW button is pressed", () => {
     const { getByTestId } = render(
       <ToolParamsGeometry
         activeTool="rotate"
@@ -119,10 +123,10 @@ describe("ToolParamsGeometry", () => {
       />,
     );
     fireEvent.press(getByTestId("e2e-action-editor__param_id-rotate90ccw"));
-    expect(mockQuickAction).toHaveBeenCalledWith({ type: "rotate90ccw" });
+    expect(mockParamsRaw.setRotateMode).toHaveBeenCalledWith("rotate90ccw");
   });
 
-  it("calls onQuickAction with rotate180 when 180 button is pressed", () => {
+  it("sets rotateMode to rotate180 when 180 button is pressed", () => {
     const { getByTestId } = render(
       <ToolParamsGeometry
         activeTool="rotate"
@@ -131,23 +135,23 @@ describe("ToolParamsGeometry", () => {
       />,
     );
     fireEvent.press(getByTestId("e2e-action-editor__param_id-rotate180"));
-    expect(mockQuickAction).toHaveBeenCalledWith({ type: "rotate180" });
+    expect(mockParamsRaw.setRotateMode).toHaveBeenCalledWith("rotate180");
   });
 
-  it("calls onQuickAction with flipH when horizontal button is pressed", () => {
+  it("sets flipMode to flipH when horizontal button is pressed", () => {
     const { getByTestId } = render(
       <ToolParamsGeometry activeTool="flip" params={mockParams} onQuickAction={mockQuickAction} />,
     );
     fireEvent.press(getByTestId("e2e-action-editor__param_id-flip-h"));
-    expect(mockQuickAction).toHaveBeenCalledWith({ type: "flipH" });
+    expect(mockParamsRaw.setFlipMode).toHaveBeenCalledWith("flipH");
   });
 
-  it("calls onQuickAction with flipV when vertical button is pressed", () => {
+  it("sets flipMode to flipV when vertical button is pressed", () => {
     const { getByTestId } = render(
       <ToolParamsGeometry activeTool="flip" params={mockParams} onQuickAction={mockQuickAction} />,
     );
     fireEvent.press(getByTestId("e2e-action-editor__param_id-flip-v"));
-    expect(mockQuickAction).toHaveBeenCalledWith({ type: "flipV" });
+    expect(mockParamsRaw.setFlipMode).toHaveBeenCalledWith("flipV");
   });
 
   it("calls setRotateAngle via rotateCustom slider", () => {
@@ -160,5 +164,30 @@ describe("ToolParamsGeometry", () => {
     );
     fireEvent.press(getByTestId("slider-editor.paramAngle"));
     expect(mockParamsRaw.setRotateAngle).toHaveBeenCalledWith(5.7);
+  });
+
+  it("calls onParamChange when slider params are updated", () => {
+    const onParamChange = jest.fn();
+    const { getByTestId, rerender } = render(
+      <ToolParamsGeometry
+        activeTool="rotateCustom"
+        params={mockParams}
+        onQuickAction={mockQuickAction}
+        onParamChange={onParamChange}
+      />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramAngle"));
+    expect(onParamChange).toHaveBeenCalledTimes(1);
+
+    rerender(
+      <ToolParamsGeometry
+        activeTool="background"
+        params={mockParams}
+        onQuickAction={mockQuickAction}
+        onParamChange={onParamChange}
+      />,
+    );
+    fireEvent.press(getByTestId("slider-editor.paramGridSize"));
+    expect(onParamChange).toHaveBeenCalledTimes(2);
   });
 });

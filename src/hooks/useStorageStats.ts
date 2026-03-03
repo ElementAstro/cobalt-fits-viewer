@@ -13,7 +13,9 @@ import {
   clearVideoProcessingCache,
 } from "../lib/video/engine/ffmpegAdapter";
 import { getPixelCacheStats } from "../lib/cache/pixelCache";
+import { getImageLoadCacheStats } from "../lib/cache/imageLoadCache";
 import { clearRuntimeCaches } from "../lib/cache/runtimeCaches";
+import { getRuntimeDiskCacheStats } from "../lib/cache/runtimeDiskCache";
 import { useTrashStore } from "../stores/useTrashStore";
 import { useFitsStore } from "../stores/useFitsStore";
 
@@ -28,6 +30,10 @@ export interface StorageBreakdown {
   exportCacheFileCount: number;
   pixelCacheBytes: number;
   pixelCacheEntries: number;
+  imageLoadCacheBytes: number;
+  imageLoadCacheEntries: number;
+  runtimeDiskCacheBytes: number;
+  runtimeDiskCacheEntries: number;
   freeDiskBytes: number | null;
 }
 
@@ -47,6 +53,10 @@ export function useStorageStats() {
     exportCacheFileCount: 0,
     pixelCacheBytes: 0,
     pixelCacheEntries: 0,
+    imageLoadCacheBytes: 0,
+    imageLoadCacheEntries: 0,
+    runtimeDiskCacheBytes: 0,
+    runtimeDiskCacheEntries: 0,
     freeDiskBytes: null,
   });
 
@@ -56,6 +66,8 @@ export function useStorageStats() {
     const thumbnailCacheBytes = getThumbnailCacheSize();
     const exportCache = getExportCacheSize();
     const pixelStats = getPixelCacheStats();
+    const imageLoadStats = getImageLoadCacheStats();
+    const runtimeDiskStats = getRuntimeDiskCacheStats();
 
     let videoCacheBytes = 0;
     try {
@@ -82,9 +94,13 @@ export function useStorageStats() {
       exportCacheFileCount: exportCache.fileCount,
       pixelCacheBytes: pixelStats.totalBytes,
       pixelCacheEntries: pixelStats.entries,
+      imageLoadCacheBytes: imageLoadStats.totalBytes,
+      imageLoadCacheEntries: imageLoadStats.entries,
+      runtimeDiskCacheBytes: runtimeDiskStats.totalBytes,
+      runtimeDiskCacheEntries: runtimeDiskStats.entries,
       freeDiskBytes,
     });
-  }, [files, trashItems]);
+  }, [trashItems]);
 
   useEffect(() => {
     void refresh();

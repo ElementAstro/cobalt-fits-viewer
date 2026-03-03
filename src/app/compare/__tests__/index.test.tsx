@@ -1,5 +1,6 @@
 import React from "react";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react-native";
+import { normalizeProcessingPipelineSnapshot } from "../../../lib/processing/recipe";
 
 const mockUseLocalSearchParams = jest.fn();
 const mockUseImageComparison = jest.fn();
@@ -21,6 +22,7 @@ const mockFiles = [
     albumIds: [],
     sourceType: "fits" as const,
     mediaKind: "image" as const,
+    decodeStatus: "ready" as const,
   },
   {
     id: "b",
@@ -34,6 +36,21 @@ const mockFiles = [
     albumIds: [],
     sourceType: "raster" as const,
     mediaKind: "image" as const,
+    decodeStatus: "ready" as const,
+  },
+  {
+    id: "f",
+    filename: "failed.fits",
+    filepath: "/tmp/failed.fits",
+    fileSize: 1,
+    importDate: 2,
+    frameType: "light" as const,
+    isFavorite: false,
+    tags: [],
+    albumIds: [],
+    sourceType: "fits" as const,
+    mediaKind: "image" as const,
+    decodeStatus: "failed" as const,
   },
   {
     id: "v",
@@ -65,6 +82,8 @@ const mockSettingsState: Record<string, unknown> = {
   compareSplitPosition: 0.5,
   imageProcessingDebounce: 0,
   useHighQualityPreview: true,
+  imageProcessingProfile: "standard",
+  viewerApplyEditorRecipe: true,
   canvasMinScale: 0.5,
   canvasMaxScale: 10,
   canvasDoubleTapScale: 3,
@@ -112,8 +131,13 @@ jest.mock("../../../hooks/useImageProcessing", () => ({
 }));
 
 jest.mock("../../../lib/import/imageParsePipeline", () => ({
-  isImageLikeMedia: (file: { mediaKind?: string; sourceType?: string }) =>
-    file?.mediaKind === "image" || file?.sourceType === "fits" || file?.sourceType === "raster",
+  isProcessableImageMedia: (file: {
+    mediaKind?: string;
+    sourceType?: string;
+    decodeStatus?: "ready" | "failed";
+  }) =>
+    (file?.mediaKind === "image" || file?.sourceType === "fits" || file?.sourceType === "raster") &&
+    file?.decodeStatus !== "failed",
 }));
 
 jest.mock("../../../hooks/useScreenOrientation", () => ({
@@ -276,6 +300,9 @@ describe("CompareScreen", () => {
   ) as FitsCanvasMockModule;
 
   beforeEach(() => {
+    for (const file of mockFiles) {
+      delete (file as { editorRecipe?: unknown }).editorRecipe;
+    }
     Object.assign(mockSettingsState, {
       defaultShowPixelInfo: true,
       compareDefaultMode: "blink",
@@ -288,6 +315,8 @@ describe("CompareScreen", () => {
     mockUseFitsFile.mockImplementation(() => ({
       pixels: new Float32Array([0, 1, 2, 3]),
       dimensions: { width: 2, height: 2, isDataCube: false, depth: 1 },
+      isLoading: false,
+      error: null,
       loadFromPath: jest.fn(),
     }));
     mockUseImageProcessing.mockImplementation(() => ({
@@ -297,7 +326,7 @@ describe("CompareScreen", () => {
       processImage: jest.fn(),
       processImagePreview: jest.fn(),
       isProcessing: false,
-      error: null,
+      processingError: null,
     }));
     comparisonState = {
       imageIds: ["a", "b"],
@@ -328,7 +357,7 @@ describe("CompareScreen", () => {
   });
 
   it("filters non-image ids from /compare?ids before initializing comparison", () => {
-    mockUseLocalSearchParams.mockReturnValueOnce({ ids: "a,v,b,v,a" });
+    mockUseLocalSearchParams.mockReturnValueOnce({ ids: "a,v,b,f,v,a" });
     render(<CompareScreen />);
     expect(mockUseImageComparison).toHaveBeenCalledWith({
       initialIds: ["a", "b"],
@@ -486,7 +515,168 @@ describe("CompareScreen", () => {
     render(<CompareScreen />);
     fireEvent.press(screen.getByTestId("e2e-action-compare__index-open-picker-a"));
     expect(screen.queryByText("clip.mp4")).toBeNull();
+    expect(screen.queryByText("failed.fits")).toBeNull();
     expect(screen.getByText("A.fits")).toBeTruthy();
     expect(screen.getByText("B.fits")).toBeTruthy();
+  });
+
+  it("passes profile pipeline options to processImage when recipe is absent", async () => {
+    const processImageA = jest.fn();
+    const processImagePreviewA = jest.fn();
+    const processImageB = jest.fn();
+    const processImagePreviewB = jest.fn();
+    mockUseFitsFile
+      .mockImplementationOnce(() => ({
+        pixels: new Float32Array([0, 1, 2, 3]),
+        dimensions: { width: 2, height: 2, isDataCube: false, depth: 1 },
+        isLoading: false,
+        error: null,
+        loadFromPath: jest.fn(),
+      }))
+      .mockImplementationOnce(() => ({
+        pixels: new Float32Array([0, 1, 2, 3]),
+        dimensions: { width: 2, height: 2, isDataCube: false, depth: 1 },
+        isLoading: false,
+        error: null,
+        loadFromPath: jest.fn(),
+      }));
+    mockUseImageProcessing
+      .mockImplementationOnce(() => ({
+        rgbaData: new Uint8ClampedArray(16),
+        displayWidth: 2,
+        displayHeight: 2,
+        processImage: processImageA,
+        processImagePreview: processImagePreviewA,
+        isProcessing: false,
+        processingError: null,
+      }))
+      .mockImplementationOnce(() => ({
+        rgbaData: new Uint8ClampedArray(16),
+        displayWidth: 2,
+        displayHeight: 2,
+        processImage: processImageB,
+        processImagePreview: processImagePreviewB,
+        isProcessing: false,
+        processingError: null,
+      }));
+
+    render(<CompareScreen />);
+
+    await waitFor(() => {
+      expect(processImageA).toHaveBeenCalled();
+      expect(processImageB).toHaveBeenCalled();
+    });
+
+    const callA = processImageA.mock.calls[processImageA.mock.calls.length - 1];
+    const callB = processImageB.mock.calls[processImageB.mock.calls.length - 1];
+    expect(callA[callA.length - 1]).toEqual({ profile: "standard", recipe: null });
+    expect(callB[callB.length - 1]).toEqual({ profile: "standard", recipe: null });
+  });
+
+  it("passes normalized recipe and defers profile when editor recipe is enabled", async () => {
+    const recipe = {
+      version: 2,
+      savedAt: 1700000000000,
+      profile: "legacy",
+      scientificNodes: [],
+      colorNodes: [],
+    };
+    (mockFiles[0] as { editorRecipe?: unknown }).editorRecipe = recipe;
+
+    const processImageA = jest.fn();
+    const processImagePreviewA = jest.fn();
+    const processImageB = jest.fn();
+    const processImagePreviewB = jest.fn();
+    mockUseFitsFile
+      .mockImplementationOnce(() => ({
+        pixels: new Float32Array([0, 1, 2, 3]),
+        dimensions: { width: 2, height: 2, isDataCube: false, depth: 1 },
+        isLoading: false,
+        error: null,
+        loadFromPath: jest.fn(),
+      }))
+      .mockImplementationOnce(() => ({
+        pixels: new Float32Array([0, 1, 2, 3]),
+        dimensions: { width: 2, height: 2, isDataCube: false, depth: 1 },
+        isLoading: false,
+        error: null,
+        loadFromPath: jest.fn(),
+      }));
+    mockUseImageProcessing
+      .mockImplementationOnce(() => ({
+        rgbaData: new Uint8ClampedArray(16),
+        displayWidth: 2,
+        displayHeight: 2,
+        processImage: processImageA,
+        processImagePreview: processImagePreviewA,
+        isProcessing: false,
+        processingError: null,
+      }))
+      .mockImplementationOnce(() => ({
+        rgbaData: new Uint8ClampedArray(16),
+        displayWidth: 2,
+        displayHeight: 2,
+        processImage: processImageB,
+        processImagePreview: processImagePreviewB,
+        isProcessing: false,
+        processingError: null,
+      }));
+
+    render(<CompareScreen />);
+
+    await waitFor(() => {
+      expect(processImageA).toHaveBeenCalled();
+      expect(processImageB).toHaveBeenCalled();
+    });
+
+    const expectedRecipe = normalizeProcessingPipelineSnapshot(recipe as any, "legacy");
+    const callA = processImageA.mock.calls[processImageA.mock.calls.length - 1];
+    const callB = processImageB.mock.calls[processImageB.mock.calls.length - 1];
+    expect(callA[callA.length - 1]).toEqual({ profile: undefined, recipe: expectedRecipe });
+    expect(callB[callB.length - 1]).toEqual({ profile: "standard", recipe: null });
+  });
+
+  it("renders loading and error states from side hooks", () => {
+    mockUseFitsFile
+      .mockImplementationOnce(() => ({
+        pixels: null,
+        dimensions: null,
+        isLoading: true,
+        error: null,
+        loadFromPath: jest.fn(),
+      }))
+      .mockImplementationOnce(() => ({
+        pixels: null,
+        dimensions: null,
+        isLoading: false,
+        error: "parse failed",
+        loadFromPath: jest.fn(),
+      }));
+    mockUseImageProcessing
+      .mockImplementationOnce(() => ({
+        rgbaData: null,
+        displayWidth: 0,
+        displayHeight: 0,
+        processImage: jest.fn(),
+        processImagePreview: jest.fn(),
+        isProcessing: false,
+        processingError: null,
+      }))
+      .mockImplementationOnce(() => ({
+        rgbaData: null,
+        displayWidth: 0,
+        displayHeight: 0,
+        processImage: jest.fn(),
+        processImagePreview: jest.fn(),
+        isProcessing: false,
+        processingError: null,
+      }));
+
+    comparisonState = { ...comparisonState, mode: "side-by-side" };
+    mockUseImageComparison.mockImplementation(() => comparisonState);
+    render(<CompareScreen />);
+
+    expect(screen.getByText("common.loading")).toBeTruthy();
+    expect(screen.getByText("parse failed")).toBeTruthy();
   });
 });

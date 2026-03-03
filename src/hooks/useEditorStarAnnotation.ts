@@ -15,7 +15,9 @@ import {
   sanitizeStarAnnotations,
 } from "../lib/stacking/starAnnotationLinkage";
 import { transformStarAnnotationPoints } from "../lib/stacking/starAnnotationGeometry";
+import { getProcessingOperation } from "../lib/processing/registry";
 import type {
+  ProcessingOperationId,
   StarAnnotationBundle,
   StarAnnotationBundleV2,
   StarAnnotationDetectionSnapshot,
@@ -34,38 +36,6 @@ const GEOMETRY_OPS = new Set([
   "flipV",
   "crop",
   "rotateArbitrary",
-]);
-const NON_GEOMETRY_OPS = new Set([
-  "invert",
-  "blur",
-  "sharpen",
-  "denoise",
-  "histogramEq",
-  "brightness",
-  "contrast",
-  "gamma",
-  "levels",
-  "backgroundExtract",
-  "mtf",
-  "curves",
-  "clahe",
-  "hdr",
-  "morphology",
-  "starMask",
-  "rangeMask",
-  "binarize",
-  "rescale",
-  "deconvolution",
-  "dbe",
-  "multiscaleDenoise",
-  "localContrast",
-  "starReduction",
-  "deconvolutionAuto",
-  "scnr",
-  "colorCalibration",
-  "saturation",
-  "colorBalance",
-  "pixelMath",
 ]);
 
 function computeDetectionChunkRows(width: number, height: number) {
@@ -432,21 +402,29 @@ export function useEditorStarAnnotation({
         let nextPoints = source.points;
         let nextStale = !!source.stale;
         let nextStaleReason = source.staleReason;
-        if (event.op && GEOMETRY_OPS.has(event.op.type)) {
-          const transformed = transformStarAnnotationPoints(
-            source.points,
-            event.before.width,
-            event.before.height,
-            event.op,
-          );
-          nextPoints = transformed.points;
-          if (!transformed.transformed) {
+        if (event.op) {
+          const schema = getProcessingOperation(event.op.type as ProcessingOperationId);
+          if (schema?.category === "geometry") {
+            if (!GEOMETRY_OPS.has(event.op.type)) {
+              nextStale = true;
+              nextStaleReason = "unsupported-transform";
+            } else {
+              const transformed = transformStarAnnotationPoints(
+                source.points,
+                event.before.width,
+                event.before.height,
+                event.op,
+              );
+              nextPoints = transformed.points;
+              if (!transformed.transformed) {
+                nextStale = true;
+                nextStaleReason = transformed.staleReason ?? "unsupported-transform";
+              }
+            }
+          } else if (!schema) {
             nextStale = true;
-            nextStaleReason = transformed.staleReason ?? "unsupported-transform";
+            nextStaleReason = "unsupported-transform";
           }
-        } else if (event.op && !NON_GEOMETRY_OPS.has(event.op.type)) {
-          nextStale = true;
-          nextStaleReason = "unsupported-transform";
         }
 
         applyStarAnnotationState(nextPoints, source.detectionSnapshot, nextStale, nextStaleReason, {

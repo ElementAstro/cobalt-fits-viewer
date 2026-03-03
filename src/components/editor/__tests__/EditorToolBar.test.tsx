@@ -35,6 +35,20 @@ describe("EditorToolBar", () => {
     const { getByText } = render(<EditorToolBar {...defaultProps} activeToolGroup="geometry" />);
     expect(getByText("editor.crop")).toBeTruthy();
     expect(getByText("editor.rotate")).toBeTruthy();
+    expect(getByText("editor.integerBin")).toBeTruthy();
+    expect(getByText("editor.resample")).toBeTruthy();
+  });
+
+  it("renders newly wired adjust and process tools", () => {
+    const { getByText, rerender } = render(
+      <EditorToolBar {...defaultProps} activeToolGroup="adjust" />,
+    );
+    expect(getByText("editor.photometricCC")).toBeTruthy();
+    expect(getByText("editor.backgroundNeutralize")).toBeTruthy();
+
+    rerender(<EditorToolBar {...defaultProps} activeToolGroup="process" />);
+    expect(getByText("editor.cosmeticCorrection")).toBeTruthy();
+    expect(getByText("editor.mmt")).toBeTruthy();
   });
 
   it("calls onToolPress when a tool is pressed", () => {
@@ -42,6 +56,15 @@ describe("EditorToolBar", () => {
     const { getByTestId } = render(<EditorToolBar {...defaultProps} onToolPress={onToolPress} />);
     fireEvent.press(getByTestId("e2e-action-editor__param_id-tool-brightness"));
     expect(onToolPress).toHaveBeenCalledWith("brightness");
+  });
+
+  it("calls onToolPress for newly wired operator tool", () => {
+    const onToolPress = jest.fn();
+    const { getByTestId } = render(
+      <EditorToolBar {...defaultProps} activeToolGroup="process" onToolPress={onToolPress} />,
+    );
+    fireEvent.press(getByTestId("e2e-action-editor__param_id-tool-cosmeticCorrection"));
+    expect(onToolPress).toHaveBeenCalledWith("cosmeticCorrection");
   });
 
   it("calls onToolGroupChange when a tab is pressed", () => {

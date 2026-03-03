@@ -327,9 +327,27 @@ function addEntry(level: LogLevel, tag: string, message: string, data?: unknown)
   return entry;
 }
 
-async function hydrateEntriesInternal(): Promise<void> {
+function mergeHydratedEntries(restored: LogEntry[]): void {
+  if (restored.length === 0) return;
+
+  const mergedById = new Map<string, LogEntry>();
+  for (const entry of restored) {
+    mergedById.set(entry.id, entry);
+  }
+  for (const entry of entries) {
+    mergedById.set(entry.id, entry);
+  }
+
+  entries = [...mergedById.values()].sort((a, b) => {
+    if (a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    return a.id.localeCompare(b.id);
+  });
+  trimEntriesToRingBuffer();
+}
+
+async function hydrateEntriesInternal(): Promise<LogEntry[]> {
   const raw = await AsyncStorage.getItem(config.persistKey);
-  if (!raw) return;
+  if (!raw) return [];
 
   let payload: PersistedPayload | null = null;
   try {
@@ -339,7 +357,7 @@ async function hydrateEntriesInternal(): Promise<void> {
   }
 
   if (!payload || payload.version !== PERSIST_VERSION || !Array.isArray(payload.entries)) {
-    return;
+    return [];
   }
 
   const restored: LogEntry[] = [];
@@ -347,8 +365,7 @@ async function hydrateEntriesInternal(): Promise<void> {
     const entry = normalizePersistEntry(item);
     if (entry) restored.push(entry);
   }
-  entries = restored;
-  trimEntriesToRingBuffer();
+  return restored;
 }
 
 // ===== Public API =====
@@ -375,7 +392,8 @@ export const Logger = {
     if (hydrationPromise) return hydrationPromise;
 
     hydrationPromise = (async () => {
-      await hydrateEntriesInternal();
+      const restored = await hydrateEntriesInternal();
+      mergeHydratedEntries(restored);
       emitChange();
     })();
 

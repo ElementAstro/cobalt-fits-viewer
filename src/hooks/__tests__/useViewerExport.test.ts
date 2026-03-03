@@ -251,4 +251,61 @@ describe("useViewerExport", () => {
     });
     expect(onDone).toHaveBeenCalledTimes(2);
   });
+
+  it("forwards compression options to export/share/save requests", async () => {
+    const rgba = new Uint8ClampedArray([255, 0, 0, 255]);
+    const { result } = renderHook(() =>
+      useViewerExport({
+        rgbaData: rgba,
+        width: 1,
+        height: 1,
+        filename: "x",
+        format: "webp",
+        onDone,
+      }),
+    );
+
+    const options = {
+      customFilename: "custom",
+      outputSize: { maxWidth: 1280, maxHeight: 1280 },
+      targetFileSize: 200 * 1024,
+      webpLossless: true,
+    };
+
+    await act(async () => {
+      await result.current.handleExport(90, options);
+    });
+    expect(exportImageDetailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "custom",
+        outputSize: options.outputSize,
+        targetFileSize: options.targetFileSize,
+        webpLossless: true,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleShare(90, options);
+    });
+    expect(shareImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "custom",
+        outputSize: options.outputSize,
+        targetFileSize: options.targetFileSize,
+        webpLossless: true,
+      }),
+    );
+
+    await act(async () => {
+      await result.current.handleSaveToDevice(90, options);
+    });
+    expect(saveImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "custom",
+        outputSize: options.outputSize,
+        targetFileSize: options.targetFileSize,
+        webpLossless: true,
+      }),
+    );
+  });
 });

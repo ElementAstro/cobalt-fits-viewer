@@ -103,4 +103,43 @@ describe("EditorToolParamPanel", () => {
     fireEvent.press(getByText("common.reset"));
     expect(onReset).toHaveBeenCalledTimes(1);
   });
+
+  it("forwards onParamChange to tool param components", () => {
+    const onParamChange = jest.fn();
+    const { getByTestId, rerender } = render(
+      <EditorToolParamPanel {...defaultProps} activeTool="blur" onParamChange={onParamChange} />,
+    );
+    expect(getByTestId("tool-params-adjust").props.onParamChange).toBe(onParamChange);
+
+    rerender(
+      <EditorToolParamPanel {...defaultProps} activeTool="rotate" onParamChange={onParamChange} />,
+    );
+    expect(getByTestId("tool-params-geometry").props.onParamChange).toBe(onParamChange);
+
+    rerender(
+      <EditorToolParamPanel
+        {...defaultProps}
+        activeTool="starMask"
+        onParamChange={onParamChange}
+      />,
+    );
+    expect(getByTestId("tool-params-mask").props.onParamChange).toBe(onParamChange);
+
+    rerender(
+      <EditorToolParamPanel {...defaultProps} activeTool="clahe" onParamChange={onParamChange} />,
+    );
+    expect(getByTestId("tool-params-process").props.onParamChange).toBe(onParamChange);
+  });
+
+  it("shows preview unsupported hint for heavy non-preview tools", () => {
+    const { getByText } = render(
+      <EditorToolParamPanel {...defaultProps} activeTool="photometricCC" />,
+    );
+    expect(getByText("editor.previewNotSupported")).toBeTruthy();
+  });
+
+  it("does not show preview hint for preview-supported tools", () => {
+    const { queryByText } = render(<EditorToolParamPanel {...defaultProps} activeTool="clahe" />);
+    expect(queryByText("editor.previewNotSupported")).toBeNull();
+  });
 });

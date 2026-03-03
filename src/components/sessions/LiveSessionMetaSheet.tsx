@@ -31,6 +31,8 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
   const { addItem: addChipItem, removeItem: removeChipItem } = useChipInput();
   const equip = useEquipmentFields();
   const loc = useLocationFields();
+  const { resetEquipment, buildEquipmentObject } = equip;
+  const { resetLocation, useCurrentLocation: applyCurrentLocation, validateAndBuild } = loc;
 
   const [targets, setTargets] = useState<string[]>([]);
   const [targetInput, setTargetInput] = useState("");
@@ -39,27 +41,27 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
     if (!visible) return;
     setTargets(activeSession?.draftTargets ?? []);
     setTargetInput("");
-    equip.resetEquipment({
+    resetEquipment({
       telescope: activeSession?.draftEquipment?.telescope,
       camera: activeSession?.draftEquipment?.camera,
       mount: activeSession?.draftEquipment?.mount,
       filters: activeSession?.draftEquipment?.filters,
     });
-    loc.resetLocation(activeSession?.draftLocation);
-  }, [visible, activeSession, equip.resetEquipment, loc.resetLocation]);
+    resetLocation(activeSession?.draftLocation);
+  }, [visible, activeSession, resetEquipment, resetLocation]);
 
   const handleUseCurrentLocation = useCallback(() => {
-    loc.useCurrentLocation(t);
-  }, [loc, t]);
+    applyCurrentLocation(t);
+  }, [applyCurrentLocation, t]);
 
   const handleSave = useCallback(() => {
     if (!activeSession) return;
 
-    const draftLocation = loc.validateAndBuild(t);
+    const draftLocation = validateAndBuild(t);
     if (draftLocation === null) return;
 
     const normalizedTargets = normalizeChipValues(targets, targetInput);
-    const draftEquipment = equip.buildEquipmentObject();
+    const draftEquipment = buildEquipmentObject();
 
     updateActiveSessionDraft({
       draftTargets: normalizedTargets,
@@ -69,10 +71,10 @@ export function LiveSessionMetaSheet({ visible, onClose }: LiveSessionMetaSheetP
     onClose();
   }, [
     activeSession,
-    loc,
     targets,
     targetInput,
-    equip.buildEquipmentObject,
+    validateAndBuild,
+    buildEquipmentObject,
     updateActiveSessionDraft,
     onClose,
     t,

@@ -73,6 +73,7 @@ export interface ImageLikeMediaRecord {
   filename?: string | null;
   sourceType?: FitsMetadata["sourceType"];
   mediaKind?: FitsMetadata["mediaKind"];
+  decodeStatus?: FitsMetadata["decodeStatus"];
 }
 
 function resolveImageFormat(options: ParseImageBufferOptions): SupportedMediaFormat {
@@ -272,4 +273,9 @@ export function isImageLikeMedia(file: ImageLikeMediaRecord | null | undefined):
     return detected.sourceType === "fits" || detected.sourceType === "raster";
   }
   return false;
+}
+
+export function isProcessableImageMedia(file: ImageLikeMediaRecord | null | undefined): boolean {
+  if (!isImageLikeMedia(file)) return false;
+  return file?.decodeStatus !== "failed";
 }

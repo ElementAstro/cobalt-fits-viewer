@@ -121,6 +121,11 @@ describe("ViewerBottomSheet", () => {
     expect(getByText("viridis")).toBeTruthy();
   });
 
+  it("does not let overlay intercept toolbar taps", () => {
+    const { getByTestId } = render(<ViewerBottomSheet {...baseProps} />);
+    expect(getByTestId("bottom-sheet-overlay").props.pointerEvents).toBe("none");
+  });
+
   it("does not render object chip when file has no object", () => {
     const propsWithoutObject = {
       ...baseProps,

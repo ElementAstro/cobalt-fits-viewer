@@ -18,6 +18,7 @@ import { useViewerExport } from "../../hooks/useViewerExport";
 import { useThumbnail } from "../../hooks/useThumbnail";
 import { useViewerHotkeys } from "../../hooks/useViewerHotkeys";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
 import { PixelInspector } from "../../components/fits/PixelInspector";
 import { RegionSelectOverlay } from "../../components/fits/RegionSelectOverlay";
 import {
@@ -167,6 +168,9 @@ export default function ViewerDetailScreen() {
   const defaultHistogramMode = useSettingsStore((s) => s.defaultHistogramMode);
   const settingsHistogramHeight = useSettingsStore((s) => s.histogramHeight);
   const settingsDebounce = useSettingsStore((s) => s.imageProcessingDebounce);
+  const viewerPreloadNeighbors = useSettingsStore((s) => s.viewerPreloadNeighbors);
+  const viewerPreloadRadius = useSettingsStore((s) => s.viewerPreloadRadius);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
   const pixelInfoDecimalPlaces = useSettingsStore((s) => s.pixelInfoDecimalPlaces);
   const settingsGridColor = useSettingsStore((s) => s.gridColor);
   const settingsGridOpacity = useSettingsStore((s) => s.gridOpacity);
@@ -930,6 +934,15 @@ export default function ViewerDetailScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [file?.id]);
 
+  useImageCacheWarmup({
+    enabled: viewerPreloadNeighbors,
+    currentFile: file,
+    allFiles,
+    radius: viewerPreloadRadius,
+    frameClassificationConfig,
+    startWhen: !isFitsLoading && !!metadata,
+  });
+
   // Set total frames from dimensions
   useEffect(() => {
     if (dimensions?.isDataCube && dimensions.depth > 1) {
@@ -1172,10 +1185,7 @@ export default function ViewerDetailScreen() {
       regionHistogram,
       stats,
       regionStats,
-      dimensions?.width,
-      dimensions?.height,
-      dimensions?.depth,
-      dimensions?.isDataCube,
+      dimensions,
       regionSelection,
       histogramDiagnostics,
       histogramInputRange,

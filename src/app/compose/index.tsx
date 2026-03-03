@@ -20,7 +20,7 @@ import { useExport } from "../../hooks/useExport";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
-import { isImageLikeMedia } from "../../lib/import/imageParsePipeline";
+import { isProcessableImageMedia } from "../../lib/import/imageParsePipeline";
 import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 
 type ComposePreset = "rgb" | "sho" | "hoo" | "lrgb" | "custom";
@@ -98,12 +98,7 @@ export default function ComposeScreen() {
 
   const files = useFitsStore((s) => s.files);
   const composableFiles = useMemo(
-    () =>
-      files.filter((file) => {
-        if (!isImageLikeMedia(file)) return false;
-        if (file.decodeStatus === "failed") return false;
-        return true;
-      }),
+    () => files.filter((file) => isProcessableImageMedia(file)),
     [files],
   );
   const defaultComposePreset = useSettingsStore((s) => s.defaultComposePreset);

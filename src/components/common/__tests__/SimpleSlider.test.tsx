@@ -112,6 +112,22 @@ describe("SimpleSlider", () => {
     createSpy.mockRestore();
   });
 
+  it("calls onSlidingComplete on PanResponder release", () => {
+    const onSlidingComplete = jest.fn();
+    const createSpy = jest.spyOn(PanResponder, "create");
+
+    render(<SimpleSlider {...defaultProps} onSlidingComplete={onSlidingComplete} />);
+
+    const config = createSpy.mock.calls[0]?.[0];
+    expect(config).toBeDefined();
+
+    config?.onPanResponderGrant?.({ nativeEvent: { locationX: 80 } } as any, {} as any);
+    config?.onPanResponderRelease?.({ nativeEvent: {} } as any, { dx: 20 } as any);
+
+    expect(onSlidingComplete).toHaveBeenCalled();
+    createSpy.mockRestore();
+  });
+
   it("resets to defaultValue on double-tap", () => {
     const onValueChange = jest.fn();
     const createSpy = jest.spyOn(PanResponder, "create");
@@ -149,6 +165,16 @@ describe("SimpleSlider", () => {
     const config = createSpy.mock.calls[0]?.[0];
     expect(config?.onStartShouldSetPanResponder?.({} as any, {} as any)).toBe(true);
     expect(config?.onMoveShouldSetPanResponder?.({} as any, {} as any)).toBe(true);
+
+    createSpy.mockRestore();
+  });
+
+  it("prevents responder termination by parent gestures", () => {
+    const createSpy = jest.spyOn(PanResponder, "create");
+    render(<SimpleSlider {...defaultProps} />);
+
+    const config = createSpy.mock.calls[0]?.[0];
+    expect(config?.onPanResponderTerminationRequest?.({} as any, {} as any)).toBe(false);
 
     createSpy.mockRestore();
   });

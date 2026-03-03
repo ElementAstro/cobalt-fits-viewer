@@ -145,4 +145,48 @@ describe("Logger", () => {
     expect(restored[0].message).toBe("second");
     expect(restored[1].message).toBe("third");
   });
+
+  it("merges hydrated entries with runtime entries created before hydrate", async () => {
+    const key = "logger-hydrate-merge-test";
+    await AsyncStorage.setItem(
+      key,
+      JSON.stringify({
+        version: 1,
+        entries: [
+          {
+            id: "persist-1",
+            timestamp: 1,
+            level: "info",
+            tag: "Persist",
+            message: "persisted-first",
+          },
+          {
+            id: "persist-2",
+            timestamp: 2,
+            level: "warn",
+            tag: "Persist",
+            message: "persisted-second",
+          },
+        ],
+      }),
+    );
+
+    Logger.clear();
+    Logger.configure({
+      maxEntries: 10,
+      minLevel: "debug",
+      consoleOutput: false,
+      persistEnabled: true,
+      persistKey: key,
+      persistDebounceMs: 60_000,
+    });
+
+    Logger.info("Runtime", "runtime-startup");
+    await Logger.hydrate();
+
+    const messages = Logger.getEntries().map((entry) => entry.message);
+    expect(messages).toEqual(
+      expect.arrayContaining(["persisted-first", "persisted-second", "runtime-startup"]),
+    );
+  });
 });

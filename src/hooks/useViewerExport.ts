@@ -4,17 +4,12 @@ import { useToast } from "heroui-native";
 import { useI18n } from "../i18n/useI18n";
 import { useExport } from "./useExport";
 import { useHapticFeedback } from "./useHapticFeedback";
-import type { ExportFormat, FitsTargetOptions, TiffTargetOptions } from "../lib/fits/types";
+import type { ExportFormat } from "../lib/fits/types";
 import type { ExportSourceContext } from "./useExport";
-import type { ExportRenderOptions } from "../lib/converter/exportDecorations";
+import type { ExportActionOptions } from "../lib/converter/exportActionOptions";
 import { ShareNotAvailableError, MediaPermissionDeniedError } from "../lib/utils/imageExport";
 
-type ViewerExportOptions = {
-  fits?: Partial<FitsTargetOptions>;
-  tiff?: Partial<TiffTargetOptions>;
-  render?: ExportRenderOptions;
-  customFilename?: string;
-};
+type ViewerExportOptions = ExportActionOptions;
 
 interface UseViewerExportParams {
   rgbaData: Uint8ClampedArray | null;
@@ -65,6 +60,9 @@ export function useViewerExport({
         fits: options?.fits,
         tiff: options?.tiff,
         renderOptions: options?.render,
+        outputSize: options?.outputSize,
+        targetFileSize: options?.targetFileSize,
+        webpLossless: options?.webpLossless,
         source,
       });
       if (detailed.path) {
@@ -116,6 +114,9 @@ export function useViewerExport({
           fits: options?.fits,
           tiff: options?.tiff,
           renderOptions: options?.render,
+          outputSize: options?.outputSize,
+          targetFileSize: options?.targetFileSize,
+          webpLossless: options?.webpLossless,
           source,
         });
       } catch (error) {
@@ -147,6 +148,9 @@ export function useViewerExport({
           fits: options?.fits,
           tiff: options?.tiff,
           renderOptions: options?.render,
+          outputSize: options?.outputSize,
+          targetFileSize: options?.targetFileSize,
+          webpLossless: options?.webpLossless,
           source,
         });
         if (uri) {

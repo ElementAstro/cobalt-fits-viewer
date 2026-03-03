@@ -16,6 +16,7 @@ import { useEditorToolState } from "../../hooks/useEditorToolState";
 import { useEditorStarAnnotation } from "../../hooks/useEditorStarAnnotation";
 import { useEditorExport } from "../../hooks/useEditorExport";
 import { useEditorHotkeys } from "../../hooks/useEditorHotkeys";
+import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
 import {
   FitsCanvas,
   type CanvasTransform,
@@ -65,6 +66,7 @@ export default function EditorDetailScreen() {
     [allFiles, file?.derivedFromId, file?.id],
   );
   const canCompare = compareIds.length >= 2;
+  const sourceRecipe = useMemo(() => file?.editorRecipe ?? null, [file?.editorRecipe]);
   const editorSettings = useSettingsStore(
     useShallow((s) => ({
       defaultBlurSigma: s.defaultBlurSigma,
@@ -79,6 +81,9 @@ export default function EditorDetailScreen() {
       canvasPinchOverzoomFactor: s.canvasPinchOverzoomFactor,
       canvasPanRubberBandFactor: s.canvasPanRubberBandFactor,
       canvasWheelZoomSensitivity: s.canvasWheelZoomSensitivity,
+      viewerPreloadNeighbors: s.viewerPreloadNeighbors,
+      viewerPreloadRadius: s.viewerPreloadRadius,
+      frameClassificationConfig: s.frameClassificationConfig,
     })),
   );
   const {
@@ -107,6 +112,15 @@ export default function EditorDetailScreen() {
     },
   });
   const haptics = useHapticFeedback();
+  const initializedEditorSourceRef = useRef<{
+    fileId: string | null;
+    filepath: string;
+    pixels: Float32Array;
+  } | null>(null);
+  const pendingLoadSourceRef = useRef<{
+    filepath: string;
+    previousPixels: Float32Array | null;
+  } | null>(null);
 
   const canvasRef = useRef<FitsCanvasHandle>(null);
   const [showOriginal, setShowOriginal] = useState(false);
@@ -179,6 +193,10 @@ export default function EditorDetailScreen() {
   // Load FITS file
   useEffect(() => {
     if (file?.filepath) {
+      pendingLoadSourceRef.current = {
+        filepath: file.filepath,
+        previousPixels: pixels,
+      };
       loadFromPath(file.filepath, file.filename, file.fileSize ?? 0);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -189,20 +207,51 @@ export default function EditorDetailScreen() {
     router.replace(`/video/${id}`);
   }, [id, isVideo, router]);
 
-  // Initialize editor when pixels are ready
+  useImageCacheWarmup({
+    enabled: editorSettings.viewerPreloadNeighbors,
+    currentFile: file,
+    allFiles,
+    radius: editorSettings.viewerPreloadRadius,
+    frameClassificationConfig: editorSettings.frameClassificationConfig,
+    startWhen: !fitsLoading,
+  });
+
+  const sourceWidth = dimensions?.width;
+  const sourceHeight = dimensions?.height;
+
+  // Initialize editor only when a new source image becomes ready.
   useEffect(() => {
-    if (pixels && dimensions) {
-      editor.initialize(
-        pixels,
-        dimensions.width,
-        dimensions.height,
-        "linear",
-        "grayscale",
-        file?.editorRecipe ?? null,
-      );
+    if (!pixels || sourceWidth == null || sourceHeight == null || !file?.filepath) return;
+
+    const pendingLoad = pendingLoadSourceRef.current;
+    if (
+      pendingLoad &&
+      pendingLoad.filepath === file.filepath &&
+      pendingLoad.previousPixels === pixels
+    ) {
+      return;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pixels, dimensions, file?.editorRecipe]);
+
+    const initialized = initializedEditorSourceRef.current;
+    if (
+      initialized &&
+      initialized.fileId === (file?.id ?? null) &&
+      initialized.filepath === file.filepath &&
+      initialized.pixels === pixels
+    ) {
+      return;
+    }
+
+    editor.initialize(pixels, sourceWidth, sourceHeight, "linear", "grayscale", sourceRecipe);
+    initializedEditorSourceRef.current = {
+      fileId: file?.id ?? null,
+      filepath: file.filepath,
+      pixels,
+    };
+    if (pendingLoad && pendingLoad.filepath === file.filepath) {
+      pendingLoadSourceRef.current = null;
+    }
+  }, [editor, file?.filepath, file?.id, pixels, sourceHeight, sourceRecipe, sourceWidth]);
 
   useEffect(() => {
     editor.setProfile(editorSettings.imageProcessingProfile);
@@ -304,20 +353,19 @@ export default function EditorDetailScreen() {
       if (previewTimerRef.current) clearTimeout(previewTimerRef.current);
     };
   }, []);
-  const handleParamPreview = useCallback(
-    (op: ImageEditOperation | null) => {
-      if (previewTimerRef.current) {
-        clearTimeout(previewTimerRef.current);
-        previewTimerRef.current = null;
-      }
-      if (!op) return;
-      previewTimerRef.current = setTimeout(() => {
+  const handleParamPreview = useCallback(() => {
+    if (previewTimerRef.current) {
+      clearTimeout(previewTimerRef.current);
+      previewTimerRef.current = null;
+    }
+    previewTimerRef.current = setTimeout(() => {
+      const op = buildOperation();
+      if (op) {
         editor.previewEdit(op);
-        previewTimerRef.current = null;
-      }, 300);
-    },
-    [editor],
-  );
+      }
+      previewTimerRef.current = null;
+    }, 300);
+  }, [buildOperation, editor]);
 
   const handleQuickAction = useCallback(
     (op: ImageEditOperation) => {
@@ -549,6 +597,7 @@ export default function EditorDetailScreen() {
             successColor={successColor}
             onToggleNode={editor.toggleNode}
             onRemoveNode={editor.removeNode}
+            onSetNodeMaskConfig={editor.setNodeMaskConfig}
             onClose={() => setShowPipeline(false)}
           />
         )}

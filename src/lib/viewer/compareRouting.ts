@@ -1,5 +1,5 @@
 import type { FitsMetadata } from "../fits/types";
-import { isImageLikeMedia } from "../import/imageParsePipeline";
+import { isProcessableImageMedia } from "../import/imageParsePipeline";
 
 function normalizeId(id: string | null | undefined): string | null {
   if (!id) return null;
@@ -18,7 +18,7 @@ export function pickImageLikeIds(ids: string[], files: FitsMetadata[], limit = 2
     const id = normalizeId(raw);
     if (!id || selected.includes(id)) continue;
     const file = byId.get(id);
-    if (!file || !isImageLikeMedia(file)) continue;
+    if (!file || !isProcessableImageMedia(file)) continue;
     selected.push(id);
     if (selected.length >= max) break;
   }
@@ -34,7 +34,7 @@ export function resolveComparePair(
   const normalizedPrimaryId = normalizeId(primaryId);
   if (!normalizedPrimaryId) return [];
 
-  const imageFiles = files.filter((file) => isImageLikeMedia(file));
+  const imageFiles = files.filter((file) => isProcessableImageMedia(file));
   if (imageFiles.length === 0) return [];
 
   const primaryIndex = imageFiles.findIndex((file) => file.id === normalizedPrimaryId);

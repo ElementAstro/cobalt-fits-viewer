@@ -25,6 +25,8 @@ import { useAutoSolve } from "../hooks/useAutoSolve";
 import { useAutoBackup } from "../hooks/useAutoBackup";
 import { Logger, cleanLogExports, initLoggerRuntime } from "../lib/logger";
 import { configurePixelCache } from "../lib/cache/pixelCache";
+import { configureImageLoadCache } from "../lib/cache/imageLoadCache";
+import { configureRuntimeDiskCache, prepareRuntimeDiskCache } from "../lib/cache/runtimeDiskCache";
 import { pruneThumbnailCacheWithPolicy } from "../lib/gallery/thumbnailWorkflow";
 import { useSettingsStore } from "../stores/useSettingsStore";
 import { useOnboardingStore } from "../stores/useOnboardingStore";
@@ -168,6 +170,12 @@ const NAV_COLORS_FALLBACK = {
   },
 } as const;
 
+const HEROUI_CONFIG = {
+  devInfo: {
+    stylingPrinciples: false,
+  },
+} as const;
+
 function ThemedRootStack() {
   return <Stack screenOptions={{ headerShown: false }} />;
 }
@@ -213,7 +221,10 @@ export default function RootLayout() {
   const { theme } = useUniwind();
   const { fontsLoaded, fontError } = useFontLoader();
   const orientationLock = useSettingsStore((s) => s.orientationLock);
-  const imageProcessingProfile = useSettingsStore((s) => s.imageProcessingProfile);
+  const pixelCacheMaxEntries = useSettingsStore((s) => s.pixelCacheMaxEntries);
+  const pixelCacheMaxSizeMB = useSettingsStore((s) => s.pixelCacheMaxSizeMB);
+  const imageLoadCacheMaxEntries = useSettingsStore((s) => s.imageLoadCacheMaxEntries);
+  const imageLoadCacheMaxSizeMB = useSettingsStore((s) => s.imageLoadCacheMaxSizeMB);
   const logMinLevel = useSettingsStore((s) => s.logMinLevel);
   const logMaxEntries = useSettingsStore((s) => s.logMaxEntries);
   const logConsoleOutput = useSettingsStore((s) => s.logConsoleOutput);
@@ -255,17 +266,31 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!settingsHydrated) return;
-    const useLegacyProfile = imageProcessingProfile === "legacy";
     configurePixelCache({
-      maxEntries: useLegacyProfile ? 2 : 3,
-      maxBytes: (useLegacyProfile ? 256 : 512) * 1024 * 1024,
+      maxEntries: pixelCacheMaxEntries,
+      maxBytes: pixelCacheMaxSizeMB * 1024 * 1024,
     });
-  }, [settingsHydrated, imageProcessingProfile]);
+    configureImageLoadCache({
+      maxEntries: imageLoadCacheMaxEntries,
+      maxBytes: imageLoadCacheMaxSizeMB * 1024 * 1024,
+    });
+    configureRuntimeDiskCache({
+      maxEntries: imageLoadCacheMaxEntries,
+      maxBytes: imageLoadCacheMaxSizeMB * 1024 * 1024,
+    });
+  }, [
+    imageLoadCacheMaxEntries,
+    imageLoadCacheMaxSizeMB,
+    pixelCacheMaxEntries,
+    pixelCacheMaxSizeMB,
+    settingsHydrated,
+  ]);
 
   useEffect(() => {
     if (!settingsHydrated || startupCachePreparedRef.current) return;
     startupCachePreparedRef.current = true;
     pruneThumbnailCacheWithPolicy({}, { force: true });
+    void prepareRuntimeDiskCache();
   }, [settingsHydrated]);
 
   useEffect(() => {
@@ -293,7 +318,7 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <HeroUINativeProvider>
+      <HeroUINativeProvider config={HEROUI_CONFIG}>
         <NavigationThemeBridge isDark={theme === "dark"}>
           <FontProvider>
             <AutoSolveProvider>

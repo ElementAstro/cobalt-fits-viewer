@@ -14,6 +14,8 @@ const GEOMETRY_TOOLS: ToolItem[] = [
   { key: "rotate", icon: "refresh-outline" },
   { key: "flip", icon: "swap-horizontal-outline" },
   { key: "rotateCustom", icon: "sync-outline" },
+  { key: "integerBin", icon: "grid-outline" },
+  { key: "resample", icon: "scan-outline" },
 ];
 
 const ADJUST_TOOLS: ToolItem[] = [
@@ -24,9 +26,13 @@ const ADJUST_TOOLS: ToolItem[] = [
   { key: "curves", icon: "trending-up-outline" },
   { key: "mtf", icon: "color-wand-outline" },
   { key: "ghs", icon: "git-branch-outline" },
+  { key: "backgroundNeutralize", icon: "water-outline" },
   { key: "saturation", icon: "color-fill-outline" },
+  { key: "perHueSaturation", icon: "color-wand-outline" },
+  { key: "selectiveColor", icon: "color-palette-outline" },
   { key: "colorBalance", icon: "color-filter-outline" },
   { key: "colorCalibration", icon: "flask-outline" },
+  { key: "photometricCC", icon: "planet-outline" },
   { key: "scnr", icon: "leaf-outline" },
   { key: "invert", icon: "contrast-outline" },
   { key: "histogram", icon: "bar-chart-outline" },
@@ -44,6 +50,8 @@ const PROCESS_TOOLS: ToolItem[] = [
   { key: "mlt", icon: "analytics-outline" },
   { key: "localContrast", icon: "contrast-outline" },
   { key: "starReduction", icon: "star-outline" },
+  { key: "cosmeticCorrection", icon: "sparkles-outline" },
+  { key: "mmt", icon: "layers-outline" },
   { key: "clahe", icon: "grid-outline" },
   { key: "hdr", icon: "aperture-outline" },
   { key: "deconvolution", icon: "flashlight-outline" },

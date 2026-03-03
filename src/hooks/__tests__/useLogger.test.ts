@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react-native";
-import { useLogViewer, useLogger, useSystemInfo } from "../useLogger";
+import { useLogViewer, useLogger, usePageLogger, useSystemInfo } from "../useLogger";
 import { flushPromises } from "./helpers/testUtils";
 
 jest.mock("../../stores/useLogStore", () => ({
@@ -78,6 +78,58 @@ describe("useLogger hooks", () => {
     expect(loggerLib.Logger.error).toHaveBeenCalledWith("Viewer", "e", undefined);
   });
 
+  it("logs page enter/leave lifecycle events", () => {
+    const { unmount } = renderHook(() => usePageLogger("FilesScreen", { screen: "files" }));
+
+    expect(loggerLib.Logger.info).toHaveBeenCalledWith("FilesScreen", "page_enter", {
+      eventType: "page_enter",
+      screen: "files",
+    });
+
+    unmount();
+
+    expect(loggerLib.Logger.info).toHaveBeenCalledWith("FilesScreen", "page_leave", {
+      eventType: "page_leave",
+      screen: "files",
+    });
+  });
+
+  it("logs page action/success/failure payloads", () => {
+    const { result } = renderHook(() =>
+      usePageLogger("FilesScreen", { screen: "files", logLifecycle: false }),
+    );
+
+    act(() => {
+      result.current.logAction("import_file", { source: "sheet" });
+      result.current.logSuccess("batch_export", { count: 2 });
+      result.current.logFailure("batch_delete", new Error("delete failed"), { selected: 3 });
+    });
+
+    expect(loggerLib.Logger.info).toHaveBeenCalledWith("FilesScreen", "import_file", {
+      eventType: "action",
+      screen: "files",
+      action: "import_file",
+      source: "sheet",
+    });
+    expect(loggerLib.Logger.info).toHaveBeenCalledWith("FilesScreen", "batch_export", {
+      eventType: "success",
+      screen: "files",
+      action: "batch_export",
+      count: 2,
+    });
+    expect(loggerLib.Logger.error).toHaveBeenCalledWith(
+      "FilesScreen",
+      "batch_delete",
+      expect.objectContaining({
+        eventType: "failure",
+        screen: "files",
+        action: "batch_delete",
+        selected: 3,
+        error: expect.objectContaining({ message: "delete failed" }),
+      }),
+    );
+  });
+
   it("refreshes system info when missing and formats data", () => {
     const refresh = jest.fn();
     const state = {
@@ -96,6 +148,12 @@ describe("useLogger hooks", () => {
   it("computes levelCounts and availableTags from entries", () => {
     const state = {
       entries: [
+        { id: "1", level: "warn", tag: "Viewer", message: "a", timestamp: 1 },
+        { id: "2", level: "info", tag: "Network", message: "b", timestamp: 2 },
+        { id: "3", level: "warn", tag: "Viewer", message: "c", timestamp: 3 },
+        { id: "4", level: "error", tag: "Auth", message: "d", timestamp: 4 },
+      ],
+      getFilteredEntries: () => [
         { id: "1", level: "warn", tag: "Viewer", message: "a", timestamp: 1 },
         { id: "2", level: "info", tag: "Network", message: "b", timestamp: 2 },
         { id: "3", level: "warn", tag: "Viewer", message: "c", timestamp: 3 },

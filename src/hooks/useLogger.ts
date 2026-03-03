@@ -2,28 +2,10 @@
  * 日志系统 Hook
  */
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useLogStore } from "../stores/useLogStore";
 import { Logger, formatSystemInfo, exportLogsToFile, shareLogFile } from "../lib/logger";
 import type { LogLevel, LogExportOptions, LogQuery } from "../lib/logger";
-
-const LOG_LEVEL_PRIORITY_MAP: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-};
-
-function toSearchText(data: unknown): string {
-  if (data === undefined || data === null) return "";
-  if (typeof data === "string") return data.toLowerCase();
-  if (typeof data === "number" || typeof data === "boolean") return String(data).toLowerCase();
-  try {
-    return JSON.stringify(data).toLowerCase();
-  } catch {
-    return String(data).toLowerCase();
-  }
-}
 
 /**
  * 提供模块级别的日志记录能力
@@ -47,6 +29,108 @@ export function useLogger(tag: string) {
   );
 
   return { debug, info, warn, error };
+}
+
+type PageLogContext = Record<string, unknown>;
+
+interface PageLoggerOptions {
+  screen?: string;
+  context?: PageLogContext;
+  logLifecycle?: boolean;
+}
+
+function normalizeLogError(error: unknown): unknown {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+  return error;
+}
+
+/**
+ * 提供页面级日志记录能力，统一生命周期与关键动作结构
+ */
+export function usePageLogger(tag: string, options: PageLoggerOptions = {}) {
+  const { info, warn, error } = useLogger(tag);
+  const screen = options.screen ?? tag;
+  const logLifecycle = options.logLifecycle ?? true;
+  const contextRef = useRef<PageLogContext | undefined>(options.context);
+
+  useEffect(() => {
+    contextRef.current = options.context;
+  }, [options.context]);
+
+  const createPayload = useCallback(
+    (
+      eventType: "page_enter" | "page_leave" | "action" | "success" | "failure",
+      action?: string,
+      data?: Record<string, unknown>,
+    ) => {
+      const payload: Record<string, unknown> = { eventType, screen };
+      if (action) payload.action = action;
+      const context = contextRef.current;
+      if (context && Object.keys(context).length > 0) {
+        payload.context = context;
+      }
+      if (data && Object.keys(data).length > 0) {
+        Object.assign(payload, data);
+      }
+      return payload;
+    },
+    [screen],
+  );
+
+  useEffect(() => {
+    if (!logLifecycle) return;
+    info("page_enter", createPayload("page_enter"));
+    return () => {
+      info("page_leave", createPayload("page_leave"));
+    };
+  }, [createPayload, info, logLifecycle]);
+
+  const logAction = useCallback(
+    (action: string, data?: Record<string, unknown>) => {
+      info(action, createPayload("action", action, data));
+    },
+    [createPayload, info],
+  );
+
+  const logSuccess = useCallback(
+    (action: string, data?: Record<string, unknown>) => {
+      info(action, createPayload("success", action, data));
+    },
+    [createPayload, info],
+  );
+
+  const logWarning = useCallback(
+    (action: string, message: string, data?: Record<string, unknown>) => {
+      warn(message, createPayload("action", action, data));
+    },
+    [createPayload, warn],
+  );
+
+  const logFailure = useCallback(
+    (action: string, failure: unknown, data?: Record<string, unknown>) => {
+      error(
+        action,
+        createPayload("failure", action, {
+          ...data,
+          error: normalizeLogError(failure),
+        }),
+      );
+    },
+    [createPayload, error],
+  );
+
+  return {
+    logAction,
+    logSuccess,
+    logWarning,
+    logFailure,
+  };
 }
 
 /**
@@ -81,6 +165,7 @@ export function useSystemInfo() {
  */
 export function useLogViewer() {
   const allEntries = useLogStore((s) => s.entries ?? []);
+  const entries = useLogStore((s) => s.getFilteredEntries());
   const totalCount = useLogStore((s) => s.totalCount);
   const filterLevel = useLogStore((s) => s.filterLevel);
   const filterTag = useLogStore((s) => s.filterTag);
@@ -107,24 +192,6 @@ export function useLogViewer() {
     }
     return Array.from(tagSet).sort();
   }, [allEntries]);
-
-  const entries = useMemo(() => {
-    const tagQuery = filterTag.trim().toLowerCase();
-    const textQuery = filterQuery.trim().toLowerCase();
-    const minPriority = filterLevel ? LOG_LEVEL_PRIORITY_MAP[filterLevel] : null;
-
-    return allEntries.filter((entry) => {
-      if (minPriority !== null && LOG_LEVEL_PRIORITY_MAP[entry.level] < minPriority) return false;
-      if (tagQuery && !entry.tag.toLowerCase().includes(tagQuery)) return false;
-      if (!textQuery) return true;
-
-      const inTag = entry.tag.toLowerCase().includes(textQuery);
-      const inMessage = entry.message.toLowerCase().includes(textQuery);
-      const inData = toSearchText(entry.data).includes(textQuery);
-      const inStack = entry.stackTrace?.toLowerCase().includes(textQuery) ?? false;
-      return inTag || inMessage || inData || inStack;
-    });
-  }, [allEntries, filterLevel, filterTag, filterQuery]);
 
   const getCurrentQuery = useCallback((): LogQuery => {
     return {

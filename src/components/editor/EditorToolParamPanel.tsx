@@ -20,7 +20,7 @@ interface EditorToolParamPanelProps {
   onCancel: () => void;
   onQuickAction: (op: ImageEditOperation) => void;
   onReset?: () => void;
-  onParamChange?: (op: ImageEditOperation | null) => void;
+  onParamChange?: () => void;
 }
 
 export const EditorToolParamPanel = React.memo(function EditorToolParamPanel({
@@ -69,6 +69,9 @@ export const EditorToolParamPanel = React.memo(function EditorToolParamPanel({
             onQuickAction={onQuickAction}
             onParamChange={onParamChange}
           />
+          {PREVIEW_UNSUPPORTED_TOOLS.has(activeTool) ? (
+            <Text className="mt-2 text-[10px] text-muted">{t("editor.previewNotSupported")}</Text>
+          ) : null}
         </Card.Body>
       </Card>
     </View>
@@ -89,28 +92,44 @@ const PARAM_SLIDER_TOOLS = new Set([
   "ghs",
 ]);
 const PARAM_MASK_TOOLS = new Set(["starMask", "rangeMask", "binarize", "edgeMask"]);
+const PREVIEW_UNSUPPORTED_TOOLS = new Set([
+  "deconvolution",
+  "deconvolutionAuto",
+  "tgvDenoise",
+  "wienerDeconvolution",
+  "photometricCC",
+]);
 
 function ToolParams({
   activeTool,
   params,
   onQuickAction,
-  onParamChange: _onParamChange,
+  onParamChange,
 }: {
   activeTool: EditorTool & string;
   params: EditorToolParams;
   onQuickAction: (op: ImageEditOperation) => void;
-  onParamChange?: (op: ImageEditOperation | null) => void;
+  onParamChange?: () => void;
 }) {
   if (PARAM_GEOMETRY_TOOLS.has(activeTool)) {
     return (
-      <ToolParamsGeometry activeTool={activeTool} params={params} onQuickAction={onQuickAction} />
+      <ToolParamsGeometry
+        activeTool={activeTool}
+        params={params}
+        onQuickAction={onQuickAction}
+        onParamChange={onParamChange}
+      />
     );
   }
   if (PARAM_SLIDER_TOOLS.has(activeTool)) {
-    return <ToolParamsSlider activeTool={activeTool} params={params} />;
+    return (
+      <ToolParamsSlider activeTool={activeTool} params={params} onParamChange={onParamChange} />
+    );
   }
   if (PARAM_MASK_TOOLS.has(activeTool)) {
-    return <ToolParamsMask activeTool={activeTool} params={params} />;
+    return <ToolParamsMask activeTool={activeTool} params={params} onParamChange={onParamChange} />;
   }
-  return <ToolParamsProcess activeTool={activeTool} params={params} />;
+  return (
+    <ToolParamsProcess activeTool={activeTool} params={params} onParamChange={onParamChange} />
+  );
 }

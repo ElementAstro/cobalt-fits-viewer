@@ -179,6 +179,20 @@ describe("ConvertScreen behaviour", () => {
     expect(screen.getByText("converter.noConvertibleFiles")).toBeTruthy();
   });
 
+  it("filters decode-failed image files from convert candidates", () => {
+    useFitsStore.setState({
+      files: [
+        makeFile({ id: "failed-1", filename: "bad.fits", decodeStatus: "failed" }),
+        makeFile({ id: "ok-1", filename: "good.fits", decodeStatus: "ready" }),
+      ],
+    });
+
+    render(<ConvertScreen />);
+
+    expect(screen.queryByTestId("e2e-action-convert__index-select-file-failed-1")).toBeNull();
+    expect(screen.getByTestId("e2e-action-convert__index-select-file-ok-1")).toBeTruthy();
+  });
+
   it("clears selection on load error to avoid exporting stale preview data", async () => {
     const loadFromPath = jest.fn();
     const reset = jest.fn();

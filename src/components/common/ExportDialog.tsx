@@ -2,28 +2,14 @@ import { View, Text } from "react-native";
 import { Button, Chip, Dialog, Input, Separator, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type {
-  ExportFormat,
-  ExportOutputSize,
-  FitsTargetOptions,
-  TiffTargetOptions,
-} from "../../lib/fits/types";
+import type { ExportFormat } from "../../lib/fits/types";
 import { formatBytes } from "../../lib/utils/format";
-import type { ExportRenderOptions } from "../../lib/converter/exportDecorations";
+import type { ExportActionOptions } from "../../lib/converter/exportActionOptions";
+import { isTargetSizeAllowed } from "../../lib/converter/compressionPolicy";
 import { useExportDialogState } from "../../hooks/useExportDialogState";
 import { FitsExportOptions } from "./FitsExportOptions";
 import { TiffExportOptions } from "./TiffExportOptions";
 import { SimpleSlider } from "./SimpleSlider";
-
-export interface ExportDialogActionOptions {
-  fits?: Partial<FitsTargetOptions>;
-  tiff?: Partial<TiffTargetOptions>;
-  render?: ExportRenderOptions;
-  customFilename?: string;
-  outputSize?: ExportOutputSize;
-  targetFileSize?: number;
-  webpLossless?: boolean;
-}
 
 interface ExportDialogProps {
   visible: boolean;
@@ -32,9 +18,9 @@ interface ExportDialogProps {
   width?: number;
   height?: number;
   onFormatChange: (format: ExportFormat) => void;
-  onExport: (quality: number, options?: ExportDialogActionOptions) => void;
-  onShare: (quality: number, options?: ExportDialogActionOptions) => void;
-  onSaveToDevice: (quality: number, options?: ExportDialogActionOptions) => void;
+  onExport: (quality: number, options?: ExportActionOptions) => void;
+  onShare: (quality: number, options?: ExportActionOptions) => void;
+  onSaveToDevice: (quality: number, options?: ExportActionOptions) => void;
   onCopyToClipboard?: () => void;
   onPrint?: () => void;
   onPrintToPdf?: () => void;
@@ -115,6 +101,7 @@ export function ExportDialog({
     height,
     fitsScientificAvailable,
   });
+  const targetSizeAllowed = isTargetSizeAllowed(format, webpLossless);
 
   return (
     <Dialog isOpen={visible} onOpenChange={(open) => !open && onClose()}>
@@ -251,12 +238,13 @@ export function ExportDialog({
                 <Chip
                   size="sm"
                   variant={compressionMode === "targetSize" ? "primary" : "secondary"}
-                  onPress={() => setCompressionMode("targetSize")}
+                  className={targetSizeAllowed ? undefined : "opacity-50"}
+                  onPress={targetSizeAllowed ? () => setCompressionMode("targetSize") : undefined}
                 >
                   <Chip.Label className="text-[9px]">{t("converter.targetSizeMode")}</Chip.Label>
                 </Chip>
               </View>
-              {compressionMode === "targetSize" && (
+              {compressionMode === "targetSize" && targetSizeAllowed && (
                 <View className="mt-2">
                   <TextField>
                     <Input

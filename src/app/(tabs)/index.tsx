@@ -5,6 +5,7 @@ import { useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { usePageLogger } from "../../hooks/useLogger";
 import { filterAndSortFiles, useFitsStore } from "../../stores/useFitsStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useTrashStore } from "../../stores/useTrashStore";
@@ -77,6 +78,7 @@ function filesFilterReducer(state: FilesFilterState, action: FilesFilterAction):
 export default function FilesScreen() {
   const router = useRouter();
   const { t } = useI18n();
+  const { logAction, logSuccess, logFailure } = usePageLogger("FilesScreen", { screen: "files" });
 
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
   const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
@@ -315,14 +317,17 @@ export default function FilesScreen() {
       const report = buildImportResultReport(lastImportResult);
       const copied = await Clipboard.setStringAsync(report);
       if (copied) {
+        logSuccess("copy_import_result", { copied: true });
         Alert.alert(t("common.success"), t("files.importResultCopySuccess"));
         return;
       }
+      logFailure("copy_import_result", new Error("clipboardCopyFailed"), { copied: false });
       Alert.alert(t("common.error"), t("files.importResultCopyFailed"));
-    } catch {
+    } catch (error) {
+      logFailure("copy_import_result", error);
       Alert.alert(t("common.error"), t("files.importResultCopyFailed"));
     }
-  }, [buildImportResultReport, lastImportResult, t]);
+  }, [buildImportResultReport, lastImportResult, logFailure, logSuccess, t]);
 
   useEffect(() => {
     if (!lastImportResult || isImporting) return;
@@ -337,6 +342,7 @@ export default function FilesScreen() {
   useEffect(() => {
     if (importError && !isImporting) {
       const errorKey = importError as string;
+      logFailure("import_failed", new Error(errorKey), { errorKey });
       const message =
         errorKey === "noFitsInFolder" || errorKey === "noSupportedInFolder"
           ? t("files.noSupportedInFolder")
@@ -353,7 +359,7 @@ export default function FilesScreen() {
                     : importError;
       Alert.alert(t("files.importFailed"), message);
     }
-  }, [importError, isImporting, t]);
+  }, [importError, isImporting, logFailure, t]);
 
   useEffect(() => {
     if (!pendingDeleteToken) return;
@@ -374,50 +380,59 @@ export default function FilesScreen() {
 
   const handleImportFile = useCallback(() => {
     closeImportSheet();
+    logAction("import_file");
     pickAndImportFile();
-  }, [closeImportSheet, pickAndImportFile]);
+  }, [closeImportSheet, logAction, pickAndImportFile]);
 
   const handleImportFolder = useCallback(() => {
     closeImportSheet();
+    logAction("import_folder");
     pickAndImportFolder();
-  }, [closeImportSheet, pickAndImportFolder]);
+  }, [closeImportSheet, logAction, pickAndImportFolder]);
 
   const handleImportZip = useCallback(() => {
     closeImportSheet();
     if (!isZipImportAvailable) {
+      logFailure("import_zip", new Error("zipImportUnavailable"));
       Alert.alert(t("files.importFailed"), t("files.importZipUnavailable"));
       return;
     }
+    logAction("import_zip");
     pickAndImportZip();
-  }, [closeImportSheet, isZipImportAvailable, pickAndImportZip, t]);
+  }, [closeImportSheet, isZipImportAvailable, logAction, logFailure, pickAndImportZip, t]);
 
   const handleImportUrl = useCallback(() => {
     closeImportSheet();
+    logAction("import_url_open");
     setUrlInput("");
     setShowUrlDialog(true);
-  }, [closeImportSheet]);
+  }, [closeImportSheet, logAction]);
 
   const handleImportClipboard = useCallback(() => {
     closeImportSheet();
+    logAction("import_clipboard");
     importFromClipboard();
-  }, [closeImportSheet, importFromClipboard]);
+  }, [closeImportSheet, importFromClipboard, logAction]);
 
   const handleImportMediaLibrary = useCallback(() => {
     closeImportSheet();
+    logAction("import_media_library");
     pickAndImportFromMediaLibrary();
-  }, [closeImportSheet, pickAndImportFromMediaLibrary]);
+  }, [closeImportSheet, logAction, pickAndImportFromMediaLibrary]);
 
   const handleRecordVideo = useCallback(() => {
     closeImportSheet();
+    logAction("import_record_video");
     recordAndImportVideo();
-  }, [closeImportSheet, recordAndImportVideo]);
+  }, [closeImportSheet, logAction, recordAndImportVideo]);
 
   const confirmUrlImport = useCallback(() => {
     const url = urlInput.trim();
     if (!url) return;
     setShowUrlDialog(false);
+    logAction("import_url_submit");
     importFromUrl(url);
-  }, [urlInput, importFromUrl]);
+  }, [importFromUrl, logAction, urlInput]);
 
   const handleSortToggle = useCallback(
     (key: "name" | "date" | "size" | "quality") => {
@@ -448,8 +463,25 @@ export default function FilesScreen() {
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
     const executeDelete = () => {
-      applyDeleteFiles(selectedIds, true);
+      const result = applyDeleteFiles(selectedIds, true);
+      if (result.failed > 0) {
+        logFailure("batch_delete", new Error("deletePartialFailed"), {
+          selectedCount: selectedIds.length,
+          success: result.success,
+          failed: result.failed,
+        });
+        return;
+      }
+      logSuccess("batch_delete", {
+        selectedCount: selectedIds.length,
+        success: result.success,
+      });
     };
+
+    logAction("batch_delete_open_confirm", {
+      selectedCount: selectedIds.length,
+      confirmRequired: confirmDestructiveActions,
+    });
 
     if (!confirmDestructiveActions) {
       executeDelete();
@@ -468,7 +500,15 @@ export default function FilesScreen() {
         },
       ],
     );
-  }, [applyDeleteFiles, confirmDestructiveActions, selectedIds, t]);
+  }, [
+    applyDeleteFiles,
+    confirmDestructiveActions,
+    logAction,
+    logFailure,
+    logSuccess,
+    selectedIds,
+    t,
+  ]);
 
   const handleSingleDelete = useCallback(
     (fileId: string) => {
@@ -499,9 +539,18 @@ export default function FilesScreen() {
     setPendingDeleteToken(null);
     setPendingDeleteCount(0);
     if (!result.success) {
+      logFailure("undo_delete", new Error(result.error ?? "undoFailed"), {
+        restored: result.restored,
+        failed: result.failed,
+      });
       Alert.alert(t("common.error"), t("files.undoFailed"));
+      return;
     }
-  }, [pendingDeleteToken, t, undoLastDelete]);
+    logSuccess("undo_delete", {
+      restored: result.restored,
+      failed: result.failed,
+    });
+  }, [logFailure, logSuccess, pendingDeleteToken, t, undoLastDelete]);
 
   const handleSelectAllVisible = useCallback(() => {
     if (displayFiles.length === 0) return;
@@ -534,13 +583,20 @@ export default function FilesScreen() {
 
   const handleBatchExport = useCallback(async () => {
     if (selectedIds.length === 0) return;
+    logAction("batch_export", { selectedCount: selectedIds.length });
     const result = await exportFiles(selectedIds);
     if (result.success) {
+      logSuccess("batch_export", { exported: result.exported, failed: result.failed });
       Alert.alert(t("common.success"), t("files.exportSuccess", { count: result.exported }));
       return;
     }
+    logFailure("batch_export", new Error(result.error ?? "exportFailed"), {
+      exported: result.exported,
+      failed: result.failed,
+      shared: result.shared,
+    });
     Alert.alert(t("common.error"), t("files.exportFailed"));
-  }, [exportFiles, selectedIds, t]);
+  }, [exportFiles, logAction, logFailure, logSuccess, selectedIds, t]);
 
   const handleGroupApply = useCallback(
     (groupId: string) => {
@@ -548,51 +604,89 @@ export default function FilesScreen() {
       if (result.success > 0) {
         clearSelection();
       }
+      if (result.failed > 0) {
+        logFailure("group_files", new Error("groupFilesPartialFailed"), {
+          selectedCount: selectedIds.length,
+          success: result.success,
+          failed: result.failed,
+        });
+      } else {
+        logSuccess("group_files", {
+          selectedCount: selectedIds.length,
+          success: result.success,
+        });
+      }
       return result;
     },
-    [groupFiles, selectedIds, clearSelection],
+    [clearSelection, groupFiles, logFailure, logSuccess, selectedIds],
   );
 
   const handleRestoreTrash = useCallback(
     (trashIds: string[]) => {
       const result = restoreFromTrash(trashIds);
       if (result.success > 0 && result.failed === 0) {
+        logSuccess("restore_trash", { selectedCount: trashIds.length, restored: result.success });
         Alert.alert(t("common.success"), t("files.restoreSuccess", { count: result.success }));
         return;
       }
 
       if (result.success > 0 && result.failed > 0) {
+        logFailure("restore_trash", new Error("restorePartialFailed"), {
+          selectedCount: trashIds.length,
+          restored: result.success,
+          failed: result.failed,
+        });
         const successMsg = t("files.restoreSuccess", { count: result.success });
         Alert.alert(t("common.error"), `${successMsg}\n${t("files.restoreFailed")}`);
         return;
       }
 
       if (result.failed > 0) {
+        logFailure("restore_trash", new Error("restoreFailed"), {
+          selectedCount: trashIds.length,
+          restored: result.success,
+          failed: result.failed,
+        });
         Alert.alert(t("common.error"), t("files.restoreFailed"));
       }
     },
-    [restoreFromTrash, t],
+    [logFailure, logSuccess, restoreFromTrash, t],
   );
 
   const applyEmptyTrash = useCallback(
     (trashIds?: string[]) => {
       const result = emptyTrash(trashIds);
       if (result.deleted > 0 && result.failed === 0) {
+        logSuccess("empty_trash", {
+          selectedCount: trashIds?.length,
+          deleted: result.deleted,
+          failed: result.failed,
+        });
         Alert.alert(t("common.success"), t("files.emptyTrashSuccess", { count: result.deleted }));
         return;
       }
 
       if (result.deleted > 0 && result.failed > 0) {
+        logFailure("empty_trash", new Error("emptyTrashPartialFailed"), {
+          selectedCount: trashIds?.length,
+          deleted: result.deleted,
+          failed: result.failed,
+        });
         const successMsg = t("files.emptyTrashSuccess", { count: result.deleted });
         Alert.alert(t("common.error"), `${successMsg}\n${t("files.restoreFailed")}`);
         return;
       }
 
       if (result.failed > 0) {
+        logFailure("empty_trash", new Error("emptyTrashFailed"), {
+          selectedCount: trashIds?.length,
+          deleted: result.deleted,
+          failed: result.failed,
+        });
         Alert.alert(t("common.error"), t("files.restoreFailed"));
       }
     },
-    [emptyTrash, t],
+    [emptyTrash, logFailure, logSuccess, t],
   );
 
   const handleEmptyTrash = useCallback(
@@ -621,10 +715,11 @@ export default function FilesScreen() {
     (albumId: string) => {
       if (selectedIds.length === 0) return;
       addImagesToAlbum(albumId, selectedIds);
+      logSuccess("add_to_album", { albumId, selectedCount: selectedIds.length });
       setShowAlbumPicker(false);
       clearSelection();
     },
-    [addImagesToAlbum, selectedIds, clearSelection],
+    [addImagesToAlbum, clearSelection, logSuccess, selectedIds],
   );
 
   const handleBatchRenameApply = useCallback(
@@ -633,33 +728,48 @@ export default function FilesScreen() {
       if (result.success > 0) {
         clearSelection();
       }
+      if (result.failed > 0) {
+        logFailure("batch_rename", new Error("renamePartialFailed"), {
+          operations: operations.length,
+          success: result.success,
+          failed: result.failed,
+        });
+      } else {
+        logSuccess("batch_rename", {
+          operations: operations.length,
+          success: result.success,
+        });
+      }
       return result;
     },
-    [clearSelection, handleRenameFiles],
+    [clearSelection, handleRenameFiles, logFailure, logSuccess],
   );
 
   const goToBatchConvert = useCallback(() => {
+    logAction("open_batch_convert", { selectedCount: selectedIds.length });
     const idsParam = selectedIds.join(",");
     if (!idsParam) {
       router.push("/convert?tab=batch");
       return;
     }
     router.push(`/convert?tab=batch&ids=${encodeURIComponent(idsParam)}`);
-  }, [selectedIds, router]);
+  }, [logAction, router, selectedIds]);
 
   const goToCompare = useCallback(() => {
     if (selectedImageIds.length < 2) return;
+    logAction("open_compare", { selectedImageCount: selectedImageIds.length });
     router.push(`/compare?ids=${selectedImageIds.join(",")}`);
-  }, [router, selectedImageIds]);
+  }, [logAction, router, selectedImageIds]);
 
   const goToStacking = useCallback(() => {
+    logAction("open_stacking", { selectedCount: selectedIds.length });
     const idsParam = selectedIds.join(",");
     if (!idsParam) {
       router.push("/stacking");
       return;
     }
     router.push(`/stacking?ids=${encodeURIComponent(idsParam)}`);
-  }, [selectedIds, router]);
+  }, [logAction, router, selectedIds]);
 
   const clearLocalFilters = useCallback(() => {
     dispatchFilter({ type: "reset" });

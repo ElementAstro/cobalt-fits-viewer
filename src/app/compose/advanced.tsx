@@ -26,7 +26,7 @@ import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
 import { useHapticFeedback } from "../../hooks/useHapticFeedback";
 import { useAdvancedCompose } from "../../hooks/useAdvancedCompose";
-import { isImageLikeMedia } from "../../lib/import/imageParsePipeline";
+import { isProcessableImageMedia } from "../../lib/import/imageParsePipeline";
 import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 import type {
   CompositeBlendMode,
@@ -78,11 +78,7 @@ export default function AdvancedComposeScreen() {
   const { contentPaddingTop, horizontalPadding } = useResponsiveLayout();
   const haptics = useHapticFeedback();
 
-  const files = useFitsStore((s) => s.files).filter((file) => {
-    if (!isImageLikeMedia(file)) return false;
-    if (file.decodeStatus === "failed") return false;
-    return true;
-  });
+  const files = useFitsStore((s) => s.files).filter((file) => isProcessableImageMedia(file));
 
   const compose = useAdvancedCompose();
 

@@ -11,7 +11,6 @@ import {
   linearFitClipStrategy,
   esdStrategy,
   averagedSigmaClipStrategy,
-  type IntegrationOptions,
 } from "../integration";
 
 function makeFrames(...rows: number[][]): Float32Array[] {

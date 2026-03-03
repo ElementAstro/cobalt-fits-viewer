@@ -134,4 +134,31 @@ describe("useEditorExport", () => {
     });
     expect(mockSaveImage).toHaveBeenCalledTimes(1);
   });
+
+  it("forwards compression options into editor export payload", async () => {
+    const { result } = renderHook(() =>
+      useEditorExport({
+        editorData: mockEditorData,
+        fileInfo: mockFileInfo,
+        starPoints: [],
+      }),
+    );
+    const options = {
+      outputSize: { maxWidth: 960, maxHeight: 960 },
+      targetFileSize: 180 * 1024,
+      webpLossless: true,
+    };
+
+    await act(async () => {
+      await result.current.handleEditorExport(85, options);
+    });
+
+    expect(mockExportImageDetailed).toHaveBeenCalledWith(
+      expect.objectContaining({
+        outputSize: options.outputSize,
+        targetFileSize: options.targetFileSize,
+        webpLossless: true,
+      }),
+    );
+  });
 });

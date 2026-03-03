@@ -14,6 +14,7 @@ interface SimpleSliderProps {
   step: number;
   defaultValue?: number;
   onValueChange: (value: number) => void;
+  onSlidingComplete?: (value: number) => void;
 }
 
 const THUMB_SIZE = 20;
@@ -28,10 +29,12 @@ export function SimpleSlider({
   step,
   defaultValue,
   onValueChange,
+  onSlidingComplete,
 }: SimpleSliderProps) {
   const [successColor, surfaceColor] = useThemeColor(["success", "surface-secondary"]);
   const [trackWidth, setTrackWidth] = useState(200);
   const lastTapRef = useRef(0);
+  const dragStartXRef = useRef(0);
 
   const fraction = Math.max(0, Math.min(1, (value - min) / (max - min)));
 
@@ -49,6 +52,8 @@ export function SimpleSlider({
   computeValueRef.current = computeValue;
   const onValueChangeRef = useRef(onValueChange);
   onValueChangeRef.current = onValueChange;
+  const onSlidingCompleteRef = useRef(onSlidingComplete);
+  onSlidingCompleteRef.current = onSlidingComplete;
   const defaultValueRef = useRef(defaultValue);
   defaultValueRef.current = defaultValue;
 
@@ -61,15 +66,31 @@ export function SimpleSlider({
         const now = Date.now();
         if (defaultValueRef.current != null && now - lastTapRef.current < DOUBLE_TAP_MS) {
           onValueChangeRef.current(defaultValueRef.current);
+          onSlidingCompleteRef.current?.(defaultValueRef.current);
           lastTapRef.current = 0;
           return;
         }
         lastTapRef.current = now;
-        onValueChangeRef.current(computeValueRef.current(evt.nativeEvent.locationX));
+        dragStartXRef.current = evt.nativeEvent.locationX;
+        onValueChangeRef.current(computeValueRef.current(dragStartXRef.current));
       },
-      onPanResponderMove: (evt) => {
-        onValueChangeRef.current(computeValueRef.current(evt.nativeEvent.locationX));
+      onPanResponderMove: (_, gestureState) => {
+        const dx = Number.isFinite(gestureState.dx) ? gestureState.dx : 0;
+        onValueChangeRef.current(computeValueRef.current(dragStartXRef.current + dx));
       },
+      onPanResponderRelease: (_, gestureState) => {
+        const dx = Number.isFinite(gestureState.dx) ? gestureState.dx : 0;
+        const nextValue = computeValueRef.current(dragStartXRef.current + dx);
+        onValueChangeRef.current(nextValue);
+        onSlidingCompleteRef.current?.(nextValue);
+      },
+      onPanResponderTerminate: (_, gestureState) => {
+        const dx = Number.isFinite(gestureState.dx) ? gestureState.dx : 0;
+        const nextValue = computeValueRef.current(dragStartXRef.current + dx);
+        onValueChangeRef.current(nextValue);
+        onSlidingCompleteRef.current?.(nextValue);
+      },
+      onPanResponderTerminationRequest: () => false,
     });
   }
   const panResponder = panResponderRef.current;

@@ -2210,6 +2210,18 @@ export type ScientificImageOperation =
 export type ColorImageOperation =
   | { type: "scnr"; method: "averageNeutral" | "maximumNeutral"; amount: number }
   | { type: "colorCalibration"; percentile: number }
+  | { type: "backgroundNeutralize"; upperLimit: number; shadowsClip: number }
+  | { type: "photometricCC"; minStars: number; percentileLow: number; percentileHigh: number }
+  | { type: "perHueSaturation"; amount: number }
+  | {
+      type: "selectiveColor";
+      targetHue: number;
+      hueRange: number;
+      hueShift: number;
+      satShift: number;
+      lumShift: number;
+      feather: number;
+    }
   | { type: "saturation"; amount: number }
   | { type: "colorBalance"; redGain: number; greenGain: number; blueGain: number };
 

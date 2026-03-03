@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { usePageLogger } from "../../hooks/useLogger";
 import { useGallery } from "../../hooks/useGallery";
 import { useAlbums } from "../../hooks/useAlbums";
 import { useFileManager } from "../../hooks/useFileManager";
@@ -57,6 +58,9 @@ export default function GalleryScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const haptics = useHapticFeedback();
+  const { logAction, logSuccess, logFailure } = usePageLogger("GalleryScreen", {
+    screen: "gallery",
+  });
 
   const [, mutedColor] = useThemeColor(["success", "muted"]);
   const { toast } = useToast();
@@ -211,6 +215,7 @@ export default function GalleryScreen() {
 
   const handleCreateAlbum = (name: string, description?: string) => {
     createNewAlbum(name, description);
+    logSuccess("create_album", { hasDescription: Boolean(description) });
     setShowCreateAlbum(false);
     toast.show({ variant: "success", label: t("album.created") });
   };
@@ -238,11 +243,13 @@ export default function GalleryScreen() {
 
   const handleAddToAlbum = (albumId: string) => {
     addImagesToAlbum(albumId, selectedIds);
+    logSuccess("add_to_album", { albumId, selectedCount: selectedIds.length });
     exitSelectionMode();
   };
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.length === 0) return;
+    logAction("batch_delete_open_confirm", { selectedCount: selectedIds.length });
     Alert.alert(t("files.batchDelete"), `${t("files.deleteConfirm")} (${selectedIds.length})`, [
       { text: t("common.cancel"), style: "cancel" },
       {
@@ -250,12 +257,33 @@ export default function GalleryScreen() {
         style: "destructive",
         onPress: () => {
           haptics.notify(Haptics.NotificationFeedbackType.Warning);
-          handleDeleteFiles(selectedIds);
+          const result = handleDeleteFiles(selectedIds);
+          if (result.failed > 0) {
+            logFailure("batch_delete", new Error("deletePartialFailed"), {
+              selectedCount: selectedIds.length,
+              success: result.success,
+              failed: result.failed,
+            });
+          } else {
+            logSuccess("batch_delete", {
+              selectedCount: selectedIds.length,
+              success: result.success,
+            });
+          }
           exitSelectionMode();
         },
       },
     ]);
-  }, [selectedIds, t, handleDeleteFiles, exitSelectionMode, haptics]);
+  }, [
+    exitSelectionMode,
+    handleDeleteFiles,
+    haptics,
+    logAction,
+    logFailure,
+    logSuccess,
+    selectedIds,
+    t,
+  ]);
 
   const handleBatchRenameApply = useCallback(
     (operations: Array<{ fileId: string; filename: string }>) => {
@@ -263,9 +291,21 @@ export default function GalleryScreen() {
       if (result.success > 0) {
         exitSelectionMode();
       }
+      if (result.failed > 0) {
+        logFailure("batch_rename", new Error("renamePartialFailed"), {
+          operations: operations.length,
+          success: result.success,
+          failed: result.failed,
+        });
+      } else {
+        logSuccess("batch_rename", {
+          operations: operations.length,
+          success: result.success,
+        });
+      }
       return result;
     },
-    [exitSelectionMode, handleRenameFiles],
+    [exitSelectionMode, handleRenameFiles, logFailure, logSuccess],
   );
 
   const handleAlbumRename = () => {
@@ -308,6 +348,7 @@ export default function GalleryScreen() {
         style: "destructive",
         onPress: () => {
           removeAlbum(album.id);
+          logSuccess("delete_album", { albumId: album.id });
           toast.show({ variant: "success", label: t("album.deleted") });
         },
       },
@@ -335,14 +376,21 @@ export default function GalleryScreen() {
 
   const handleCompare = useCallback(() => {
     if (selectedImageIds.length < 2) {
+      logFailure("open_compare", new Error("insufficientSelection"), {
+        selectedImageCount: selectedImageIds.length,
+      });
       exitSelectionMode();
       return;
     }
+    logAction("open_compare", { selectedImageCount: selectedImageIds.length });
     router.push(`/compare?ids=${selectedImageIds.join(",")}`);
     exitSelectionMode();
-  }, [router, selectedImageIds, exitSelectionMode]);
+  }, [exitSelectionMode, logAction, logFailure, router, selectedImageIds]);
 
-  const handleOpenMap = useCallback(() => router.push("/map"), [router]);
+  const handleOpenMap = useCallback(() => {
+    logAction("open_map");
+    router.push("/map");
+  }, [logAction, router]);
   const handleOpenAlbumPicker = useCallback(() => setShowAlbumPicker(true), []);
   const handleOpenBatchTag = useCallback(() => setShowBatchTag(true), []);
   const handleOpenBatchRename = useCallback(() => setShowBatchRename(true), []);

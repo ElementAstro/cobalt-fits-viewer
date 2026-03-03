@@ -59,7 +59,7 @@ export function ViewerBottomSheet({
       }}
     >
       <BottomSheet.Portal>
-        <BottomSheet.Overlay />
+        <BottomSheet.Overlay pointerEvents="none" />
         <BottomSheet.Content
           index={sheetIndex}
           snapPoints={snapPoints}

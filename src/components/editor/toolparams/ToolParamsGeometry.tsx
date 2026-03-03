@@ -10,14 +10,17 @@ interface ToolParamsGeometryProps {
   activeTool: EditorTool & string;
   params: EditorToolParams;
   onQuickAction: (op: ImageEditOperation) => void;
+  onParamChange?: () => void;
 }
 
 export const ToolParamsGeometry = React.memo(function ToolParamsGeometry({
   activeTool,
   params,
   onQuickAction,
+  onParamChange,
 }: ToolParamsGeometryProps) {
   const { t } = useI18n();
+  void onQuickAction;
 
   switch (activeTool) {
     case "rotate":
@@ -26,24 +29,33 @@ export const ToolParamsGeometry = React.memo(function ToolParamsGeometry({
           <Button
             testID="e2e-action-editor__param_id-rotate90cw"
             size="sm"
-            variant="outline"
-            onPress={() => onQuickAction({ type: "rotate90cw" })}
+            variant={params.rotateMode === "rotate90cw" ? "primary" : "outline"}
+            onPress={() => {
+              params.setRotateMode("rotate90cw");
+              onParamChange?.();
+            }}
           >
             <Button.Label className="text-[9px]">{t("editor.paramRotate90CW")}</Button.Label>
           </Button>
           <Button
             testID="e2e-action-editor__param_id-rotate90ccw"
             size="sm"
-            variant="outline"
-            onPress={() => onQuickAction({ type: "rotate90ccw" })}
+            variant={params.rotateMode === "rotate90ccw" ? "primary" : "outline"}
+            onPress={() => {
+              params.setRotateMode("rotate90ccw");
+              onParamChange?.();
+            }}
           >
             <Button.Label className="text-[9px]">{t("editor.paramRotate90CCW")}</Button.Label>
           </Button>
           <Button
             testID="e2e-action-editor__param_id-rotate180"
             size="sm"
-            variant="outline"
-            onPress={() => onQuickAction({ type: "rotate180" })}
+            variant={params.rotateMode === "rotate180" ? "primary" : "outline"}
+            onPress={() => {
+              params.setRotateMode("rotate180");
+              onParamChange?.();
+            }}
           >
             <Button.Label className="text-[9px]">{t("editor.paramRotate180")}</Button.Label>
           </Button>
@@ -56,16 +68,22 @@ export const ToolParamsGeometry = React.memo(function ToolParamsGeometry({
           <Button
             testID="e2e-action-editor__param_id-flip-h"
             size="sm"
-            variant="outline"
-            onPress={() => onQuickAction({ type: "flipH" })}
+            variant={params.flipMode === "flipH" ? "primary" : "outline"}
+            onPress={() => {
+              params.setFlipMode("flipH");
+              onParamChange?.();
+            }}
           >
             <Button.Label className="text-[9px]">{t("editor.paramHorizontal")}</Button.Label>
           </Button>
           <Button
             testID="e2e-action-editor__param_id-flip-v"
             size="sm"
-            variant="outline"
-            onPress={() => onQuickAction({ type: "flipV" })}
+            variant={params.flipMode === "flipV" ? "primary" : "outline"}
+            onPress={() => {
+              params.setFlipMode("flipV");
+              onParamChange?.();
+            }}
           >
             <Button.Label className="text-[9px]">{t("editor.paramVertical")}</Button.Label>
           </Button>
@@ -81,7 +99,10 @@ export const ToolParamsGeometry = React.memo(function ToolParamsGeometry({
           max={180}
           step={0.5}
           defaultValue={0}
-          onValueChange={params.setRotateAngle}
+          onValueChange={(v) => {
+            params.setRotateAngle(v);
+            onParamChange?.();
+          }}
         />
       );
 
@@ -94,7 +115,10 @@ export const ToolParamsGeometry = React.memo(function ToolParamsGeometry({
           max={16}
           step={1}
           defaultValue={8}
-          onValueChange={(v) => params.setBgGridSize(Math.round(v))}
+          onValueChange={(v) => {
+            params.setBgGridSize(Math.round(v));
+            onParamChange?.();
+          }}
         />
       );
 

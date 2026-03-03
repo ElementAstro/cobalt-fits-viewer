@@ -7,8 +7,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
 import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/useSettingsStore";
 import { useFitsFile } from "../../hooks/useFitsFile";
 import { useHeaderEditor } from "../../hooks/useHeaderEditor";
+import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
 import { HeaderTable } from "../../components/fits/HeaderTable";
 import { HeaderEditSheet } from "../../components/fits/HeaderEditSheet";
 import { HeaderExportDialog } from "../../components/fits/HeaderExportDialog";
@@ -34,6 +36,10 @@ export default function HeaderDetailScreen() {
     useResponsiveLayout();
 
   const file = useFitsStore((s) => s.getFileById(id ?? ""));
+  const allFiles = useFitsStore((s) => s.files);
+  const viewerPreloadNeighbors = useSettingsStore((s) => s.viewerPreloadNeighbors);
+  const viewerPreloadRadius = useSettingsStore((s) => s.viewerPreloadRadius);
+  const frameClassificationConfig = useSettingsStore((s) => s.frameClassificationConfig);
 
   const { headers: rawHeaders, isLoading, loadFromPath } = useFitsFile();
   const editor = useHeaderEditor();
@@ -51,6 +57,15 @@ export default function HeaderDetailScreen() {
   useEffect(() => {
     if (file) loadFromPath(file.filepath, file.filename, file.fileSize);
   }, [file, loadFromPath]);
+
+  useImageCacheWarmup({
+    enabled: viewerPreloadNeighbors,
+    currentFile: file,
+    allFiles,
+    radius: viewerPreloadRadius,
+    frameClassificationConfig,
+    startWhen: !!file && !isLoading,
+  });
 
   useEffect(() => {
     if (rawHeaders.length > 0 && !editorInitialized.current) {

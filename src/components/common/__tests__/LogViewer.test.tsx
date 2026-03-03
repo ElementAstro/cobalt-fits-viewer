@@ -376,7 +376,9 @@ describe("LogViewer", () => {
     const alertArgs = alertSpy.mock.calls[0];
     const buttons = alertArgs[2] as Array<{ text: string; onPress?: () => void }>;
     const confirmButton = buttons.find((b) => b.text === "common.confirm");
-    confirmButton?.onPress?.();
+    act(() => {
+      confirmButton?.onPress?.();
+    });
 
     expect(mockUseLogViewer.clearLogs).toHaveBeenCalled();
     alertSpy.mockRestore();

@@ -8,11 +8,13 @@ import type { EditorTool, EditorToolParams } from "../../../hooks/useEditorToolS
 interface ToolParamsMaskProps {
   activeTool: EditorTool & string;
   params: EditorToolParams;
+  onParamChange?: () => void;
 }
 
 export const ToolParamsMask = React.memo(function ToolParamsMask({
   activeTool,
   params,
+  onParamChange,
 }: ToolParamsMaskProps) {
   const { t } = useI18n();
 
@@ -27,21 +29,54 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
             max={4.0}
             step={0.1}
             defaultValue={1.5}
-            onValueChange={params.setStarMaskScale}
+            onValueChange={(v) => {
+              params.setStarMaskScale(v);
+              onParamChange?.();
+            }}
+          />
+          <SimpleSlider
+            label={t("editor.paramGrowth")}
+            value={params.starMaskGrowth}
+            min={0}
+            max={5}
+            step={1}
+            defaultValue={0}
+            onValueChange={(v) => {
+              params.setStarMaskGrowth(Math.round(v));
+              onParamChange?.();
+            }}
+          />
+          <SimpleSlider
+            label={t("editor.paramSoftness")}
+            value={params.starMaskSoftness}
+            min={0}
+            max={5}
+            step={0.5}
+            defaultValue={0}
+            onValueChange={(v) => {
+              params.setStarMaskSoftness(v);
+              onParamChange?.();
+            }}
           />
 
           <View className="flex-row gap-2 mt-1">
             <Button
               size="sm"
               variant={!params.starMaskInvert ? "primary" : "outline"}
-              onPress={() => params.setStarMaskInvert(false)}
+              onPress={() => {
+                params.setStarMaskInvert(false);
+                onParamChange?.();
+              }}
             >
               <Button.Label className="text-[9px]">{t("editor.paramIsolateStars")}</Button.Label>
             </Button>
             <Button
               size="sm"
               variant={params.starMaskInvert ? "primary" : "outline"}
-              onPress={() => params.setStarMaskInvert(true)}
+              onPress={() => {
+                params.setStarMaskInvert(true);
+                onParamChange?.();
+              }}
             >
               <Button.Label className="text-[9px]">{t("editor.paramRemoveStars")}</Button.Label>
             </Button>
@@ -59,7 +94,10 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
             max={1}
             step={0.01}
             defaultValue={0}
-            onValueChange={params.setRangeMaskLow}
+            onValueChange={(v) => {
+              params.setRangeMaskLow(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramHigh")}
@@ -68,7 +106,10 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
             max={1}
             step={0.01}
             defaultValue={1}
-            onValueChange={params.setRangeMaskHigh}
+            onValueChange={(v) => {
+              params.setRangeMaskHigh(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramFuzziness")}
@@ -77,7 +118,10 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
             max={0.5}
             step={0.01}
             defaultValue={0.1}
-            onValueChange={params.setRangeMaskFuzz}
+            onValueChange={(v) => {
+              params.setRangeMaskFuzz(v);
+              onParamChange?.();
+            }}
           />
         </View>
       );
@@ -91,7 +135,10 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
           max={1}
           step={0.01}
           defaultValue={0.5}
-          onValueChange={params.setBinarizeThreshold}
+          onValueChange={(v) => {
+            params.setBinarizeThreshold(v);
+            onParamChange?.();
+          }}
         />
       );
 
@@ -103,9 +150,12 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
             value={params.edgeMaskPreBlur}
             min={0}
             max={5}
-            step={0.1}
+            step={0.5}
             defaultValue={1}
-            onValueChange={params.setEdgeMaskPreBlur}
+            onValueChange={(v) => {
+              params.setEdgeMaskPreBlur(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramThreshold")}
@@ -114,16 +164,22 @@ export const ToolParamsMask = React.memo(function ToolParamsMask({
             max={1}
             step={0.01}
             defaultValue={0.1}
-            onValueChange={params.setEdgeMaskThreshold}
+            onValueChange={(v) => {
+              params.setEdgeMaskThreshold(v);
+              onParamChange?.();
+            }}
           />
           <SimpleSlider
             label={t("editor.paramPostBlurSigma")}
             value={params.edgeMaskPostBlur}
             min={0}
             max={5}
-            step={0.1}
+            step={0.5}
             defaultValue={1}
-            onValueChange={params.setEdgeMaskPostBlur}
+            onValueChange={(v) => {
+              params.setEdgeMaskPostBlur(v);
+              onParamChange?.();
+            }}
           />
         </View>
       );

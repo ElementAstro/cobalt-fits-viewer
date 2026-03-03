@@ -1,6 +1,8 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useFitsFile } from "../useFitsFile";
 import type { ImageParseResult } from "../../lib/import/imageParsePipeline";
+import { clearPixelCache } from "../../lib/cache/pixelCache";
+import { clearImageLoadCache, getImageLoadCache } from "../../lib/cache/imageLoadCache";
 
 jest.mock("../../lib/fits/parser", () => ({
   getImagePixels: jest.fn(),
@@ -13,10 +15,24 @@ jest.mock("../../lib/fits/parser", () => ({
 jest.mock("../../lib/utils/fileManager", () => ({
   readFileAsArrayBuffer: jest.fn(),
   generateFileId: jest.fn(() => "fid-1"),
+  getFileCacheFingerprint: jest.fn((filepath: string, fallbackFileSize?: number) => ({
+    fileSize: fallbackFileSize ?? 0,
+    mtimeMs: 1700000000000,
+    cacheKey: `${filepath}::${fallbackFileSize ?? 0}::1700000000000`,
+    strictUsable: true,
+  })),
 }));
 
 jest.mock("../../lib/import/imageParsePipeline", () => ({
   parseImageBuffer: jest.fn(),
+}));
+
+const mockGetRuntimeDiskCacheBuffer = jest.fn();
+const mockSetRuntimeDiskCacheBuffer = jest.fn();
+
+jest.mock("../../lib/cache/runtimeDiskCache", () => ({
+  getRuntimeDiskCacheBuffer: (...args: unknown[]) => mockGetRuntimeDiskCacheBuffer(...args),
+  setRuntimeDiskCacheBuffer: (...args: unknown[]) => mockSetRuntimeDiskCacheBuffer(...args),
 }));
 
 jest.mock("../../lib/logger", () => {
@@ -43,6 +59,7 @@ const parserMock = jest.requireMock("../../lib/fits/parser") as {
 
 const fileMock = jest.requireMock("../../lib/utils/fileManager") as {
   readFileAsArrayBuffer: jest.Mock;
+  getFileCacheFingerprint: jest.Mock;
 };
 
 const pipelineMock = jest.requireMock("../../lib/import/imageParsePipeline") as {
@@ -134,8 +151,18 @@ function createRasterParseResult(overrides: Partial<ImageParseResult> = {}): Ima
 
 describe("useFitsFile", () => {
   beforeEach(() => {
+    clearPixelCache();
+    clearImageLoadCache();
     jest.clearAllMocks();
     fileMock.readFileAsArrayBuffer.mockResolvedValue(new ArrayBuffer(8));
+    fileMock.getFileCacheFingerprint.mockImplementation(
+      (filepath: string, fallbackFileSize?: number) => ({
+        fileSize: fallbackFileSize ?? 0,
+        mtimeMs: 1700000000000,
+        cacheKey: `${filepath}::${fallbackFileSize ?? 0}::1700000000000`,
+        strictUsable: true,
+      }),
+    );
     parserMock.getImagePixels.mockResolvedValue(new Float32Array([0, 1, 2, 3]));
     parserMock.getImageDimensions.mockReturnValue({
       width: 2,
@@ -146,6 +173,8 @@ describe("useFitsFile", () => {
     parserMock.isRgbCube.mockReturnValue({ isRgb: false, width: 0, height: 0 });
     parserMock.getImageChannels.mockResolvedValue(null);
     pipelineMock.parseImageBuffer.mockResolvedValue(createFitsParseResult());
+    mockGetRuntimeDiskCacheBuffer.mockResolvedValue(null);
+    mockSetRuntimeDiskCacheBuffer.mockResolvedValue(undefined);
   });
 
   it("loads fits from path and supports frame loading/reset", async () => {
@@ -249,5 +278,88 @@ describe("useFitsFile", () => {
     expect(result.current.metadata).toBeNull();
     expect(result.current.pixels).toBeNull();
     expect(result.current.sourceBuffer).toBeNull();
+  });
+
+  it("reopens same file from cache without disk read or re-parse", async () => {
+    const { result } = renderHook(() => useFitsFile());
+
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+    });
+    expect(fileMock.readFileAsArrayBuffer).toHaveBeenCalledTimes(1);
+    expect(pipelineMock.parseImageBuffer).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+    });
+    expect(fileMock.readFileAsArrayBuffer).toHaveBeenCalledTimes(1);
+    expect(pipelineMock.parseImageBuffer).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses in-memory parsed snapshot when pixel cache misses", async () => {
+    const { result } = renderHook(() => useFitsFile());
+
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+    });
+
+    clearPixelCache();
+    fileMock.readFileAsArrayBuffer.mockClear();
+    pipelineMock.parseImageBuffer.mockClear();
+    parserMock.getImagePixels.mockClear();
+
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+    });
+
+    expect(fileMock.readFileAsArrayBuffer).not.toHaveBeenCalled();
+    expect(pipelineMock.parseImageBuffer).not.toHaveBeenCalled();
+    expect(parserMock.getImagePixels).toHaveBeenCalledWith({ fits: true });
+  });
+
+  it("treats mtime change as strict cache miss", async () => {
+    fileMock.getFileCacheFingerprint
+      .mockImplementationOnce((filepath: string, fallbackFileSize?: number) => ({
+        fileSize: fallbackFileSize ?? 0,
+        mtimeMs: 1700000000000,
+        cacheKey: `${filepath}::${fallbackFileSize ?? 0}::1700000000000`,
+        strictUsable: true,
+      }))
+      .mockImplementationOnce((filepath: string, fallbackFileSize?: number) => ({
+        fileSize: fallbackFileSize ?? 0,
+        mtimeMs: 1700000001000,
+        cacheKey: `${filepath}::${fallbackFileSize ?? 0}::1700000001000`,
+        strictUsable: true,
+      }));
+
+    const { result } = renderHook(() => useFitsFile());
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+    });
+
+    expect(fileMock.readFileAsArrayBuffer).toHaveBeenCalledTimes(2);
+    expect(pipelineMock.parseImageBuffer).toHaveBeenCalledTimes(2);
+  });
+
+  it("falls back to safe full load when strict fingerprint is unavailable", async () => {
+    fileMock.getFileCacheFingerprint.mockImplementation(
+      (filepath: string, fallbackFileSize?: number) => ({
+        fileSize: fallbackFileSize ?? 0,
+        mtimeMs: null,
+        cacheKey: `${filepath}::${fallbackFileSize ?? 0}`,
+        strictUsable: false,
+      }),
+    );
+
+    const { result } = renderHook(() => useFitsFile());
+    await act(async () => {
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+      await result.current.loadFromPath("/tmp/a.fits", "a.fits", 10);
+    });
+
+    expect(fileMock.readFileAsArrayBuffer).toHaveBeenCalledTimes(2);
+    expect(pipelineMock.parseImageBuffer).toHaveBeenCalledTimes(2);
+    expect(getImageLoadCache("/tmp/a.fits::10")).toBeNull();
   });
 });
