@@ -2,8 +2,9 @@
  * 目标统计计算
  */
 
-import type { Target, FitsMetadata } from "../fits/types";
+import type { Target, TargetGroup, FitsMetadata } from "../fits/types";
 import { buildTargetIndexes, type TargetIndexes } from "./targetIndexes";
+import { calculateCompletionRate } from "./exposureStats";
 
 export interface TargetStatistics {
   totalTargets: number;
@@ -171,6 +172,83 @@ export function getMonthlyStatistics(
   }
 
   return result.reverse();
+}
+
+// ===== 分组统计 =====
+
+export interface GroupStatistics {
+  targetCount: number;
+  byStatus: Record<string, number>;
+  totalFrames: number;
+  totalExposureSeconds: number;
+  filterBreakdown: Record<string, { count: number; totalSeconds: number }>;
+  overallCompletion: number;
+  lastActivityTime: number;
+}
+
+/**
+ * 计算单个分组的统计数据
+ */
+export function calculateGroupStatistics(
+  group: TargetGroup,
+  targets: Target[],
+  files: FitsMetadata[],
+  indexes: TargetIndexes = buildTargetIndexes(targets, files),
+): GroupStatistics {
+  const memberSet = new Set(group.targetIds);
+  const groupTargets = targets.filter((t) => memberSet.has(t.id));
+
+  const byStatus: Record<string, number> = {};
+  const filterBreakdown: Record<string, { count: number; totalSeconds: number }> = {};
+  let totalFrames = 0;
+  let totalExposureSeconds = 0;
+  let lastActivityTime = group.createdAt;
+
+  let completionSum = 0;
+  let completionCount = 0;
+
+  for (const target of groupTargets) {
+    const status = target.status ?? "unknown";
+    byStatus[status] = (byStatus[status] ?? 0) + 1;
+
+    const cachedStats = indexes.targetStatsCache.get(target.id);
+    const frames = cachedStats?.frameCount ?? target.imageIds.length;
+    const exposure = cachedStats?.totalExposureSeconds ?? 0;
+    totalFrames += frames;
+    totalExposureSeconds += exposure;
+
+    // Merge per-filter breakdown
+    if (cachedStats) {
+      for (const [filter, data] of Object.entries(cachedStats.filterExposure)) {
+        const existing = filterBreakdown[filter] ?? { count: 0, totalSeconds: 0 };
+        existing.count += data.count;
+        existing.totalSeconds += data.totalSeconds;
+        filterBreakdown[filter] = existing;
+      }
+    }
+
+    // Completion rate
+    if (target.plannedFilters.length > 0) {
+      const completion = calculateCompletionRate(target, files);
+      completionSum += completion.overall;
+      completionCount += 1;
+    }
+
+    // Track last activity
+    if (target.updatedAt > lastActivityTime) {
+      lastActivityTime = target.updatedAt;
+    }
+  }
+
+  return {
+    targetCount: groupTargets.length,
+    byStatus,
+    totalFrames,
+    totalExposureSeconds,
+    filterBreakdown,
+    overallCompletion: completionCount > 0 ? Math.round(completionSum / completionCount) : 0,
+    lastActivityTime,
+  };
 }
 
 /**

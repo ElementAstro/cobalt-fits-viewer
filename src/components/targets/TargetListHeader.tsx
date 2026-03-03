@@ -72,6 +72,7 @@ interface TargetListHeaderProps {
   onShowGroupManager: () => void;
   onScanTargets: () => void;
   onShowAddSheet: () => void;
+  onSaveAsGroup?: () => void;
 
   // Layout
   useCompactHeaderActions: boolean;
@@ -644,11 +645,21 @@ export const TargetListHeader = React.memo(function TargetListHeader(props: Targ
               {filteredTargets.length} / {targets.length} {t("targets.title")}
             </Alert.Title>
           </Alert.Content>
-          <Button size="sm" variant="ghost" onPress={props.onClearFilters}>
-            <Button.Label className={tinyActionLabelClassName}>
-              {t("targets.clearFilters")}
-            </Button.Label>
-          </Button>
+          <View className="flex-row gap-1">
+            {props.onSaveAsGroup && filteredTargets.length > 0 && (
+              <Button size="sm" variant="ghost" onPress={props.onSaveAsGroup}>
+                <Ionicons name="folder-open-outline" size={miniIconSize} color={mutedColor} />
+                <Button.Label className={tinyActionLabelClassName}>
+                  {t("targets.groups.saveAsGroup")}
+                </Button.Label>
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" onPress={props.onClearFilters}>
+              <Button.Label className={tinyActionLabelClassName}>
+                {t("targets.clearFilters")}
+              </Button.Label>
+            </Button>
+          </View>
         </Alert>
       )}
 

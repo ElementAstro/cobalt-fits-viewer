@@ -9,3 +9,6 @@ export { ImportResultSheet } from "./ImportResultSheet";
 export { SelectionActionsSheet } from "./SelectionActionsSheet";
 export { SheetActionItem } from "./SheetActionItem";
 export { UndoSnackbar } from "./UndoSnackbar";
+export { FolderPickerSheet } from "./FolderPickerSheet";
+export { FolderBrowserView } from "./FolderBrowserView";
+export { StorageAnalyticsSheet } from "./StorageAnalyticsSheet";

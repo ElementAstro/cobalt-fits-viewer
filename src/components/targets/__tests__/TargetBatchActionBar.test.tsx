@@ -75,4 +75,47 @@ describe("TargetBatchActionBar", () => {
     fireEvent.press(buttons[0]);
     expect(defaultProps.onExitSelectionMode).toHaveBeenCalledTimes(1);
   });
+
+  it("renders batch status button when onBatchStatus provided", () => {
+    const onBatchStatus = jest.fn();
+    render(<TargetBatchActionBar {...defaultProps} onBatchStatus={onBatchStatus} />);
+    const buttons = screen.getAllByTestId("button");
+    // Find status button (swap-horizontal-outline icon) - it's rendered after close button
+    // Just verify more buttons are rendered compared to without the prop
+    const withoutCount = 4; // close, favorite, delete + select all/deselect
+    expect(buttons.length).toBeGreaterThan(withoutCount);
+  });
+
+  it("renders batch group button when onBatchGroup provided", () => {
+    const onBatchGroup = jest.fn();
+    render(<TargetBatchActionBar {...defaultProps} onBatchGroup={onBatchGroup} />);
+    const buttons = screen.getAllByTestId("button");
+    const withoutCount = 4;
+    expect(buttons.length).toBeGreaterThan(withoutCount);
+  });
+
+  it("renders batch tag button when onBatchTag provided", () => {
+    const onBatchTag = jest.fn();
+    render(<TargetBatchActionBar {...defaultProps} onBatchTag={onBatchTag} />);
+    const buttons = screen.getAllByTestId("button");
+    const withoutCount = 4;
+    expect(buttons.length).toBeGreaterThan(withoutCount);
+  });
+
+  it("does not render optional buttons when props not provided", () => {
+    render(<TargetBatchActionBar {...defaultProps} />);
+    const buttonsWithout = screen.getAllByTestId("button");
+
+    const { unmount } = render(
+      <TargetBatchActionBar
+        {...defaultProps}
+        onBatchStatus={jest.fn()}
+        onBatchGroup={jest.fn()}
+        onBatchTag={jest.fn()}
+      />,
+    );
+    const buttonsWith = screen.getAllByTestId("button");
+    expect(buttonsWith.length).toBeGreaterThan(buttonsWithout.length);
+    unmount();
+  });
 });

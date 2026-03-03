@@ -2,7 +2,7 @@
  * 元数据索引 - 用于搜索和筛选
  */
 
-import type { FitsMetadata } from "../fits/types";
+import type { FitsMetadata, FileGroup } from "../fits/types";
 
 export interface MetadataIndexResult {
   objects: string[];
@@ -135,4 +135,33 @@ export function groupByObject(files: FitsMetadata[]): Record<string, FitsMetadat
   }
 
   return groups;
+}
+
+/**
+ * 按文件夹/分组分组
+ */
+export function groupByGroup(
+  files: FitsMetadata[],
+  fileGroupMap: Record<string, string[]>,
+  groups: FileGroup[],
+): Record<string, FitsMetadata[]> {
+  const result: Record<string, FitsMetadata[]> = {};
+  const groupNameMap = new Map(groups.map((g) => [g.id, g.name]));
+  const ungroupedKey = "__ungrouped__";
+
+  for (const file of files) {
+    const groupIds = fileGroupMap[file.id];
+    if (!groupIds || groupIds.length === 0) {
+      if (!result[ungroupedKey]) result[ungroupedKey] = [];
+      result[ungroupedKey].push(file);
+    } else {
+      for (const groupId of groupIds) {
+        const key = groupNameMap.get(groupId) ?? groupId;
+        if (!result[key]) result[key] = [];
+        result[key].push(file);
+      }
+    }
+  }
+
+  return result;
 }

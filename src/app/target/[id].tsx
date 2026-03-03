@@ -400,7 +400,12 @@ export default function TargetDetailScreen() {
                     <Text className="w-12 text-xs text-muted">{t("targets.groups.title")}</Text>
                     <View className="flex-1 flex-row flex-wrap gap-1">
                       {targetGroups.map((group) => (
-                        <Chip key={group.id} size={chipSize} variant="secondary">
+                        <Chip
+                          key={group.id}
+                          size={chipSize}
+                          variant="secondary"
+                          onPress={() => router.push(`/group/${group.id}`)}
+                        >
                           <Chip.Label className={tinyLabelClassName}>{group.name}</Chip.Label>
                         </Chip>
                       ))}

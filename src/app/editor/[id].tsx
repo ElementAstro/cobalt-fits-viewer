@@ -336,6 +336,11 @@ export default function EditorDetailScreen() {
     setActiveTool(null);
   }, [editor, setActiveTool]);
 
+  const handleCropCancelHotkey = useCallback(() => {
+    setShowCrop(false);
+    setActiveTool(null);
+  }, [setActiveTool, setShowCrop]);
+
   useEditorHotkeys({
     onUndo: editor.undo,
     onRedo: editor.redo,
@@ -345,6 +350,8 @@ export default function EditorDetailScreen() {
     onTogglePixelInfo: () => setShowPixelInfo((prev) => !prev),
     onToggleMinimap: () => setShowMinimap((prev) => !prev),
     onResetView: () => canvasRef.current?.setTransform(0, 0, 1),
+    isCropMode: showCrop,
+    onCropCancel: handleCropCancelHotkey,
   });
 
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -524,6 +531,7 @@ export default function EditorDetailScreen() {
                 imageHeight={editor.current.height}
                 containerWidth={canvasLayout.width}
                 containerHeight={canvasLayout.height}
+                transform={canvasTransform}
                 onCropConfirm={(x, y, w, h) => {
                   editor.applyEdit({ type: "crop", x, y, width: w, height: h });
                   setShowCrop(false);

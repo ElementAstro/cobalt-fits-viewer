@@ -143,6 +143,34 @@ describe("Geometry transforms", () => {
     expect(r.pixels[3]).toBe(5);
   });
 
+  it("cropImage clamps out-of-bounds parameters without crashing", () => {
+    const r = cropImage(pixels, 3, 2, 1, 10, 10);
+    expect(r.width).toBe(1);
+    expect(r.height).toBe(1);
+    expect(r.pixels[0]).toBe(6);
+  });
+
+  it("cropImage clamps negative x/y to zero", () => {
+    const r = cropImage(pixels, 3, -5, -5, 2, 2);
+    expect(r.width).toBe(2);
+    expect(r.height).toBe(2);
+    expect(r.pixels[0]).toBe(1);
+    expect(r.pixels[1]).toBe(2);
+    expect(r.pixels[2]).toBe(4);
+    expect(r.pixels[3]).toBe(5);
+  });
+
+  it("cropImage uses subarray for row copy (result matches expected)", () => {
+    const big = new Float32Array(100);
+    for (let i = 0; i < 100; i++) big[i] = i;
+    const r = cropImage(big, 10, 3, 2, 4, 3);
+    expect(r.width).toBe(4);
+    expect(r.height).toBe(3);
+    expect(r.pixels[0]).toBe(23);
+    expect(r.pixels[4]).toBe(33);
+    expect(r.pixels[8]).toBe(43);
+  });
+
   it("rotateArbitrary preserves approximate dimensions for 0°", () => {
     const r = rotateArbitrary(pixels, 3, 2, 0);
     expect(r.width).toBe(3);

@@ -1,4 +1,4 @@
-import { View, Text, Alert } from "react-native";
+import { View, Text, Alert, ScrollView } from "react-native";
 import { FlashList } from "@shopify/flash-list";
 import { useState, useMemo, useCallback, useEffect } from "react";
 import * as Haptics from "expo-haptics";
@@ -15,6 +15,8 @@ import { useAlbums } from "../../hooks/useAlbums";
 import { useFileManager } from "../../hooks/useFileManager";
 import { useGalleryStore } from "../../stores/useGalleryStore";
 import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useFileGroupStore } from "../../stores/useFileGroupStore";
+import { groupByGroup } from "../../lib/gallery/metadataIndex";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { GalleryHeader } from "../../components/gallery/GalleryHeader";
 import { AlbumsTabContent } from "../../components/gallery/AlbumsTabContent";
@@ -69,6 +71,14 @@ export default function GalleryScreen() {
     useResponsiveLayout();
   const { files, totalCount, viewMode, gridColumns, metadataIndex, groupedByDate, search } =
     useGallery();
+  const fileGroupStoreGroups = useFileGroupStore((s) => s.groups);
+  const fileGroupMap = useFileGroupStore((s) => s.fileGroupMap);
+
+  const groupedByFolder = useMemo(() => {
+    if (viewMode !== "folder") return {};
+    return groupByGroup(files, fileGroupMap, fileGroupStoreGroups);
+  }, [viewMode, files, fileGroupMap, fileGroupStoreGroups]);
+
   const effectiveColumns = isLandscapeTablet
     ? Math.min(gridColumns + 3, 7)
     : isLandscape
@@ -520,6 +530,50 @@ export default function GalleryScreen() {
             }}
             showsVerticalScrollIndicator={false}
           />
+        ) : viewMode === "folder" ? (
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{
+              paddingHorizontal: horizontalPadding,
+              paddingTop: 8,
+              paddingBottom: 24,
+            }}
+            showsVerticalScrollIndicator={false}
+          >
+            {galleryHeaderElement}
+            {Object.entries(groupedByFolder).map(([groupName, groupFiles]) => (
+              <View key={groupName} className="mb-4">
+                <View className="flex-row items-center gap-2 mb-2">
+                  <Ionicons
+                    name={groupName === "__ungrouped__" ? "documents-outline" : "folder"}
+                    size={14}
+                    color={mutedColor}
+                  />
+                  <Text className="text-xs font-semibold text-muted">
+                    {groupName === "__ungrouped__" ? t("files.ungroupedFiles") : groupName} (
+                    {groupFiles.length})
+                  </Text>
+                </View>
+                <ThumbnailGrid
+                  files={groupFiles}
+                  columns={effectiveColumns}
+                  selectionMode={isSelectionMode}
+                  selectedIds={selectedIds}
+                  onPress={handleFilePress}
+                  onLongPress={handleFileLongPress}
+                  onSelect={toggleSelection}
+                  scrollEnabled={false}
+                  showFilename={thumbShowFilename}
+                  showObject={thumbShowObject}
+                  showFilter={thumbShowFilter}
+                  showExposure={thumbShowExposure}
+                />
+              </View>
+            ))}
+            {Object.keys(groupedByFolder).length === 0 && (
+              <EmptyState icon="folder-outline" title={t("files.noGroups")} />
+            )}
+          </ScrollView>
         ) : viewMode === "timeline" ? (
           <FlashList
             data={timelineSections}

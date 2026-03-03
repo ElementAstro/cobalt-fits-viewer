@@ -87,4 +87,60 @@ describe("CropOverlay", () => {
     expect(getByText("160 × 80")).toBeTruthy();
     expect(getByText("(20, 10)")).toBeTruthy();
   });
+
+  it("renders aspect ratio chips", () => {
+    const { getByText } = render(<CropOverlay {...baseProps} />);
+    expect(getByText("editor.cropFree")).toBeTruthy();
+    expect(getByText("editor.cropSquare")).toBeTruthy();
+    expect(getByText("4:3")).toBeTruthy();
+    expect(getByText("16:9")).toBeTruthy();
+    expect(getByText("editor.cropOriginal")).toBeTruthy();
+  });
+
+  it("renders grid toggle chip", () => {
+    const { getByText } = render(<CropOverlay {...baseProps} />);
+    expect(getByText("editor.cropNoGrid")).toBeTruthy();
+  });
+
+  it("renders preset buttons", () => {
+    const { getByText } = render(<CropOverlay {...baseProps} />);
+    expect(getByText("editor.cropPresetAll")).toBeTruthy();
+    expect(getByText("editor.cropPresetCenter50")).toBeTruthy();
+  });
+
+  it("renders numeric coordinate inputs with initial values", () => {
+    const { getByDisplayValue } = render(<CropOverlay {...baseProps} />);
+    // Initial 80% center: x=100, y=80, w=800, h=640
+    expect(getByDisplayValue("100")).toBeTruthy();
+    expect(getByDisplayValue("80")).toBeTruthy();
+    expect(getByDisplayValue("800")).toBeTruthy();
+    expect(getByDisplayValue("640")).toBeTruthy();
+  });
+
+  it("preset All sets full image region", () => {
+    const { getByText } = render(<CropOverlay {...baseProps} />);
+    fireEvent.press(getByText("editor.cropPresetAll"));
+    expect(getByText("1000 × 800")).toBeTruthy();
+    expect(getByText("(0, 0)")).toBeTruthy();
+  });
+
+  it("preset Center 50% sets half-center region", () => {
+    const { getByText } = render(<CropOverlay {...baseProps} />);
+    fireEvent.press(getByText("editor.cropPresetCenter50"));
+    expect(getByText("500 × 400")).toBeTruthy();
+    expect(getByText("(250, 200)")).toBeTruthy();
+  });
+
+  it("accepts optional transform prop without crashing", () => {
+    const mockTransform = {
+      scale: 2,
+      translateX: 10,
+      translateY: 20,
+      canvasWidth: 500,
+      canvasHeight: 400,
+    };
+    const { getByText } = render(<CropOverlay {...baseProps} transform={mockTransform} />);
+    expect(getByText("common.cancel")).toBeTruthy();
+    expect(getByText("editor.apply")).toBeTruthy();
+  });
 });

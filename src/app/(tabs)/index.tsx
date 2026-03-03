@@ -31,6 +31,9 @@ import {
   ImportResultSheet,
   SelectionActionsSheet,
   UndoSnackbar,
+  FolderPickerSheet,
+  FolderBrowserView,
+  StorageAnalyticsSheet,
 } from "../../components/files";
 import { GuideTarget } from "../../components/common/GuideTarget";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
@@ -151,6 +154,8 @@ export default function FilesScreen() {
   const [showTrashSheet, setShowTrashSheet] = useState(false);
   const [showGroupSheet, setShowGroupSheet] = useState(false);
   const [showSelectionActions, setShowSelectionActions] = useState(false);
+  const [showFolderPicker, setShowFolderPicker] = useState(false);
+  const [showStorageAnalytics, setShowStorageAnalytics] = useState(false);
   const [showImportResultSheet, setShowImportResultSheet] = useState(false);
   const [pendingDeleteToken, setPendingDeleteToken] = useState<string | null>(null);
   const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
@@ -598,6 +603,17 @@ export default function FilesScreen() {
     Alert.alert(t("common.error"), t("files.exportFailed"));
   }, [exportFiles, logAction, logFailure, logSuccess, selectedIds, t]);
 
+  const handleMoveToFolder = useCallback(
+    (groupId: string) => {
+      if (selectedIds.length === 0) return;
+      const { moveFilesToGroup } = useFileGroupStore.getState();
+      moveFilesToGroup(selectedIds, undefined, groupId);
+      logSuccess("move_to_folder", { groupId, selectedCount: selectedIds.length });
+      clearSelection();
+    },
+    [clearSelection, logSuccess, selectedIds],
+  );
+
   const handleGroupApply = useCallback(
     (groupId: string) => {
       const result = groupFiles(selectedIds, groupId);
@@ -962,32 +978,48 @@ export default function FilesScreen() {
         onCancel={cancelImport}
       />
 
-      <FilesContent
-        displayFiles={displayFiles}
-        searchQuery={searchQuery}
-        activeFilterCount={activeFilterCount}
-        fileListStyle={fileListStyle}
-        isGridStyle={isGridStyle}
-        listColumns={listColumns}
-        isSelectionMode={isSelectionMode}
-        selectedIds={selectedIds}
-        selectedIdSet={selectedIdSet}
-        horizontalPadding={horizontalPadding}
-        contentPaddingTop={contentPaddingTop}
-        isLandscape={isLandscape}
-        thumbShowFilename={thumbShowFilename}
-        thumbShowObject={thumbShowObject}
-        thumbShowFilter={thumbShowFilter}
-        thumbShowExposure={thumbShowExposure}
-        ListHeader={ListHeader}
-        onFilePress={handleFilePress}
-        onFileLongPress={handleFileLongPress}
-        onToggleSelection={toggleSelection}
-        onToggleFavorite={toggleFavorite}
-        onSingleDelete={handleSingleDelete}
-        onImport={openImportSheet}
-        onClearFilters={clearLocalFilters}
-      />
+      {fileListStyle === "folder" ? (
+        <FolderBrowserView
+          horizontalPadding={horizontalPadding}
+          contentPaddingTop={contentPaddingTop}
+          isLandscape={isLandscape}
+          isSelectionMode={isSelectionMode}
+          selectedIds={selectedIds}
+          gridColumns={listColumns}
+          onFilePress={handleFilePress}
+          onFileLongPress={handleFileLongPress}
+          onToggleSelection={toggleSelection}
+          onImport={openImportSheet}
+          onManageFolders={() => setShowGroupSheet(true)}
+        />
+      ) : (
+        <FilesContent
+          displayFiles={displayFiles}
+          searchQuery={searchQuery}
+          activeFilterCount={activeFilterCount}
+          fileListStyle={fileListStyle}
+          isGridStyle={isGridStyle}
+          listColumns={listColumns}
+          isSelectionMode={isSelectionMode}
+          selectedIds={selectedIds}
+          selectedIdSet={selectedIdSet}
+          horizontalPadding={horizontalPadding}
+          contentPaddingTop={contentPaddingTop}
+          isLandscape={isLandscape}
+          thumbShowFilename={thumbShowFilename}
+          thumbShowObject={thumbShowObject}
+          thumbShowFilter={thumbShowFilter}
+          thumbShowExposure={thumbShowExposure}
+          ListHeader={ListHeader}
+          onFilePress={handleFilePress}
+          onFileLongPress={handleFileLongPress}
+          onToggleSelection={toggleSelection}
+          onToggleFavorite={toggleFavorite}
+          onSingleDelete={handleSingleDelete}
+          onImport={openImportSheet}
+          onClearFilters={clearLocalFilters}
+        />
+      )}
 
       <UndoSnackbar
         visible={!!pendingDeleteToken}
@@ -1080,6 +1112,17 @@ export default function FilesScreen() {
         onApplyGroup={handleGroupApply}
       />
 
+      <FolderPickerSheet
+        visible={showFolderPicker}
+        onClose={() => setShowFolderPicker(false)}
+        onSelect={handleMoveToFolder}
+      />
+
+      <StorageAnalyticsSheet
+        visible={showStorageAnalytics}
+        onClose={() => setShowStorageAnalytics(false)}
+      />
+
       <SelectionActionsSheet
         visible={showSelectionActions}
         onOpenChange={setShowSelectionActions}
@@ -1094,6 +1137,7 @@ export default function FilesScreen() {
         onBatchTag={() => setShowBatchTag(true)}
         onBatchRename={() => setShowBatchRename(true)}
         onGroupSheet={() => setShowGroupSheet(true)}
+        onMoveToFolder={() => setShowFolderPicker(true)}
         onBatchExport={handleBatchExport}
         onBatchConvert={goToBatchConvert}
         onCompare={goToCompare}

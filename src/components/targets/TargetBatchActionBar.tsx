@@ -16,6 +16,9 @@ interface TargetBatchActionBarProps {
   onDeselectAll: () => void;
   onBatchDelete: () => void;
   onBatchFavorite: () => void;
+  onBatchStatus?: () => void;
+  onBatchGroup?: () => void;
+  onBatchTag?: () => void;
   onExitSelectionMode: () => void;
 }
 
@@ -26,6 +29,9 @@ export const TargetBatchActionBar = React.memo(function TargetBatchActionBar({
   onDeselectAll,
   onBatchDelete,
   onBatchFavorite,
+  onBatchStatus,
+  onBatchGroup,
+  onBatchTag,
   onExitSelectionMode,
 }: TargetBatchActionBarProps) {
   const { t } = useI18n();
@@ -51,15 +57,39 @@ export const TargetBatchActionBar = React.memo(function TargetBatchActionBar({
         </Button>
       </View>
       <View className="flex-row items-center gap-1">
-        <Button
-          size="sm"
-          isIconOnly
-          variant="ghost"
-          onPress={() => setShowDeleteDialog(true)}
-          isDisabled={selectedCount === 0}
-        >
-          <Ionicons name="trash-outline" size={18} color={dangerColor} />
-        </Button>
+        {onBatchStatus && (
+          <Button
+            size="sm"
+            isIconOnly
+            variant="ghost"
+            onPress={onBatchStatus}
+            isDisabled={selectedCount === 0}
+          >
+            <Ionicons name="swap-horizontal-outline" size={18} color={mutedColor} />
+          </Button>
+        )}
+        {onBatchGroup && (
+          <Button
+            size="sm"
+            isIconOnly
+            variant="ghost"
+            onPress={onBatchGroup}
+            isDisabled={selectedCount === 0}
+          >
+            <Ionicons name="folder-open-outline" size={18} color={mutedColor} />
+          </Button>
+        )}
+        {onBatchTag && (
+          <Button
+            size="sm"
+            isIconOnly
+            variant="ghost"
+            onPress={onBatchTag}
+            isDisabled={selectedCount === 0}
+          >
+            <Ionicons name="pricetag-outline" size={18} color={mutedColor} />
+          </Button>
+        )}
         <Button
           size="sm"
           isIconOnly
@@ -68,6 +98,15 @@ export const TargetBatchActionBar = React.memo(function TargetBatchActionBar({
           isDisabled={selectedCount === 0}
         >
           <Ionicons name="star-outline" size={18} color={mutedColor} />
+        </Button>
+        <Button
+          size="sm"
+          isIconOnly
+          variant="ghost"
+          onPress={() => setShowDeleteDialog(true)}
+          isDisabled={selectedCount === 0}
+        >
+          <Ionicons name="trash-outline" size={18} color={dangerColor} />
         </Button>
       </View>
 

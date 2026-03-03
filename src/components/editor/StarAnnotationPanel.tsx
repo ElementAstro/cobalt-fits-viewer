@@ -5,6 +5,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { StarAnnotationStaleReason } from "../../lib/fits/types";
 
+interface StarFwhmStats {
+  medianFwhm: number;
+  meanFwhm: number;
+  stdFwhm: number;
+  count: number;
+}
+
 interface StarAnnotationPanelProps {
   successColor: string;
   detectedStarCount: number;
@@ -16,6 +23,7 @@ interface StarAnnotationPanelProps {
   starDetectionStage: string;
   starDetectionProgress: number;
   pendingAnchorIndex: 1 | 2 | 3 | null;
+  fwhmStats?: StarFwhmStats | null;
   onClose: () => void;
   onReDetect: () => void;
   onCancelDetection: () => void;
@@ -34,6 +42,7 @@ export const StarAnnotationPanel = React.memo(function StarAnnotationPanel({
   starDetectionStage,
   starDetectionProgress,
   pendingAnchorIndex,
+  fwhmStats,
   onClose,
   onReDetect,
   onCancelDetection,
@@ -65,6 +74,15 @@ export const StarAnnotationPanel = React.memo(function StarAnnotationPanel({
             {t("editor.detectedStars")}: {detectedStarCount} · {t("editor.manualStars")}:{" "}
             {manualStarCount} · {t("editor.enabledStars")}: {enabledStarCount}
           </Text>
+
+          {fwhmStats && (
+            <Text className="mt-1 text-[9px] text-muted">
+              FWHM: {fwhmStats.medianFwhm.toFixed(2)} (med) / {fwhmStats.meanFwhm.toFixed(2)} (avg)
+              {" ± "}
+              {fwhmStats.stdFwhm.toFixed(2)} · {fwhmStats.count}{" "}
+              {t("editor.detectedStars").toLowerCase()}
+            </Text>
+          )}
 
           {starAnnotationsStale && (
             <View className="mt-2 rounded-md bg-warning/15 px-2 py-1">

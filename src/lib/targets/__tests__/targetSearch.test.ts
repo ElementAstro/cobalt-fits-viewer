@@ -1,5 +1,5 @@
 import type { Target } from "../../fits/types";
-import { getSearchSuggestions, quickSearch, searchTargets } from "../targetSearch";
+import { getSearchSuggestions, quickSearch, searchTargets, sortTargets } from "../targetSearch";
 
 const makeTarget = (overrides: Partial<Target> = {}): Target => {
   const now = Date.now();
@@ -121,5 +121,59 @@ describe("targetSearch", () => {
 
   it("returns empty suggestions on blank query", () => {
     expect(getSearchSuggestions(targets, " ")).toEqual([]);
+  });
+
+  describe("sortTargets", () => {
+    it("sorts by name ascending", () => {
+      const sorted = sortTargets(targets, "name", "asc");
+      expect(sorted.map((t) => t.id)).toEqual(["c", "b", "a"]);
+    });
+
+    it("sorts by name descending", () => {
+      const sorted = sortTargets(targets, "name", "desc");
+      // b and c are pinned so come first; among pinned, desc name: M31(b) > Jupiter(c)
+      // then unpinned: a (M42)
+      expect(sorted.map((t) => t.id)).toEqual(["b", "c", "a"]);
+    });
+
+    it("pinned targets always come first regardless of sort", () => {
+      const sorted = sortTargets(targets, "name", "asc");
+      // b and c are pinned, should come before a
+      expect(sorted[0].isPinned || sorted[1].isPinned).toBe(true);
+      const unpinned = sorted.filter((t) => !t.isPinned);
+      expect(unpinned[0].id).toBe("a");
+    });
+
+    it("sorts by frames count", () => {
+      const sorted = sortTargets(targets, "frames", "desc");
+      const unpinned = sorted.filter((t) => !t.isPinned);
+      // a has 1 image (only unpinned), so it's the only one
+      expect(unpinned[0].imageIds.length).toBe(1);
+    });
+
+    it("sorts by exposure using lookup function", () => {
+      const lookup = (id: string) => {
+        if (id === "a") return 300;
+        if (id === "c") return 100;
+        return 0;
+      };
+      const sorted = sortTargets(targets, "exposure", "desc", lookup);
+      // pinned first (b, c), then a
+      const unpinned = sorted.filter((t) => !t.isPinned);
+      expect(unpinned[0].id).toBe("a");
+    });
+
+    it("sorts by favorite then date", () => {
+      const sorted = sortTargets(targets, "favorite", "desc");
+      // pinned first, then among unpinned: a is favorite
+      const unpinned = sorted.filter((t) => !t.isPinned);
+      expect(unpinned[0].isFavorite).toBe(true);
+    });
+
+    it("does not mutate the original array", () => {
+      const original = [...targets];
+      sortTargets(targets, "name", "asc");
+      expect(targets).toEqual(original);
+    });
   });
 });

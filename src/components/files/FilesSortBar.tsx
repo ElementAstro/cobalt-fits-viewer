@@ -15,10 +15,10 @@ const SORT_LABEL_KEYS: Record<FitsSortBy, string> = {
 interface FilesSortBarProps {
   sortBy: FitsSortBy;
   sortOrder: FitsSortOrder;
-  fileListStyle: "grid" | "list" | "compact";
+  fileListStyle: "grid" | "list" | "compact" | "folder";
   fileListGridColumns: 2 | 3 | 4;
   onSortToggle: (key: FitsSortBy) => void;
-  onStyleChange: (style: "grid" | "list" | "compact") => void;
+  onStyleChange: (style: "grid" | "list" | "compact" | "folder") => void;
   onGridColumnsChange: (cols: 2 | 3 | 4) => void;
 }
 
@@ -52,7 +52,7 @@ export function FilesSortBar({
 
         <Separator orientation="vertical" className="h-4" />
 
-        {(["grid", "list", "compact"] as const).map((style) => (
+        {(["grid", "list", "compact", "folder"] as const).map((style) => (
           <Chip
             key={style}
             size="sm"
@@ -64,7 +64,9 @@ export function FilesSortBar({
                 ? t("settings.fileListGrid")
                 : style === "list"
                   ? t("settings.fileListList")
-                  : t("settings.fileListCompact")}
+                  : style === "compact"
+                    ? t("settings.fileListCompact")
+                    : t("files.folders")}
             </Chip.Label>
           </Chip>
         ))}

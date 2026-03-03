@@ -2,7 +2,13 @@ import { memo } from "react";
 import { Text, View } from "react-native";
 import { Card, Chip } from "heroui-native";
 import type { HistogramDiagnostics } from "../../lib/fits/types";
+import type { AstrometryCalibration } from "../../lib/astrometry/types";
 import { formatStatValue, formatClipPercent } from "../../lib/utils/formatters";
+import {
+  formatFieldSize,
+  formatRACompact,
+  formatDecCompact,
+} from "../../lib/astrometry/formatUtils";
 import { useI18n } from "../../i18n/useI18n";
 
 interface StatsLike {
@@ -38,6 +44,7 @@ interface ImageInfoMetricsCardProps {
   currentHDU?: number;
   currentFrame?: number;
   totalFrames?: number;
+  calibration?: AstrometryCalibration | null;
 }
 
 export const ImageInfoMetricsCard = memo(function ImageInfoMetricsCard({
@@ -50,6 +57,7 @@ export const ImageInfoMetricsCard = memo(function ImageInfoMetricsCard({
   currentHDU,
   currentFrame,
   totalFrames,
+  calibration,
 }: ImageInfoMetricsCardProps) {
   const { t } = useI18n();
 
@@ -96,6 +104,26 @@ export const ImageInfoMetricsCard = memo(function ImageInfoMetricsCard({
             <Chip size="sm" variant="secondary">
               <Chip.Label className="text-[8px]">~ {t("viewer.approximate")}</Chip.Label>
             </Chip>
+          )}
+          {calibration && (
+            <>
+              <Chip size="sm" variant="primary">
+                <Chip.Label className="text-[8px]">
+                  {formatFieldSize(calibration.fieldWidth)}×
+                  {formatFieldSize(calibration.fieldHeight)}
+                </Chip.Label>
+              </Chip>
+              <Chip size="sm" variant="primary">
+                <Chip.Label className="text-[8px]">
+                  {calibration.pixscale.toFixed(2)}″/px
+                </Chip.Label>
+              </Chip>
+              <Chip size="sm" variant="primary">
+                <Chip.Label className="text-[8px]">
+                  {formatRACompact(calibration.ra)} {formatDecCompact(calibration.dec)}
+                </Chip.Label>
+              </Chip>
+            </>
           )}
         </View>
 

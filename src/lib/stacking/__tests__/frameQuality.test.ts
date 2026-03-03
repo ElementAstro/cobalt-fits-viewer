@@ -90,9 +90,48 @@ describe("stacking frameQuality", () => {
       noise: 1,
     });
     const stars = [
-      { cx: 1, cy: 1, flux: 40, peak: 40, area: 3, fwhm: 2.1 },
-      { cx: 2, cy: 2, flux: 35, peak: 35, area: 3, fwhm: 2.4 },
-      { cx: 3, cy: 3, flux: 30, peak: 30, area: 3, fwhm: 2.8 },
+      {
+        cx: 1,
+        cy: 1,
+        flux: 40,
+        peak: 40,
+        area: 3,
+        fwhm: 2.1,
+        roundness: 1,
+        ellipticity: 0,
+        theta: 0,
+        snr: 0,
+        sharpness: 0,
+        flags: 0,
+      },
+      {
+        cx: 2,
+        cy: 2,
+        flux: 35,
+        peak: 35,
+        area: 3,
+        fwhm: 2.4,
+        roundness: 1,
+        ellipticity: 0,
+        theta: 0,
+        snr: 0,
+        sharpness: 0,
+        flags: 0,
+      },
+      {
+        cx: 3,
+        cy: 3,
+        flux: 30,
+        peak: 30,
+        area: 3,
+        fwhm: 2.8,
+        roundness: 1,
+        ellipticity: 0,
+        theta: 0,
+        snr: 0,
+        sharpness: 0,
+        flags: 0,
+      },
     ];
 
     const metrics = evaluateFrameQuality(new Float32Array([1, 2, 3, 4]), 2, 2, {
@@ -110,8 +149,34 @@ describe("stacking frameQuality", () => {
       noise: 2,
     });
     mockDetectStarsAsync.mockResolvedValue([
-      { cx: 1, cy: 1, flux: 20, peak: 20, area: 3, fwhm: 2, roundness: 1, ellipticity: 0 },
-      { cx: 2, cy: 2, flux: 25, peak: 25, area: 3, fwhm: 2.4, roundness: 0.95, ellipticity: 0.05 },
+      {
+        cx: 1,
+        cy: 1,
+        flux: 20,
+        peak: 20,
+        area: 3,
+        fwhm: 2,
+        roundness: 1,
+        ellipticity: 0,
+        theta: 0,
+        snr: 0,
+        sharpness: 0,
+        flags: 0,
+      },
+      {
+        cx: 2,
+        cy: 2,
+        flux: 25,
+        peak: 25,
+        area: 3,
+        fwhm: 2.4,
+        roundness: 0.95,
+        ellipticity: 0.05,
+        theta: 0,
+        snr: 0,
+        sharpness: 0,
+        flags: 0,
+      },
     ]);
 
     const progress: number[] = [];

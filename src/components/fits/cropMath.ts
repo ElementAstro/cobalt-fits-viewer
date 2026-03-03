@@ -50,6 +50,71 @@ export function moveCropRegion(
   );
 }
 
+export type AspectRatioPreset = "free" | "1:1" | "4:3" | "3:2" | "16:9" | "original";
+
+export function getAspectRatioValue(
+  preset: AspectRatioPreset,
+  imageWidth: number,
+  imageHeight: number,
+): number | null {
+  switch (preset) {
+    case "free":
+      return null;
+    case "1:1":
+      return 1;
+    case "4:3":
+      return 4 / 3;
+    case "3:2":
+      return 3 / 2;
+    case "16:9":
+      return 16 / 9;
+    case "original":
+      return imageHeight > 0 ? imageWidth / imageHeight : 1;
+  }
+}
+
+export function applyAspectRatio(
+  region: CropRegion,
+  aspect: number | null,
+  imageWidth: number,
+  imageHeight: number,
+  minCropSize: number,
+): CropRegion {
+  if (aspect == null || aspect <= 0) return region;
+  const centerX = region.x + region.w / 2;
+  const centerY = region.y + region.h / 2;
+  let w = region.w;
+  let h = Math.round(w / aspect);
+  if (h > imageHeight) {
+    h = imageHeight;
+    w = Math.round(h * aspect);
+  }
+  if (w > imageWidth) {
+    w = imageWidth;
+    h = Math.round(w / aspect);
+  }
+  w = Math.max(minCropSize, w);
+  h = Math.max(minCropSize, h);
+  const x = Math.round(centerX - w / 2);
+  const y = Math.round(centerY - h / 2);
+  return clampCropRegion({ x, y, w, h }, imageWidth, imageHeight, minCropSize);
+}
+
+export function resizeCropRegionWithAspect(
+  region: CropRegion,
+  handle: CropResizeHandle,
+  dx: number,
+  dy: number,
+  aspect: number | null,
+  imageWidth: number,
+  imageHeight: number,
+  minCropSize: number,
+): CropRegion {
+  const resized = resizeCropRegion(region, handle, dx, dy, imageWidth, imageHeight, minCropSize);
+  if (aspect == null) return resized;
+  return applyAspectRatio(resized, aspect, imageWidth, imageHeight, minCropSize);
+}
+
 export function resizeCropRegion(
   region: CropRegion,
   handle: CropResizeHandle,

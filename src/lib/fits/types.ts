@@ -319,6 +319,9 @@ export interface FitsMetadata {
 
   // Non-destructive editor recipe
   editorRecipe?: ProcessingPipelineSnapshot;
+
+  // WCS calibration parsed from FITS header (if present)
+  wcsCalibration?: import("../astrometry/types").AstrometryCalibration;
 }
 
 export type ProcessingExecutionMode = "preview" | "full";
@@ -429,6 +432,12 @@ export interface FileGroup {
   color?: string;
   createdAt: number;
   updatedAt: number;
+  parentId?: string;
+  description?: string;
+  icon?: string;
+  coverImageId?: string;
+  sortOrder?: number;
+  isPinned?: boolean;
 }
 
 export interface ViewerPreset {
@@ -637,6 +646,10 @@ export interface TargetGroup {
   name: string;
   description?: string;
   color?: string;
+  icon?: string;
+  isPinned?: boolean;
+  sortOrder?: number;
+  coverImageId?: string;
   targetIds: string[];
   createdAt: number;
   updatedAt: number;
@@ -1120,7 +1133,7 @@ export interface BatchTask {
 }
 
 // ===== 相册视图模式 =====
-export type GalleryViewMode = "grid" | "list" | "timeline";
+export type GalleryViewMode = "grid" | "list" | "timeline" | "folder";
 
 // ===== 统计数据 =====
 export interface ExposureStats {

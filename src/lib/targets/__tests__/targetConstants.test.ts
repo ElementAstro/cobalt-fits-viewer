@@ -42,8 +42,8 @@ describe("targetConstants", () => {
   });
 
   describe("GROUP_COLORS", () => {
-    it("has 8 colors", () => {
-      expect(GROUP_COLORS).toHaveLength(8);
+    it("has 16 colors", () => {
+      expect(GROUP_COLORS).toHaveLength(16);
     });
 
     it("all are valid hex colors", () => {

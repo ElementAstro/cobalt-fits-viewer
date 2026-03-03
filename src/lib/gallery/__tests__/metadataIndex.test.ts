@@ -1,7 +1,8 @@
-import type { FitsMetadata } from "../../fits/types";
+import type { FitsMetadata, FileGroup } from "../../fits/types";
 import {
   buildMetadataIndex,
   groupByDate,
+  groupByGroup,
   groupByLocation,
   groupByObject,
   searchFiles,
@@ -111,5 +112,26 @@ describe("metadataIndex", () => {
     expect(groupByDate(files).Unknown.map((f) => f.id)).toEqual(["b"]);
     expect(groupByObject(files).M42.map((f) => f.id)).toEqual(["a"]);
     expect(groupByObject(files).Unknown.map((f) => f.id)).toEqual(["b"]);
+  });
+
+  it("groups files by FileGroup with ungrouped fallback", () => {
+    const files = [makeFile({ id: "f1" }), makeFile({ id: "f2" }), makeFile({ id: "f3" })];
+    const groups: FileGroup[] = [
+      { id: "g1", name: "Stars", createdAt: 1, updatedAt: 1 },
+      { id: "g2", name: "Nebulae", createdAt: 2, updatedAt: 2 },
+    ];
+    const fileGroupMap: Record<string, string[]> = {
+      f1: ["g1"],
+      f2: ["g1", "g2"],
+    };
+    const result = groupByGroup(files, fileGroupMap, groups);
+    expect(result["Stars"].map((f) => f.id).sort()).toEqual(["f1", "f2"]);
+    expect(result["Nebulae"].map((f) => f.id)).toEqual(["f2"]);
+    expect(result["__ungrouped__"].map((f) => f.id)).toEqual(["f3"]);
+  });
+
+  it("groupByGroup returns empty when no files", () => {
+    const result = groupByGroup([], {}, []);
+    expect(Object.keys(result)).toHaveLength(0);
   });
 });

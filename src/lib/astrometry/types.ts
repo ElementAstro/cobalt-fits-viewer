@@ -50,6 +50,26 @@ export interface AstrometryResult {
   tags: string[];
 }
 
+// ===== SIP 畸变校正系数 =====
+export interface SIPCoefficients {
+  /** 正向 (pixel→sky) X 方向多项式阶数 */
+  aOrder: number;
+  /** 正向 (pixel→sky) Y 方向多项式阶数 */
+  bOrder: number;
+  /** A_i_j 系数矩阵 (正向 X) */
+  a: number[][];
+  /** B_i_j 系数矩阵 (正向 Y) */
+  b: number[][];
+  /** 逆向 (sky→pixel) X 方向多项式阶数 */
+  apOrder?: number;
+  /** 逆向 (sky→pixel) Y 方向多项式阶数 */
+  bpOrder?: number;
+  /** AP_i_j 系数矩阵 (逆向 X) */
+  ap?: number[][];
+  /** BP_i_j 系数矩阵 (逆向 Y) */
+  bp?: number[][];
+}
+
 // ===== WCS 标定结果 =====
 export interface AstrometryCalibration {
   /** 中心 RA (度) */
@@ -68,6 +88,8 @@ export interface AstrometryCalibration {
   fieldWidth: number;
   /** 视场高 (度) */
   fieldHeight: number;
+  /** SIP 畸变校正系数 (可选) */
+  sip?: SIPCoefficients;
 }
 
 // ===== 天体标注 =====

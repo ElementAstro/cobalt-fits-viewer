@@ -10,7 +10,14 @@ jest.mock("../exposureStats", () => ({
 
 import { Share } from "react-native";
 import type { Target } from "../../fits/types";
-import { formatTargetAsJSON, formatTargetAsText, shareTarget } from "../targetExport";
+import {
+  formatTargetAsJSON,
+  formatTargetAsText,
+  formatTargetsAsJSON,
+  formatTargetsAsCSV,
+  shareTarget,
+  shareTargets,
+} from "../targetExport";
 
 const makeTarget = (overrides: Partial<Target> = {}): Target => {
   const now = Date.now();
@@ -82,5 +89,82 @@ describe("targetExport", () => {
 
     shareSpy.mockRejectedValueOnce(new Error("boom"));
     await expect(shareTarget(target)).resolves.toBe(false);
+  });
+
+  describe("multi-target export", () => {
+    const targets = [
+      makeTarget({
+        id: "a",
+        name: "M42",
+        type: "nebula",
+        status: "planned",
+        ra: 83.8,
+        dec: -5.4,
+        category: "Winter",
+        tags: ["deep-sky"],
+        aliases: ["Orion"],
+      }),
+      makeTarget({
+        id: "b",
+        name: "M31",
+        type: "galaxy",
+        status: "completed",
+        ra: 10.7,
+        dec: 41.3,
+        tags: [],
+      }),
+    ];
+
+    it("formatTargetsAsJSON produces valid JSON array", () => {
+      const json = formatTargetsAsJSON(targets);
+      const parsed = JSON.parse(json) as Array<Record<string, unknown>>;
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0].name).toBe("M42");
+      expect(parsed[0].category).toBe("Winter");
+      expect(parsed[1].name).toBe("M31");
+      expect(parsed[1].type).toBe("galaxy");
+    });
+
+    it("formatTargetsAsCSV produces header + data rows", () => {
+      const csv = formatTargetsAsCSV(targets);
+      const lines = csv.split("\n");
+      expect(lines).toHaveLength(3);
+      expect(lines[0]).toContain("name");
+      expect(lines[0]).toContain("type");
+      expect(lines[0]).toContain("ra");
+      expect(lines[1]).toContain("M42");
+      expect(lines[2]).toContain("M31");
+    });
+
+    it("formatTargetsAsCSV escapes commas and quotes in fields", () => {
+      const t = [makeTarget({ name: 'NGC 1234, "The Blob"', notes: "line1\nline2" })];
+      const csv = formatTargetsAsCSV(t);
+      // Name should be quoted and internal quotes doubled
+      expect(csv).toContain('"NGC 1234, ""The Blob"""');
+      // Notes with newline should be quoted
+      expect(csv).toContain('"line1\nline2"');
+    });
+
+    it("shareTargets calls Share.share with JSON format", async () => {
+      const shareSpy = jest.spyOn(Share, "share");
+      shareSpy.mockResolvedValueOnce({ action: Share.sharedAction } as never);
+      const result = await shareTargets(targets, "json");
+      expect(result).toBe(true);
+      expect(shareSpy).toHaveBeenCalledWith(expect.objectContaining({ title: "2 Targets" }));
+    });
+
+    it("shareTargets handles csv and text formats", async () => {
+      const shareSpy = jest.spyOn(Share, "share");
+      shareSpy.mockResolvedValueOnce({ action: Share.sharedAction } as never);
+      await shareTargets(targets, "csv");
+      const csvCall = shareSpy.mock.calls[shareSpy.mock.calls.length - 1][0];
+      expect(csvCall.message).toContain("name,type");
+
+      shareSpy.mockResolvedValueOnce({ action: Share.sharedAction } as never);
+      await shareTargets(targets, "text");
+      const textCall = shareSpy.mock.calls[shareSpy.mock.calls.length - 1][0];
+      expect(textCall.message).toContain("🔭 M42");
+      expect(textCall.message).toContain("🔭 M31");
+    });
   });
 });

@@ -122,6 +122,49 @@ export function searchTargets(targets: Target[], conditions: SearchConditions): 
   };
 }
 
+export type TargetSortKey = "name" | "date" | "frames" | "exposure" | "favorite";
+
+/**
+ * 排序目标列表（从 targets.tsx 提取的通用纯函数）
+ */
+export function sortTargets(
+  targets: Target[],
+  sortBy: TargetSortKey,
+  sortOrder: "asc" | "desc",
+  exposureLookup?: (targetId: string) => number,
+): Target[] {
+  return [...targets].sort((a, b) => {
+    if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+
+    let cmp = 0;
+    switch (sortBy) {
+      case "name":
+        cmp = a.name.localeCompare(b.name);
+        break;
+      case "date":
+        cmp = a.createdAt - b.createdAt;
+        break;
+      case "frames":
+        cmp = a.imageIds.length - b.imageIds.length;
+        break;
+      case "exposure": {
+        const aExp = exposureLookup?.(a.id) ?? 0;
+        const bExp = exposureLookup?.(b.id) ?? 0;
+        cmp = aExp - bExp;
+        break;
+      }
+      case "favorite":
+        cmp = Number(a.isFavorite) - Number(b.isFavorite);
+        if (cmp === 0) {
+          cmp = a.createdAt - b.createdAt;
+        }
+        break;
+    }
+
+    return sortOrder === "asc" ? cmp : -cmp;
+  });
+}
+
 /**
  * 快速搜索（仅名称和别名）
  */

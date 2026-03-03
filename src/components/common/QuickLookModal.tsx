@@ -5,7 +5,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { View, Text } from "react-native";
 import { Image } from "expo-image";
-import { Button, Dialog, Separator, Spinner, useThemeColor } from "heroui-native";
+import { Accordion, Button, Chip, Dialog, Separator, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useVideoPlayer, VideoView } from "expo-video";
 import { useI18n } from "../../i18n/useI18n";
@@ -15,6 +15,8 @@ import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import { isVideoFile, isAudioFile, isMediaWorkspaceFile } from "../../lib/media/routing";
 import { useFitsStore } from "../../stores/useFitsStore";
+import { useAlbumStore } from "../../stores/useAlbumStore";
+import { useFileGroupStore } from "../../stores/useFileGroupStore";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { InfoRow } from "./InfoRow";
 
@@ -175,6 +177,9 @@ export function QuickLookModal({
             )}
           </View>
 
+          {/* Extended Details */}
+          <FileDetailAccordion file={file} />
+
           {/* Quick Actions */}
           {(onToggleFavorite || onDelete || onRename || onAddTag) && (
             <View className="mt-3 flex-row justify-around rounded-lg bg-surface-secondary py-2">
@@ -279,5 +284,130 @@ function QuickAction({
         {label}
       </Text>
     </Button>
+  );
+}
+
+function FileDetailAccordion({ file }: { file: FitsMetadata }) {
+  const { t } = useI18n();
+  const albums = useAlbumStore((s) => s.albums);
+  const fileGroupStore = useFileGroupStore((s) => s.groups);
+  const getFileGroupIds = useFileGroupStore((s) => s.getFileGroupIds);
+
+  const fileAlbums = useMemo(
+    () => albums.filter((a) => a.imageIds.includes(file.id)),
+    [albums, file.id],
+  );
+  const fileGroups = useMemo(() => {
+    const ids = getFileGroupIds(file.id);
+    return fileGroupStore.filter((g) => ids.includes(g.id));
+  }, [file.id, fileGroupStore, getFileGroupIds]);
+
+  const importDate = file.importDate ? new Date(file.importDate).toLocaleDateString() : undefined;
+  const lastViewed = file.lastViewed ? new Date(file.lastViewed).toLocaleDateString() : undefined;
+
+  const hasDetails =
+    file.instrument ||
+    file.telescope ||
+    file.gain != null ||
+    file.ccdTemp != null ||
+    file.ra != null ||
+    file.dec != null ||
+    file.frameTypeSource ||
+    file.sourceFormat;
+
+  return (
+    <Accordion className="mt-2" variant="surface">
+      {hasDetails && (
+        <Accordion.Item value="details">
+          <Accordion.Trigger>
+            <Text className="text-xs font-medium text-foreground flex-1">
+              {t("files.fileDetails")}
+            </Text>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+          <Accordion.Content>
+            <View className="gap-1">
+              {importDate && <InfoRow label={t("files.importedAt")} value={importDate} />}
+              {lastViewed && <InfoRow label={t("files.lastViewed")} value={lastViewed} />}
+              {file.sourceFormat && (
+                <InfoRow label={t("files.sourceFormat")} value={file.sourceFormat.toUpperCase()} />
+              )}
+              {file.frameType && <InfoRow label={t("gallery.frameType")} value={file.frameType} />}
+              {file.instrument && (
+                <InfoRow label={t("targets.instrument")} value={file.instrument} />
+              )}
+              {file.telescope && <InfoRow label={t("targets.telescope")} value={file.telescope} />}
+              {file.gain != null && <InfoRow label={t("targets.gain")} value={String(file.gain)} />}
+              {file.ccdTemp != null && (
+                <InfoRow label={t("targets.ccdTemp")} value={`${file.ccdTemp}°C`} />
+              )}
+              {file.ra != null && file.dec != null && (
+                <InfoRow
+                  label="RA / DEC"
+                  value={`${file.ra.toFixed(4)}° / ${file.dec.toFixed(4)}°`}
+                />
+              )}
+              {file.qualityScore != null && (
+                <InfoRow label={t("gallery.quality")} value={`${file.qualityScore}/100`} />
+              )}
+              <InfoRow label={t("files.filePath")} value={file.filepath} size="xs" selectable />
+            </View>
+          </Accordion.Content>
+        </Accordion.Item>
+      )}
+
+      {(fileAlbums.length > 0 || fileGroups.length > 0 || file.tags.length > 0) && (
+        <Accordion.Item value="relations">
+          <Accordion.Trigger>
+            <Text className="text-xs font-medium text-foreground flex-1">
+              {t("files.belongsTo")}
+            </Text>
+            <Accordion.Indicator />
+          </Accordion.Trigger>
+          <Accordion.Content>
+            <View className="gap-2">
+              {fileAlbums.length > 0 && (
+                <View className="gap-1">
+                  <Text className="text-[10px] font-semibold text-muted">
+                    {t("gallery.albumsTab")}
+                  </Text>
+                  <View className="flex-row flex-wrap gap-1">
+                    {fileAlbums.map((album) => (
+                      <Chip key={album.id} size="sm" variant="secondary">
+                        <Chip.Label className="text-[10px]">{album.name}</Chip.Label>
+                      </Chip>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {fileGroups.length > 0 && (
+                <View className="gap-1">
+                  <Text className="text-[10px] font-semibold text-muted">{t("files.folders")}</Text>
+                  <View className="flex-row flex-wrap gap-1">
+                    {fileGroups.map((group) => (
+                      <Chip key={group.id} size="sm" variant="secondary">
+                        <Chip.Label className="text-[10px]">{group.name}</Chip.Label>
+                      </Chip>
+                    ))}
+                  </View>
+                </View>
+              )}
+              {file.tags.length > 0 && (
+                <View className="gap-1">
+                  <Text className="text-[10px] font-semibold text-muted">{t("files.tags")}</Text>
+                  <View className="flex-row flex-wrap gap-1">
+                    {file.tags.map((tag) => (
+                      <Chip key={tag} size="sm" variant="secondary">
+                        <Chip.Label className="text-[10px]">#{tag}</Chip.Label>
+                      </Chip>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          </Accordion.Content>
+        </Accordion.Item>
+      )}
+    </Accordion>
   );
 }

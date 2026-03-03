@@ -127,6 +127,19 @@ export async function parseImageBuffer(
       rgbChannels = channels ? { r: channels.r, g: channels.g, b: channels.b } : null;
     }
     const commentsHistory = getCommentsAndHistory(fits);
+    const headers = getHeaderKeywords(fits);
+    const metadataBase = extractMetadata(fits, fileInfo, options.frameClassificationConfig);
+
+    // Attempt to parse WCS calibration from FITS header keywords
+    try {
+      const { parseWCSFromHeaders } = await import("../astrometry/wcsParser");
+      const wcsCalibration = parseWCSFromHeaders(headers);
+      if (wcsCalibration) {
+        (metadataBase as Record<string, unknown>).wcsCalibration = wcsCalibration;
+      }
+    } catch {
+      // WCS parsing is best-effort; failures are silently ignored
+    }
 
     return {
       detectedFormat,
@@ -137,10 +150,10 @@ export async function parseImageBuffer(
       pixels,
       rgbChannels,
       dimensions,
-      headers: getHeaderKeywords(fits),
+      headers,
       comments: commentsHistory.comments,
       history: commentsHistory.history,
-      metadataBase: extractMetadata(fits, fileInfo, options.frameClassificationConfig),
+      metadataBase,
       decodeStatus: "ready",
       decodeError: undefined,
       serInfo: getSerMetadata(fits),

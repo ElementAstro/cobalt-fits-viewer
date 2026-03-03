@@ -101,6 +101,9 @@ interface ViewerControlPanelProps {
   onResetToSaved: () => void;
   onApplyQuickPreset?: (preset: "auto" | "linearReset" | "deepSky" | "moonPlanet") => void;
 
+  // WCS calibration (unified: astrometry.net > imported > header)
+  calibration?: import("../../lib/astrometry/types").AstrometryCalibration | null;
+
   // Astrometry
   showAstrometryResult: boolean;
   latestSolvedJob?: AstrometryJob;
@@ -177,6 +180,7 @@ export function ViewerControlPanel({
   onSavePreset,
   onResetToSaved,
   onApplyQuickPreset,
+  calibration,
   showAstrometryResult,
   latestSolvedJob,
   showAnnotations,
@@ -248,6 +252,7 @@ export function ViewerControlPanel({
                 currentHDU={currentHDU}
                 currentFrame={currentFrame}
                 totalFrames={totalFrames}
+                calibration={calibration}
               />
             </View>
           )}

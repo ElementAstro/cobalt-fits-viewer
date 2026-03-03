@@ -91,6 +91,52 @@ export function formatTargetAsJSON(target: Target): string {
 }
 
 /**
+ * 将多个目标导出为 JSON 字符串
+ */
+export function formatTargetsAsJSON(targets: Target[]): string {
+  const exportData = targets.map((target) => ({
+    name: target.name,
+    aliases: target.aliases,
+    type: target.type,
+    status: target.status,
+    category: target.category,
+    tags: target.tags,
+    ra: target.ra,
+    dec: target.dec,
+    plannedFilters: target.plannedFilters,
+    plannedExposure: target.plannedExposure,
+    notes: target.notes,
+  }));
+  return JSON.stringify(exportData, null, 2);
+}
+
+/**
+ * 将多个目标导出为 CSV 字符串
+ */
+export function formatTargetsAsCSV(targets: Target[]): string {
+  const headers = ["name", "type", "status", "category", "tags", "ra", "dec", "aliases", "notes"];
+  const rows = targets.map((target) => [
+    csvEscape(target.name),
+    target.type,
+    target.status,
+    csvEscape(target.category ?? ""),
+    csvEscape(target.tags.join("; ")),
+    target.ra?.toString() ?? "",
+    target.dec?.toString() ?? "",
+    csvEscape(target.aliases.join("; ")),
+    csvEscape(target.notes ?? ""),
+  ]);
+  return [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+}
+
+function csvEscape(value: string): string {
+  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+/**
  * 使用系统分享功能分享目标
  */
 export async function shareTarget(
@@ -106,6 +152,36 @@ export async function shareTarget(
     const result = await Share.share({
       message: text,
       title: target.name,
+    });
+    return result.action === Share.sharedAction;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 使用系统分享功能分享多个目标
+ */
+export async function shareTargets(
+  targets: Target[],
+  format: "json" | "csv" | "text" = "json",
+): Promise<boolean> {
+  try {
+    let message: string;
+    switch (format) {
+      case "json":
+        message = formatTargetsAsJSON(targets);
+        break;
+      case "csv":
+        message = formatTargetsAsCSV(targets);
+        break;
+      case "text":
+        message = targets.map((t) => formatTargetAsText(t)).join("\n\n---\n\n");
+        break;
+    }
+    const result = await Share.share({
+      message,
+      title: `${targets.length} Targets`,
     });
     return result.action === Share.sharedAction;
   } catch {

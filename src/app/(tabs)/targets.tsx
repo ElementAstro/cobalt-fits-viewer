@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { View, FlatList, useWindowDimensions } from "react-native";
-import { BottomSheet, Spinner } from "heroui-native";
+import { BottomSheet, Button, Chip, Dialog, Spinner } from "heroui-native";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
@@ -25,8 +25,14 @@ import {
   type SummaryItem,
 } from "../../components/common/OperationSummaryDialog";
 import { TargetBatchActionBar } from "../../components/targets/TargetBatchActionBar";
+import { TagInput } from "../../components/targets/TagInput";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
+import {
+  TARGET_STATUSES,
+  targetStatusI18nKey,
+  STATUS_COLORS,
+} from "../../lib/targets/targetConstants";
 import { resolveTargetInteractionUi } from "../../lib/targets/targetInteractionUi";
 
 export default function TargetsScreen() {
@@ -44,6 +50,10 @@ export default function TargetsScreen() {
   const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const [showDuplicateMerge, setShowDuplicateMerge] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
+  const [showBatchStatusDialog, setShowBatchStatusDialog] = useState(false);
+  const [showBatchGroupSheet, setShowBatchGroupSheet] = useState(false);
+  const [showBatchTagSheet, setShowBatchTagSheet] = useState(false);
+  const [batchTagsBuffer, setBatchTagsBuffer] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [summaryDialog, setSummaryDialog] = useState<{
     title: string;
@@ -82,6 +92,9 @@ export default function TargetsScreen() {
     togglePinned,
     allTags,
     allCategories,
+    batchSetStatus,
+    batchAddToGroup,
+    batchAddTags,
   } = useTargets();
 
   const { isSelectionMode, selectedIds, toggleSelection, exitSelectionMode, selectAll } =
@@ -243,6 +256,42 @@ export default function TargetsScreen() {
     }
     exitSelectionMode();
   }, [exitSelectionMode, logAction, logSuccess, selectedIds, toggleFavorite]);
+
+  const handleBatchStatus = useCallback(
+    (status: TargetStatus) => {
+      if (selectedIds.length === 0) return;
+      logAction("batch_set_status", { selectedCount: selectedIds.length, status });
+      batchSetStatus(selectedIds, status);
+      logSuccess("batch_set_status", { selectedCount: selectedIds.length, status });
+      setShowBatchStatusDialog(false);
+      exitSelectionMode();
+    },
+    [batchSetStatus, exitSelectionMode, logAction, logSuccess, selectedIds],
+  );
+
+  const handleBatchGroupSave = useCallback(
+    (groupId: string) => {
+      if (selectedIds.length === 0) return;
+      logAction("batch_add_to_group", { selectedCount: selectedIds.length, groupId });
+      batchAddToGroup(selectedIds, groupId);
+      logSuccess("batch_add_to_group", { selectedCount: selectedIds.length });
+      setShowBatchGroupSheet(false);
+      exitSelectionMode();
+    },
+    [batchAddToGroup, exitSelectionMode, logAction, logSuccess, selectedIds],
+  );
+
+  const handleBatchTagSave = useCallback(
+    (newTags: string[]) => {
+      if (selectedIds.length === 0 || newTags.length === 0) return;
+      logAction("batch_add_tags", { selectedCount: selectedIds.length, tagCount: newTags.length });
+      batchAddTags(selectedIds, newTags);
+      logSuccess("batch_add_tags", { selectedCount: selectedIds.length });
+      setShowBatchTagSheet(false);
+      exitSelectionMode();
+    },
+    [batchAddTags, exitSelectionMode, logAction, logSuccess, selectedIds],
+  );
 
   const handleSelectAll = useCallback(() => {
     selectAll(filteredTargets.map((t) => t.id));
@@ -426,6 +475,11 @@ export default function TargetsScreen() {
         onShowGroupManager={handleShowGroupManager}
         onScanTargets={handleScanTargets}
         onShowAddSheet={handleShowAddSheet}
+        onSaveAsGroup={() => {
+          if (filteredTargets.length === 0) return;
+          const name = `${t("targets.groups.saveAsGroup")} ${new Date().toLocaleDateString()}`;
+          addGroup({ name, targetIds: filteredTargets.map((tgt) => tgt.id) });
+        }}
         useCompactHeaderActions={useCompactHeaderActions}
         useCompactFilterLayout={useCompactFilterLayout}
         interactionUi={resolvedInteractionUi}
@@ -458,6 +512,8 @@ export default function TargetsScreen() {
       handleShowGroupManager,
       handleScanTargets,
       handleShowAddSheet,
+      addGroup,
+      t,
       useCompactHeaderActions,
       useCompactFilterLayout,
       resolvedInteractionUi,
@@ -478,6 +534,9 @@ export default function TargetsScreen() {
           onDeselectAll={exitSelectionMode}
           onBatchDelete={handleBatchDelete}
           onBatchFavorite={handleBatchFavorite}
+          onBatchStatus={() => setShowBatchStatusDialog(true)}
+          onBatchGroup={() => setShowBatchGroupSheet(true)}
+          onBatchTag={() => setShowBatchTagSheet(true)}
           onExitSelectionMode={exitSelectionMode}
         />
       ) : (
@@ -578,6 +637,7 @@ export default function TargetsScreen() {
         }
         onUpdateGroup={updateGroup}
         onDeleteGroup={removeGroup}
+        onNavigateToGroup={(groupId) => router.push(`/group/${groupId}`)}
       />
 
       {!isLandscapeTablet && (
@@ -599,6 +659,150 @@ export default function TargetsScreen() {
           </BottomSheet.Portal>
         </BottomSheet>
       )}
+      {/* Batch Status Dialog */}
+      <Dialog
+        isOpen={showBatchStatusDialog}
+        onOpenChange={(open) => {
+          if (!open) setShowBatchStatusDialog(false);
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay />
+          <Dialog.Content>
+            <Dialog.Title>{t("targets.batch.setStatus")}</Dialog.Title>
+            <Dialog.Description>
+              {t("targets.batch.setStatusDesc", { count: selectedIds.length })}
+            </Dialog.Description>
+            <View className="mt-4 flex-row flex-wrap gap-2">
+              {TARGET_STATUSES.map((status) => (
+                <Chip
+                  key={status}
+                  size="sm"
+                  variant="secondary"
+                  onPress={() => handleBatchStatus(status)}
+                >
+                  <View
+                    className="h-2 w-2 rounded-full mr-1"
+                    style={{ backgroundColor: STATUS_COLORS[status] }}
+                  />
+                  <Chip.Label className="text-xs">{t(targetStatusI18nKey(status))}</Chip.Label>
+                </Chip>
+              ))}
+            </View>
+            <View className="mt-4 flex-row justify-end">
+              <Button variant="outline" size="sm" onPress={() => setShowBatchStatusDialog(false)}>
+                <Button.Label>{t("common.cancel")}</Button.Label>
+              </Button>
+            </View>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog>
+
+      {/* Batch Group Sheet */}
+      <BottomSheet
+        isOpen={showBatchGroupSheet}
+        onOpenChange={(open) => {
+          if (!open) setShowBatchGroupSheet(false);
+        }}
+      >
+        <BottomSheet.Portal>
+          <BottomSheet.Overlay />
+          <BottomSheet.Content style={{ paddingBottom: insets.bottom + 8 }}>
+            <View className="mb-3 flex-row items-center justify-between px-4">
+              <BottomSheet.Title>{t("targets.batch.addToGroup")}</BottomSheet.Title>
+              <BottomSheet.Close />
+            </View>
+            <View className="px-4 pb-4">
+              <Dialog.Description className="mb-3 text-xs text-muted">
+                {t("targets.batch.addToGroupDesc", { count: selectedIds.length })}
+              </Dialog.Description>
+              {groups.length === 0 ? (
+                <View className="items-center py-4">
+                  <Button
+                    variant="outline"
+                    onPress={() => {
+                      setShowBatchGroupSheet(false);
+                      setShowGroupManager(true);
+                    }}
+                  >
+                    <Button.Label>{t("targets.groups.create")}</Button.Label>
+                  </Button>
+                </View>
+              ) : (
+                <View className="gap-2">
+                  {groups.map((group) => (
+                    <Button
+                      key={group.id}
+                      variant="outline"
+                      onPress={() => handleBatchGroupSave(group.id)}
+                      className="justify-start"
+                    >
+                      <View
+                        className="h-3 w-3 rounded-full"
+                        style={{ backgroundColor: group.color ?? "#888" }}
+                      />
+                      <Button.Label>{group.name}</Button.Label>
+                    </Button>
+                  ))}
+                </View>
+              )}
+            </View>
+          </BottomSheet.Content>
+        </BottomSheet.Portal>
+      </BottomSheet>
+
+      {/* Batch Tag Sheet */}
+      <BottomSheet
+        isOpen={showBatchTagSheet}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowBatchTagSheet(false);
+            setBatchTagsBuffer([]);
+          }
+        }}
+      >
+        <BottomSheet.Portal>
+          <BottomSheet.Overlay />
+          <BottomSheet.Content style={{ paddingBottom: insets.bottom + 8 }}>
+            <View className="mb-3 flex-row items-center justify-between px-4">
+              <BottomSheet.Title>{t("targets.batch.addTags")}</BottomSheet.Title>
+              <BottomSheet.Close />
+            </View>
+            <View className="px-4 pb-4">
+              <Dialog.Description className="mb-3 text-xs text-muted">
+                {t("targets.batch.addTagsDesc", { count: selectedIds.length })}
+              </Dialog.Description>
+              <TagInput
+                tags={batchTagsBuffer}
+                suggestions={allTags}
+                onChange={setBatchTagsBuffer}
+                placeholder={t("targets.addTag")}
+              />
+              <View className="mt-4 flex-row justify-end gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onPress={() => {
+                    setShowBatchTagSheet(false);
+                    setBatchTagsBuffer([]);
+                  }}
+                >
+                  <Button.Label>{t("common.cancel")}</Button.Label>
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  isDisabled={batchTagsBuffer.length === 0}
+                  onPress={() => handleBatchTagSave(batchTagsBuffer)}
+                >
+                  <Button.Label>{t("common.confirm")}</Button.Label>
+                </Button>
+              </View>
+            </View>
+          </BottomSheet.Content>
+        </BottomSheet.Portal>
+      </BottomSheet>
+
       {summaryDialog && (
         <OperationSummaryDialog
           visible={!!summaryDialog}

@@ -27,6 +27,7 @@ interface ViewerToolbarProps {
   onExport: () => void;
   onAstrometry: () => void;
   onToggleControls: () => void;
+  onImportWCS?: () => void;
 }
 
 export function ViewerToolbar({
@@ -50,6 +51,7 @@ export function ViewerToolbar({
   onExport,
   onAstrometry,
   onToggleControls,
+  onImportWCS,
 }: ViewerToolbarProps) {
   const { t } = useI18n();
   const haptics = useHapticFeedback();
@@ -95,6 +97,15 @@ export function ViewerToolbar({
       icon: "share-outline",
       onPress: onExport,
     },
+    ...(onImportWCS
+      ? [
+          {
+            label: t("astrometry.importWCS"),
+            icon: "globe-outline" as keyof typeof Ionicons.glyphMap,
+            onPress: onImportWCS,
+          },
+        ]
+      : []),
   ];
 
   return (

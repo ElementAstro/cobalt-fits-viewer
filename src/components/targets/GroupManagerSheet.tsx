@@ -11,6 +11,7 @@ import {
   Dialog,
   Input,
   Label,
+  PressableFeedback,
   Separator,
   useThemeColor,
 } from "heroui-native";
@@ -30,6 +31,7 @@ interface GroupManagerSheetProps {
   onCreateGroup: (name: string, description?: string, color?: string) => string;
   onUpdateGroup: (id: string, updates: Partial<TargetGroup>) => void;
   onDeleteGroup: (id: string) => void;
+  onNavigateToGroup?: (groupId: string) => void;
 }
 
 export function GroupManagerSheet({
@@ -41,6 +43,7 @@ export function GroupManagerSheet({
   onCreateGroup,
   onUpdateGroup,
   onDeleteGroup,
+  onNavigateToGroup,
 }: GroupManagerSheetProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
@@ -233,15 +236,34 @@ export function GroupManagerSheet({
                         </View>
                       ) : (
                         <View className="flex-row items-center justify-between">
-                          <View className="flex-row items-center gap-2 flex-1">
-                            <View
-                              className="w-3 h-3 rounded-full"
-                              style={{ backgroundColor: group.color ?? "#888" }}
-                            />
+                          <PressableFeedback
+                            className="flex-row items-center gap-2 flex-1"
+                            onPress={() => {
+                              if (onNavigateToGroup) {
+                                onClose();
+                                onNavigateToGroup(group.id);
+                              }
+                            }}
+                            isDisabled={!onNavigateToGroup}
+                          >
+                            <PressableFeedback.Highlight />
+                            {group.icon ? (
+                              <Text className="text-sm">{group.icon}</Text>
+                            ) : (
+                              <View
+                                className="w-3 h-3 rounded-full"
+                                style={{ backgroundColor: group.color ?? "#888" }}
+                              />
+                            )}
                             <View className="flex-1">
-                              <Text className="text-sm font-medium text-foreground">
-                                {group.name}
-                              </Text>
+                              <View className="flex-row items-center gap-1">
+                                <Text className="text-sm font-medium text-foreground">
+                                  {group.name}
+                                </Text>
+                                {group.isPinned && (
+                                  <Ionicons name="pin" size={10} color={mutedColor} />
+                                )}
+                              </View>
                               {group.description && (
                                 <Text className="text-xs text-muted">{group.description}</Text>
                               )}
@@ -249,7 +271,7 @@ export function GroupManagerSheet({
                                 {group.targetIds.length} {t("targets.groups.targets")}
                               </Text>
                             </View>
-                          </View>
+                          </PressableFeedback>
                           <View className="flex-row gap-1">
                             <Button
                               variant="ghost"

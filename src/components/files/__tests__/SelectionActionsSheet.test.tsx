@@ -22,6 +22,7 @@ const defaultProps = {
   onBatchTag: jest.fn(),
   onBatchRename: jest.fn(),
   onGroupSheet: jest.fn(),
+  onMoveToFolder: jest.fn(),
   onBatchExport: jest.fn(),
   onBatchConvert: jest.fn(),
   onCompare: jest.fn(),

@@ -21,6 +21,7 @@ interface SelectionActionsSheetProps {
   onBatchTag: () => void;
   onBatchRename: () => void;
   onGroupSheet: () => void;
+  onMoveToFolder: () => void;
   onBatchExport: () => void;
   onBatchConvert: () => void;
   onCompare: () => void;
@@ -41,6 +42,7 @@ export function SelectionActionsSheet({
   onBatchTag,
   onBatchRename,
   onGroupSheet,
+  onMoveToFolder,
   onBatchExport,
   onBatchConvert,
   onCompare,
@@ -134,6 +136,13 @@ export function SelectionActionsSheet({
                   icon="folder-open-outline"
                   title={t("files.fileGroup")}
                   onPress={act(onGroupSheet)}
+                  disabled={!hasSelection}
+                  compact={compact}
+                />
+                <SheetActionItem
+                  icon="arrow-forward-outline"
+                  title={t("files.moveToFolder")}
+                  onPress={act(onMoveToFolder)}
                   disabled={!hasSelection}
                   compact={compact}
                 />

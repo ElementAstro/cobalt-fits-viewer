@@ -17,6 +17,12 @@ const detected = (cx: number, cy: number, flux: number): DetectedStar => ({
   peak: flux,
   area: 3,
   fwhm: 2.5,
+  roundness: 1,
+  ellipticity: 0,
+  theta: 0,
+  snr: 0,
+  sharpness: 0,
+  flags: 0,
 });
 
 describe("starAnnotationLinkage", () => {

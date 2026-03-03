@@ -116,13 +116,32 @@ jest.mock("../../../stores/useTrashStore", () => ({
     selector(mockTrashStore),
 }));
 
-jest.mock("../../../stores/useFileGroupStore", () => ({
-  useFileGroupStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      groups: [],
-      fileGroupMap: {},
-    }),
-}));
+jest.mock("../../../stores/useFileGroupStore", () => {
+  const mockState = {
+    groups: [],
+    fileGroupMap: {},
+    getChildGroups: () => [],
+    getRootGroups: () => [],
+    getGroupStats: () => ({ fileCount: 0, totalSize: 0 }),
+    getGroupPath: () => [],
+    getFilesInGroup: () => [],
+    moveFilesToGroup: jest.fn(),
+    moveGroup: jest.fn(),
+    createGroup: jest.fn(),
+    updateGroup: jest.fn(),
+    removeGroup: jest.fn(),
+    assignFilesToGroup: jest.fn(),
+    removeFilesFromGroup: jest.fn(),
+    removeFileMappings: jest.fn(),
+    getFileGroupIds: () => [],
+    getGroupById: () => undefined,
+  };
+  const useFileGroupStore = (selector: (state: Record<string, unknown>) => unknown) =>
+    selector(mockState);
+  useFileGroupStore.getState = () => mockState;
+  useFileGroupStore.setState = jest.fn();
+  return { useFileGroupStore };
+});
 
 jest.mock("../../../components/gallery/AlbumPickerSheet", () => ({
   AlbumPickerSheet: () => null,

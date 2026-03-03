@@ -106,4 +106,14 @@ export const GROUP_COLORS = [
   "#3b82f6",
   "#8b5cf6",
   "#ec4899",
+  "#6366f1",
+  "#0ea5e9",
+  "#84cc16",
+  "#f43f5e",
+  "#a855f7",
+  "#78716c",
+  "#06b6d4",
+  "#d946ef",
 ];
+
+export const GROUP_ICONS = ["🔭", "🌌", "⭐", "🌙", "☄️", "🪐", "🌟", "💫"];

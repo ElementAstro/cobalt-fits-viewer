@@ -1,6 +1,7 @@
-import type { FitsMetadata, Target } from "../../fits/types";
+import type { FitsMetadata, Target, TargetGroup } from "../../fits/types";
 import {
   calculateTargetStatistics,
+  calculateGroupStatistics,
   formatExposureHours,
   getMonthlyStatistics,
   getProgressOverview,
@@ -151,6 +152,89 @@ describe("targetStatistics", () => {
       acquiring: 1,
       completed: 1,
       processed: 1,
+    });
+  });
+
+  describe("calculateGroupStatistics", () => {
+    const makeGroup = (overrides: Partial<TargetGroup> = {}): TargetGroup => ({
+      id: "g1",
+      name: "Test Group",
+      targetIds: [],
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      ...overrides,
+    });
+
+    it("calculates stats for group members only", () => {
+      const targets = [
+        makeTarget({ id: "a", status: "completed", imageIds: ["f1", "f2"] }),
+        makeTarget({ id: "b", status: "planned", imageIds: ["f3"] }),
+        makeTarget({ id: "c", status: "acquiring", imageIds: [] }),
+      ];
+      const files = [
+        makeFile({ id: "f1", exptime: 120, filter: "Ha" }),
+        makeFile({ id: "f2", exptime: 180, filter: "OIII" }),
+        makeFile({ id: "f3", exptime: 60, filter: "Ha" }),
+      ];
+      const group = makeGroup({ targetIds: ["a", "b"] });
+
+      const stats = calculateGroupStatistics(group, targets, files);
+      expect(stats.targetCount).toBe(2);
+      expect(stats.byStatus).toEqual({ completed: 1, planned: 1 });
+      expect(stats.totalFrames).toBe(3);
+      expect(stats.totalExposureSeconds).toBe(360);
+      expect(stats.filterBreakdown["Ha"].count).toBe(2);
+      expect(stats.filterBreakdown["Ha"].totalSeconds).toBe(180);
+      expect(stats.filterBreakdown["OIII"].count).toBe(1);
+    });
+
+    it("returns zeros for empty group", () => {
+      const group = makeGroup({ targetIds: [] });
+      const stats = calculateGroupStatistics(group, [], []);
+      expect(stats.targetCount).toBe(0);
+      expect(stats.totalFrames).toBe(0);
+      expect(stats.totalExposureSeconds).toBe(0);
+      expect(stats.overallCompletion).toBe(0);
+    });
+
+    it("calculates completion from planned exposure", () => {
+      const targets = [
+        makeTarget({
+          id: "a",
+          imageIds: ["f1"],
+          plannedFilters: ["Ha"],
+          plannedExposure: { Ha: 300 },
+        }),
+      ];
+      const files = [makeFile({ id: "f1", exptime: 150, filter: "Ha" })];
+      const group = makeGroup({ targetIds: ["a"] });
+
+      const stats = calculateGroupStatistics(group, targets, files);
+      expect(stats.overallCompletion).toBe(50);
+    });
+
+    it("ignores targets not in the group", () => {
+      const targets = [
+        makeTarget({ id: "a", imageIds: ["f1"] }),
+        makeTarget({ id: "b", imageIds: ["f2"] }),
+      ];
+      const files = [makeFile({ id: "f1", exptime: 100 }), makeFile({ id: "f2", exptime: 200 })];
+      const group = makeGroup({ targetIds: ["a"] });
+
+      const stats = calculateGroupStatistics(group, targets, files);
+      expect(stats.targetCount).toBe(1);
+      expect(stats.totalExposureSeconds).toBe(100);
+    });
+
+    it("tracks lastActivityTime from target updatedAt", () => {
+      const targets = [
+        makeTarget({ id: "a", updatedAt: 1000 }),
+        makeTarget({ id: "b", updatedAt: 3000 }),
+      ];
+      const group = makeGroup({ targetIds: ["a", "b"], createdAt: 500 });
+
+      const stats = calculateGroupStatistics(group, targets, []);
+      expect(stats.lastActivityTime).toBe(3000);
     });
   });
 });

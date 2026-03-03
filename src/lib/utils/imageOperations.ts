@@ -109,13 +109,17 @@ export function cropImage(
   cropWidth: number,
   cropHeight: number,
 ): { pixels: Float32Array; width: number; height: number } {
-  const result = new Float32Array(cropWidth * cropHeight);
-  for (let dy = 0; dy < cropHeight; dy++) {
-    for (let dx = 0; dx < cropWidth; dx++) {
-      result[dy * cropWidth + dx] = pixels[(y + dy) * srcWidth + (x + dx)];
-    }
+  const srcHeight = srcWidth > 0 ? Math.floor(pixels.length / srcWidth) : 0;
+  const cx = Math.max(0, Math.min(x, srcWidth - 1));
+  const cy = Math.max(0, Math.min(y, srcHeight - 1));
+  const cw = Math.max(1, Math.min(cropWidth, srcWidth - cx));
+  const ch = Math.max(1, Math.min(cropHeight, srcHeight - cy));
+  const result = new Float32Array(cw * ch);
+  for (let row = 0; row < ch; row++) {
+    const srcOff = (cy + row) * srcWidth + cx;
+    result.set(pixels.subarray(srcOff, srcOff + cw), row * cw);
   }
-  return { pixels: result, width: cropWidth, height: cropHeight };
+  return { pixels: result, width: cw, height: ch };
 }
 
 // ===== 像素值操作 =====

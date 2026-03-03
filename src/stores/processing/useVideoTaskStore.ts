@@ -1,0 +1,190 @@
+import { create } from "zustand";
+import { persist, createJSONStorage } from "zustand/middleware";
+import { zustandAsyncStorage } from "../../lib/storage";
+import type { VideoProcessingRequest } from "../../lib/video/engine";
+
+export type VideoTaskStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+
+export const MAX_TASK_HISTORY = 100;
+export const MAX_VIDEO_RETRIES = 3;
+
+export interface VideoTaskRecord {
+  id: string;
+  request: VideoProcessingRequest;
+  status: VideoTaskStatus;
+  progress: number;
+  processedMs: number;
+  durationMs?: number;
+  createdAt: number;
+  startedAt?: number;
+  finishedAt?: number;
+  outputUris: string[];
+  outputFileIds?: string[];
+  error?: string;
+  engineErrorCode?: string;
+  retries: number;
+  logLines: string[];
+}
+
+interface VideoTaskStoreState {
+  tasks: VideoTaskRecord[];
+  enqueueTask: (request: VideoProcessingRequest) => string;
+  updateTask: (id: string, patch: Partial<VideoTaskRecord>) => void;
+  markRunning: (id: string) => void;
+  markCompleted: (
+    id: string,
+    outputUris: string[],
+    outputFileIds?: string[],
+    logLines?: string[],
+  ) => void;
+  markFailed: (id: string, error: string, logLines?: string[], engineErrorCode?: string) => void;
+  markCancelled: (id: string) => void;
+  retryTask: (id: string) => void;
+  removeTask: (id: string) => void;
+  clearFinished: () => void;
+}
+
+export const useVideoTaskStore = create<VideoTaskStoreState>()(
+  persist(
+    (set) => ({
+      tasks: [],
+
+      enqueueTask: (request) => {
+        const id = `video_task_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const now = Date.now();
+        const next: VideoTaskRecord = {
+          id,
+          request,
+          status: "pending",
+          progress: 0,
+          processedMs: 0,
+          durationMs: request.sourceDurationMs,
+          createdAt: now,
+          outputUris: [],
+          outputFileIds: [],
+          retries: 0,
+          logLines: [],
+        };
+        set((state) => {
+          let tasks = [next, ...state.tasks];
+          if (tasks.length > MAX_TASK_HISTORY) {
+            const removable = new Set<VideoTaskStatus>(["completed", "cancelled", "failed"]);
+            for (let i = tasks.length - 1; i >= 0 && tasks.length > MAX_TASK_HISTORY; i--) {
+              if (removable.has(tasks[i].status)) {
+                tasks = [...tasks.slice(0, i), ...tasks.slice(i + 1)];
+              }
+            }
+          }
+          return { tasks };
+        });
+        return id;
+      },
+
+      updateTask: (id, patch) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) => (task.id === id ? { ...task, ...patch } : task)),
+        })),
+
+      markRunning: (id) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === id
+              ? {
+                  ...task,
+                  status: "running",
+                  startedAt: task.startedAt ?? Date.now(),
+                  error: undefined,
+                  engineErrorCode: undefined,
+                }
+              : task,
+          ),
+        })),
+
+      markCompleted: (id, outputUris, outputFileIds = [], logLines = []) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === id
+              ? {
+                  ...task,
+                  status: "completed",
+                  progress: 1,
+                  finishedAt: Date.now(),
+                  outputUris,
+                  outputFileIds,
+                  error: undefined,
+                  engineErrorCode: undefined,
+                  logLines: logLines.length ? logLines : task.logLines,
+                }
+              : task,
+          ),
+        })),
+
+      markFailed: (id, error, logLines = [], engineErrorCode) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === id
+              ? {
+                  ...task,
+                  status: "failed",
+                  finishedAt: Date.now(),
+                  error,
+                  engineErrorCode,
+                  logLines: logLines.length ? logLines : task.logLines,
+                }
+              : task,
+          ),
+        })),
+
+      markCancelled: (id) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === id
+              ? {
+                  ...task,
+                  status: "cancelled",
+                  finishedAt: Date.now(),
+                }
+              : task,
+          ),
+        })),
+
+      retryTask: (id) =>
+        set((state) => ({
+          tasks: state.tasks.map((task) =>
+            task.id === id && task.retries < MAX_VIDEO_RETRIES
+              ? {
+                  ...task,
+                  status: "pending",
+                  progress: 0,
+                  processedMs: 0,
+                  startedAt: undefined,
+                  finishedAt: undefined,
+                  error: undefined,
+                  engineErrorCode: undefined,
+                  outputUris: [],
+                  outputFileIds: [],
+                  retries: task.retries + 1,
+                }
+              : task,
+          ),
+        })),
+
+      removeTask: (id) => set((state) => ({ tasks: state.tasks.filter((task) => task.id !== id) })),
+
+      clearFinished: () =>
+        set((state) => ({
+          tasks: state.tasks.filter(
+            (task) =>
+              task.status !== "completed" &&
+              task.status !== "cancelled" &&
+              task.status !== "failed",
+          ),
+        })),
+    }),
+    {
+      name: "video-task-store",
+      storage: createJSONStorage(() => zustandAsyncStorage),
+      partialize: (state) => ({ tasks: state.tasks }),
+    },
+  ),
+);

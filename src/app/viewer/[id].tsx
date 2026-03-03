@@ -57,6 +57,9 @@ import { ViewerToolbar } from "../../components/fits/ViewerToolbar";
 import { StatsOverlay } from "../../components/fits/StatsOverlay";
 import { ZoomControls } from "../../components/fits/ZoomControls";
 import { AstrometryBadge } from "../../components/fits/AstrometryBadge";
+import { MeasurementOverlay } from "../../components/fits/MeasurementOverlay";
+import { MeasurementPanel } from "../../components/fits/MeasurementPanel";
+import { useMeasurement } from "../../hooks/useMeasurement";
 import { shareWCS } from "../../lib/astrometry/wcsExport";
 import {
   pixelToRaDec,
@@ -365,6 +368,9 @@ export default function ViewerDetailScreen() {
   const [showCoordinateGrid, setShowCoordinateGrid] = useState(false);
   const [showConstellations, setShowConstellations] = useState(false);
   const [selectedAnnotation, setSelectedAnnotation] = useState<AstrometryAnnotation | null>(null);
+  const [importedCalibration, setImportedCalibration] = useState<
+    import("../../lib/astrometry/types").AstrometryCalibration | null
+  >(null);
 
   const visibleAnnotationTypes = useMemo(
     () => getVisibleTypes(annotationLayerVisibility),
@@ -398,6 +404,9 @@ export default function ViewerDetailScreen() {
   const activeAstrometryJob = astrometryJobs.find(
     (j) => j.status === "uploading" || j.status === "submitted" || j.status === "solving",
   );
+
+  // Measurement tool (needs calibration which is computed later, so we pass undefined initially)
+  const measurement = useMeasurement(latestSolvedJob?.result?.calibration ?? file?.wcsCalibration);
 
   const exportSource = useMemo(
     () => ({
@@ -484,6 +493,32 @@ export default function ViewerDetailScreen() {
     astrometrySubmit(id);
     haptics.notify();
   }, [astrometryConfig.apiKey, id, astrometrySubmit, haptics, toast, t]);
+
+  const handleImportWCS = useCallback(async () => {
+    try {
+      const DocumentPicker = await import("expo-document-picker");
+      const result = await DocumentPicker.getDocumentAsync({
+        type: "*/*",
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      const asset = result.assets[0];
+      const { readFileAsArrayBuffer } = await import("../../lib/utils/fileManager");
+      const buffer = await readFileAsArrayBuffer(asset.uri);
+      const { parseWCSFile } = await import("../../lib/astrometry/wcsFileParser");
+      const cal = parseWCSFile(buffer);
+      if (cal) {
+        setImportedCalibration(cal);
+        setShowCoordinateGrid(true);
+        haptics.notify();
+        toast.show({ variant: "success", label: t("astrometry.wcsImportSuccess") });
+      } else {
+        toast.show({ variant: "danger", label: t("astrometry.wcsImportFailed") });
+      }
+    } catch {
+      toast.show({ variant: "danger", label: t("astrometry.wcsImportFailed") });
+    }
+  }, [haptics, toast, t]);
 
   const handleViewerExportWCS = useCallback(async () => {
     if (!latestSolvedJob?.result || !file) return;
@@ -736,6 +771,12 @@ export default function ViewerDetailScreen() {
       const val = pixels[y * dimensions.width + x] ?? null;
       setCursorPosition(x, y, val);
 
+      // Route to measurement tool when active
+      if (measurement.isActive) {
+        measurement.addPoint(x, y);
+        return;
+      }
+
       // Hit-test annotations: find nearest annotation within 30px radius
       if (showAnnotations && latestSolvedJob?.result?.annotations) {
         const HIT_RADIUS = 30; // pixels in source space
@@ -758,6 +799,7 @@ export default function ViewerDetailScreen() {
       pixels,
       dimensions,
       setCursorPosition,
+      measurement,
       showAnnotations,
       latestSolvedJob,
       visibleAnnotationTypes,
@@ -1080,17 +1122,20 @@ export default function ViewerDetailScreen() {
       ? (pixels[cursorY * dimensions.width + cursorX] ?? null)
       : null;
 
+  // Unified WCS calibration: Astrometry.net > imported WCS > FITS header WCS
+  const calibration =
+    latestSolvedJob?.result?.calibration ?? importedCalibration ?? file?.wcsCalibration ?? null;
+
   // Compute RA/Dec from WCS calibration for PixelInspector
   const pixelWcs = useMemo(() => {
-    const cal = latestSolvedJob?.result?.calibration;
-    if (!cal || !dimensions || cursorX < 0 || cursorY < 0) return null;
-    const radec = pixelToRaDec(cursorX, cursorY, cal);
+    if (!calibration || !dimensions || cursorX < 0 || cursorY < 0) return null;
+    const radec = pixelToRaDec(cursorX, cursorY, calibration);
     if (!radec) return null;
     return {
       ra: formatRaFromDeg(radec.ra),
       dec: formatDecFromDeg(radec.dec),
     };
-  }, [latestSolvedJob, dimensions, cursorX, cursorY]);
+  }, [calibration, dimensions, cursorX, cursorY]);
 
   const handleToggleAnnotations = useCallback(() => setShowAnnotations((prev) => !prev), []);
 
@@ -1164,6 +1209,7 @@ export default function ViewerDetailScreen() {
       onSavePreset: handleSaveViewerPreset,
       onResetToSaved: handleResetToSaved,
       onApplyQuickPreset: handleApplyQuickPreset,
+      calibration,
       showAstrometryResult,
       latestSolvedJob,
       showAnnotations,
@@ -1235,6 +1281,7 @@ export default function ViewerDetailScreen() {
       handleSaveViewerPreset,
       handleResetToSaved,
       handleApplyQuickPreset,
+      calibration,
       showAstrometryResult,
       latestSolvedJob,
       showAnnotations,
@@ -1358,10 +1405,10 @@ export default function ViewerDetailScreen() {
             )}
 
             {/* Coordinate Grid Overlay */}
-            {latestSolvedJob?.result && showCoordinateGrid && dimensions && (
+            {calibration && showCoordinateGrid && dimensions && (
               <View className="absolute inset-0" pointerEvents="none">
                 <CoordinateGridOverlay
-                  calibration={latestSolvedJob.result.calibration}
+                  calibration={calibration}
                   renderWidth={displayWidth || dimensions.width}
                   renderHeight={displayHeight || dimensions.height}
                   sourceWidth={dimensions.width}
@@ -1373,10 +1420,10 @@ export default function ViewerDetailScreen() {
             )}
 
             {/* Constellation Lines Overlay */}
-            {latestSolvedJob?.result && showConstellations && dimensions && (
+            {calibration && showConstellations && dimensions && (
               <View className="absolute inset-0" pointerEvents="none">
                 <ConstellationOverlay
-                  calibration={latestSolvedJob.result.calibration}
+                  calibration={calibration}
                   renderWidth={displayWidth || dimensions.width}
                   renderHeight={displayHeight || dimensions.height}
                   sourceWidth={dimensions.width}
@@ -1385,6 +1432,31 @@ export default function ViewerDetailScreen() {
                   visible={showConstellations}
                 />
               </View>
+            )}
+
+            {/* Measurement Overlay */}
+            {dimensions && (
+              <MeasurementOverlay
+                measurements={measurement.measurements}
+                pendingPoint={measurement.pendingPoint}
+                renderWidth={displayWidth || dimensions.width}
+                renderHeight={displayHeight || dimensions.height}
+                sourceWidth={dimensions.width}
+                sourceHeight={dimensions.height}
+                transform={canvasTransform}
+                visible={measurement.isActive || measurement.measurements.length > 0}
+              />
+            )}
+
+            {/* Measurement Panel */}
+            {(measurement.isActive || measurement.measurements.length > 0) && (
+              <MeasurementPanel
+                measurements={measurement.measurements}
+                isActive={measurement.isActive}
+                onToggle={measurement.toggle}
+                onRemoveLast={measurement.removeLast}
+                onClear={measurement.clear}
+              />
             )}
 
             {/* Region selection overlay */}
@@ -1443,17 +1515,17 @@ export default function ViewerDetailScreen() {
             />
 
             {/* Compass Indicator */}
-            {latestSolvedJob?.result?.calibration && showAnnotations && (
+            {calibration && showAnnotations && (
               <View className="absolute" style={{ top: 8, right: 8 }}>
-                <CompassIndicator calibration={latestSolvedJob.result.calibration} />
+                <CompassIndicator calibration={calibration} />
               </View>
             )}
 
             {/* Annotation Detail Sheet */}
-            {selectedAnnotation && latestSolvedJob?.result?.calibration && (
+            {selectedAnnotation && calibration && (
               <AnnotationDetailSheet
                 annotation={selectedAnnotation}
-                calibration={latestSolvedJob.result.calibration}
+                calibration={calibration}
                 onClose={() => setSelectedAnnotation(null)}
               />
             )}
@@ -1637,6 +1709,7 @@ export default function ViewerDetailScreen() {
                 : handleSolveThis
           }
           onToggleControls={() => setShowControls(!showControls)}
+          onImportWCS={handleImportWCS}
         />
       )}
 

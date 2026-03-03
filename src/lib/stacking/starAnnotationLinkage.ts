@@ -355,12 +355,12 @@ export function toDetectedStars(
       peak,
       area,
       fwhm: point.metrics?.fwhm ?? defaultFwhm,
-      snr: point.metrics?.snr,
-      roundness: point.metrics?.roundness,
-      ellipticity: point.metrics?.ellipticity,
-      sharpness: point.metrics?.sharpness,
-      theta: point.metrics?.theta,
-      flags: point.metrics?.flags,
+      snr: point.metrics?.snr ?? 0,
+      roundness: point.metrics?.roundness ?? 1,
+      ellipticity: point.metrics?.ellipticity ?? 0,
+      sharpness: point.metrics?.sharpness ?? 0,
+      theta: point.metrics?.theta ?? 0,
+      flags: point.metrics?.flags ?? 0,
     });
   }
 

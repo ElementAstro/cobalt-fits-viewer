@@ -23,25 +23,16 @@ export interface DetectedStar {
   /** 估算半高全宽 (FWHM) */
   fwhm: number;
   /** 圆度 [0,1]，越接近 1 越圆 */
-  roundness?: number;
-  /** 椭率 [0,1]，越接近 0 越圆 */
-  ellipticity?: number;
-  /** 主轴方向 (弧度) */
-  theta?: number;
-  /** 信噪比估计 */
-  snr?: number;
-  /** 锐度估计 */
-  sharpness?: number;
-  /** 诊断标记位 */
-  flags?: number;
-}
-
-export interface DetectedStarExtended extends DetectedStar {
   roundness: number;
+  /** 椭率 [0,1]，越接近 0 越圆 */
   ellipticity: number;
+  /** 主轴方向 (弧度) */
   theta: number;
+  /** 信噪比估计 */
   snr: number;
+  /** 锐度估计 */
   sharpness: number;
+  /** 诊断标记位 */
   flags: number;
 }
 
@@ -618,7 +609,7 @@ function measureStar(
   width: number,
   noise: number,
   deblended: boolean,
-): DetectedStarExtended | null {
+): DetectedStar | null {
   if (indices.length === 0) return null;
   let flux = 0;
   let sumX = 0;
@@ -687,7 +678,7 @@ function measureStar(
 }
 
 function acceptStar(
-  star: DetectedStarExtended,
+  star: DetectedStar,
   options: ResolvedStarDetectionOptions,
   width: number,
   height: number,
@@ -806,7 +797,22 @@ function detectStarsLegacy(
       ) {
         continue;
       }
-      stars.push({ cx: centroidX, cy: centroidY, flux: sumFlux, peak, area, fwhm });
+      const meanFlux = sumFlux / Math.max(1, area);
+      const snr = sumFlux / (Math.sqrt(area) * Math.max(EPS, noise));
+      stars.push({
+        cx: centroidX,
+        cy: centroidY,
+        flux: sumFlux,
+        peak,
+        area,
+        fwhm,
+        roundness: 1,
+        ellipticity: 0,
+        theta: 0,
+        snr,
+        sharpness: peak / (meanFlux + EPS),
+        flags: 0,
+      });
     }
   }
   stars.sort((a, b) => b.flux - a.flux);
@@ -818,7 +824,7 @@ function detectStarsModernSync(
   width: number,
   height: number,
   options: ResolvedStarDetectionOptions,
-): DetectedStarExtended[] {
+): DetectedStar[] {
   const { background, noise } = estimateBackground(
     pixels,
     width,
@@ -835,7 +841,7 @@ function detectStarsModernSync(
       : bgsub;
   const threshold = options.sigmaThreshold * Math.max(noise, EPS);
   const labels = new Int32Array(n);
-  const stars: DetectedStarExtended[] = [];
+  const stars: DetectedStar[] = [];
   const stack: number[] = [];
   const neighborOffsets = getNeighborOffsets(width, options.connectivity);
   let label = 1;
@@ -921,21 +927,13 @@ export async function detectStarsAsync(
   height: number,
   options: StarDetectionOptions = {},
   runtime: StarDetectionRuntime = {},
-): Promise<DetectedStarExtended[]> {
+): Promise<DetectedStar[]> {
   const profile = options.profile ?? "balanced";
   if (profile === "legacy") {
     reportProgress(runtime, 0.1, "legacy-start");
     throwIfAborted(runtime.signal);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    const stars = detectStarsLegacy(pixels, width, height, options) as DetectedStarExtended[];
-    for (const star of stars) {
-      star.roundness ??= 1;
-      star.ellipticity ??= 0;
-      star.theta ??= 0;
-      star.snr ??= 0;
-      star.sharpness ??= 0;
-      star.flags ??= 0;
-    }
+    const stars = detectStarsLegacy(pixels, width, height, options);
     reportProgress(runtime, 1, "done");
     return stars;
   }
@@ -975,7 +973,7 @@ export async function detectStarsAsync(
 
   const threshold = resolved.sigmaThreshold * Math.max(noise, EPS);
   const labels = new Int32Array(n);
-  const stars: DetectedStarExtended[] = [];
+  const stars: DetectedStar[] = [];
   const stack: number[] = [];
   const neighborOffsets = getNeighborOffsets(width, resolved.connectivity);
   let label = 1;

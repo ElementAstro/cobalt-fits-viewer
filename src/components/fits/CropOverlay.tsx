@@ -1,27 +1,33 @@
 /**
  * 交互式裁剪覆盖层组件
- * 支持拖拽四角和边来调整裁剪区域
+ * 支持拖拽四角和边来调整裁剪区域、宽高比锁定、辅助网格、数值输入、预设尺寸
  */
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { View, Text } from "react-native";
-import { Button } from "heroui-native";
+import React, { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { View, Text, TextInput, Platform, ScrollView } from "react-native";
+import { Button, Chip } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSharedValue, runOnJS } from "react-native-reanimated";
 import {
   clampCropRegion,
   moveCropRegion,
-  resizeCropRegion,
+  resizeCropRegionWithAspect,
+  applyAspectRatio,
+  getAspectRatioValue,
+  type AspectRatioPreset,
   type CropResizeHandle,
   type CropRegion,
 } from "./cropMath";
+import type { CanvasTransform } from "./FitsCanvas";
+import { imageToScreenPoint, computeFitGeometry } from "../../lib/viewer/transform";
 
 interface CropOverlayProps {
   imageWidth: number;
   imageHeight: number;
   containerWidth: number;
   containerHeight: number;
+  transform?: CanvasTransform;
   onCropConfirm: (x: number, y: number, width: number, height: number) => void;
   onCropCancel: () => void;
 }
@@ -30,6 +36,23 @@ const MIN_CROP_SIZE = 20;
 const HANDLE_TOUCH_SIZE = 24;
 const HANDLE_DOT_SIZE = 10;
 const RESIZE_HANDLES: CropResizeHandle[] = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+type GridMode = "none" | "thirds" | "center";
+const GRID_CYCLE: GridMode[] = ["none", "thirds", "center"];
+const GRID_LABEL: Record<GridMode, string> = {
+  none: "editor.cropNoGrid",
+  thirds: "editor.cropThirds",
+  center: "editor.cropCenterCross",
+};
+
+const ASPECT_PRESETS: { key: AspectRatioPreset; labelKey: string }[] = [
+  { key: "free", labelKey: "editor.cropFree" },
+  { key: "1:1", labelKey: "editor.cropSquare" },
+  { key: "4:3", labelKey: "4:3" },
+  { key: "3:2", labelKey: "3:2" },
+  { key: "16:9", labelKey: "16:9" },
+  { key: "original", labelKey: "editor.cropOriginal" },
+];
 
 function getHandlePosition(
   cropDisplay: { left: number; top: number; width: number; height: number },
@@ -65,20 +88,55 @@ export function CropOverlay({
   imageHeight,
   containerWidth,
   containerHeight,
+  transform,
   onCropConfirm,
   onCropCancel,
 }: CropOverlayProps) {
   const { t } = useI18n();
 
-  // Scale factor from image coords to container coords
-  const scaleX = containerWidth / imageWidth;
-  const scaleY = containerHeight / imageHeight;
-  const scale = Math.max(0.0001, Math.min(scaleX, scaleY));
+  const [aspectPreset, setAspectPreset] = useState<AspectRatioPreset>("free");
+  const [gridMode, setGridMode] = useState<GridMode>("none");
 
-  const displayW = imageWidth * scale;
-  const displayH = imageHeight * scale;
-  const offsetX = (containerWidth - displayW) / 2;
-  const offsetY = (containerHeight - displayH) / 2;
+  const aspectValue = useMemo(
+    () => getAspectRatioValue(aspectPreset, imageWidth, imageHeight),
+    [aspectPreset, imageWidth, imageHeight],
+  );
+  const aspectRef = useRef(aspectValue);
+  useEffect(() => {
+    aspectRef.current = aspectValue;
+  }, [aspectValue]);
+
+  // Coordinate mapping: use CanvasTransform when available, fallback to fit-scale
+  const fallbackFit = useMemo(
+    () => computeFitGeometry(imageWidth, imageHeight, containerWidth, containerHeight),
+    [imageWidth, imageHeight, containerWidth, containerHeight],
+  );
+
+  const effectiveScale = useMemo(() => {
+    if (transform) {
+      const fit = computeFitGeometry(
+        imageWidth,
+        imageHeight,
+        transform.canvasWidth,
+        transform.canvasHeight,
+      );
+      return fit.fitScale * transform.scale;
+    }
+    return fallbackFit.fitScale;
+  }, [transform, imageWidth, imageHeight, fallbackFit]);
+
+  const imgToScreen = useCallback(
+    (imgX: number, imgY: number) => {
+      if (transform) {
+        return imageToScreenPoint({ x: imgX, y: imgY }, transform, imageWidth, imageHeight);
+      }
+      return {
+        x: fallbackFit.offsetX + imgX * fallbackFit.fitScale,
+        y: fallbackFit.offsetY + imgY * fallbackFit.fitScale,
+      };
+    },
+    [transform, imageWidth, imageHeight, fallbackFit],
+  );
 
   // Crop region in image coordinates (initially 80% center)
   const margin = 0.1;
@@ -131,15 +189,15 @@ export function CropOverlay({
               w: startW.value,
               h: startH.value,
             },
-            e.translationX / scale,
-            e.translationY / scale,
+            e.translationX / effectiveScale,
+            e.translationY / effectiveScale,
             imageWidth,
             imageHeight,
             MIN_CROP_SIZE,
           );
           runOnJS(applyCropRegion)(next);
         }),
-    [applyCropRegion, imageHeight, imageWidth, scale, startH, startW, startX, startY],
+    [applyCropRegion, imageHeight, imageWidth, effectiveScale, startH, startW, startX, startY],
   );
 
   const createResizeGesture = useCallback(
@@ -153,7 +211,7 @@ export function CropOverlay({
           startH.value = current.h;
         })
         .onUpdate((e) => {
-          const next = resizeCropRegion(
+          const next = resizeCropRegionWithAspect(
             {
               x: startX.value,
               y: startY.value,
@@ -161,15 +219,16 @@ export function CropOverlay({
               h: startH.value,
             },
             handle,
-            e.translationX / scale,
-            e.translationY / scale,
+            e.translationX / effectiveScale,
+            e.translationY / effectiveScale,
+            aspectRef.current,
             imageWidth,
             imageHeight,
             MIN_CROP_SIZE,
           );
           runOnJS(applyCropRegion)(next);
         }),
-    [applyCropRegion, imageHeight, imageWidth, scale, startH, startW, startX, startY],
+    [applyCropRegion, imageHeight, imageWidth, effectiveScale, startH, startW, startX, startY],
   );
 
   const resizeGestures = useMemo(
@@ -184,15 +243,16 @@ export function CropOverlay({
     [createResizeGesture],
   );
 
-  const cropDisplay = useMemo(
-    () => ({
-      left: offsetX + cropRegion.x * scale,
-      top: offsetY + cropRegion.y * scale,
-      width: cropRegion.w * scale,
-      height: cropRegion.h * scale,
-    }),
-    [cropRegion.h, cropRegion.w, cropRegion.x, cropRegion.y, offsetX, offsetY, scale],
-  );
+  const cropDisplay = useMemo(() => {
+    const tl = imgToScreen(cropRegion.x, cropRegion.y);
+    const br = imgToScreen(cropRegion.x + cropRegion.w, cropRegion.y + cropRegion.h);
+    return {
+      left: tl.x,
+      top: tl.y,
+      width: br.x - tl.x,
+      height: br.y - tl.y,
+    };
+  }, [cropRegion, imgToScreen]);
 
   const handleDisplayPositions = useMemo(() => {
     return RESIZE_HANDLES.map((handle) => ({
@@ -219,6 +279,22 @@ export function CropOverlay({
       });
     }
   }, [imageHeight, imageWidth]);
+
+  // Web-only: Enter to confirm crop (skip when editing a text input)
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Enter") {
+        const tag = (e.target as HTMLElement)?.tagName?.toLowerCase();
+        if (tag === "input" || tag === "textarea") return;
+        e.preventDefault();
+        const r = cropRegionRef.current;
+        onCropConfirm(r.x, r.y, r.w, r.h);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onCropConfirm]);
 
   return (
     <View
@@ -323,6 +399,61 @@ export function CropOverlay({
         </GestureDetector>
       ))}
 
+      {/* Grid overlay lines inside crop area */}
+      {gridMode === "thirds" &&
+        [1 / 3, 2 / 3].map((frac) => (
+          <React.Fragment key={frac}>
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: cropDisplay.left + cropDisplay.width * frac,
+                top: cropDisplay.top,
+                width: 0.5,
+                height: cropDisplay.height,
+                backgroundColor: "rgba(255,255,255,0.35)",
+              }}
+            />
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                left: cropDisplay.left,
+                top: cropDisplay.top + cropDisplay.height * frac,
+                width: cropDisplay.width,
+                height: 0.5,
+                backgroundColor: "rgba(255,255,255,0.35)",
+              }}
+            />
+          </React.Fragment>
+        ))}
+      {gridMode === "center" && (
+        <>
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: cropDisplay.left + cropDisplay.width / 2,
+              top: cropDisplay.top,
+              width: 0.5,
+              height: cropDisplay.height,
+              backgroundColor: "rgba(255,255,255,0.4)",
+            }}
+          />
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              left: cropDisplay.left,
+              top: cropDisplay.top + cropDisplay.height / 2,
+              width: cropDisplay.width,
+              height: 0.5,
+              backgroundColor: "rgba(255,255,255,0.4)",
+            }}
+          />
+        </>
+      )}
+
       {/* Dimension info */}
       <View
         style={{
@@ -341,28 +472,147 @@ export function CropOverlay({
         </Text>
       </View>
 
-      {/* Action buttons */}
+      {/* Bottom toolbar */}
       <View
         style={{
           position: "absolute",
-          bottom: 12,
+          bottom: 0,
           left: 0,
           right: 0,
-          flexDirection: "row",
-          justifyContent: "center",
-          gap: 16,
+          backgroundColor: "rgba(0,0,0,0.75)",
+          borderTopLeftRadius: 10,
+          borderTopRightRadius: 10,
+          paddingHorizontal: 8,
+          paddingTop: 6,
+          paddingBottom: Platform.OS === "ios" ? 28 : 8,
+          gap: 6,
         }}
       >
-        <View
-          style={{
-            backgroundColor: "rgba(0,0,0,0.7)",
-            borderRadius: 8,
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            flexDirection: "row",
-            gap: 8,
-          }}
-        >
+        {/* Row 1: Aspect ratio chips + Grid toggle */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          <View style={{ flexDirection: "row", gap: 4, alignItems: "center" }}>
+            {ASPECT_PRESETS.map((p) => (
+              <Chip
+                key={p.key}
+                size="sm"
+                variant={aspectPreset === p.key ? "primary" : "secondary"}
+                onPress={() => {
+                  setAspectPreset(p.key);
+                  const av = getAspectRatioValue(p.key, imageWidth, imageHeight);
+                  if (av != null) {
+                    applyCropRegion(
+                      applyAspectRatio(
+                        cropRegionRef.current,
+                        av,
+                        imageWidth,
+                        imageHeight,
+                        MIN_CROP_SIZE,
+                      ),
+                    );
+                  }
+                }}
+              >
+                <Chip.Label className="text-[9px]">
+                  {p.labelKey.startsWith("editor.") ? t(p.labelKey) : p.labelKey}
+                </Chip.Label>
+              </Chip>
+            ))}
+            <View
+              style={{
+                width: 1,
+                height: 16,
+                backgroundColor: "rgba(255,255,255,0.2)",
+                marginHorizontal: 2,
+              }}
+            />
+            <Chip
+              size="sm"
+              variant={gridMode !== "none" ? "primary" : "secondary"}
+              onPress={() => {
+                const idx = GRID_CYCLE.indexOf(gridMode);
+                setGridMode(GRID_CYCLE[(idx + 1) % GRID_CYCLE.length]);
+              }}
+            >
+              <Chip.Label className="text-[9px]">{t(GRID_LABEL[gridMode])}</Chip.Label>
+            </Chip>
+          </View>
+        </ScrollView>
+
+        {/* Row 2: Numeric coordinate inputs */}
+        <View style={{ flexDirection: "row", gap: 4 }}>
+          {(["x", "y", "w", "h"] as const).map((key) => (
+            <View key={key} style={{ flex: 1 }}>
+              <Text style={{ fontSize: 8, color: "rgba(255,255,255,0.5)", marginBottom: 1 }}>
+                {key.toUpperCase()}
+              </Text>
+              <TextInput
+                keyboardType="number-pad"
+                value={String(cropRegion[key])}
+                onChangeText={(text) => {
+                  const val = parseInt(text, 10);
+                  if (!isNaN(val)) {
+                    const next = { ...cropRegionRef.current, [key]: val };
+                    const av = aspectRef.current;
+                    if (av != null && (key === "w" || key === "h")) {
+                      if (key === "w") next.h = Math.round(val / av);
+                      else next.w = Math.round(val * av);
+                    }
+                    applyCropRegion(next);
+                  }
+                }}
+                selectTextOnFocus
+                style={{
+                  fontSize: 10,
+                  color: "#fff",
+                  backgroundColor: "rgba(255,255,255,0.1)",
+                  borderRadius: 4,
+                  paddingHorizontal: 4,
+                  height: 24,
+                  textAlign: "center",
+                }}
+              />
+            </View>
+          ))}
+        </View>
+
+        {/* Row 3: Presets + Action buttons */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={() => {
+              const base = { x: 0, y: 0, w: imageWidth, h: imageHeight };
+              const av = aspectRef.current;
+              applyCropRegion(
+                av != null
+                  ? applyAspectRatio(base, av, imageWidth, imageHeight, MIN_CROP_SIZE)
+                  : base,
+              );
+            }}
+          >
+            <Button.Label className="text-[9px]">{t("editor.cropPresetAll")}</Button.Label>
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onPress={() => {
+              const base = {
+                x: Math.floor(imageWidth * 0.25),
+                y: Math.floor(imageHeight * 0.25),
+                w: Math.floor(imageWidth * 0.5),
+                h: Math.floor(imageHeight * 0.5),
+              };
+              const av = aspectRef.current;
+              applyCropRegion(
+                av != null
+                  ? applyAspectRatio(base, av, imageWidth, imageHeight, MIN_CROP_SIZE)
+                  : base,
+              );
+            }}
+          >
+            <Button.Label className="text-[9px]">{t("editor.cropPresetCenter50")}</Button.Label>
+          </Button>
+          <View style={{ flex: 1 }} />
           <Button size="sm" variant="danger" onPress={onCropCancel}>
             <Button.Label className="text-xs">{t("common.cancel")}</Button.Label>
           </Button>

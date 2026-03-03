@@ -24,6 +24,9 @@ const WCS_KEY_PATTERNS: RegExp[] = [
   /^CROTA\d+$/i,
   /^CD\d+_\d+$/i,
   /^PC\d+_\d+$/i,
+  /^WCSAXES$/i,
+  /^[AB]P?_\d+_\d+$/i,
+  /^[AB]P?_ORDER$/i,
 ];
 
 type PrimitiveFitsValue = string | number | boolean | null;

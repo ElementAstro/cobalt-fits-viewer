@@ -3,7 +3,7 @@
  * 提供像素坐标 ↔ 天球坐标 (RA/Dec) 的精确互转
  */
 
-import type { AstrometryCalibration } from "./types";
+import type { AstrometryCalibration, SIPCoefficients } from "./types";
 
 const DEG2RAD = Math.PI / 180;
 const RAD2DEG = 180 / Math.PI;
@@ -42,6 +42,7 @@ export interface ProjectionContext {
   dec0Rad: number;
   sinDec0: number;
   cosDec0: number;
+  sip?: SIPCoefficients;
 }
 
 /**
@@ -94,6 +95,7 @@ export function computeProjectionContext(calibration: AstrometryCalibration): Pr
     dec0Rad,
     sinDec0: Math.sin(dec0Rad),
     cosDec0: Math.cos(dec0Rad),
+    sip: calibration.sip,
   };
 }
 
@@ -111,6 +113,57 @@ export function invertCDMatrix(cd: CDMatrix): CDMatrixInverse {
     cdi2_1: -cd.cd2_1 / det,
     cdi2_2: cd.cd1_1 / det,
   };
+}
+
+/**
+ * 评估 SIP 多项式: Σ c[i][j] * u^i * v^j
+ */
+function evaluateSIPPolynomial(coeffs: number[][], order: number, u: number, v: number): number {
+  let result = 0;
+  for (let i = 0; i <= order; i++) {
+    if (!coeffs[i]) continue;
+    const ui = Math.pow(u, i);
+    for (let j = 0; j <= order - i; j++) {
+      const c = coeffs[i][j];
+      if (c === 0) continue;
+      result += c * ui * Math.pow(v, j);
+    }
+  }
+  return result;
+}
+
+/**
+ * SIP 正向畸变校正 (pixel → corrected pixel)
+ * 输入 u,v 为相对参考像素的偏移 (u = x - CRPIX1, v = y - CRPIX2)
+ * 返回校正增量 du, dv
+ */
+export function applySIPForward(
+  u: number,
+  v: number,
+  sip: SIPCoefficients,
+): { du: number; dv: number } {
+  const du = evaluateSIPPolynomial(sip.a, sip.aOrder, u, v);
+  const dv = evaluateSIPPolynomial(sip.b, sip.bOrder, u, v);
+  return { du, dv };
+}
+
+/**
+ * SIP 逆向畸变校正 (sky → pixel)
+ * 输入 U,V 为 CD 逆矩阵输出的中间像素偏移
+ * 返回校正增量 du, dv
+ * 如果没有逆系数 (AP/BP)，则返回零校正
+ */
+export function applySIPInverse(
+  u: number,
+  v: number,
+  sip: SIPCoefficients,
+): { du: number; dv: number } {
+  if (!sip.ap || !sip.bp || sip.apOrder == null || sip.bpOrder == null) {
+    return { du: 0, dv: 0 };
+  }
+  const du = evaluateSIPPolynomial(sip.ap, sip.apOrder, u, v);
+  const dv = evaluateSIPPolynomial(sip.bp, sip.bpOrder, u, v);
+  return { du, dv };
 }
 
 /**
@@ -138,15 +191,22 @@ export function pixelToRaDecWithContext(
   y: number,
   ctx: ProjectionContext,
 ): RaDec | null {
-  const { cd, ra0Rad, sinDec0, cosDec0 } = ctx;
+  const { cd, ra0Rad, sinDec0, cosDec0, sip } = ctx;
 
   // 相对参考像素的偏移 (FITS 像素从 1 开始, 这里 x/y 是 0-indexed)
-  const dx = x + 1 - cd.crpix1;
-  const dy = y + 1 - cd.crpix2;
+  let u = x + 1 - cd.crpix1;
+  let v = y + 1 - cd.crpix2;
+
+  // Apply SIP forward distortion correction (pixel → corrected pixel)
+  if (sip) {
+    const correction = applySIPForward(u, v, sip);
+    u += correction.du;
+    v += correction.dv;
+  }
 
   // 中间世界坐标 (度)
-  const xi = cd.cd1_1 * dx + cd.cd1_2 * dy;
-  const eta = cd.cd2_1 * dx + cd.cd2_2 * dy;
+  const xi = cd.cd1_1 * u + cd.cd1_2 * v;
+  const eta = cd.cd2_1 * u + cd.cd2_2 * v;
 
   // 转换为弧度
   const xiRad = xi * DEG2RAD;
@@ -195,7 +255,7 @@ export function raDecToPixelWithContext(
   dec: number,
   ctx: ProjectionContext,
 ): { x: number; y: number } | null {
-  const { cd, inv, ra0Rad, sinDec0, cosDec0 } = ctx;
+  const { cd, inv, ra0Rad, sinDec0, cosDec0, sip } = ctx;
 
   // 参考点和目标点的三角函数
   const raRad = ra * DEG2RAD;
@@ -219,12 +279,19 @@ export function raDecToPixelWithContext(
   const eta = etaRad * RAD2DEG;
 
   // 逆 CD 矩阵: 中间坐标 → 像素偏移
-  const dx = inv.cdi1_1 * xi + inv.cdi1_2 * eta;
-  const dy = inv.cdi2_1 * xi + inv.cdi2_2 * eta;
+  let u = inv.cdi1_1 * xi + inv.cdi1_2 * eta;
+  let v = inv.cdi2_1 * xi + inv.cdi2_2 * eta;
+
+  // Apply SIP inverse distortion correction (sky → pixel)
+  if (sip) {
+    const correction = applySIPInverse(u, v, sip);
+    u += correction.du;
+    v += correction.dv;
+  }
 
   // 像素坐标 (0-indexed)
-  const px = dx + cd.crpix1 - 1;
-  const py = dy + cd.crpix2 - 1;
+  const px = u + cd.crpix1 - 1;
+  const py = v + cd.crpix2 - 1;
 
   if (!Number.isFinite(px) || !Number.isFinite(py)) return null;
 
