@@ -3,7 +3,7 @@ import { View } from "react-native";
 import { Button } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
-import type { EditorTool, EditorToolParams } from "../../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolParams } from "../../../hooks/editor/useEditorToolState";
 import type { ImageEditOperation } from "../../../lib/utils/imageOperations";
 
 interface ToolParamsGeometryProps {

@@ -15,7 +15,7 @@ function loadThumbnailWorkflowModule() {
     pruneThumbnailCache: (...args: unknown[]) => mockPruneThumbnailCache(...args),
   }));
 
-  jest.doMock("../../../stores/useSettingsStore", () => ({
+  jest.doMock("../../../stores/app/useSettingsStore", () => ({
     useSettingsStore: {
       getState: () => mockGetSettingsState(),
     },

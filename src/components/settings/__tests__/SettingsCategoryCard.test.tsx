@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen, fireEvent } from "@testing-library/react-native";
 import { SettingsCategoryCard } from "../SettingsCategoryCard";
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),

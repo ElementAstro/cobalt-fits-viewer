@@ -4,7 +4,7 @@
 
 import { useMemo } from "react";
 import { Skia, AlphaType, ColorType, type SkImage } from "@shopify/react-native-skia";
-import { Logger, LOG_TAGS } from "../lib/logger";
+import { Logger, LOG_TAGS } from "../../lib/logger";
 
 export function useSkImage(
   rgbaData: Uint8ClampedArray | null,

@@ -8,11 +8,11 @@ import { useRouter } from "expo-router";
 import { Alert, Button, Card, Chip, Dialog, Separator, Switch, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useBackupSummary } from "../../hooks/useBackupSummary";
+import { useBackupSummary } from "../../hooks/backup/useBackupSummary";
 import { formatFileSize } from "../../lib/utils/fileManager";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useBackup } from "../../hooks/useBackup";
-import { useBackupStore } from "../../stores/useBackupStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useBackup } from "../../hooks/backup/useBackup";
+import { useBackupStore } from "../../stores/app/useBackupStore";
 import { ProviderCard } from "../../components/backup/ProviderCard";
 import { BackupProgressSheet } from "../../components/backup/BackupProgressSheet";
 import { AddProviderSheet } from "../../components/backup/AddProviderSheet";
@@ -20,7 +20,7 @@ import { WebDAVConfigSheet } from "../../components/backup/WebDAVConfigSheet";
 import { SFTPConfigSheet } from "../../components/backup/SFTPConfigSheet";
 import { LANSendSheet } from "../../components/backup/LANSendSheet";
 import { LANReceiveSheet } from "../../components/backup/LANReceiveSheet";
-import { useLANTransfer } from "../../hooks/useLANTransfer";
+import { useLANTransfer } from "../../hooks/backup/useLANTransfer";
 import {
   BackupOptionsSheet,
   type BackupOptionsSheetMode,

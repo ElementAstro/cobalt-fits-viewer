@@ -3,16 +3,16 @@ import { View, Text, FlatList } from "react-native";
 import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 import {
   generateIntegrationReport,
   formatExposureTime,
   exportReportAsMarkdown,
   type TargetReport,
 } from "../../lib/gallery/integrationReport";
-import { useFrameTypeLabelMap } from "../../hooks/useFrameTypeLabelMap";
+import { useFrameTypeLabelMap } from "../../hooks/gallery/useFrameTypeLabelMap";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 

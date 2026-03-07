@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import * as Haptics from "expo-haptics";
-import { useSettingsStore } from "../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 
 function runSafely(task: Promise<unknown>) {
   void task.catch(() => undefined);

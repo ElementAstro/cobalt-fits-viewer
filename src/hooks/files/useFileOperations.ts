@@ -6,13 +6,13 @@
 
 import { useCallback } from "react";
 import { File, Directory, Paths } from "expo-file-system";
-import { shareFile, ShareNotAvailableError } from "../lib/utils/imageExport";
-import { renameFitsFile, readFileAsArrayBuffer } from "../lib/utils/fileManager";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useFileGroupStore } from "../stores/useFileGroupStore";
-import { loadScientificFitsFromBuffer, extractMetadata } from "../lib/fits/parser";
-import { classifyWithDetail } from "../lib/gallery/frameClassifier";
+import { shareFile, ShareNotAvailableError } from "../../lib/utils/imageExport";
+import { renameFitsFile, readFileAsArrayBuffer } from "../../lib/utils/fileManager";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useFileGroupStore } from "../../stores/files/useFileGroupStore";
+import { loadScientificFitsFromBuffer, extractMetadata } from "../../lib/fits/parser";
+import { classifyWithDetail } from "../../lib/gallery/frameClassifier";
 
 export interface ExportFilesResult {
   success: boolean;

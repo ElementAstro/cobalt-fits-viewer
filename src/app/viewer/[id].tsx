@@ -8,17 +8,17 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
 import Animated, { FadeIn, FadeInDown, FadeInUp, FadeOut } from "react-native-reanimated";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useViewerStore } from "../../stores/useViewerStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useFitsFile } from "../../hooks/useFitsFile";
-import { useImageProcessing } from "../../hooks/useImageProcessing";
-import { useViewerExport } from "../../hooks/useViewerExport";
-import { useThumbnail } from "../../hooks/useThumbnail";
-import { useViewerHotkeys } from "../../hooks/useViewerHotkeys";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useViewerStore } from "../../stores/viewer/useViewerStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useFitsFile } from "../../hooks/viewer/useFitsFile";
+import { useImageProcessing } from "../../hooks/viewer/useImageProcessing";
+import { useViewerExport } from "../../hooks/viewer/useViewerExport";
+import { useThumbnail } from "../../hooks/gallery/useThumbnail";
+import { useViewerHotkeys } from "../../hooks/viewer/useViewerHotkeys";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useImageCacheWarmup } from "../../hooks/viewer/useImageCacheWarmup";
 import { PixelInspector } from "../../components/fits/PixelInspector";
 import { RegionSelectOverlay } from "../../components/fits/RegionSelectOverlay";
 import {
@@ -44,8 +44,8 @@ import {
   getHistogramPeakValue,
   getHistogramPercentile,
 } from "../../lib/utils/pixelMath";
-import { useAstrometry } from "../../hooks/useAstrometry";
-import { useAstrometryStore } from "../../stores/useAstrometryStore";
+import { useAstrometry } from "../../hooks/astrometry/useAstrometry";
+import { useAstrometryStore } from "../../stores/processing/useAstrometryStore";
 import { AstrometryAnnotationOverlay } from "../../components/astrometry/AstrometryAnnotationOverlay";
 import { CoordinateGridOverlay } from "../../components/astrometry/CoordinateGridOverlay";
 import { ConstellationOverlay } from "../../components/astrometry/ConstellationOverlay";
@@ -59,7 +59,7 @@ import { ZoomControls } from "../../components/fits/ZoomControls";
 import { AstrometryBadge } from "../../components/fits/AstrometryBadge";
 import { MeasurementOverlay } from "../../components/fits/MeasurementOverlay";
 import { MeasurementPanel } from "../../components/fits/MeasurementPanel";
-import { useMeasurement } from "../../hooks/useMeasurement";
+import { useMeasurement } from "../../hooks/viewer/useMeasurement";
 import { shareWCS } from "../../lib/astrometry/wcsExport";
 import {
   pixelToRaDec,

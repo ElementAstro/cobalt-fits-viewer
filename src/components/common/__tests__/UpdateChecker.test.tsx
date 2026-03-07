@@ -8,7 +8,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),
@@ -40,7 +40,7 @@ const mockUseAppUpdate = {
   clearError: jest.fn(),
 };
 
-jest.mock("../../../hooks/useAppUpdate", () => ({
+jest.mock("../../../hooks/common/useAppUpdate", () => ({
   useAppUpdate: () => mockUseAppUpdate,
 }));
 

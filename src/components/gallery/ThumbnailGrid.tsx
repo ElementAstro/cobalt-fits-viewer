@@ -5,7 +5,7 @@ import { Image } from "expo-image";
 import { Skeleton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
-import { useThumbnailOnDemand } from "../../hooks/useThumbnailOnDemand";
+import { useThumbnailOnDemand } from "../../hooks/gallery/useThumbnailOnDemand";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { isVideoFile, isAudioFile } from "../../lib/media/routing";

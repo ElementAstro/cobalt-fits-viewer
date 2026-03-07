@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react-native";
 import { RecentFilesSection } from "../RecentFilesSection";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({

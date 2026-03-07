@@ -7,8 +7,8 @@
 
 import { File } from "expo-file-system";
 import { fileExists, getFitsDir, getTrashDir, listImportedMediaFiles } from "./fileManager";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useTrashStore } from "../../stores/useTrashStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useTrashStore } from "../../stores/files/useTrashStore";
 import { reconcileAllStores } from "../targets/targetIntegrity";
 import { deleteThumbnails } from "../gallery/thumbnailCache";
 import type { FitsMetadata, TrashedFitsRecord } from "../fits/types";

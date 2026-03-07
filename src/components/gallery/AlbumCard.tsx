@@ -3,7 +3,7 @@ import { View, Text, Pressable, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { Button, Card, Chip, PressableFeedback, Surface, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
 import { resolveAlbumCoverUri } from "../../lib/gallery/thumbnailCache";
 import type { Album } from "../../lib/fits/types";

@@ -16,7 +16,7 @@ import {
   computeObservationSummary,
 } from "../../lib/map/utils";
 import { formatExposureTime } from "../../lib/gallery/albumStatistics";
-import { useFavoriteSitesStore } from "../../stores/useFavoriteSitesStore";
+import { useFavoriteSitesStore } from "../../stores/app/useFavoriteSitesStore";
 import { ThumbnailGrid } from "./ThumbnailGrid";
 
 const NOOP = () => {};

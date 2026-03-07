@@ -6,10 +6,10 @@ import type {
   Target,
   TargetGroup,
 } from "../fits/types";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSessionStore } from "../../stores/useSessionStore";
-import { useTargetGroupStore } from "../../stores/useTargetGroupStore";
-import { useTargetStore } from "../../stores/useTargetStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useTargetGroupStore } from "../../stores/observation/useTargetGroupStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import {
   dedupeTargetRefs,
   normalizeSessionTargetRefs,

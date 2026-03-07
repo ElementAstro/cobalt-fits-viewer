@@ -20,7 +20,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     isLandscape: false,
     isLandscapeTablet: false,
@@ -29,7 +29,7 @@ jest.mock("../../../hooks/useResponsiveLayout", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useSelectionMode", () => ({
+jest.mock("../../../hooks/files/useSelectionMode", () => ({
   useSelectionMode: () => ({
     isSelectionMode: false,
     selectedIds: [],
@@ -41,14 +41,14 @@ jest.mock("../../../hooks/useSelectionMode", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     impact: jest.fn(),
     notify: jest.fn(),
   }),
 }));
 
-jest.mock("../../../hooks/useGallery", () => ({
+jest.mock("../../../hooks/gallery/useGallery", () => ({
   useGallery: () => ({
     files: mockFiles,
     totalCount: mockFiles.length,
@@ -60,7 +60,7 @@ jest.mock("../../../hooks/useGallery", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useAlbums", () => ({
+jest.mock("../../../hooks/gallery/useAlbums", () => ({
   useAlbums: () => ({
     albums: [],
     filteredAlbums: [],
@@ -84,7 +84,7 @@ jest.mock("../../../hooks/useAlbums", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useFileManager", () => ({
+jest.mock("../../../hooks/files/useFileManager", () => ({
   useFileManager: () => ({
     handleDeleteFiles: jest.fn(),
     handleRenameFiles: jest.fn(() => ({ success: 0, failed: 0 })),
@@ -104,7 +104,7 @@ const mockGalleryStore = {
   clearFilters: jest.fn(),
 };
 
-jest.mock("../../../stores/useGalleryStore", () => ({
+jest.mock("../../../stores/gallery/useGalleryStore", () => ({
   useGalleryStore: (selector: (state: typeof mockGalleryStore) => unknown) =>
     selector(mockGalleryStore),
 }));
@@ -127,7 +127,7 @@ const mockSettingsStore = {
   },
 };
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof mockSettingsStore) => unknown) =>
     selector(mockSettingsStore),
 }));

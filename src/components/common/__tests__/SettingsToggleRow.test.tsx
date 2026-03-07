@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen } from "@testing-library/react-native";
 import { SettingsToggleRow } from "../SettingsToggleRow";
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),

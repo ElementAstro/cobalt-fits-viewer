@@ -1,6 +1,6 @@
 import { renderHook, act } from "@testing-library/react-native";
 import { useVideoProcessingForm } from "../useVideoProcessingForm";
-import type { FitsMetadata } from "../../lib/fits/types";
+import type { FitsMetadata } from "../../../lib/fits/types";
 
 const mockT = (key: string) => key;
 

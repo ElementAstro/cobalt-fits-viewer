@@ -3,9 +3,9 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useTargetStore } from "../stores/useTargetStore";
-import { useTargetGroupStore } from "../stores/useTargetGroupStore";
-import { useFitsStore } from "../stores/useFitsStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
+import { useTargetGroupStore } from "../../stores/observation/useTargetGroupStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import {
   calculateTargetStatistics,
   calculateGroupStatistics,
@@ -15,8 +15,8 @@ import {
   type TargetStatistics,
   type MonthlyStats,
   type GroupStatistics,
-} from "../lib/targets/targetStatistics";
-import { buildTargetIndexes } from "../lib/targets/targetIndexes";
+} from "../../lib/targets/targetStatistics";
+import { buildTargetIndexes } from "../../lib/targets/targetIndexes";
 
 export function useTargetStatistics() {
   const targets = useTargetStore((s) => s.targets);

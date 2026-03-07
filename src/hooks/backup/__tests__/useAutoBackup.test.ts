@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { useAutoBackup } from "../useAutoBackup";
-import { useBackupStore } from "../../stores/useBackupStore";
+import { useBackupStore } from "../../../stores/app/useBackupStore";
 
 const mockBackupFn = jest.fn();
 const mockUseBackupState = {
@@ -22,8 +22,8 @@ jest.mock("expo-network", () => ({
   },
 }));
 
-jest.mock("../../lib/logger", () => {
-  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+jest.mock("../../../lib/logger", () => {
+  const actual = jest.requireActual("../../../lib/logger") as typeof import("../../../lib/logger");
   return {
     ...actual,
     Logger: {

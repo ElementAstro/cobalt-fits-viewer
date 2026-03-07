@@ -13,10 +13,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { ObservationSession } from "../../lib/fits/types";
-import { useTargetStore } from "../../stores/useTargetStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
-import { useChipInput } from "../../hooks/useChipInput";
-import { useEquipmentFields } from "../../hooks/useEquipmentFields";
+import { useChipInput } from "../../hooks/common/useChipInput";
+import { useEquipmentFields } from "../../hooks/sessions/useEquipmentFields";
 import { ChipInputField } from "./ChipInputField";
 import { EquipmentFields } from "./EquipmentFields";
 import { RatingSelector } from "./RatingSelector";

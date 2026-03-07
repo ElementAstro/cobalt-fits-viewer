@@ -58,7 +58,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     isLandscape: false,
     isLandscapeTablet: false,
@@ -67,7 +67,7 @@ jest.mock("../../../hooks/useResponsiveLayout", () => ({
   }),
 }));
 
-jest.mock("../../../stores/useAlbumStore", () => ({
+jest.mock("../../../stores/gallery/useAlbumStore", () => ({
   useAlbumStore: (selector: any) =>
     selector({
       getAlbumById: (id: string) => (id === "album-1" ? mockAlbum : undefined),
@@ -79,21 +79,21 @@ jest.mock("../../../stores/useAlbumStore", () => ({
     }),
 }));
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: any) =>
     selector({
       files: mockFiles,
     }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     impact: jest.fn(),
     notify: jest.fn(),
   }),
 }));
 
-jest.mock("../../../hooks/useSelectionMode", () => ({
+jest.mock("../../../hooks/files/useSelectionMode", () => ({
   useSelectionMode: () => mockSelectionState,
 }));
 

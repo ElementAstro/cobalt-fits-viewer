@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { useChipInput } from "./useChipInput";
+import { useChipInput } from "../common/useChipInput";
 
 interface EquipmentValues {
   telescope?: string;

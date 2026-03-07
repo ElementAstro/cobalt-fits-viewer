@@ -1,11 +1,11 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useGallery } from "../useGallery";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useGalleryStore } from "../../stores/useGalleryStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import type { FitsMetadata } from "../../lib/fits/types";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
+import { useGalleryStore } from "../../../stores/gallery/useGalleryStore";
+import { useSettingsStore } from "../../../stores/app/useSettingsStore";
+import type { FitsMetadata } from "../../../lib/fits/types";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),

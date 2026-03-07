@@ -24,14 +24,14 @@ jest.mock("../../../i18n/useI18n", () => ({
 
 let mockStoreState: Record<string, unknown>;
 
-jest.mock("../../../stores/useFileGroupStore", () => ({
+jest.mock("../../../stores/files/useFileGroupStore", () => ({
   useFileGroupStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector(mockStoreState),
 }));
 
 let mockFitsState: Record<string, unknown>;
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (s: Record<string, unknown>) => unknown) => selector(mockFitsState),
 }));
 

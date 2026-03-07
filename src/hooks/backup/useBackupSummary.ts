@@ -3,10 +3,10 @@
  */
 
 import { useMemo } from "react";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useAlbumStore } from "../stores/useAlbumStore";
-import { useTargetStore } from "../stores/useTargetStore";
-import { useSessionStore } from "../stores/useSessionStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
 
 export interface BackupSummary {
   fileCount: number;

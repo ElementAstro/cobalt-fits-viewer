@@ -13,14 +13,14 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
 import {
   useSessionById,
   useLogEntriesBySession,
   useSessionStore,
-} from "../../stores/useSessionStore";
-import { useTargetStore } from "../../stores/useTargetStore";
-import { useFitsStore } from "../../stores/useFitsStore";
+} from "../../stores/observation/useSessionStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { exportToCSV, exportSessionToJSON } from "../../lib/sessions/observationLog";
 import { formatDuration } from "../../lib/sessions/format";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";

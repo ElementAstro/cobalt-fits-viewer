@@ -1,45 +1,45 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useSessions } from "../useSessions";
 
-jest.mock("../../stores/useSessionStore", () => ({
+jest.mock("../../../stores/observation/useSessionStore", () => ({
   useSessionStore: jest.fn(),
 }));
-jest.mock("../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: jest.fn(),
 }));
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: jest.fn(),
 }));
-jest.mock("../../stores/useTargetStore", () => ({
+jest.mock("../../../stores/observation/useTargetStore", () => ({
   useTargetStore: jest.fn(),
 }));
-jest.mock("../../lib/sessions/sessionDetector", () => ({
+jest.mock("../../../lib/sessions/sessionDetector", () => ({
   detectSessions: jest.fn(),
   findMatchingSession: jest.fn(),
   getDatesWithObservations: jest.fn(),
 }));
-jest.mock("../../lib/sessions/observationLog", () => ({
+jest.mock("../../../lib/sessions/observationLog", () => ({
   generateLogFromFiles: jest.fn(),
   exportToCSV: jest.fn(() => "csv"),
   exportToText: jest.fn(() => "text"),
   exportSessionToJSON: jest.fn(() => "json-session"),
   exportAllSessionsToJSON: jest.fn(() => "json-all"),
 }));
-jest.mock("../../lib/sessions/statsCalculator", () => ({
+jest.mock("../../../lib/sessions/statsCalculator", () => ({
   calculateObservationStats: jest.fn(() => ({ total: 1 })),
   getMonthlyTrend: jest.fn(() => [{ month: "2025-01" }]),
 }));
-jest.mock("../../lib/sessions/sessionLinking", () => ({
+jest.mock("../../../lib/sessions/sessionLinking", () => ({
   deriveSessionMetadataFromFiles: jest.fn(),
   buildMissingLogEntries: jest.fn(),
 }));
-jest.mock("../../lib/sessions/sessionNormalization", () => ({
+jest.mock("../../../lib/sessions/sessionNormalization", () => ({
   mergeSessionLike: jest.fn((base: object, incoming: object) => ({ ...base, ...incoming })),
 }));
-jest.mock("../../lib/sessions/sessionReconciliation", () => ({
+jest.mock("../../../lib/sessions/sessionReconciliation", () => ({
   reconcileSessionsFromLinkedFilesGraph: jest.fn(),
 }));
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     Sessions: "Sessions",
   },
@@ -51,38 +51,38 @@ jest.mock("../../lib/logger", () => ({
   },
 }));
 
-const { useSessionStore } = jest.requireMock("../../stores/useSessionStore") as {
+const { useSessionStore } = jest.requireMock("../../../stores/observation/useSessionStore") as {
   useSessionStore: jest.Mock & { getState?: jest.Mock; setState?: jest.Mock };
 };
-const { useFitsStore } = jest.requireMock("../../stores/useFitsStore") as {
+const { useFitsStore } = jest.requireMock("../../../stores/files/useFitsStore") as {
   useFitsStore: jest.Mock & { getState?: jest.Mock };
 };
-const { useSettingsStore } = jest.requireMock("../../stores/useSettingsStore") as {
+const { useSettingsStore } = jest.requireMock("../../../stores/app/useSettingsStore") as {
   useSettingsStore: jest.Mock;
 };
-const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
+const { useTargetStore } = jest.requireMock("../../../stores/observation/useTargetStore") as {
   useTargetStore: jest.Mock & { getState?: jest.Mock };
 };
-const detectorLib = jest.requireMock("../../lib/sessions/sessionDetector") as {
+const detectorLib = jest.requireMock("../../../lib/sessions/sessionDetector") as {
   detectSessions: jest.Mock;
   findMatchingSession: jest.Mock;
   getDatesWithObservations: jest.Mock;
 };
-const logLib = jest.requireMock("../../lib/sessions/observationLog") as {
+const logLib = jest.requireMock("../../../lib/sessions/observationLog") as {
   generateLogFromFiles: jest.Mock;
 };
-const statsLib = jest.requireMock("../../lib/sessions/statsCalculator") as {
+const statsLib = jest.requireMock("../../../lib/sessions/statsCalculator") as {
   calculateObservationStats: jest.Mock;
   getMonthlyTrend: jest.Mock;
 };
-const linkingLib = jest.requireMock("../../lib/sessions/sessionLinking") as {
+const linkingLib = jest.requireMock("../../../lib/sessions/sessionLinking") as {
   deriveSessionMetadataFromFiles: jest.Mock;
   buildMissingLogEntries: jest.Mock;
 };
-const sessionNormalizationLib = jest.requireMock("../../lib/sessions/sessionNormalization") as {
+const sessionNormalizationLib = jest.requireMock("../../../lib/sessions/sessionNormalization") as {
   mergeSessionLike: jest.Mock;
 };
-const reconciliationLib = jest.requireMock("../../lib/sessions/sessionReconciliation") as {
+const reconciliationLib = jest.requireMock("../../../lib/sessions/sessionReconciliation") as {
   reconcileSessionsFromLinkedFilesGraph: jest.Mock;
 };
 

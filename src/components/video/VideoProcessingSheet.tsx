@@ -18,9 +18,9 @@ import type {
   WatermarkPosition,
 } from "../../lib/video/engine";
 import { useI18n } from "../../i18n/useI18n";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { FilePickerSheet } from "../astrometry/FilePickerSheet";
-import { useVideoProcessingForm } from "../../hooks/useVideoProcessingForm";
+import { useVideoProcessingForm } from "../../hooks/video/useVideoProcessingForm";
 import {
   formatVideoDuration,
   formatVideoResolution,

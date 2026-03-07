@@ -1,7 +1,7 @@
 import React from "react";
 import { render, screen, waitFor } from "@testing-library/react-native";
 import ConvertScreen from "../index";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
 
 const mockUseLocalSearchParams = jest.fn(
@@ -87,7 +87,7 @@ jest.mock("heroui-native", () => {
   };
 });
 
-jest.mock("../../../hooks/useConverter", () => ({
+jest.mock("../../../hooks/export/useConverter", () => ({
   useConverter: () => ({
     currentOptions: {
       format: "png",
@@ -133,7 +133,7 @@ jest.mock("../../../hooks/useConverter", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useFitsFile", () => ({
+jest.mock("../../../hooks/viewer/useFitsFile", () => ({
   useFitsFile: () => ({
     pixels: null,
     dimensions: null,
@@ -143,21 +143,21 @@ jest.mock("../../../hooks/useFitsFile", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useImageProcessing", () => ({
+jest.mock("../../../hooks/viewer/useImageProcessing", () => ({
   useImageProcessing: () => ({
     rgbaData: null,
     processImage: jest.fn(),
   }),
 }));
 
-jest.mock("../../../hooks/useExport", () => ({
+jest.mock("../../../hooks/export/useExport", () => ({
   useExport: () => ({
     isExporting: false,
     exportImageDetailed: jest.fn(),
   }),
 }));
 
-jest.mock("../../../stores/useAstrometryStore", () => ({
+jest.mock("../../../stores/processing/useAstrometryStore", () => ({
   useAstrometryStore: (selector: (state: unknown) => unknown) =>
     selector({
       jobs: [],

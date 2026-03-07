@@ -6,7 +6,7 @@ jest.mock("../../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (k: string) => k }),
 }));
 
-jest.mock("../../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),
@@ -14,7 +14,7 @@ jest.mock("../../../../hooks/useHapticFeedback", () => ({
   }),
 }));
 
-jest.mock("../../../../hooks/useSettingsPicker", () => ({
+jest.mock("../../../../hooks/common/useSettingsPicker", () => ({
   useSettingsPicker: () => ({
     activePicker: null,
     openPicker: jest.fn(),

@@ -11,7 +11,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (k: string) => k }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     contentPaddingTop: 0,
     horizontalPadding: 16,
@@ -23,7 +23,7 @@ jest.mock("react-native-safe-area-context", () => ({
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),

@@ -19,9 +19,9 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { Button, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useOnboardingStore, ONBOARDING_TOTAL_STEPS } from "../../stores/useOnboardingStore";
+import { useScreenOrientation } from "../../hooks/common/useScreenOrientation";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useOnboardingStore, ONBOARDING_TOTAL_STEPS } from "../../stores/app/useOnboardingStore";
 
 interface OnboardingStep {
   icon: keyof typeof Ionicons.glyphMap;

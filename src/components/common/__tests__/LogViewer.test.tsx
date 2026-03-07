@@ -8,7 +8,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),
@@ -76,7 +76,7 @@ const mockUseLogViewer = {
   totalCount: 3,
 };
 
-jest.mock("../../../hooks/useLogger", () => ({
+jest.mock("../../../hooks/common/useLogger", () => ({
   useLogViewer: () => mockUseLogViewer,
 }));
 

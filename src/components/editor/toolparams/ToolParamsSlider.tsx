@@ -3,7 +3,11 @@ import { View } from "react-native";
 import { Button } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
-import type { EditorTool, EditorToolParams, CurvesPreset } from "../../../hooks/useEditorToolState";
+import type {
+  EditorTool,
+  EditorToolParams,
+  CurvesPreset,
+} from "../../../hooks/editor/useEditorToolState";
 
 interface ToolParamsSliderProps {
   activeTool: EditorTool & string;

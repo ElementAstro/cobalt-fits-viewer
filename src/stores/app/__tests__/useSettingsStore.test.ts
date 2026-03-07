@@ -4,13 +4,13 @@
 
 import { useSettingsStore } from "../useSettingsStore";
 import { Uniwind } from "uniwind";
-import { DEFAULT_CUSTOM_THEME_COLORS } from "../../lib/theme/presets";
+import { DEFAULT_CUSTOM_THEME_COLORS } from "../../../lib/theme/presets";
 
 // Mock theme/style utilities
 jest.mock("uniwind", () => ({
   Uniwind: { setTheme: jest.fn(), updateCSSVariables: jest.fn() },
 }));
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),

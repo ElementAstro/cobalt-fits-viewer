@@ -14,8 +14,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useFileGroupStore } from "../../stores/useFileGroupStore";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useFileGroupStore } from "../../stores/files/useFileGroupStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { GroupColorPicker, GROUP_COLORS } from "../common/GroupColorPicker";
 import { formatFileSize } from "../../lib/utils/fileManager";
 import type { FileGroup } from "../../lib/fits/types";

@@ -1,43 +1,43 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { InteractionManager } from "react-native";
 import { useImageProcessing } from "../useImageProcessing";
-import { createDeferred, flushPromises } from "./helpers/testUtils";
-import type { ProcessingPipelineSnapshot } from "../../lib/fits/types";
+import { createDeferred, flushPromises } from "../../__test-helpers__/testUtils";
+import type { ProcessingPipelineSnapshot } from "../../../lib/fits/types";
 
-jest.mock("../../lib/converter/formatConverter", () => ({
+jest.mock("../../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(),
   fitsToRGBAChunked: jest.fn(),
   downsamplePixels: jest.fn(),
   getExtent: jest.fn(() => [0, 1] as [number, number]),
 }));
-jest.mock("../../lib/utils/pixelMath", () => ({
+jest.mock("../../../lib/utils/pixelMath", () => ({
   calculateStats: jest.fn(),
   calculateHistogram: jest.fn(),
   calculateRegionStats: jest.fn(),
   calculateRegionHistogram: jest.fn(),
 }));
-jest.mock("../../lib/processing/executor", () => ({
+jest.mock("../../../lib/processing/executor", () => ({
   executeProcessingPipeline: jest.fn(),
 }));
-jest.mock("../../lib/processing/recipe", () => ({
+jest.mock("../../../lib/processing/recipe", () => ({
   normalizeProcessingPipelineSnapshot: jest.fn(),
 }));
 
-const converterLib = jest.requireMock("../../lib/converter/formatConverter") as {
+const converterLib = jest.requireMock("../../../lib/converter/formatConverter") as {
   fitsToRGBA: jest.Mock;
   fitsToRGBAChunked: jest.Mock;
   downsamplePixels: jest.Mock;
 };
-const pixelMathLib = jest.requireMock("../../lib/utils/pixelMath") as {
+const pixelMathLib = jest.requireMock("../../../lib/utils/pixelMath") as {
   calculateStats: jest.Mock;
   calculateHistogram: jest.Mock;
   calculateRegionStats: jest.Mock;
   calculateRegionHistogram: jest.Mock;
 };
-const executorLib = jest.requireMock("../../lib/processing/executor") as {
+const executorLib = jest.requireMock("../../../lib/processing/executor") as {
   executeProcessingPipeline: jest.Mock;
 };
-const recipeLib = jest.requireMock("../../lib/processing/recipe") as {
+const recipeLib = jest.requireMock("../../../lib/processing/recipe") as {
   normalizeProcessingPipelineSnapshot: jest.Mock;
 };
 type InteractionTask = Parameters<typeof InteractionManager.runAfterInteractions>[0];

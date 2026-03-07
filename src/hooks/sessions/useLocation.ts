@@ -8,8 +8,8 @@
 
 import { useState, useCallback, useEffect } from "react";
 import * as Location from "expo-location";
-import type { GeoLocation } from "../lib/fits/types";
-import { LOG_TAGS, Logger } from "../lib/logger";
+import type { GeoLocation } from "../../lib/fits/types";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 分钟缓存
 

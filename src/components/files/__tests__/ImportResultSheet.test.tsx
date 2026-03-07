@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { ImportResultSheet } from "../ImportResultSheet";
-import type { ImportResult } from "../../../hooks/useFileManager";
+import type { ImportResult } from "../../../hooks/files/useFileManager";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({

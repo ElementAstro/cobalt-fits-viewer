@@ -9,15 +9,15 @@ jest.mock("expo-updates", () => ({
   reloadAsync: jest.fn(),
 }));
 
-jest.mock("../../lib/version", () => ({
+jest.mock("../../../lib/version", () => ({
   getAppVersionInfo: jest.fn(() => ({
     nativeVersion: "1.0.0",
     runtimeVersion: "rv-1",
   })),
 }));
 
-jest.mock("../../lib/logger", () => {
-  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+jest.mock("../../../lib/logger", () => {
+  const actual = jest.requireActual("../../../lib/logger") as typeof import("../../../lib/logger");
   return {
     ...actual,
     Logger: {

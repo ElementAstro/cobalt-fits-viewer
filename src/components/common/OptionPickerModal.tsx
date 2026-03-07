@@ -1,7 +1,7 @@
 import { Button, Dialog, Label, Radio, RadioGroup } from "heroui-native";
 import { View } from "react-native";
 import { coerceOptionValue } from "./optionPickerValue";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 import { useI18n } from "../../i18n/useI18n";
 
 interface OptionPickerModalProps<T extends string | number> {

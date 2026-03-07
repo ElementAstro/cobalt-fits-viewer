@@ -14,13 +14,13 @@ import {
   type PropsWithChildren,
 } from "react";
 import { usePathname } from "expo-router";
-import { useOnboardingStore } from "../stores/useOnboardingStore";
+import { useOnboardingStore } from "../../stores/app/useOnboardingStore";
 import {
   getPageStepCount,
   getStepConfig,
   GUIDE_PAGES,
   type GuideStepConfig,
-} from "../lib/onboarding/guideSteps";
+} from "../../lib/onboarding/guideSteps";
 
 interface TooltipGuideContextValue {
   isGuideActive: boolean;

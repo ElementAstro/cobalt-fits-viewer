@@ -4,8 +4,8 @@ import { Card, Chip, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { ObservationSession } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useTargetStore } from "../../stores/useTargetStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import { formatDuration } from "../../lib/sessions/format";
 import { resolveSessionTargetNames } from "../../lib/sessions/sessionLinking";
 

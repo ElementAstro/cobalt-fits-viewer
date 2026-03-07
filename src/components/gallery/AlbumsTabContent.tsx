@@ -4,13 +4,13 @@ import { FlashList } from "@shopify/flash-list";
 import { Button, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
 import { SearchBar } from "../common/SearchBar";
 import { AlbumCard } from "./AlbumCard";
 import { AlbumSortControl } from "./AlbumSortControl";
 import { EmptyState } from "../common/EmptyState";
 import type { Album } from "../../lib/fits/types";
-import type { AlbumSortBy } from "../../stores/useAlbumStore";
+import type { AlbumSortBy } from "../../stores/gallery/useAlbumStore";
 
 interface AlbumsTabContentProps {
   albums: Album[];

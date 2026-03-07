@@ -17,7 +17,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     isLandscape: false,
     isLandscapeTablet: false,

@@ -4,30 +4,30 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useAlbumStore } from "../stores/useAlbumStore";
-import { useTargetStore } from "../stores/useTargetStore";
-import { useTargetGroupStore } from "../stores/useTargetGroupStore";
-import { useSessionStore } from "../stores/useSessionStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useFileGroupStore } from "../stores/useFileGroupStore";
-import { useAstrometryStore } from "../stores/useAstrometryStore";
-import { useTrashStore } from "../stores/useTrashStore";
-import { useBackupStore } from "../stores/useBackupStore";
-import { createDataSource } from "../lib/backup/dataSourceFactory";
-import { createRestoreTarget } from "../lib/backup/restoreTargetFactory";
-import { createManifest } from "../lib/backup/manifest";
-import { buildFullPackage, importFromPackage } from "../lib/backup/localBackup";
-import { reconcileAllStores } from "../lib/targets/targetIntegrity";
-import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
-import type { BackupOptions, BackupProgress } from "../lib/backup/types";
-import { DEFAULT_BACKUP_OPTIONS } from "../lib/backup/types";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
+import { useTargetGroupStore } from "../../stores/observation/useTargetGroupStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useFileGroupStore } from "../../stores/files/useFileGroupStore";
+import { useAstrometryStore } from "../../stores/processing/useAstrometryStore";
+import { useTrashStore } from "../../stores/files/useTrashStore";
+import { useBackupStore } from "../../stores/app/useBackupStore";
+import { createDataSource } from "../../lib/backup/dataSourceFactory";
+import { createRestoreTarget } from "../../lib/backup/restoreTargetFactory";
+import { createManifest } from "../../lib/backup/manifest";
+import { buildFullPackage, importFromPackage } from "../../lib/backup/localBackup";
+import { reconcileAllStores } from "../../lib/targets/targetIntegrity";
+import { computeAlbumFileConsistencyPatches } from "../../lib/gallery/albumSync";
+import type { BackupOptions, BackupProgress } from "../../lib/backup/types";
+import { DEFAULT_BACKUP_OPTIONS } from "../../lib/backup/types";
 import {
   startLANServer,
   downloadFromLAN,
   type LANServerHandle,
   type LANServerInfo,
-} from "../lib/backup/lanTransfer";
+} from "../../lib/backup/lanTransfer";
 
 export type LANSendStatus = "idle" | "preparing" | "ready" | "error";
 export type LANReceiveStatus =

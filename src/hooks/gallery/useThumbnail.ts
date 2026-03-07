@@ -9,11 +9,11 @@ import {
   hasThumbnail,
   clearThumbnailCache,
   getThumbnailCacheSize,
-} from "../lib/gallery/thumbnailCache";
-import { saveThumbnailFromRGBA, saveThumbnailFromVideo } from "../lib/gallery/thumbnailWorkflow";
-import { regenerateFileThumbnail } from "../lib/gallery/thumbnailGenerator";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import type { FitsMetadata } from "../lib/fits/types";
+} from "../../lib/gallery/thumbnailCache";
+import { saveThumbnailFromRGBA, saveThumbnailFromVideo } from "../../lib/gallery/thumbnailWorkflow";
+import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import type { FitsMetadata } from "../../lib/fits/types";
 
 const REGENERATE_CONCURRENCY = 3;
 

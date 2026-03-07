@@ -8,7 +8,7 @@ import { View, Text, Alert } from "react-native";
 import { Button, Card, Input, Label, Separator, Switch, TextField } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useAstrometry } from "../../hooks/useAstrometry";
+import { useAstrometry } from "../../hooks/astrometry/useAstrometry";
 import { SettingsRow } from "../common/SettingsRow";
 import { OptionPickerModal } from "../common/OptionPickerModal";
 

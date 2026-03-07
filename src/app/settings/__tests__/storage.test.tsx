@@ -41,11 +41,11 @@ jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({ contentPaddingTop: 0, horizontalPadding: 0 }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({ notify: mockNotify }),
 }));
 
@@ -122,7 +122,7 @@ jest.mock("heroui-native", () => ({
   },
 }));
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (state: any) => unknown) =>
     selector({
       files: mockFiles,
@@ -131,7 +131,7 @@ jest.mock("../../../stores/useFitsStore", () => ({
     }),
 }));
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: any) => unknown) =>
     selector({
       confirmDestructiveActions: false,
@@ -140,7 +140,7 @@ jest.mock("../../../stores/useSettingsStore", () => ({
     }),
 }));
 
-jest.mock("../../../stores/useAstrometryStore", () => ({
+jest.mock("../../../stores/processing/useAstrometryStore", () => ({
   useAstrometryStore: (selector: (state: any) => unknown) =>
     selector({
       config: { apiKey: "" },
@@ -150,14 +150,14 @@ jest.mock("../../../stores/useAstrometryStore", () => ({
     }),
 }));
 
-jest.mock("../../../stores/useVideoTaskStore", () => ({
+jest.mock("../../../stores/processing/useVideoTaskStore", () => ({
   useVideoTaskStore: (selector: (state: any) => unknown) =>
     selector({
       tasks: [],
     }),
 }));
 
-jest.mock("../../../hooks/useThumbnail", () => ({
+jest.mock("../../../hooks/gallery/useThumbnail", () => ({
   useThumbnail: () => ({
     clearCache: mockClearCache,
     regenerateThumbnails: mockRegenerateThumbnails,
@@ -170,7 +170,7 @@ jest.mock("../../../lib/gallery/thumbnailWorkflow", () => ({
   pruneThumbnailCacheWithPolicy: (...args: unknown[]) => mockPruneThumbnailCacheWithPolicy(...args),
 }));
 
-jest.mock("../../../hooks/useStorageStats", () => ({
+jest.mock("../../../hooks/common/useStorageStats", () => ({
   useStorageStats: () => ({
     breakdown: {
       filesTotalBytes: 22,

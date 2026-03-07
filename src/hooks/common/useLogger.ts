@@ -3,9 +3,9 @@
  */
 
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
-import { useLogStore } from "../stores/useLogStore";
-import { Logger, formatSystemInfo, exportLogsToFile, shareLogFile } from "../lib/logger";
-import type { LogLevel, LogExportOptions, LogQuery } from "../lib/logger";
+import { useLogStore } from "../../stores/app/useLogStore";
+import { Logger, formatSystemInfo, exportLogsToFile, shareLogFile } from "../../lib/logger";
+import type { LogLevel, LogExportOptions, LogQuery } from "../../lib/logger";
 
 /**
  * 提供模块级别的日志记录能力

@@ -9,8 +9,8 @@ import { Button, Card, Separator, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
-import { useAppUpdate } from "../../hooks/useAppUpdate";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useAppUpdate } from "../../hooks/common/useAppUpdate";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 
 export function UpdateChecker() {
   const { t } = useI18n();

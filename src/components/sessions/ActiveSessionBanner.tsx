@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, useCallback } from "react";
 import { View, Text, Alert } from "react-native";
 import { Button, Card, Input, TextField, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useSessionStore } from "../../stores/useSessionStore";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
-import { useSessions } from "../../hooks/useSessions";
+import { useSessions } from "../../hooks/sessions/useSessions";
 import { LiveSessionMetaSheet } from "./LiveSessionMetaSheet";
 
 export function ActiveSessionBanner() {

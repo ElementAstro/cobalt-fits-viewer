@@ -4,7 +4,7 @@ import { useI18n } from "../../../i18n/useI18n";
 import { SettingsSection } from "../SettingsSection";
 import { ClassificationRuleCard } from "./ClassificationRuleCard";
 import { AddRuleForm } from "./AddRuleForm";
-import { useFrameClassification } from "../../../hooks/useFrameClassification";
+import { useFrameClassification } from "../../../hooks/gallery/useFrameClassification";
 
 export function ProcessingFrameClassSection() {
   const { t } = useI18n();

@@ -3,16 +3,16 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useGalleryStore } from "../stores/useGalleryStore";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
+import { useGalleryStore } from "../../stores/gallery/useGalleryStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import {
   buildMetadataIndex,
   searchFiles,
   groupByDate,
   groupByObject,
   groupByLocation,
-} from "../lib/gallery/metadataIndex";
+} from "../../lib/gallery/metadataIndex";
 
 export function useGallery() {
   const files = useFitsStore((s) => s.files);

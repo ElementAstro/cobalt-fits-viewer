@@ -11,7 +11,7 @@ import {
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 
 interface BatchTagSheetProps {
   visible: boolean;

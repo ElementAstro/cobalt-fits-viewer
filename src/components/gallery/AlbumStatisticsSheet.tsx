@@ -7,10 +7,10 @@ import { View, Text, ScrollView } from "react-native";
 import { BottomSheet, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import type { AlbumStatistics } from "../../lib/fits/types";
 import { formatExposureTime, formatFileSize } from "../../lib/gallery/albumStatistics";
-import { useFrameTypeLabelMap } from "../../hooks/useFrameTypeLabelMap";
+import { useFrameTypeLabelMap } from "../../hooks/gallery/useFrameTypeLabelMap";
 
 interface AlbumStatisticsSheetProps {
   visible: boolean;

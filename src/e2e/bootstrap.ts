@@ -1,16 +1,16 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { DEFAULT_ASTROMETRY_CONFIG } from "../lib/astrometry/types";
-import { useAlbumStore } from "../stores/useAlbumStore";
-import { useAstrometryStore } from "../stores/useAstrometryStore";
-import { useBackupStore } from "../stores/useBackupStore";
-import { useFileGroupStore } from "../stores/useFileGroupStore";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useOnboardingStore } from "../stores/useOnboardingStore";
-import { useSessionStore } from "../stores/useSessionStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useTargetGroupStore } from "../stores/useTargetGroupStore";
-import { useTargetStore } from "../stores/useTargetStore";
-import { useTrashStore } from "../stores/useTrashStore";
+import { useAlbumStore } from "../stores/gallery/useAlbumStore";
+import { useAstrometryStore } from "../stores/processing/useAstrometryStore";
+import { useBackupStore } from "../stores/app/useBackupStore";
+import { useFileGroupStore } from "../stores/files/useFileGroupStore";
+import { useFitsStore } from "../stores/files/useFitsStore";
+import { useOnboardingStore } from "../stores/app/useOnboardingStore";
+import { useSessionStore } from "../stores/observation/useSessionStore";
+import { useSettingsStore } from "../stores/app/useSettingsStore";
+import { useTargetGroupStore } from "../stores/observation/useTargetGroupStore";
+import { useTargetStore } from "../stores/observation/useTargetStore";
+import { useTrashStore } from "../stores/files/useTrashStore";
 import {
   E2E_ALBUMS,
   E2E_ASTROMETRY_JOBS,

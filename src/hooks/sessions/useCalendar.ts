@@ -7,9 +7,9 @@ import { useCallback, useState } from "react";
 import { Alert } from "react-native";
 import * as Haptics from "expo-haptics";
 import * as Linking from "expo-linking";
-import { useSessionStore } from "../stores/useSessionStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useTargetStore } from "../stores/useTargetStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import {
   isCalendarAvailable,
   requestCalendarPermission,
@@ -24,9 +24,9 @@ import {
   buildPlanEventDetails,
   buildSessionEventDetails,
   createEventViaSystemUI,
-} from "../lib/calendar";
-import type { ObservationSession, ObservationPlan } from "../lib/fits/types";
-import { LOG_TAGS, Logger } from "../lib/logger";
+} from "../../lib/calendar";
+import type { ObservationSession, ObservationPlan } from "../../lib/fits/types";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 type CalendarRefreshOutcome = "updated" | "cleared" | "unchanged" | "skipped" | "error";
 

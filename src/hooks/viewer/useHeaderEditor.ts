@@ -5,10 +5,10 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import type { HeaderKeyword } from "../lib/fits/types";
-import { writeHeaderKeywords, deleteHeaderKeywords } from "../lib/fits/headerWriter";
-import { isProtectedKeyword, validateHeaderRecord } from "../lib/fits/headerValidator";
-import { LOG_TAGS, Logger } from "../lib/logger";
+import type { HeaderKeyword } from "../../lib/fits/types";
+import { writeHeaderKeywords, deleteHeaderKeywords } from "../../lib/fits/headerWriter";
+import { isProtectedKeyword, validateHeaderRecord } from "../../lib/fits/headerValidator";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 const TAG = LOG_TAGS.FitsHeaderWriter;
 const DEFAULT_MAX_HISTORY = 50;

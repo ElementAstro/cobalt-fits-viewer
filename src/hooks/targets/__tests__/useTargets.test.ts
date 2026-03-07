@@ -1,12 +1,17 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useTargets } from "../useTargets";
-import { useTargetStore } from "../../stores/useTargetStore";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useTargetGroupStore } from "../../stores/useTargetGroupStore";
-import { useSessionStore } from "../../stores/useSessionStore";
-import type { FitsMetadata, ObservationSession, Target, TargetGroup } from "../../lib/fits/types";
+import { useTargetStore } from "../../../stores/observation/useTargetStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
+import { useTargetGroupStore } from "../../../stores/observation/useTargetGroupStore";
+import { useSessionStore } from "../../../stores/observation/useSessionStore";
+import type {
+  FitsMetadata,
+  ObservationSession,
+  Target,
+  TargetGroup,
+} from "../../../lib/fits/types";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),

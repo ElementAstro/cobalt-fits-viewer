@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react-native";
-import type { FitsMetadata } from "../../lib/fits/types";
+import type { FitsMetadata } from "../../../lib/fits/types";
 import { useThumbnail } from "../useThumbnail";
 
 const mockHasThumbnail = jest.fn();
@@ -10,27 +10,27 @@ const mockSaveThumbnailFromRGBA = jest.fn();
 const mockSaveThumbnailFromVideo = jest.fn();
 const mockRegenerateFileThumbnail = jest.fn();
 
-jest.mock("../../lib/gallery/thumbnailCache", () => ({
+jest.mock("../../../lib/gallery/thumbnailCache", () => ({
   hasThumbnail: (...args: unknown[]) => mockHasThumbnail(...args),
   getThumbnailPath: (...args: unknown[]) => mockGetThumbnailPath(...args),
   clearThumbnailCache: (...args: unknown[]) => mockClearThumbnailCache(...args),
   getThumbnailCacheSize: (...args: unknown[]) => mockGetThumbnailCacheSize(...args),
 }));
 
-jest.mock("../../lib/gallery/thumbnailWorkflow", () => ({
+jest.mock("../../../lib/gallery/thumbnailWorkflow", () => ({
   saveThumbnailFromRGBA: (...args: unknown[]) => mockSaveThumbnailFromRGBA(...args),
   saveThumbnailFromVideo: (...args: unknown[]) => mockSaveThumbnailFromVideo(...args),
 }));
 
-jest.mock("../../lib/gallery/thumbnailGenerator", () => ({
+jest.mock("../../../lib/gallery/thumbnailGenerator", () => ({
   regenerateFileThumbnail: (...args: unknown[]) => mockRegenerateFileThumbnail(...args),
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: jest.fn(),
 }));
 
-const { useSettingsStore } = jest.requireMock("../../stores/useSettingsStore") as {
+const { useSettingsStore } = jest.requireMock("../../../stores/app/useSettingsStore") as {
   useSettingsStore: jest.Mock;
 };
 

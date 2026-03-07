@@ -1,18 +1,18 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { useTargetSearch } from "../useTargetSearch";
 
-jest.mock("../../stores/useTargetStore", () => ({
+jest.mock("../../../stores/observation/useTargetStore", () => ({
   useTargetStore: jest.fn(),
 }));
 
-jest.mock("../../lib/targets/targetSearch", () => ({
+jest.mock("../../../lib/targets/targetSearch", () => ({
   searchTargets: jest.fn(),
 }));
 
-const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
+const { useTargetStore } = jest.requireMock("../../../stores/observation/useTargetStore") as {
   useTargetStore: jest.Mock;
 };
-const targetSearchLib = jest.requireMock("../../lib/targets/targetSearch") as {
+const targetSearchLib = jest.requireMock("../../../lib/targets/targetSearch") as {
   searchTargets: jest.Mock;
 };
 

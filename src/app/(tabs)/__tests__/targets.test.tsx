@@ -48,7 +48,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     isLandscapeTablet: true,
     contentPaddingTop: 0,
@@ -57,7 +57,7 @@ jest.mock("../../../hooks/useResponsiveLayout", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useTargets", () => ({
+jest.mock("../../../hooks/targets/useTargets", () => ({
   useTargets: () => ({
     targets: [],
     groups: [],
@@ -79,14 +79,14 @@ jest.mock("../../../hooks/useTargets", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useTargetStatistics", () => ({
+jest.mock("../../../hooks/targets/useTargetStatistics", () => ({
   useTargetStatistics: () => ({
     statistics: null,
     monthlyStats: [],
   }),
 }));
 
-jest.mock("../../../hooks/useTargetSearch", () => ({
+jest.mock("../../../hooks/targets/useTargetSearch", () => ({
   useTargetSearch: () => ({
     query: "",
     setQuery: jest.fn(),
@@ -106,7 +106,7 @@ jest.mock("../../../hooks/useTargetSearch", () => ({
   }),
 }));
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       files: [],
@@ -123,7 +123,7 @@ const mockSettingsStore = {
   setTargetSortOrder: jest.fn(),
 };
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof mockSettingsStore) => unknown) =>
     selector(mockSettingsStore),
 }));

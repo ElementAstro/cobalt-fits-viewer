@@ -29,7 +29,7 @@ const mockConfig = {
   defaultScaleUpper: undefined as number | undefined,
 };
 
-jest.mock("../../../hooks/useAstrometry", () => ({
+jest.mock("../../../hooks/astrometry/useAstrometry", () => ({
   useAstrometry: () => ({
     config: mockConfig,
     setConfig: mockSetConfig,

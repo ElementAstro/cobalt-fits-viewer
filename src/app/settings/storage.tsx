@@ -5,19 +5,19 @@ import { SettingsHeader } from "../../components/settings";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useAstrometryStore } from "../../stores/useAstrometryStore";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useVideoTaskStore } from "../../stores/useVideoTaskStore";
-import { useThumbnail } from "../../hooks/useThumbnail";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useAstrometryStore } from "../../stores/processing/useAstrometryStore";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useVideoTaskStore } from "../../stores/processing/useVideoTaskStore";
+import { useThumbnail } from "../../hooks/gallery/useThumbnail";
 import { pruneThumbnailCacheWithPolicy } from "../../lib/gallery/thumbnailWorkflow";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { SettingsSliderRow } from "../../components/common/SettingsSliderRow";
 import { formatBytes } from "../../lib/utils/format";
-import { useStorageStats } from "../../hooks/useStorageStats";
+import { useStorageStats } from "../../hooks/common/useStorageStats";
 import { checkAndRepairFileSystemIntegrity } from "../../lib/utils/fileSystemIntegrity";
 
 export default function StorageSettingsScreen() {

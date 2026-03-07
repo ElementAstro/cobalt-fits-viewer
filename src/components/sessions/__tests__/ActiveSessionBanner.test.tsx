@@ -13,7 +13,7 @@ const mockAddActiveNote = jest.fn();
 
 let mockActiveSession: ReturnType<typeof makeActiveSession> | null = null;
 
-jest.mock("../../../stores/useSessionStore", () => ({
+jest.mock("../../../stores/observation/useSessionStore", () => ({
   useSessionStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       activeSession: mockActiveSession,
@@ -24,11 +24,11 @@ jest.mock("../../../stores/useSessionStore", () => ({
     }),
 }));
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (s: Record<string, unknown>) => unknown) => selector({ files: [] }),
 }));
 
-jest.mock("../../../hooks/useSessions", () => ({
+jest.mock("../../../hooks/sessions/useSessions", () => ({
   useSessions: () => ({
     endLiveSessionWithIntegration: jest.fn(() => ({
       session: null,

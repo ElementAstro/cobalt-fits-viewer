@@ -26,7 +26,7 @@ jest.mock("../../../lib/gallery/albumStatistics", () => ({
 const mockAddSite = jest.fn();
 const mockRemoveSite = jest.fn();
 let mockSites: Array<{ id: string; latitude: number; longitude: number; label: string }> = [];
-jest.mock("../../../stores/useFavoriteSitesStore", () => ({
+jest.mock("../../../stores/app/useFavoriteSitesStore", () => ({
   useFavoriteSitesStore: () => ({
     addSite: mockAddSite,
     removeSite: mockRemoveSite,

@@ -6,7 +6,7 @@ import type { ExportFormat } from "../../lib/fits/types";
 import { formatBytes } from "../../lib/utils/format";
 import type { ExportActionOptions } from "../../lib/converter/exportActionOptions";
 import { isTargetSizeAllowed } from "../../lib/converter/compressionPolicy";
-import { useExportDialogState } from "../../hooks/useExportDialogState";
+import { useExportDialogState } from "../../hooks/export/useExportDialogState";
 import { FitsExportOptions } from "./FitsExportOptions";
 import { TiffExportOptions } from "./TiffExportOptions";
 import { SimpleSlider } from "./SimpleSlider";

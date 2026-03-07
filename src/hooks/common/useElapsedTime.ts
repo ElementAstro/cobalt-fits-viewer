@@ -4,7 +4,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { formatDuration } from "../lib/astrometry/formatUtils";
+import { formatDuration } from "../../lib/astrometry/formatUtils";
 
 export function useElapsedTime(
   startTime: number,

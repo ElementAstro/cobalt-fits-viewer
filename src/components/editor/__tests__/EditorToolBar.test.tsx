@@ -8,7 +8,7 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 const defaultProps = {
-  activeTool: null as import("../../../hooks/useEditorToolState").EditorTool,
+  activeTool: null as import("../../../hooks/editor/useEditorToolState").EditorTool,
   activeToolGroup: "adjust" as const,
   onToolPress: jest.fn(),
   onToolGroupChange: jest.fn(),

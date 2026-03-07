@@ -5,7 +5,7 @@
 import { renderHook, act } from "@testing-library/react-native";
 import { useElapsedTime } from "../useElapsedTime";
 
-jest.mock("../../lib/astrometry/formatUtils", () => ({
+jest.mock("../../../lib/astrometry/formatUtils", () => ({
   formatDuration: (ms: number) => `${Math.floor(ms / 1000)}s`,
 }));
 

@@ -14,7 +14,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     contentPaddingTop: 0,
     horizontalPadding: 16,
@@ -26,7 +26,7 @@ jest.mock("zustand/react/shallow", () => ({
   useShallow: (fn: unknown) => fn,
 }));
 
-jest.mock("../../../stores/useSessionStore", () => {
+jest.mock("../../../stores/observation/useSessionStore", () => {
   const s1 = {
     id: "s1",
     date: "2026-01-01",
@@ -100,11 +100,11 @@ jest.mock("../../../stores/useSessionStore", () => {
   };
 });
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (state: { files: unknown[] }) => unknown) => selector({ files: [] }),
 }));
 
-jest.mock("../../../stores/useTargetStore", () => ({
+jest.mock("../../../stores/observation/useTargetStore", () => ({
   useTargetStore: (selector: (state: { targets: unknown[] }) => unknown) =>
     selector({ targets: [] }),
 }));

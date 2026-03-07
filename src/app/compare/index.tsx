@@ -6,12 +6,12 @@ import { Button, Chip, Dialog, Input, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useImageComparison, type CompareMode } from "../../hooks/useImageComparison";
-import { useFitsFile } from "../../hooks/useFitsFile";
-import { useImageProcessing } from "../../hooks/useImageProcessing";
-import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useImageComparison, type CompareMode } from "../../hooks/viewer/useImageComparison";
+import { useFitsFile } from "../../hooks/viewer/useFitsFile";
+import { useImageProcessing } from "../../hooks/viewer/useImageProcessing";
+import { useImageCacheWarmup } from "../../hooks/viewer/useImageCacheWarmup";
 import {
   FitsCanvas,
   type CanvasTransform,
@@ -20,7 +20,7 @@ import {
 import { PixelInspector } from "../../components/fits/PixelInspector";
 import { Minimap } from "../../components/fits/Minimap";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import type { ViewerCurvePreset } from "../../lib/fits/types";
 import {
   resolveAdjustmentsFromPreset,

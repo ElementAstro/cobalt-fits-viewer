@@ -13,13 +13,13 @@ import type {
   ProcessingPipelineSnapshot,
   ProcessingParamValue,
   StretchType,
-} from "../lib/fits/types";
-import { executeProcessingPipeline } from "../lib/processing/executor";
-import { fitsToRGBA } from "../lib/converter/formatConverter";
-import { normalizeProcessingPipelineSnapshot } from "../lib/processing/recipe";
-import { getProcessingOperation } from "../lib/processing/registry";
-import type { ImageEditOperation } from "../lib/utils/imageOperations";
-import { LOG_TAGS, Logger } from "../lib/logger";
+} from "../../lib/fits/types";
+import { executeProcessingPipeline } from "../../lib/processing/executor";
+import { fitsToRGBA } from "../../lib/converter/formatConverter";
+import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
+import { getProcessingOperation } from "../../lib/processing/registry";
+import type { ImageEditOperation } from "../../lib/utils/imageOperations";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 interface ImageState {
   pixels: Float32Array;

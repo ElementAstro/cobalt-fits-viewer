@@ -10,24 +10,24 @@ import {
   getHDUList,
   getImageChannels,
   isRgbCube,
-} from "../lib/fits/parser";
-import type { FitsMetadata, HeaderKeyword } from "../lib/fits/types";
+} from "../../lib/fits/parser";
+import type { FitsMetadata, HeaderKeyword } from "../../lib/fits/types";
 import {
   readFileAsArrayBuffer,
   generateFileId,
   getFileCacheFingerprint,
-} from "../lib/utils/fileManager";
-import { LOG_TAGS, Logger } from "../lib/logger";
-import type { RasterFrameProvider } from "../lib/image/tiff/decoder";
-import { parseImageBuffer, type ImageParseResult } from "../lib/import/imageParsePipeline";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { getPixelCache } from "../lib/cache/pixelCache";
-import { getImageLoadCache, type ImageLoadCacheEntry } from "../lib/cache/imageLoadCache";
+} from "../../lib/utils/fileManager";
+import { LOG_TAGS, Logger } from "../../lib/logger";
+import type { RasterFrameProvider } from "../../lib/image/tiff/decoder";
+import { parseImageBuffer, type ImageParseResult } from "../../lib/import/imageParsePipeline";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { getPixelCache } from "../../lib/cache/pixelCache";
+import { getImageLoadCache, type ImageLoadCacheEntry } from "../../lib/cache/imageLoadCache";
 import {
   hydratePixelCacheFromImageSnapshot,
   warmImageCachesFromFile,
   writeImageCachesFromParsed,
-} from "../lib/cache/imageLoadWorkflow";
+} from "../../lib/cache/imageLoadWorkflow";
 
 function yieldToMain(): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, 0));

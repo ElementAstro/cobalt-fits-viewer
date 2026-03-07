@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react-native";
 import { StorageAnalyticsSheet } from "../StorageAnalyticsSheet";
-import { useFileGroupStore } from "../../../stores/useFileGroupStore";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFileGroupStore } from "../../../stores/files/useFileGroupStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({

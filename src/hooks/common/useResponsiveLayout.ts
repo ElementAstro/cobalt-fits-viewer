@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useScreenOrientation } from "./useScreenOrientation";
-import { getLayoutMode, type LayoutMode } from "../lib/layout/breakpoints";
+import { getLayoutMode, type LayoutMode } from "../../lib/layout/breakpoints";
 
 export interface ResponsiveLayoutState {
   isLandscape: boolean;

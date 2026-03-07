@@ -7,7 +7,7 @@ import {
   DEFAULT_SER_TARGET_OPTIONS,
   type BatchTask,
   type ConvertPreset,
-} from "../../lib/fits/types";
+} from "../../../lib/fits/types";
 
 const makeTask = (overrides: Partial<BatchTask> = {}): BatchTask => ({
   id: `task-${Math.random().toString(36).slice(2, 8)}`,

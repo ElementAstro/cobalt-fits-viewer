@@ -13,13 +13,16 @@ import {
   type TiffCompression,
   type TiffMultipageMode,
   type TiffTargetOptions,
-} from "../lib/fits/types";
-import { supportsQuality } from "../lib/converter/convertPresets";
-import { estimateFileSize } from "../lib/converter/formatConverter";
-import { isTargetSizeAllowed, normalizeTargetFileSize } from "../lib/converter/compressionPolicy";
-import type { ExportRenderOptions } from "../lib/converter/exportDecorations";
-import type { ExportActionOptions } from "../lib/converter/exportActionOptions";
-import { useSettingsStore } from "../stores/useSettingsStore";
+} from "../../lib/fits/types";
+import { supportsQuality } from "../../lib/converter/convertPresets";
+import { estimateFileSize } from "../../lib/converter/formatConverter";
+import {
+  isTargetSizeAllowed,
+  normalizeTargetFileSize,
+} from "../../lib/converter/compressionPolicy";
+import type { ExportRenderOptions } from "../../lib/converter/exportDecorations";
+import type { ExportActionOptions } from "../../lib/converter/exportActionOptions";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 
 interface UseExportDialogStateArgs {
   filename: string;

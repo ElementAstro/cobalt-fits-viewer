@@ -2,7 +2,7 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
+import { useScreenOrientation } from "../../hooks/common/useScreenOrientation";
 import { useUniwind } from "uniwind";
 
 export default function TabLayout() {

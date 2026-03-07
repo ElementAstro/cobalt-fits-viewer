@@ -17,7 +17,7 @@ import {
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { LANReceiveStatus } from "../../hooks/useLANTransfer";
+import type { LANReceiveStatus } from "../../hooks/backup/useLANTransfer";
 import type { BackupProgress } from "../../lib/backup/types";
 import { LAN_PORT_BASE } from "../../lib/backup/lanTransfer";
 import { BackupProgressDisplay } from "./BackupProgressDisplay";

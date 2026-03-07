@@ -4,7 +4,7 @@
  */
 
 import { createContext, useContext, useMemo, type PropsWithChildren } from "react";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import {
   FONT_FAMILY_PRESETS,
   MONO_FONT_PRESETS,

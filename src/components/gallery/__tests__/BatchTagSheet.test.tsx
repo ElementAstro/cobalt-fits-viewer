@@ -2,7 +2,7 @@ import React from "react";
 import { Alert } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { BatchTagSheet } from "../BatchTagSheet";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
 
 jest.mock("../../../i18n/useI18n", () => ({

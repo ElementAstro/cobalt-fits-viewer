@@ -13,7 +13,7 @@ import { type ReactNode } from "react";
 import { View, Text } from "react-native";
 import { Button, Popover, useThemeColor } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
-import { useGuideStep } from "../../hooks/useTooltipGuide";
+import { useGuideStep } from "../../hooks/common/useTooltipGuide";
 
 interface GuideTargetProps {
   name: string;

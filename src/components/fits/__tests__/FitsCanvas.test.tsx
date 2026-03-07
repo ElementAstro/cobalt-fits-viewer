@@ -3,7 +3,7 @@ import { act, fireEvent, render } from "@testing-library/react-native";
 import { View } from "react-native";
 import { FitsCanvas, type FitsCanvasHandle } from "../FitsCanvas";
 
-jest.mock("../../../hooks/useSkImage", () => ({
+jest.mock("../../../hooks/viewer/useSkImage", () => ({
   useSkImage: () => ({ width: 1, height: 1 }),
 }));
 

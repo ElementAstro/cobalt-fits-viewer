@@ -16,7 +16,7 @@ import {
   formatFieldSize as formatFieldSizeDeg,
 } from "../../lib/astrometry/formatUtils";
 import { AnimatedProgressBar } from "../common/AnimatedProgressBar";
-import { useElapsedTime } from "../../hooks/useElapsedTime";
+import { useElapsedTime } from "../../hooks/common/useElapsedTime";
 
 interface AstrometryJobCardProps {
   job: AstrometryJob;

@@ -8,7 +8,7 @@ import { View, Text } from "react-native";
 import { Button, Card, Surface } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { MeasurementLine } from "../../hooks/useMeasurement";
+import type { MeasurementLine } from "../../hooks/viewer/useMeasurement";
 
 interface MeasurementPanelProps {
   measurements: MeasurementLine[];

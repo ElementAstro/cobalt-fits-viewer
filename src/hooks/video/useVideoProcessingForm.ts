@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FitsMetadata } from "../lib/fits/types";
+import type { FitsMetadata } from "../../lib/fits/types";
 import type {
   VideoProcessingRequest,
   VideoProcessingTag,
   VideoProfile,
   WatermarkPosition,
-} from "../lib/video/engine";
+} from "../../lib/video/engine";
 
 type PresetValue = "1080p" | "720p" | "custom";
 

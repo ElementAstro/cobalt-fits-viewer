@@ -1,12 +1,12 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useLogViewer, useLogger, usePageLogger, useSystemInfo } from "../useLogger";
-import { flushPromises } from "./helpers/testUtils";
+import { flushPromises } from "../../__test-helpers__/testUtils";
 
-jest.mock("../../stores/useLogStore", () => ({
+jest.mock("../../../stores/app/useLogStore", () => ({
   useLogStore: jest.fn(),
 }));
 
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   Logger: {
     debug: jest.fn(),
     info: jest.fn(),
@@ -20,10 +20,10 @@ jest.mock("../../lib/logger", () => ({
   shareLogFile: jest.fn(async () => true),
 }));
 
-const { useLogStore } = jest.requireMock("../../stores/useLogStore") as {
+const { useLogStore } = jest.requireMock("../../../stores/app/useLogStore") as {
   useLogStore: jest.Mock;
 };
-const loggerLib = jest.requireMock("../../lib/logger") as {
+const loggerLib = jest.requireMock("../../../lib/logger") as {
   Logger: {
     debug: jest.Mock;
     info: jest.Mock;

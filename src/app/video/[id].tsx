@@ -1,16 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useVideoPlayerState } from "../../hooks/useVideoPlayerState";
+import { useVideoPlayerState } from "../../hooks/video/useVideoPlayerState";
 import { ScrollView, StatusBar, Text, View } from "react-native";
 import { useKeepAwake } from "expo-keep-awake";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Button, Tabs, useThemeColor, useToast } from "heroui-native";
 import { createVideoPlayer, isPictureInPictureSupported, useVideoPlayer } from "expo-video";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import { shareFile, type MediaExportFormat } from "../../lib/utils/imageExport";
-import { useMediaLibrary } from "../../hooks/useMediaLibrary";
-import { useVideoProcessing } from "../../hooks/useVideoProcessing";
+import { useMediaLibrary } from "../../hooks/files/useMediaLibrary";
+import { useVideoProcessing } from "../../hooks/video/useVideoProcessing";
 import { VideoProcessingSheet } from "../../components/video/VideoProcessingSheet";
 import { TaskQueueSheet } from "../../components/video/TaskQueueSheet";
 import { VideoToolbar } from "../../components/video/VideoToolbar";
@@ -25,11 +25,11 @@ import {
   routeForMedia,
 } from "../../lib/media/routing";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useScreenOrientation } from "../../hooks/useScreenOrientation";
-import { useVideoKeyboard } from "../../hooks/useVideoKeyboard";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useScreenOrientation } from "../../hooks/common/useScreenOrientation";
+import { useVideoKeyboard } from "../../hooks/video/useVideoKeyboard";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { saveThumbnailFromExternalUri } from "../../lib/gallery/thumbnailWorkflow";
 

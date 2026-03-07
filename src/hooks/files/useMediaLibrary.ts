@@ -4,7 +4,7 @@
 
 import { useState, useCallback } from "react";
 import * as MediaLibrary from "expo-media-library";
-import { LOG_TAGS, Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 export type MediaSaveIntent = "image" | "video" | "unknown";
 

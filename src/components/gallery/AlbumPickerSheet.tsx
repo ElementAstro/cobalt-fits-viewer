@@ -4,7 +4,7 @@ import { Image } from "expo-image";
 import { BottomSheet, Button, PressableFeedback, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { SearchBar } from "../common/SearchBar";
 import { EmptyState } from "../common/EmptyState";
 import { resolveAlbumCoverUri } from "../../lib/gallery/thumbnailCache";

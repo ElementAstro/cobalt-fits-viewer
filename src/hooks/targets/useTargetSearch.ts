@@ -3,9 +3,9 @@
  */
 
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useTargetStore } from "../stores/useTargetStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import { useTargets } from "./useTargets";
-import { searchTargets, type SearchConditions } from "../lib/targets/targetSearch";
+import { searchTargets, type SearchConditions } from "../../lib/targets/targetSearch";
 import {
   detectDuplicates,
   findDuplicatesOf,
@@ -13,7 +13,7 @@ import {
   sortDuplicateTargetsByMergePriority,
   type DuplicateDetectionResult,
   type DuplicateGroup,
-} from "../lib/targets/duplicateDetector";
+} from "../../lib/targets/duplicateDetector";
 
 const DEBOUNCE_MS = 300;
 

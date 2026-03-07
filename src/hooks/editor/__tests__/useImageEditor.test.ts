@@ -1,18 +1,18 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { InteractionManager } from "react-native";
 import { useImageEditor } from "../useImageEditor";
-import type { ProcessingPipelineSnapshot } from "../../lib/fits/types";
+import type { ProcessingPipelineSnapshot } from "../../../lib/fits/types";
 
-jest.mock("../../lib/processing/executor", () => ({
+jest.mock("../../../lib/processing/executor", () => ({
   executeProcessingPipeline: jest.fn(),
 }));
-jest.mock("../../lib/processing/recipe", () => ({
+jest.mock("../../../lib/processing/recipe", () => ({
   normalizeProcessingPipelineSnapshot: jest.fn(),
 }));
-jest.mock("../../lib/processing/registry", () => ({
+jest.mock("../../../lib/processing/registry", () => ({
   getProcessingOperation: jest.fn(),
 }));
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     ImageEditor: "ImageEditor",
   },
@@ -24,13 +24,13 @@ jest.mock("../../lib/logger", () => ({
   },
 }));
 
-const executorLib = jest.requireMock("../../lib/processing/executor") as {
+const executorLib = jest.requireMock("../../../lib/processing/executor") as {
   executeProcessingPipeline: jest.Mock;
 };
-const recipeLib = jest.requireMock("../../lib/processing/recipe") as {
+const recipeLib = jest.requireMock("../../../lib/processing/recipe") as {
   normalizeProcessingPipelineSnapshot: jest.Mock;
 };
-const registryLib = jest.requireMock("../../lib/processing/registry") as {
+const registryLib = jest.requireMock("../../../lib/processing/registry") as {
   getProcessingOperation: jest.Mock;
 };
 type InteractionTask = Parameters<typeof InteractionManager.runAfterInteractions>[0];

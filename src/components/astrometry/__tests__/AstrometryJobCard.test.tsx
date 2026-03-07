@@ -38,7 +38,7 @@ jest.mock("expo-image", () => {
   return createExpoImageMock();
 });
 
-jest.mock("../../../hooks/useElapsedTime", () => ({
+jest.mock("../../../hooks/common/useElapsedTime", () => ({
   useElapsedTime: (_startTime: number, isActive: boolean) => (isActive ? "30s" : ""),
 }));
 

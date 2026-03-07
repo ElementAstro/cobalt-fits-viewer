@@ -6,7 +6,7 @@ import { useState, useCallback } from "react";
 import { View } from "react-native";
 import { Alert, Button, Dialog, FieldError, Input, Label, Spinner, TextField } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
-import { useConnectionTest } from "../../hooks/useConnectionTest";
+import { useConnectionTest } from "../../hooks/backup/useConnectionTest";
 
 interface WebDAVConfigSheetProps {
   visible: boolean;

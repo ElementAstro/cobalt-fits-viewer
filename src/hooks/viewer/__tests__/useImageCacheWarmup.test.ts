@@ -3,11 +3,11 @@ import { useImageCacheWarmup } from "../useImageCacheWarmup";
 
 const mockWarmImageCachesFromFile = jest.fn();
 
-jest.mock("../../lib/cache/imageLoadWorkflow", () => ({
+jest.mock("../../../lib/cache/imageLoadWorkflow", () => ({
   warmImageCachesFromFile: (...args: unknown[]) => mockWarmImageCachesFromFile(...args),
 }));
 
-jest.mock("../../lib/import/imageParsePipeline", () => ({
+jest.mock("../../../lib/import/imageParsePipeline", () => ({
   isProcessableImageMedia: jest.fn(() => true),
 }));
 

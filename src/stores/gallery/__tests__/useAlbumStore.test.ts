@@ -1,8 +1,8 @@
 import { useAlbumStore } from "../useAlbumStore";
-import { useFitsStore } from "../useFitsStore";
-import type { Album } from "../../lib/fits/types";
+import { useFitsStore } from "../../files/useFitsStore";
+import type { Album } from "../../../lib/fits/types";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),

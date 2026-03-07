@@ -3,27 +3,27 @@ import { AppState, Platform } from "react-native";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { isRunningInExpoGo } from "expo";
 import { File } from "expo-file-system";
-import { useVideoTaskStore } from "../stores/useVideoTaskStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useFitsStore } from "../stores/useFitsStore";
+import { useVideoTaskStore } from "../../stores/processing/useVideoTaskStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import {
   getVideoProcessingEngine,
   type VideoProcessingCapabilities,
   type VideoProcessingRequest,
-} from "../lib/video/engine";
-import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
-import { detectSupportedMediaFormat, toImageSourceFormat } from "../lib/import/fileFormat";
-import { generateFileId, importFile } from "../lib/utils/fileManager";
+} from "../../lib/video/engine";
+import { extractVideoMetadata, type VideoMetadataSnapshot } from "../../lib/video/metadata";
+import { detectSupportedMediaFormat, toImageSourceFormat } from "../../lib/import/fileFormat";
+import { generateFileId, importFile } from "../../lib/utils/fileManager";
 import {
   saveThumbnailFromExternalUri,
   saveThumbnailFromRGBA,
-} from "../lib/gallery/thumbnailWorkflow";
-import { classifyWithDetail } from "../lib/gallery/frameClassifier";
-import { getFreeDiskBytes } from "../lib/utils/diskSpace";
-import { estimateOutputSizeBytes } from "../lib/video/format";
-import { parseImageBuffer } from "../lib/import/imageParsePipeline";
-import type { FitsMetadata } from "../lib/fits/types";
-import { useI18n } from "../i18n/useI18n";
+} from "../../lib/gallery/thumbnailWorkflow";
+import { classifyWithDetail } from "../../lib/gallery/frameClassifier";
+import { getFreeDiskBytes } from "../../lib/utils/diskSpace";
+import { estimateOutputSizeBytes } from "../../lib/video/format";
+import { parseImageBuffer } from "../../lib/import/imageParsePipeline";
+import type { FitsMetadata } from "../../lib/fits/types";
+import { useI18n } from "../../i18n/useI18n";
 
 function deriveOutputEntries(taskOutput: string, extraOutputs?: string[]): string[] {
   return [taskOutput, ...(extraOutputs ?? [])];

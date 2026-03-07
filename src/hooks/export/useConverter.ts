@@ -4,22 +4,22 @@
 
 import { useCallback, useEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
-import { useConverterStore } from "../stores/useConverterStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { fitsToRGBA, estimateFileSize } from "../lib/converter/formatConverter";
+import { useConverterStore } from "../../stores/viewer/useConverterStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { fitsToRGBA, estimateFileSize } from "../../lib/converter/formatConverter";
 import {
   createBatchTask,
   generateOutputFilename,
   executeBatchConvert,
-} from "../lib/converter/batchProcessor";
+} from "../../lib/converter/batchProcessor";
 import {
   getAllPresets,
   getDefaultOptionsForFormat,
   supportsQuality,
   getSupportedBitDepths,
-} from "../lib/converter/convertPresets";
-import type { ExportFormat } from "../lib/fits/types";
-import { LOG_TAGS, Logger } from "../lib/logger";
+} from "../../lib/converter/convertPresets";
+import type { ExportFormat } from "../../lib/fits/types";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 interface BatchFileInfo {
   id: string;

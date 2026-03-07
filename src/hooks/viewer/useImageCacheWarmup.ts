@@ -1,7 +1,7 @@
 import { useEffect } from "react";
-import type { FitsMetadata, FrameClassificationConfig } from "../lib/fits/types";
-import { isProcessableImageMedia } from "../lib/import/imageParsePipeline";
-import { warmImageCachesFromFile } from "../lib/cache/imageLoadWorkflow";
+import type { FitsMetadata, FrameClassificationConfig } from "../../lib/fits/types";
+import { isProcessableImageMedia } from "../../lib/import/imageParsePipeline";
+import { warmImageCachesFromFile } from "../../lib/cache/imageLoadWorkflow";
 
 const RECENT_WARMUP_WINDOW_MS = 15_000;
 const globalInFlightWarmups = new Set<string>();

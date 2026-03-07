@@ -4,12 +4,12 @@ import { SettingsHeader } from "../../components/settings";
 import { SettingsToggleRow } from "../../components/common/SettingsToggleRow";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { OptionPickerModal } from "../../components/common/OptionPickerModal";
-import { useSettingsPicker } from "../../hooks/useSettingsPicker";
+import { useSettingsPicker } from "../../hooks/common/useSettingsPicker";
 
 const GRID_OPTIONS: Array<{ label: string; value: 2 | 3 | 4 }> = [
   { label: "2", value: 2 },

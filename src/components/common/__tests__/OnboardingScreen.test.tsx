@@ -64,7 +64,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useScreenOrientation", () => ({
+jest.mock("../../../hooks/common/useScreenOrientation", () => ({
   useScreenOrientation: () => ({
     isLandscape: false,
     isPortrait: true,
@@ -72,7 +72,7 @@ jest.mock("../../../hooks/useScreenOrientation", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),
@@ -86,7 +86,7 @@ const mockSetCurrentStep = jest.fn((step: number) => {
 });
 const mockCompleteOnboarding = jest.fn();
 
-jest.mock("../../../stores/useOnboardingStore", () => ({
+jest.mock("../../../stores/app/useOnboardingStore", () => ({
   useOnboardingStore: (selector: (s: any) => any) =>
     selector({
       currentStep: mockCurrentStep,

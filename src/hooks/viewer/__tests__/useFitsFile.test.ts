@@ -1,10 +1,10 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useFitsFile } from "../useFitsFile";
-import type { ImageParseResult } from "../../lib/import/imageParsePipeline";
-import { clearPixelCache } from "../../lib/cache/pixelCache";
-import { clearImageLoadCache, getImageLoadCache } from "../../lib/cache/imageLoadCache";
+import type { ImageParseResult } from "../../../lib/import/imageParsePipeline";
+import { clearPixelCache } from "../../../lib/cache/pixelCache";
+import { clearImageLoadCache, getImageLoadCache } from "../../../lib/cache/imageLoadCache";
 
-jest.mock("../../lib/fits/parser", () => ({
+jest.mock("../../../lib/fits/parser", () => ({
   getImagePixels: jest.fn(),
   getImageChannels: jest.fn(),
   isRgbCube: jest.fn(() => ({ isRgb: false, width: 0, height: 0 })),
@@ -12,7 +12,7 @@ jest.mock("../../lib/fits/parser", () => ({
   getHDUList: jest.fn(() => [{ index: 0, type: "image", hasData: true }]),
 }));
 
-jest.mock("../../lib/utils/fileManager", () => ({
+jest.mock("../../../lib/utils/fileManager", () => ({
   readFileAsArrayBuffer: jest.fn(),
   generateFileId: jest.fn(() => "fid-1"),
   getFileCacheFingerprint: jest.fn((filepath: string, fallbackFileSize?: number) => ({
@@ -23,20 +23,20 @@ jest.mock("../../lib/utils/fileManager", () => ({
   })),
 }));
 
-jest.mock("../../lib/import/imageParsePipeline", () => ({
+jest.mock("../../../lib/import/imageParsePipeline", () => ({
   parseImageBuffer: jest.fn(),
 }));
 
 const mockGetRuntimeDiskCacheBuffer = jest.fn();
 const mockSetRuntimeDiskCacheBuffer = jest.fn();
 
-jest.mock("../../lib/cache/runtimeDiskCache", () => ({
+jest.mock("../../../lib/cache/runtimeDiskCache", () => ({
   getRuntimeDiskCacheBuffer: (...args: unknown[]) => mockGetRuntimeDiskCacheBuffer(...args),
   setRuntimeDiskCacheBuffer: (...args: unknown[]) => mockSetRuntimeDiskCacheBuffer(...args),
 }));
 
-jest.mock("../../lib/logger", () => {
-  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+jest.mock("../../../lib/logger", () => {
+  const actual = jest.requireActual("../../../lib/logger") as typeof import("../../../lib/logger");
   return {
     ...actual,
     Logger: {
@@ -49,7 +49,7 @@ jest.mock("../../lib/logger", () => {
   };
 });
 
-const parserMock = jest.requireMock("../../lib/fits/parser") as {
+const parserMock = jest.requireMock("../../../lib/fits/parser") as {
   getImagePixels: jest.Mock;
   getImageChannels: jest.Mock;
   isRgbCube: jest.Mock;
@@ -57,12 +57,12 @@ const parserMock = jest.requireMock("../../lib/fits/parser") as {
   getHDUList: jest.Mock;
 };
 
-const fileMock = jest.requireMock("../../lib/utils/fileManager") as {
+const fileMock = jest.requireMock("../../../lib/utils/fileManager") as {
   readFileAsArrayBuffer: jest.Mock;
   getFileCacheFingerprint: jest.Mock;
 };
 
-const pipelineMock = jest.requireMock("../../lib/import/imageParsePipeline") as {
+const pipelineMock = jest.requireMock("../../../lib/import/imageParsePipeline") as {
   parseImageBuffer: jest.Mock;
 };
 

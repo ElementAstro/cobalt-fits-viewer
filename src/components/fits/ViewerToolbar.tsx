@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, BottomSheet, Separator } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 
 interface ViewerToolbarProps {
   filename: string;

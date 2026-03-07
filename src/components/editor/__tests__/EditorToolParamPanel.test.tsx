@@ -24,7 +24,7 @@ jest.mock("../toolparams", () => {
 const mockParams = {} as never;
 
 const defaultProps = {
-  activeTool: "blur" as import("../../../hooks/useEditorToolState").EditorTool,
+  activeTool: "blur" as import("../../../hooks/editor/useEditorToolState").EditorTool,
   params: mockParams,
   successColor: "#00ff00",
   onApply: jest.fn(),

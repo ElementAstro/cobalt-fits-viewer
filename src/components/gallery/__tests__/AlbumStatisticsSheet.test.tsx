@@ -24,7 +24,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (s: any) => any) =>
     selector({
       frameClassificationConfig: { customTypes: [] },

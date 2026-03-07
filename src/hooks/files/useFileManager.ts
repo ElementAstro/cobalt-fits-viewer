@@ -11,15 +11,15 @@ import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { File, Directory, Paths } from "expo-file-system";
 import { convertHiPSToFITS } from "fitsjs-ng";
-import { LOG_TAGS, Logger } from "../lib/logger";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useAlbumStore } from "../stores/useAlbumStore";
-import { useSessionStore } from "../stores/useSessionStore";
-import { useTrashStore } from "../stores/useTrashStore";
-import { useFileGroupStore } from "../stores/useFileGroupStore";
-import { useTargetStore } from "../stores/useTargetStore";
-import { useTargets } from "./useTargets";
+import { LOG_TAGS, Logger } from "../../lib/logger";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useTrashStore } from "../../stores/files/useTrashStore";
+import { useFileGroupStore } from "../../stores/files/useFileGroupStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
+import { useTargets } from "../targets/useTargets";
 import {
   importFile,
   deleteFilesPermanently,
@@ -31,16 +31,16 @@ import {
   getTempExtractDir,
   cleanTempExtractDir,
   sanitizeFilename,
-} from "../lib/utils/fileManager";
-import { getFreeDiskBytes } from "../lib/utils/diskSpace";
-import { computeQuickHash, findDuplicateOnImport } from "../lib/gallery/duplicateDetector";
-import { classifyWithDetail } from "../lib/gallery/frameClassifier";
-import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
-import { fitsToRGBA } from "../lib/converter/formatConverter";
-import { deleteThumbnails } from "../lib/gallery/thumbnailCache";
-import { saveThumbnailFromRGBA, saveThumbnailFromVideo } from "../lib/gallery/thumbnailWorkflow";
-import { LocationService } from "./useLocation";
-import type { FitsMetadata, TrashedFitsRecord } from "../lib/fits/types";
+} from "../../lib/utils/fileManager";
+import { getFreeDiskBytes } from "../../lib/utils/diskSpace";
+import { computeQuickHash, findDuplicateOnImport } from "../../lib/gallery/duplicateDetector";
+import { classifyWithDetail } from "../../lib/gallery/frameClassifier";
+import { computeAlbumFileConsistencyPatches } from "../../lib/gallery/albumSync";
+import { fitsToRGBA } from "../../lib/converter/formatConverter";
+import { deleteThumbnails } from "../../lib/gallery/thumbnailCache";
+import { saveThumbnailFromRGBA, saveThumbnailFromVideo } from "../../lib/gallery/thumbnailWorkflow";
+import { LocationService } from "../sessions/useLocation";
+import type { FitsMetadata, TrashedFitsRecord } from "../../lib/fits/types";
 import {
   detectPreferredSupportedImageFormat,
   detectSupportedImageFormat,
@@ -49,13 +49,14 @@ import {
   isDistributedXisfFilename,
   replaceFilenameExtension,
   toImageSourceFormat,
-} from "../lib/import/fileFormat";
-import { parseImageBuffer } from "../lib/import/imageParsePipeline";
-import { parseHiPSCutoutRequest } from "../lib/import/hipsUrl";
-import { resolveImportSessionId } from "../lib/sessions/sessionLinking";
-import { reconcileSessionsFromLinkedFilesGraph } from "../lib/sessions/sessionReconciliation";
-import { extractVideoMetadata, type VideoMetadataSnapshot } from "../lib/video/metadata";
-import { normalizeGeoLocation } from "../lib/map/geo";
+} from "../../lib/import/fileFormat";
+import { parseImageBuffer } from "../../lib/import/imageParsePipeline";
+import { parseHiPSCutoutRequest } from "../../lib/import/hipsUrl";
+import { resolveImportSessionId } from "../../lib/sessions/sessionLinking";
+import { reconcileSessionsFromLinkedFilesGraph } from "../../lib/sessions/sessionReconciliation";
+import { evaluateFrameQuality } from "../../lib/stacking/frameQuality";
+import { extractVideoMetadata, type VideoMetadataSnapshot } from "../../lib/video/metadata";
+import { normalizeGeoLocation } from "../../lib/map/geo";
 import { useFileOperations } from "./useFileOperations";
 
 export interface ImportProgress {
@@ -575,7 +576,6 @@ export function useFileManager() {
 
                 const meta = useFitsStore.getState().getFileById(fileId);
                 if (meta && meta.frameType === "light") {
-                  const { evaluateFrameQuality } = require("../lib/stacking/frameQuality");
                   const quality = evaluateFrameQuality(
                     parsedPixels,
                     parsedDimensions.width,

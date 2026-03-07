@@ -9,7 +9,7 @@ jest.mock("heroui-native", () => ({
   useThemeColor: () => "#00ff00",
 }));
 
-jest.mock("../../i18n/useI18n", () => ({
+jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
@@ -20,7 +20,7 @@ const mockExportImageDetailed = jest.fn().mockResolvedValue({
 const mockShareImage = jest.fn().mockResolvedValue(undefined);
 const mockSaveImage = jest.fn().mockResolvedValue("/test/saved.png");
 
-jest.mock("../useExport", () => ({
+jest.mock("../../export/useExport", () => ({
   useExport: () => ({
     isExporting: false,
     exportImageDetailed: mockExportImageDetailed,
@@ -29,7 +29,7 @@ jest.mock("../useExport", () => ({
   }),
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({ defaultExportFormat: "png" }),
 }));

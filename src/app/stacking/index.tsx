@@ -17,9 +17,9 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import { calculateStats } from "../../lib/utils/pixelMath";
 import { LoadingOverlay } from "../../components/common/LoadingOverlay";
 import { EmptyState } from "../../components/common/EmptyState";
@@ -32,8 +32,8 @@ import {
   type AlignmentMode,
   type StackResult,
   type StackingWarning,
-} from "../../hooks/useStacking";
-import { useExport } from "../../hooks/useExport";
+} from "../../hooks/stacking/useStacking";
+import { useExport } from "../../hooks/export/useExport";
 import type { ExportFormat, FitsMetadata, GeoLocation } from "../../lib/fits/types";
 import { isFitsFamilyFilename, splitFilenameExtension } from "../../lib/import/fileFormat";
 import { getFitsDir, generateFileId } from "../../lib/utils/fileManager";

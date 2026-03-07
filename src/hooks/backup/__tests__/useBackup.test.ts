@@ -1,9 +1,9 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useBackup } from "../useBackup";
-import { useBackupStore } from "../../stores/useBackupStore";
-import { useAlbumStore } from "../../stores/useAlbumStore";
-import { useFitsStore } from "../../stores/useFitsStore";
-import type { Album, FitsMetadata } from "../../lib/fits/types";
+import { useBackupStore } from "../../../stores/app/useBackupStore";
+import { useAlbumStore } from "../../../stores/gallery/useAlbumStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
+import type { Album, FitsMetadata } from "../../../lib/fits/types";
 
 const mockPerformBackup = jest.fn();
 const mockPerformRestore = jest.fn();
@@ -51,7 +51,7 @@ const mockSettingsState: Record<string, unknown> = {
   canvasWheelZoomSensitivity: 0.0021,
 };
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
@@ -65,7 +65,7 @@ jest.mock("uniwind", () => ({
   },
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: {
     getState: () => mockSettingsState,
   },
@@ -73,13 +73,13 @@ jest.mock("../../stores/useSettingsStore", () => ({
   normalizeSettingsBackupPatch: (patch: Record<string, unknown>) => patch,
 }));
 
-jest.mock("../../lib/backup/backupService", () => ({
+jest.mock("../../../lib/backup/backupService", () => ({
   performBackup: (...args: unknown[]) => mockPerformBackup(...args),
   performRestore: (...args: unknown[]) => mockPerformRestore(...args),
   getBackupInfo: (...args: unknown[]) => mockGetBackupInfoService(...args),
 }));
 
-jest.mock("../../lib/backup/localBackup", () => ({
+jest.mock("../../../lib/backup/localBackup", () => ({
   exportLocalBackup: (...args: unknown[]) => mockExportLocalBackup(...args),
   importLocalBackup: (...args: unknown[]) => mockImportLocalBackup(...args),
   previewLocalBackup: (...args: unknown[]) => mockPreviewLocalBackup(...args),
@@ -89,15 +89,15 @@ jest.mock("expo-network", () => ({
   getNetworkStateAsync: (...args: unknown[]) => mockGetNetworkStateAsync(...args),
 }));
 
-jest.mock("../../lib/targets/targetIntegrity", () => ({
+jest.mock("../../../lib/targets/targetIntegrity", () => ({
   reconcileAllStores: (...args: unknown[]) => mockReconcileAllStores(...args),
 }));
 
-jest.mock("../../lib/targets/targetRelations", () => ({
+jest.mock("../../../lib/targets/targetRelations", () => ({
   normalizeTargetMatch: jest.fn(() => undefined),
 }));
 
-jest.mock("../../lib/backup/providers/googleDrive", () => ({
+jest.mock("../../../lib/backup/providers/googleDrive", () => ({
   GoogleDriveProvider: class {
     name = "mock";
     displayName = "Mock Provider";
@@ -129,7 +129,7 @@ jest.mock("../../lib/backup/providers/googleDrive", () => ({
     }
   },
 }));
-jest.mock("../../lib/backup/providers/onedrive", () => ({
+jest.mock("../../../lib/backup/providers/onedrive", () => ({
   OneDriveProvider: class {
     name = "mock";
     displayName = "Mock Provider";
@@ -161,7 +161,7 @@ jest.mock("../../lib/backup/providers/onedrive", () => ({
     }
   },
 }));
-jest.mock("../../lib/backup/providers/dropbox", () => ({
+jest.mock("../../../lib/backup/providers/dropbox", () => ({
   DropboxProvider: class {
     name = "mock";
     displayName = "Mock Provider";
@@ -193,7 +193,7 @@ jest.mock("../../lib/backup/providers/dropbox", () => ({
     }
   },
 }));
-jest.mock("../../lib/backup/providers/webdav", () => ({
+jest.mock("../../../lib/backup/providers/webdav", () => ({
   WebDAVProvider: class {
     name = "mock";
     displayName = "Mock Provider";
@@ -225,7 +225,7 @@ jest.mock("../../lib/backup/providers/webdav", () => ({
     }
   },
 }));
-jest.mock("../../lib/backup/providers/sftp", () => ({
+jest.mock("../../../lib/backup/providers/sftp", () => ({
   SFTPProvider: class {
     name = "mock";
     displayName = "Mock SFTP";
@@ -258,7 +258,7 @@ jest.mock("../../lib/backup/providers/sftp", () => ({
   },
 }));
 
-jest.mock("../../lib/backup/oauthHelper", () => ({
+jest.mock("../../../lib/backup/oauthHelper", () => ({
   authenticateOneDrive: jest.fn(),
   authenticateDropbox: jest.fn(),
 }));

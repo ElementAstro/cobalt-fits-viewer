@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useDuplicateDetection } from "../useTargetSearch";
 
-jest.mock("../../stores/useTargetStore", () => ({
+jest.mock("../../../stores/observation/useTargetStore", () => ({
   useTargetStore: jest.fn(),
 }));
 
@@ -9,20 +9,20 @@ jest.mock("../useTargets", () => ({
   useTargets: jest.fn(),
 }));
 
-jest.mock("../../lib/targets/duplicateDetector", () => ({
+jest.mock("../../../lib/targets/duplicateDetector", () => ({
   detectDuplicates: jest.fn(),
   findDuplicatesOf: jest.fn(),
   sortDuplicateTargetsByMergePriority: jest.fn(),
   selectPrimaryDuplicateTarget: jest.fn(),
 }));
 
-const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
+const { useTargetStore } = jest.requireMock("../../../stores/observation/useTargetStore") as {
   useTargetStore: jest.Mock;
 };
 const { useTargets } = jest.requireMock("../useTargets") as {
   useTargets: jest.Mock;
 };
-const duplicateLib = jest.requireMock("../../lib/targets/duplicateDetector") as {
+const duplicateLib = jest.requireMock("../../../lib/targets/duplicateDetector") as {
   detectDuplicates: jest.Mock;
   findDuplicatesOf: jest.Mock;
   sortDuplicateTargetsByMergePriority: jest.Mock;

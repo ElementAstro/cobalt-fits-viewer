@@ -3,13 +3,17 @@
  */
 
 import { useCallback, useEffect, useMemo } from "react";
-import { useAlbumStore } from "../stores/useAlbumStore";
-import { useFitsStore } from "../stores/useFitsStore";
-import { createAlbum, evaluateSmartRules, suggestSmartAlbums } from "../lib/gallery/albumManager";
-import { calculateAlbumStatistics } from "../lib/gallery/albumStatistics";
-import { findDuplicateImages } from "../lib/gallery/albumDuplicateDetector";
-import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
-import type { SmartAlbumRule, AlbumStatistics } from "../lib/fits/types";
+import { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import {
+  createAlbum,
+  evaluateSmartRules,
+  suggestSmartAlbums,
+} from "../../lib/gallery/albumManager";
+import { calculateAlbumStatistics } from "../../lib/gallery/albumStatistics";
+import { findDuplicateImages } from "../../lib/gallery/albumDuplicateDetector";
+import { computeAlbumFileConsistencyPatches } from "../../lib/gallery/albumSync";
+import type { SmartAlbumRule, AlbumStatistics } from "../../lib/fits/types";
 
 const hasSameIds = (prev: string[], next: string[]) =>
   prev.length === next.length && prev.every((id, index) => id === next[index]);

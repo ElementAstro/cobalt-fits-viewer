@@ -4,10 +4,10 @@
  */
 
 import { useCallback, useRef } from "react";
-import { hasThumbnail } from "../lib/gallery/thumbnailCache";
-import { regenerateFileThumbnail } from "../lib/gallery/thumbnailGenerator";
-import { useFitsStore } from "../stores/useFitsStore";
-import type { FitsMetadata } from "../lib/fits/types";
+import { hasThumbnail } from "../../lib/gallery/thumbnailCache";
+import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import type { FitsMetadata } from "../../lib/fits/types";
 
 const ON_DEMAND_CONCURRENCY = 2;
 const FAILURE_COOLDOWN_MS = 60_000;

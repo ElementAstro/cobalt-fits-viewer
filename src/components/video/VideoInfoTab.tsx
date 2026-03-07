@@ -4,7 +4,7 @@ import { Accordion, Button, Card, Chip } from "heroui-native";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import { formatFileSize } from "../../lib/utils/fileManager";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { useI18n } from "../../i18n/useI18n";
 
 interface VideoInfoTabProps {

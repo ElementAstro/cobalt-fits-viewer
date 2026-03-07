@@ -2,7 +2,7 @@ import React from "react";
 import { render, screen, waitFor, fireEvent } from "@testing-library/react-native";
 import { Alert } from "react-native";
 import StackingScreen from "../index";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
 
 const mockUseLocalSearchParams = jest.fn((): { ids?: string | string[] } => ({}));
@@ -21,14 +21,14 @@ jest.mock("expo-keep-awake", () => ({
   useKeepAwake: jest.fn(),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     contentPaddingTop: 0,
     horizontalPadding: 0,
   }),
 }));
 
-jest.mock("../../../hooks/useExport", () => ({
+jest.mock("../../../hooks/export/useExport", () => ({
   useExport: () => ({
     saveImage: jest.fn(),
     shareImage: jest.fn(),
@@ -45,7 +45,7 @@ const mockStackingState = {
   reset: jest.fn(),
 };
 
-jest.mock("../../../hooks/useStacking", () => ({
+jest.mock("../../../hooks/stacking/useStacking", () => ({
   useStacking: () => mockStackingState,
 }));
 
@@ -81,7 +81,7 @@ const settingsState = {
   thumbnailQuality: 80,
 };
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof settingsState) => unknown) => selector(settingsState),
 }));
 

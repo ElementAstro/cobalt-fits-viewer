@@ -1,19 +1,19 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useCompose } from "../useCompose";
 
-jest.mock("../../lib/image/scientificImageLoader", () => ({
+jest.mock("../../../lib/image/scientificImageLoader", () => ({
   loadScientificImageFromPath: jest.fn(),
 }));
-jest.mock("../../lib/utils/rgbCompose", () => ({
+jest.mock("../../../lib/utils/rgbCompose", () => ({
   composeRGB: jest.fn(),
 }));
-jest.mock("../../lib/processing/color", () => ({
+jest.mock("../../../lib/processing/color", () => ({
   applySCNRRGBA: jest.fn((rgba: Uint8ClampedArray) => rgba),
   applyColorCalibrationRGBA: jest.fn((rgba: Uint8ClampedArray) => rgba),
   applySaturationRGBA: jest.fn((rgba: Uint8ClampedArray) => rgba),
   applyColorBalanceRGBA: jest.fn((rgba: Uint8ClampedArray) => rgba),
 }));
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     Compose: "Compose",
   },
@@ -25,13 +25,13 @@ jest.mock("../../lib/logger", () => ({
   },
 }));
 
-const loaderLib = jest.requireMock("../../lib/image/scientificImageLoader") as {
+const loaderLib = jest.requireMock("../../../lib/image/scientificImageLoader") as {
   loadScientificImageFromPath: jest.Mock;
 };
-const rgbLib = jest.requireMock("../../lib/utils/rgbCompose") as {
+const rgbLib = jest.requireMock("../../../lib/utils/rgbCompose") as {
   composeRGB: jest.Mock;
 };
-const colorLib = jest.requireMock("../../lib/processing/color") as {
+const colorLib = jest.requireMock("../../../lib/processing/color") as {
   applySCNRRGBA: jest.Mock;
   applyColorCalibrationRGBA: jest.Mock;
   applySaturationRGBA: jest.Mock;

@@ -4,9 +4,9 @@
  */
 
 import { useState, useCallback, useRef } from "react";
-import { loadScientificImageFromPath } from "../lib/image/scientificImageLoader";
-import { computeAutoStretch } from "../lib/utils/pixelMath";
-import { fitsToRGBA } from "../lib/converter/formatConverter";
+import { loadScientificImageFromPath } from "../../lib/image/scientificImageLoader";
+import { computeAutoStretch } from "../../lib/utils/pixelMath";
+import { fitsToRGBA } from "../../lib/converter/formatConverter";
 import {
   integrateFrames,
   averageStrategy,
@@ -21,29 +21,29 @@ import {
   esdStrategy,
   averagedSigmaClipStrategy,
   type PixelRejectionStrategy,
-} from "../lib/stacking/integration";
-import { normalizeFrames, type NormalizationMode } from "../lib/stacking/normalization";
+} from "../../lib/stacking/integration";
+import { normalizeFrames, type NormalizationMode } from "../../lib/stacking/normalization";
 import {
   calibrateFrame,
   createMasterDark,
   createMasterFlat,
   computeMedianExposure,
   scaleFrameByExposure,
-} from "../lib/stacking/calibration";
+} from "../../lib/stacking/calibration";
 import {
   alignFrameAsync,
   type AlignmentMode,
   type AlignmentOptions,
-} from "../lib/stacking/alignment";
+} from "../../lib/stacking/alignment";
 import {
   evaluateFrameQualityAsync,
   qualityToWeights,
   type FrameQualityMetrics,
   type FrameQualityOptions,
-} from "../lib/stacking/frameQuality";
-import type { StarDetectionOptions } from "../lib/stacking/starDetection";
-import { LOG_TAGS, Logger } from "../lib/logger";
-import type { StarAnnotationBundle } from "../lib/fits/types";
+} from "../../lib/stacking/frameQuality";
+import type { StarDetectionOptions } from "../../lib/stacking/starDetection";
+import { LOG_TAGS, Logger } from "../../lib/logger";
+import type { StarAnnotationBundle } from "../../lib/fits/types";
 import {
   buildAnchorPairs,
   evaluateStarAnnotationUsability,
@@ -51,7 +51,7 @@ import {
   resolveRegistrationMode,
   sanitizeStarAnnotations,
   toDetectedStars,
-} from "../lib/stacking/starAnnotationLinkage";
+} from "../../lib/stacking/starAnnotationLinkage";
 
 export type StackMethod =
   | "average"
@@ -66,8 +66,8 @@ export type StackMethod =
   | "esd"
   | "averagedSigma";
 
-export type { AlignmentMode } from "../lib/stacking/alignment";
-export type { FrameQualityMetrics } from "../lib/stacking/frameQuality";
+export type { AlignmentMode } from "../../lib/stacking/alignment";
+export type { FrameQualityMetrics } from "../../lib/stacking/frameQuality";
 
 export interface CalibrationFrames {
   darkFilepath?: string;

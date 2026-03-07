@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Alert } from "react-native";
-import { parseGeoCoordinate } from "../lib/sessions/format";
+import { parseGeoCoordinate } from "../../lib/sessions/format";
 import { LocationService } from "./useLocation";
 
 interface LocationValues {

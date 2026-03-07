@@ -1,26 +1,26 @@
 import { renderHook } from "@testing-library/react-native";
 import { useTargetStatistics } from "../useTargetStatistics";
 
-jest.mock("../../stores/useTargetStore", () => ({
+jest.mock("../../../stores/observation/useTargetStore", () => ({
   useTargetStore: jest.fn(),
 }));
-jest.mock("../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: jest.fn(),
 }));
-jest.mock("../../lib/targets/targetStatistics", () => ({
+jest.mock("../../../lib/targets/targetStatistics", () => ({
   calculateTargetStatistics: jest.fn(),
   getMonthlyStatistics: jest.fn(),
   getProgressOverview: jest.fn(),
   formatExposureHours: jest.fn((v: number) => `${v}h`),
 }));
 
-const { useTargetStore } = jest.requireMock("../../stores/useTargetStore") as {
+const { useTargetStore } = jest.requireMock("../../../stores/observation/useTargetStore") as {
   useTargetStore: jest.Mock;
 };
-const { useFitsStore } = jest.requireMock("../../stores/useFitsStore") as {
+const { useFitsStore } = jest.requireMock("../../../stores/files/useFitsStore") as {
   useFitsStore: jest.Mock;
 };
-const targetStatsLib = jest.requireMock("../../lib/targets/targetStatistics") as {
+const targetStatsLib = jest.requireMock("../../../lib/targets/targetStatistics") as {
   calculateTargetStatistics: jest.Mock;
   getMonthlyStatistics: jest.Mock;
   getProgressOverview: jest.Mock;

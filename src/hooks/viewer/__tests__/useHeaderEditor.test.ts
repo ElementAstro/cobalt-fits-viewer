@@ -1,7 +1,7 @@
 import { renderHook, act } from "@testing-library/react-native";
 import { useHeaderEditor } from "../useHeaderEditor";
 
-jest.mock("../../lib/fits/headerWriter", () => ({
+jest.mock("../../../lib/fits/headerWriter", () => ({
   writeHeaderKeywords: jest.fn().mockResolvedValue(2),
   deleteHeaderKeywords: jest.fn().mockResolvedValue(1),
   formatHeaderRecord: jest.fn((entry: { key: string; value: unknown }) => {
@@ -10,7 +10,7 @@ jest.mock("../../lib/fits/headerWriter", () => ({
   }),
 }));
 
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: { FitsHeaderWriter: "FitsHeaderWriter" },
   Logger: {
     debug: jest.fn(),
@@ -21,7 +21,7 @@ jest.mock("../../lib/logger", () => ({
 }));
 
 const { writeHeaderKeywords, deleteHeaderKeywords } = jest.requireMock(
-  "../../lib/fits/headerWriter",
+  "../../../lib/fits/headerWriter",
 );
 
 const sampleKeywords = [

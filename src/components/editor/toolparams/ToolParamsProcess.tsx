@@ -3,7 +3,7 @@ import { View, Text, TextInput } from "react-native";
 import { Button, useThemeColor } from "heroui-native";
 import { useI18n } from "../../../i18n/useI18n";
 import { SimpleSlider } from "../../common/SimpleSlider";
-import type { EditorTool, EditorToolParams } from "../../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolParams } from "../../../hooks/editor/useEditorToolState";
 
 const MORPH_OP_KEYS: Record<EditorToolParams["morphOp"], string> = {
   erode: "editor.paramMorphErode",

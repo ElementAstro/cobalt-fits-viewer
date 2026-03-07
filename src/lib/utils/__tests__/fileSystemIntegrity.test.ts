@@ -14,7 +14,7 @@ jest.mock("../../gallery/thumbnailCache", () => ({
   deleteThumbnails: jest.fn(),
 }));
 
-jest.mock("../../../stores/useFitsStore", () => {
+jest.mock("../../../stores/files/useFitsStore", () => {
   let mockFiles: FitsMetadata[] = [];
   return {
     useFitsStore: {
@@ -37,7 +37,7 @@ jest.mock("../../../stores/useFitsStore", () => {
   };
 });
 
-jest.mock("../../../stores/useTrashStore", () => {
+jest.mock("../../../stores/files/useTrashStore", () => {
   let mockItems: TrashedFitsRecord[] = [];
   return {
     useTrashStore: {
@@ -161,12 +161,12 @@ function makeTrash(id: string, overrides: Partial<TrashedFitsRecord> = {}): Tras
   };
 }
 
-const fitsStoreMock = require("../../../stores/useFitsStore") as {
+const fitsStoreMock = require("../../../stores/files/useFitsStore") as {
   __setFiles: (files: FitsMetadata[]) => void;
   __getFiles: () => FitsMetadata[];
 };
 
-const trashStoreMock = require("../../../stores/useTrashStore") as {
+const trashStoreMock = require("../../../stores/files/useTrashStore") as {
   __setItems: (items: TrashedFitsRecord[]) => void;
   __getItems: () => TrashedFitsRecord[];
 };

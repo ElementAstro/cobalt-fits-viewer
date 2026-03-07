@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useFitsStore } from "../stores/useFitsStore";
-import type { FitsMetadata } from "../lib/fits/types";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import type { FitsMetadata } from "../../lib/fits/types";
 
 const MAX_RECENT = 20;
 

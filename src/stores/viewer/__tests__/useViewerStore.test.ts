@@ -3,10 +3,10 @@
  */
 
 import { useViewerStore } from "../useViewerStore";
-import type { ColormapType } from "../../lib/fits/types";
+import type { ColormapType } from "../../../lib/fits/types";
 
 // Mock useSettingsStore
-jest.mock("../useSettingsStore", () => ({
+jest.mock("../../app/useSettingsStore", () => ({
   useSettingsStore: {
     getState: () => ({
       defaultStretch: "asinh",

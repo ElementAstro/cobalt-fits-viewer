@@ -3,9 +3,9 @@ import { Alert } from "react-native";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import * as Clipboard from "expo-clipboard";
 import FilesScreen from "../index";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
-import type { ImportResult } from "../../../hooks/useFileManager";
+import type { ImportResult } from "../../../hooks/files/useFileManager";
 
 const mockPush = jest.fn();
 
@@ -73,7 +73,7 @@ const mockTrashStore = {
 };
 
 // Mock useScreenOrientation hook
-jest.mock("../../../hooks/useScreenOrientation", () => ({
+jest.mock("../../../hooks/common/useScreenOrientation", () => ({
   useScreenOrientation: () => ({
     isLandscape: false,
     isPortrait: true,
@@ -85,7 +85,7 @@ jest.mock("../../../hooks/useScreenOrientation", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     isLandscape: false,
     isLandscapeTablet: false,
@@ -95,28 +95,28 @@ jest.mock("../../../hooks/useResponsiveLayout", () => ({
 }));
 
 // Mock useFileManager hook
-jest.mock("../../../hooks/useFileManager", () => ({
+jest.mock("../../../hooks/files/useFileManager", () => ({
   useFileManager: () => mockFileManager,
 }));
 
-jest.mock("../../../hooks/useAlbums", () => ({
+jest.mock("../../../hooks/gallery/useAlbums", () => ({
   useAlbums: () => ({
     albums: [],
     addImagesToAlbum: jest.fn(),
   }),
 }));
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector(mockSettingsStore),
 }));
 
-jest.mock("../../../stores/useTrashStore", () => ({
+jest.mock("../../../stores/files/useTrashStore", () => ({
   useTrashStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector(mockTrashStore),
 }));
 
-jest.mock("../../../stores/useFileGroupStore", () => {
+jest.mock("../../../stores/files/useFileGroupStore", () => {
   const mockState = {
     groups: [],
     fileGroupMap: {},

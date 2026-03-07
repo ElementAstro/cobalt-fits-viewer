@@ -4,16 +4,16 @@
  */
 
 import { useState, useCallback } from "react";
-import { loadScientificImageFromPath } from "../lib/image/scientificImageLoader";
-import { composeRGB, type ChannelData } from "../lib/utils/rgbCompose";
+import { loadScientificImageFromPath } from "../../lib/image/scientificImageLoader";
+import { composeRGB, type ChannelData } from "../../lib/utils/rgbCompose";
 import {
   applyColorBalanceRGBA,
   applyColorCalibrationRGBA,
   applySaturationRGBA,
   applySCNRRGBA,
   type SCNRMethod,
-} from "../lib/processing/color";
-import { LOG_TAGS, Logger } from "../lib/logger";
+} from "../../lib/processing/color";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 interface ChannelState {
   fileId: string | null;

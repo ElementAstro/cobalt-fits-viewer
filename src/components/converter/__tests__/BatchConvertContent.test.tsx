@@ -12,7 +12,7 @@ const mockRetryTask = jest.fn();
 const mockClearCompletedTasks = jest.fn();
 let mockBatchTasks: BatchTask[] = [];
 
-jest.mock("../../../hooks/useConverter", () => ({
+jest.mock("../../../hooks/export/useConverter", () => ({
   useConverter: () => ({
     batchTasks: mockBatchTasks,
     startBatchConvert: mockStartBatchConvert,
@@ -31,7 +31,7 @@ let mockFiles: Array<{
 }> = [];
 let mockSelectedIds: string[] = [];
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (state: unknown) => unknown) =>
     selector({
       files: mockFiles,

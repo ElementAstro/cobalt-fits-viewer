@@ -6,8 +6,8 @@
 
 import { useState, useCallback, useEffect, useMemo } from "react";
 import * as Updates from "expo-updates";
-import { LOG_TAGS, Logger } from "../lib/logger";
-import { getAppVersionInfo } from "../lib/version";
+import { LOG_TAGS, Logger } from "../../lib/logger";
+import { getAppVersionInfo } from "../../lib/version";
 
 export type UpdateStatus =
   | "idle"

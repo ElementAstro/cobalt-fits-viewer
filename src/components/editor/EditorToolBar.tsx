@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import type { Href } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import type { EditorTool, EditorToolGroup } from "../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolGroup } from "../../hooks/editor/useEditorToolState";
 
 type ToolItem = { key: EditorTool & string; icon: keyof typeof Ionicons.glyphMap };
 

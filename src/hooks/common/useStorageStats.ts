@@ -4,20 +4,20 @@
  */
 
 import { useState, useCallback, useEffect } from "react";
-import { getStorageStats } from "../lib/utils/fileManager";
-import { getFreeDiskBytes } from "../lib/utils/diskSpace";
-import { getThumbnailCacheSize } from "../lib/gallery/thumbnailCache";
-import { getExportCacheSize, cleanExpiredExports } from "../lib/utils/imageExport";
+import { getStorageStats } from "../../lib/utils/fileManager";
+import { getFreeDiskBytes } from "../../lib/utils/diskSpace";
+import { getThumbnailCacheSize } from "../../lib/gallery/thumbnailCache";
+import { getExportCacheSize, cleanExpiredExports } from "../../lib/utils/imageExport";
 import {
   getVideoProcessingCacheSize,
   clearVideoProcessingCache,
-} from "../lib/video/engine/ffmpegAdapter";
-import { getPixelCacheStats } from "../lib/cache/pixelCache";
-import { getImageLoadCacheStats } from "../lib/cache/imageLoadCache";
-import { clearRuntimeCaches } from "../lib/cache/runtimeCaches";
-import { getRuntimeDiskCacheStats } from "../lib/cache/runtimeDiskCache";
-import { useTrashStore } from "../stores/useTrashStore";
-import { useFitsStore } from "../stores/useFitsStore";
+} from "../../lib/video/engine/ffmpegAdapter";
+import { getPixelCacheStats } from "../../lib/cache/pixelCache";
+import { getImageLoadCacheStats } from "../../lib/cache/imageLoadCache";
+import { clearRuntimeCaches } from "../../lib/cache/runtimeCaches";
+import { getRuntimeDiskCacheStats } from "../../lib/cache/runtimeDiskCache";
+import { useTrashStore } from "../../stores/files/useTrashStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 
 export interface StorageBreakdown {
   filesCount: number;

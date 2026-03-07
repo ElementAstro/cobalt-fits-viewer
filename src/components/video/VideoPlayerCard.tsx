@@ -9,7 +9,7 @@ import { formatVideoDuration } from "../../lib/video/format";
 import { SimpleSlider } from "../common/SimpleSlider";
 import { VideoSeekBar } from "./VideoSeekBar";
 import { useI18n } from "../../i18n/useI18n";
-import { RATE_OPTIONS } from "../../hooks/useVideoPlayerState";
+import { RATE_OPTIONS } from "../../hooks/video/useVideoPlayerState";
 
 const AUTO_HIDE_MS = 3000;
 

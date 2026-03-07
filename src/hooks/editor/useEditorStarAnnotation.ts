@@ -5,18 +5,18 @@
 
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { Alert } from "react-native";
-import { useI18n } from "../i18n/useI18n";
-import { useSettingsStore } from "../stores/useSettingsStore";
+import { useI18n } from "../../i18n/useI18n";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import { useShallow } from "zustand/shallow";
-import { detectStarsAsync, type DetectedStar } from "../lib/stacking/starDetection";
-import { computeStarStats, type StarFwhmStats } from "../lib/stacking/starStats";
+import { detectStarsAsync, type DetectedStar } from "../../lib/stacking/starDetection";
+import { computeStarStats, type StarFwhmStats } from "../../lib/stacking/starStats";
 import {
   createManualStarAnnotationPoint,
   mergeDetectedWithManual,
   sanitizeStarAnnotations,
-} from "../lib/stacking/starAnnotationLinkage";
-import { transformStarAnnotationPoints } from "../lib/stacking/starAnnotationGeometry";
-import { getProcessingOperation } from "../lib/processing/registry";
+} from "../../lib/stacking/starAnnotationLinkage";
+import { transformStarAnnotationPoints } from "../../lib/stacking/starAnnotationGeometry";
+import { getProcessingOperation } from "../../lib/processing/registry";
 import type {
   ProcessingOperationId,
   StarAnnotationBundle,
@@ -24,7 +24,7 @@ import type {
   StarAnnotationDetectionSnapshot,
   StarAnnotationPoint,
   StarAnnotationStaleReason,
-} from "../lib/fits/types";
+} from "../../lib/fits/types";
 import type { EditorOperationEvent } from "./useImageEditor";
 
 const STAR_POINT_TAP_RADIUS = 12;
@@ -45,6 +45,28 @@ function computeDetectionChunkRows(width: number, height: number) {
   if (megaPixels >= 8) return 10;
   if (megaPixels >= 4) return 14;
   return 24;
+}
+
+function stableEquals(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function toComparableAnnotationState(bundle: StarAnnotationBundleV2 | null | undefined) {
+  if (!bundle) return null;
+  return {
+    detectionSnapshot: bundle.detectionSnapshot,
+    points: bundle.points,
+    stale: !!bundle.stale,
+    staleReason: bundle.staleReason,
+    imageGeometry: bundle.imageGeometry,
+  };
+}
+
+function getAnnotationStateSignature(
+  bundle: StarAnnotationBundleV2 | null | undefined,
+): string | null {
+  const comparable = toComparableAnnotationState(bundle);
+  return comparable ? JSON.stringify(comparable) : null;
 }
 
 interface EditorImageState {
@@ -122,19 +144,83 @@ export function useEditorStarAnnotation({
       snrMin: s.stackingDetectSnrMin,
     })),
   );
+  const {
+    profile,
+    sigmaThreshold,
+    maxStars,
+    minArea,
+    maxArea,
+    borderMargin,
+    sigmaClipIters,
+    applyMatchedFilter,
+    connectivity,
+    meshSize,
+    deblendNLevels,
+    deblendMinContrast,
+    filterFwhm,
+    minFwhm,
+    maxFwhm,
+    maxEllipticity,
+    minSharpness,
+    maxSharpness,
+    peakMax,
+    snrMin,
+  } = detectionSettings;
 
   const currentDetectionSnapshot = useMemo(
     (): StarAnnotationDetectionSnapshot => ({
-      ...detectionSettings,
-      peakMax: detectionSettings.peakMax > 0 ? detectionSettings.peakMax : undefined,
+      profile,
+      sigmaThreshold,
+      maxStars,
+      minArea,
+      maxArea,
+      borderMargin,
+      sigmaClipIters,
+      applyMatchedFilter,
+      connectivity,
+      meshSize,
+      deblendNLevels,
+      deblendMinContrast,
+      filterFwhm,
+      minFwhm,
+      maxFwhm,
+      maxEllipticity,
+      minSharpness,
+      maxSharpness,
+      peakMax: peakMax > 0 ? peakMax : undefined,
+      snrMin,
     }),
-    [detectionSettings],
+    [
+      applyMatchedFilter,
+      borderMargin,
+      connectivity,
+      deblendMinContrast,
+      deblendNLevels,
+      filterFwhm,
+      maxArea,
+      maxEllipticity,
+      maxFwhm,
+      maxSharpness,
+      maxStars,
+      meshSize,
+      minArea,
+      minFwhm,
+      minSharpness,
+      peakMax,
+      profile,
+      sigmaClipIters,
+      sigmaThreshold,
+      snrMin,
+    ],
   );
+  const currentWidth = editorCurrent?.width ?? dimensions?.width;
+  const currentHeight = editorCurrent?.height ?? dimensions?.height;
 
   // Refs
   const annotationHistoryRef = useRef<Map<number, StarAnnotationBundleV2>>(new Map());
   const activeAnnotationRef = useRef<StarAnnotationBundleV2 | null>(null);
   const loadedFileIdRef = useRef<string | null>(null);
+  const loadedAnnotationSignatureRef = useRef<string | null>(null);
   const detectAbortRef = useRef<AbortController | null>(null);
 
   // State
@@ -209,8 +295,8 @@ export function useEditorStarAnnotation({
         persist?: boolean;
       },
     ) => {
-      const targetWidth = options?.width ?? editorCurrent?.width ?? dimensions?.width;
-      const targetHeight = options?.height ?? editorCurrent?.height ?? dimensions?.height;
+      const targetWidth = options?.width ?? currentWidth;
+      const targetHeight = options?.height ?? currentHeight;
       const sanitized = sanitizeStarAnnotations(
         {
           version: 2,
@@ -247,9 +333,8 @@ export function useEditorStarAnnotation({
       }
     },
     [
-      dimensions?.height,
-      dimensions?.width,
-      editorCurrent,
+      currentHeight,
+      currentWidth,
       editorHistoryIndex,
       persistStarAnnotations,
       updateDetectedStarsFromPoints,
@@ -260,30 +345,46 @@ export function useEditorStarAnnotation({
   useEffect(() => {
     if (loadedFileIdRef.current !== (fileId ?? null)) {
       annotationHistoryRef.current.clear();
+      activeAnnotationRef.current = null;
       loadedFileIdRef.current = fileId ?? null;
+      loadedAnnotationSignatureRef.current = null;
     }
   }, [fileId]);
 
   // Load star annotations from file
   useEffect(() => {
     if (!fileId) return;
-    const currentWidth = editorCurrent?.width ?? dimensions?.width;
-    const currentHeight = editorCurrent?.height ?? dimensions?.height;
     const historyIndex = editorHistoryIndex >= 0 ? editorHistoryIndex : 0;
     if (starAnnotations) {
       const sanitized = sanitizeStarAnnotations(starAnnotations, {
         width: currentWidth,
         height: currentHeight,
       });
+      const incomingSignature = getAnnotationStateSignature(sanitized);
+      if (loadedAnnotationSignatureRef.current === incomingSignature) {
+        return;
+      }
+      loadedAnnotationSignatureRef.current = incomingSignature;
+      const isSameAnnotationState = stableEquals(
+        toComparableAnnotationState(activeAnnotationRef.current),
+        toComparableAnnotationState(sanitized),
+      );
+      activeAnnotationRef.current = sanitized;
+      annotationHistoryRef.current.set(historyIndex, sanitized);
+      if (isSameAnnotationState) {
+        return;
+      }
       setStarPoints(sanitized.points);
       setStarSnapshot(sanitized.detectionSnapshot);
       setStarAnnotationsStale(!!sanitized.stale);
       setStarAnnotationsStaleReason(sanitized.staleReason);
       updateDetectedStarsFromPoints(sanitized.points);
-      activeAnnotationRef.current = sanitized;
-      annotationHistoryRef.current.set(historyIndex, sanitized);
       return;
     }
+    if (loadedAnnotationSignatureRef.current === null && activeAnnotationRef.current) {
+      return;
+    }
+    loadedAnnotationSignatureRef.current = null;
     applyStarAnnotationState([], currentDetectionSnapshot, false, undefined, {
       width: currentWidth,
       height: currentHeight,
@@ -294,9 +395,8 @@ export function useEditorStarAnnotation({
   }, [
     applyStarAnnotationState,
     currentDetectionSnapshot,
-    dimensions?.height,
-    dimensions?.width,
-    editorCurrent,
+    currentHeight,
+    currentWidth,
     editorHistoryIndex,
     fileId,
     starAnnotations,

@@ -2,7 +2,7 @@ import React from "react";
 import { Alert } from "react-native";
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 import ConvertScreen from "../index";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 import { DEFAULT_FITS_TARGET_OPTIONS, DEFAULT_TIFF_TARGET_OPTIONS } from "../../../lib/fits/types";
 import type { FitsMetadata } from "../../../lib/fits/types";
 
@@ -17,27 +17,27 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({ contentPaddingTop: 0, horizontalPadding: 0 }),
 }));
 
-jest.mock("../../../hooks/useConverter", () => ({
+jest.mock("../../../hooks/export/useConverter", () => ({
   useConverter: () => mockUseConverter(),
 }));
 
-jest.mock("../../../hooks/useFitsFile", () => ({
+jest.mock("../../../hooks/viewer/useFitsFile", () => ({
   useFitsFile: () => mockUseFitsFile(),
 }));
 
-jest.mock("../../../hooks/useImageProcessing", () => ({
+jest.mock("../../../hooks/viewer/useImageProcessing", () => ({
   useImageProcessing: () => mockUseImageProcessing(),
 }));
 
-jest.mock("../../../hooks/useExport", () => ({
+jest.mock("../../../hooks/export/useExport", () => ({
   useExport: () => mockUseExport(),
 }));
 
-jest.mock("../../../stores/useAstrometryStore", () => ({
+jest.mock("../../../stores/processing/useAstrometryStore", () => ({
   useAstrometryStore: (selector: (state: unknown) => unknown) =>
     selector({
       jobs: [],

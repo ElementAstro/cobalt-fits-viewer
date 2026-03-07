@@ -13,11 +13,11 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useAlbumStore } from "../../stores/useAlbumStore";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSelectionMode } from "../../hooks/useSelectionMode";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSelectionMode } from "../../hooks/files/useSelectionMode";
 import { ThumbnailGrid } from "../../components/gallery/ThumbnailGrid";
 import { ThumbnailLoadingBanner } from "../../components/gallery/ThumbnailLoadingBanner";
 import { EmptyState } from "../../components/common/EmptyState";

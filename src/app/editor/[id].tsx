@@ -5,18 +5,18 @@ import { Button, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter, useNavigation } from "expo-router";
 import { useI18n, type TranslationKey } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import { useShallow } from "zustand/shallow";
-import { useFitsFile } from "../../hooks/useFitsFile";
-import { useImageEditor } from "../../hooks/useImageEditor";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useEditorToolState } from "../../hooks/useEditorToolState";
-import { useEditorStarAnnotation } from "../../hooks/useEditorStarAnnotation";
-import { useEditorExport } from "../../hooks/useEditorExport";
-import { useEditorHotkeys } from "../../hooks/useEditorHotkeys";
-import { useImageCacheWarmup } from "../../hooks/useImageCacheWarmup";
+import { useFitsFile } from "../../hooks/viewer/useFitsFile";
+import { useImageEditor } from "../../hooks/editor/useImageEditor";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useEditorToolState } from "../../hooks/editor/useEditorToolState";
+import { useEditorStarAnnotation } from "../../hooks/editor/useEditorStarAnnotation";
+import { useEditorExport } from "../../hooks/editor/useEditorExport";
+import { useEditorHotkeys } from "../../hooks/editor/useEditorHotkeys";
+import { useImageCacheWarmup } from "../../hooks/viewer/useImageCacheWarmup";
 import {
   FitsCanvas,
   type CanvasTransform,
@@ -94,7 +94,7 @@ export default function EditorDetailScreen() {
     loadFromPath,
   } = useFitsFile();
   const handleEditorOperationRef = useRef<
-    ((event: import("../../hooks/useImageEditor").EditorOperationEvent) => void) | null
+    ((event: import("../../hooks/editor/useImageEditor").EditorOperationEvent) => void) | null
   >(null);
   const handleRecipeChange = useCallback(
     (nextRecipe: ProcessingPipelineSnapshot) => {

@@ -1,4 +1,4 @@
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 
 export function resetFitsStore() {
   useFitsStore.setState({

@@ -17,6 +17,7 @@ export default tseslint.config(
       "commitlint.config.js",
       "jest.config.js",
       "jest.setup.js",
+      "jest.after-env.js",
     ],
   },
   js.configs.recommended,

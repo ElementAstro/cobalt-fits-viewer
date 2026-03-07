@@ -20,12 +20,12 @@ import {
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
 import { FitsCanvas } from "../../components/fits/FitsCanvas";
 import { SimpleSlider } from "../../components/common/SimpleSlider";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useAdvancedCompose } from "../../hooks/useAdvancedCompose";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useAdvancedCompose } from "../../hooks/stacking/useAdvancedCompose";
 import { isProcessableImageMedia } from "../../lib/import/imageParsePipeline";
 import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 import type {

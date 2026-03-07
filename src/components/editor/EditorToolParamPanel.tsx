@@ -9,7 +9,7 @@ import {
   ToolParamsProcess,
   ToolParamsMask,
 } from "./toolparams";
-import type { EditorTool, EditorToolParams } from "../../hooks/useEditorToolState";
+import type { EditorTool, EditorToolParams } from "../../hooks/editor/useEditorToolState";
 import type { ImageEditOperation } from "../../lib/utils/imageOperations";
 
 interface EditorToolParamPanelProps {

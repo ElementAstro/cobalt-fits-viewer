@@ -3,7 +3,7 @@ import { Chip, Separator } from "heroui-native";
 import { useShallow } from "zustand/react/shallow";
 import { SettingsToggleRow } from "../../common/SettingsToggleRow";
 import { useI18n } from "../../../i18n/useI18n";
-import { useSettingsStore } from "../../../stores/useSettingsStore";
+import { useSettingsStore } from "../../../stores/app/useSettingsStore";
 import { SettingsRow } from "../../common/SettingsRow";
 import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { SimpleSlider } from "../../common/SimpleSlider";

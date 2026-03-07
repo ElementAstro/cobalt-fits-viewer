@@ -1,7 +1,7 @@
 import { useTrashStore } from "../useTrashStore";
-import type { FitsMetadata, TrashedFitsRecord } from "../../lib/fits/types";
+import type { FitsMetadata, TrashedFitsRecord } from "../../../lib/fits/types";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),

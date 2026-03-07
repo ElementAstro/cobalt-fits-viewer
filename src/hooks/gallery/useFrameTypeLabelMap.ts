@@ -1,7 +1,7 @@
 import { useMemo } from "react";
-import { useI18n } from "../i18n/useI18n";
-import { getFrameTypeDefinitions } from "../lib/gallery/frameClassifier";
-import type { FrameClassificationConfig } from "../lib/fits/types";
+import { useI18n } from "../../i18n/useI18n";
+import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
+import type { FrameClassificationConfig } from "../../lib/fits/types";
 
 export function useFrameTypeLabelMap(config: FrameClassificationConfig): Map<string, string> {
   const { t } = useI18n();

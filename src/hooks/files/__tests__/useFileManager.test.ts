@@ -1,11 +1,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
-import type { FitsMetadata, TrashedFitsRecord } from "../../lib/fits/types";
+import type { FitsMetadata, TrashedFitsRecord } from "../../../lib/fits/types";
 import { useFileManager } from "../useFileManager";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSessionStore } from "../../stores/useSessionStore";
-import { useTrashStore } from "../../stores/useTrashStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
+import { useSessionStore } from "../../../stores/observation/useSessionStore";
+import { useTrashStore } from "../../../stores/files/useTrashStore";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
@@ -147,7 +147,7 @@ jest.mock("expo-file-system", () => {
   };
 });
 
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     FileManager: "FileManager",
   },
@@ -159,45 +159,49 @@ jest.mock("../../lib/logger", () => ({
   },
 }));
 
-jest.mock("../useTargets", () => ({
+jest.mock("../../targets/useTargets", () => ({
   useTargets: () => ({
     upsertAndLinkFileTarget: jest.fn(),
     reconcileTargetGraph: jest.fn(),
   }),
 }));
 
-jest.mock("../useLocation", () => ({
+jest.mock("../../sessions/useLocation", () => ({
   LocationService: {
     getCurrentLocation: jest.fn().mockResolvedValue(null),
   },
 }));
 
-jest.mock("../../lib/gallery/thumbnailCache", () => ({
+jest.mock("../../../lib/gallery/thumbnailCache", () => ({
   deleteThumbnails: jest.fn(),
 }));
 
-jest.mock("../../lib/gallery/thumbnailWorkflow", () => ({
+jest.mock("../../../lib/gallery/thumbnailWorkflow", () => ({
   saveThumbnailFromRGBA: jest.fn(),
   saveThumbnailFromVideo: jest.fn(),
 }));
 
-jest.mock("../../lib/fits/parser", () => ({
+jest.mock("../../../lib/fits/parser", () => ({
   loadScientificFitsFromBuffer: jest.fn(),
   extractMetadata: jest.fn(),
   getImagePixels: jest.fn(),
   getImageDimensions: jest.fn(),
 }));
 
-jest.mock("../../lib/converter/formatConverter", () => ({
+jest.mock("../../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(),
 }));
 
-jest.mock("../../lib/gallery/duplicateDetector", () => ({
+jest.mock("../../../lib/stacking/frameQuality", () => ({
+  evaluateFrameQuality: jest.fn(() => ({ score: 0.91 })),
+}));
+
+jest.mock("../../../lib/gallery/duplicateDetector", () => ({
   computeQuickHash: jest.fn(),
   findDuplicateOnImport: jest.fn(),
 }));
 
-jest.mock("../../lib/gallery/albumSync", () => ({
+jest.mock("../../../lib/gallery/albumSync", () => ({
   computeAlbumFileConsistencyPatches: jest.fn(() => []),
   reconcileAlbumsWithValidFiles: jest.fn((albums) => ({
     albums,
@@ -206,11 +210,11 @@ jest.mock("../../lib/gallery/albumSync", () => ({
   })),
 }));
 
-jest.mock("../../lib/import/imageParsePipeline", () => ({
+jest.mock("../../../lib/import/imageParsePipeline", () => ({
   parseImageBuffer: jest.fn(),
 }));
 
-jest.mock("../../lib/utils/fileManager", () => ({
+jest.mock("../../../lib/utils/fileManager", () => ({
   importFile: jest.fn(),
   deleteFilesPermanently: jest.fn().mockReturnValue(0),
   moveFileToTrash: jest.fn(),
@@ -260,7 +264,7 @@ describe("useFileManager", () => {
     };
   };
 
-  const thumbnailCacheMock = require("../../lib/gallery/thumbnailCache") as {
+  const thumbnailCacheMock = require("../../../lib/gallery/thumbnailCache") as {
     deleteThumbnails: jest.Mock;
   };
 
@@ -272,24 +276,27 @@ describe("useFileManager", () => {
   const zipMock = require("react-native-zip-archive") as {
     zip: jest.Mock;
   };
-  const parserMock = require("../../lib/fits/parser") as {
+  const parserMock = require("../../../lib/fits/parser") as {
     loadScientificFitsFromBuffer: jest.Mock;
     extractMetadata: jest.Mock;
   };
   const fitsJsMock = require("fitsjs-ng") as {
     convertHiPSToFITS: jest.Mock;
   };
-  const fileManagerMock = require("../../lib/utils/fileManager") as {
+  const fileManagerMock = require("../../../lib/utils/fileManager") as {
     importFile: jest.Mock;
     readFileAsArrayBuffer: jest.Mock;
     renameFitsFile: jest.Mock;
     moveFileToTrash: jest.Mock;
     restoreFileFromTrash: jest.Mock;
   };
-  const imageParsePipelineMock = require("../../lib/import/imageParsePipeline") as {
+  const imageParsePipelineMock = require("../../../lib/import/imageParsePipeline") as {
     parseImageBuffer: jest.Mock;
   };
-  const duplicateDetectorMock = require("../../lib/gallery/duplicateDetector") as {
+  const frameQualityMock = require("../../../lib/stacking/frameQuality") as {
+    evaluateFrameQuality: jest.Mock;
+  };
+  const duplicateDetectorMock = require("../../../lib/gallery/duplicateDetector") as {
     computeQuickHash: jest.Mock;
     findDuplicateOnImport: jest.Mock;
   };
@@ -349,6 +356,7 @@ describe("useFileManager", () => {
       imageTypeRaw: "DarkFlat",
       frameHeaderRaw: "DarkFlat",
     });
+    frameQualityMock.evaluateFrameQuality.mockReturnValue({ score: 0.91 });
     imageParsePipelineMock.parseImageBuffer.mockImplementation(
       async ({
         filename,
@@ -951,6 +959,34 @@ describe("useFileManager", () => {
       expect.objectContaining({
         filename: "bad.tiff",
         allowDecodeFailureMetadata: true,
+      }),
+    );
+  });
+
+  it("assigns a quality score for imported light raster frames", async () => {
+    documentPickerMock.getDocumentAsync.mockResolvedValue({
+      canceled: false,
+      assets: [
+        { uri: "file:///source/light.png", name: "light.png", size: 8, mimeType: "image/png" },
+      ],
+    });
+
+    const { result } = renderHook(() => useFileManager());
+    await act(async () => {
+      await result.current.pickAndImportFile();
+    });
+
+    const [file] = useFitsStore.getState().files;
+    expect(frameQualityMock.evaluateFrameQuality).toHaveBeenCalledWith(
+      expect.any(Float32Array),
+      2,
+      2,
+    );
+    expect(file).toEqual(
+      expect.objectContaining({
+        filename: "light.png",
+        frameType: "light",
+        qualityScore: 0.91,
       }),
     );
   });

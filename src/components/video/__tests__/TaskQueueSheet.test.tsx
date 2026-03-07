@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { TaskQueueSheet } from "../TaskQueueSheet";
-import type { VideoTaskRecord } from "../../../stores/useVideoTaskStore";
+import type { VideoTaskRecord } from "../../../stores/processing/useVideoTaskStore";
 
 jest.mock("../../common/AnimatedProgressBar", () => {
   const React = require("react");

@@ -2,8 +2,8 @@ import { View, Text } from "react-native";
 import { Button, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useConverter } from "../../hooks/useConverter";
-import { useFitsStore } from "../../stores/useFitsStore";
+import { useConverter } from "../../hooks/export/useConverter";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import { BatchTaskItem } from "./BatchTaskItem";
 import { EmptyState } from "../common/EmptyState";
 

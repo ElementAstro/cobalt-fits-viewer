@@ -4,7 +4,7 @@ import { Accordion, Card, useThemeColor } from "heroui-native";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useRecentFiles } from "../../hooks/useRecentFiles";
+import { useRecentFiles } from "../../hooks/files/useRecentFiles";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import type { FitsMetadata } from "../../lib/fits/types";
 

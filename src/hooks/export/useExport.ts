@@ -9,21 +9,21 @@ import { Skia, AlphaType, ColorType, ImageFormat } from "@shopify/react-native-s
 import { File as FSFile } from "expo-file-system";
 import * as Print from "expo-print";
 import * as Clipboard from "expo-clipboard";
-import { LOG_TAGS, Logger } from "../lib/logger";
-import type { ExportFormat } from "../lib/fits/types";
+import { LOG_TAGS, Logger } from "../../lib/logger";
+import type { ExportFormat } from "../../lib/fits/types";
 import type {
   ExportRequest,
   ExportSourceContext,
   ExportDiagnostics,
-} from "../lib/converter/exportCore";
-import { encodeExportRequest } from "../lib/converter/exportCore";
-import { splitFilenameExtension } from "../lib/import/fileFormat";
+} from "../../lib/converter/exportCore";
+import { encodeExportRequest } from "../../lib/converter/exportCore";
+import { splitFilenameExtension } from "../../lib/import/fileFormat";
 import {
   shareFile,
   saveToMediaLibrary,
   getExportDir,
   type ShareFileOptions,
-} from "../lib/utils/imageExport";
+} from "../../lib/utils/imageExport";
 
 export type { ExportRequest, ExportSourceContext, ExportDiagnostics };
 

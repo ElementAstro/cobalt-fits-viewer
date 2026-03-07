@@ -1,9 +1,9 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useCalendar } from "../useCalendar";
-import { useSessionStore } from "../../stores/useSessionStore";
-import type { ObservationPlan, ObservationSession } from "../../lib/fits/types";
+import { useSessionStore } from "../../../stores/observation/useSessionStore";
+import type { ObservationPlan, ObservationSession } from "../../../lib/fits/types";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),
@@ -11,7 +11,7 @@ jest.mock("../../lib/storage", () => ({
   },
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (
     selector: (state: {
       defaultReminderMinutes: number;
@@ -39,7 +39,7 @@ jest.mock("expo-linking", () => ({
   openSettings: jest.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("../../lib/calendar", () => ({
+jest.mock("../../../lib/calendar", () => ({
   isCalendarAvailable: jest.fn().mockResolvedValue(true),
   requestCalendarPermission: jest.fn().mockResolvedValue(true),
   checkCalendarPermission: jest.fn().mockResolvedValue(true),
@@ -55,7 +55,7 @@ jest.mock("../../lib/calendar", () => ({
   createEventViaSystemUI: jest.fn(),
 }));
 
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     Calendar: "Calendar",
   },
@@ -67,7 +67,7 @@ jest.mock("../../lib/logger", () => ({
   },
 }));
 
-const calendarApi = jest.requireMock("../../lib/calendar") as {
+const calendarApi = jest.requireMock("../../../lib/calendar") as {
   isCalendarAvailable: jest.Mock;
   requestCalendarPermission: jest.Mock;
   checkCalendarPermission: jest.Mock;

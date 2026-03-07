@@ -11,10 +11,10 @@ import {
 } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useChipInput, normalizeChipValues } from "../../hooks/useChipInput";
-import { useEquipmentFields } from "../../hooks/useEquipmentFields";
-import { useLocationFields } from "../../hooks/useLocationFields";
-import { useSessionStore } from "../../stores/useSessionStore";
+import { useChipInput, normalizeChipValues } from "../../hooks/common/useChipInput";
+import { useEquipmentFields } from "../../hooks/sessions/useEquipmentFields";
+import { useLocationFields } from "../../hooks/sessions/useLocationFields";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
 import { ChipInputField } from "./ChipInputField";
 import { EquipmentFields } from "./EquipmentFields";
 

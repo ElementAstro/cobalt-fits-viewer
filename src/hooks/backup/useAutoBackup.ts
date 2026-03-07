@@ -6,9 +6,9 @@
 import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import * as Network from "expo-network";
-import { useBackupStore } from "../stores/useBackupStore";
+import { useBackupStore } from "../../stores/app/useBackupStore";
 import { useBackup } from "./useBackup";
-import { LOG_TAGS, Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 const TAG = LOG_TAGS.AutoBackup;
 const AUTO_BACKUP_FAILURE_COOLDOWN_MS = 15 * 60 * 1000;

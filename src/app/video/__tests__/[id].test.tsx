@@ -1,8 +1,8 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import VideoDetailScreen from "../[id]";
-import { useFitsStore } from "../../../stores/useFitsStore";
-import { useSettingsStore } from "../../../stores/useSettingsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../../stores/app/useSettingsStore";
 
 const mockBack = jest.fn();
 const mockPush = jest.fn();
@@ -51,7 +51,7 @@ jest.mock("expo-keep-awake", () => ({
   useKeepAwake: jest.fn(),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     isLandscape: false,
     layoutMode: "portrait",
@@ -73,7 +73,7 @@ const mockHaptics = {
   impact: jest.fn(),
   notify: jest.fn(),
 };
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => mockHaptics,
 }));
 
@@ -122,7 +122,7 @@ jest.mock("react-native-gesture-handler", () => {
   };
 });
 
-jest.mock("../../../hooks/useScreenOrientation", () => ({
+jest.mock("../../../hooks/common/useScreenOrientation", () => ({
   useScreenOrientation: () => ({
     isLandscape: false,
     isPortrait: true,
@@ -212,14 +212,14 @@ jest.mock("../../../i18n/useI18n", () => ({
 
 jest.spyOn(require("react-native").StatusBar, "setHidden").mockImplementation(jest.fn());
 
-jest.mock("../../../hooks/useMediaLibrary", () => ({
+jest.mock("../../../hooks/files/useMediaLibrary", () => ({
   useMediaLibrary: () => ({
     saveToDevice: jest.fn(),
     isSaving: false,
   }),
 }));
 
-jest.mock("../../../hooks/useVideoProcessing", () => ({
+jest.mock("../../../hooks/video/useVideoProcessing", () => ({
   useVideoProcessing: () => mockVideoProcessing,
 }));
 

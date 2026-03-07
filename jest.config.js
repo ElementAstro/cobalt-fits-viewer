@@ -2,7 +2,10 @@
 module.exports = {
   preset: "jest-expo",
   setupFiles: ["./jest.setup.js"],
-  setupFilesAfterEnv: ["@testing-library/react-native/build/matchers/extend-expect"],
+  setupFilesAfterEnv: [
+    "./jest.after-env.js",
+    "@testing-library/react-native/build/matchers/extend-expect",
+  ],
   transformIgnorePatterns: [
     "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@sentry/react-native|native-base|react-native-svg|i18n-js|heroui-native|tailwind-merge|tailwind-variants|@shopify/flash-list)",
   ],

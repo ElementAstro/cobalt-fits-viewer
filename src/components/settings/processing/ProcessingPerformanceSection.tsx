@@ -2,13 +2,13 @@ import { Separator } from "heroui-native";
 import { useShallow } from "zustand/react/shallow";
 import { SettingsToggleRow } from "../../common/SettingsToggleRow";
 import { useI18n } from "../../../i18n/useI18n";
-import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
-import { useSettingsStore } from "../../../stores/useSettingsStore";
+import { useHapticFeedback } from "../../../hooks/common/useHapticFeedback";
+import { useSettingsStore } from "../../../stores/app/useSettingsStore";
 import { SettingsSection } from "../SettingsSection";
 import { SettingsRow } from "../../common/SettingsRow";
 import { SettingsSliderRow } from "../../common/SettingsSliderRow";
 import { OptionPickerModal } from "../../common/OptionPickerModal";
-import { useSettingsPicker } from "../../../hooks/useSettingsPicker";
+import { useSettingsPicker } from "../../../hooks/common/useSettingsPicker";
 
 const DEBOUNCE_OPTIONS = [
   { label: "50ms", value: 50 },

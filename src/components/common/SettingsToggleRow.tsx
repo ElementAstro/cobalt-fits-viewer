@@ -1,7 +1,7 @@
 import { View } from "react-native";
 import { ControlField, Description, Label, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 
 export interface SettingsToggleRowProps {
   icon: keyof typeof Ionicons.glyphMap;

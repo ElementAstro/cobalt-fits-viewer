@@ -282,10 +282,9 @@ describe("stacking starDetection", () => {
 
     expect(equal.length).toBeGreaterThanOrEqual(2);
     expect(unequal.length).toBeGreaterThanOrEqual(2);
-  });
+  }, 15000);
 
   it("meets quantitative benchmark on synthetic star field", async () => {
-    jest.setTimeout(15000);
     const width = 256;
     const height = 256;
     const pixels = makeImage(width, height, 100);
@@ -366,5 +365,5 @@ describe("stacking starDetection", () => {
     expect(recall).toBeGreaterThanOrEqual(0.9);
     expect(centroidP95).toBeLessThanOrEqual(0.6);
     expect(fwhmRelMedian).toBeLessThanOrEqual(0.2);
-  });
+  }, 15000);
 });

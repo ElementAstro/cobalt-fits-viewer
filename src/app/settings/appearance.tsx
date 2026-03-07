@@ -18,15 +18,15 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useSavedThemesStore, MAX_SAVED_THEMES } from "../../stores/useSavedThemesStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useSavedThemesStore, MAX_SAVED_THEMES } from "../../stores/app/useSavedThemesStore";
 import { useFontFamily } from "../../components/common/FontProvider";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { OptionPickerModal } from "../../components/common/OptionPickerModal";
-import { useSettingsPicker } from "../../hooks/useSettingsPicker";
+import { useSettingsPicker } from "../../hooks/common/useSettingsPicker";
 import {
   ACCENT_PRESETS,
   ACCENT_COLOR_KEYS,

@@ -7,8 +7,8 @@ import { Button, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useTargetStatistics } from "../../hooks/useTargetStatistics";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useTargetStatistics } from "../../hooks/targets/useTargetStatistics";
 import { StatisticsDashboard } from "../../components/targets/StatisticsDashboard";
 
 export default function TargetStatsScreen() {

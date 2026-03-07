@@ -5,16 +5,16 @@
 
 import { useState, useCallback } from "react";
 import { useToast } from "heroui-native";
-import { useI18n } from "../i18n/useI18n";
+import { useI18n } from "../../i18n/useI18n";
 import { useExport } from "../export/useExport";
-import { useSettingsStore } from "../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import type {
   ExportFormat,
   ImageSourceType,
   ImageSourceFormat,
   StarAnnotationPoint,
-} from "../lib/fits/types";
-import type { ExportActionOptions } from "../lib/converter/exportActionOptions";
+} from "../../lib/fits/types";
+import type { ExportActionOptions } from "../../lib/converter/exportActionOptions";
 
 type EditorExportOptions = ExportActionOptions;
 

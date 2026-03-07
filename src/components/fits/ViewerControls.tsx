@@ -3,7 +3,7 @@ import { View, Text, ScrollView } from "react-native";
 import { Button, Chip } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 import { SimpleSlider } from "../common/SimpleSlider";
 import type { StretchType, ColormapType, ViewerCurvePreset } from "../../lib/fits/types";
 import { VIEWER_CURVE_PRESETS } from "../../lib/viewer/presets";

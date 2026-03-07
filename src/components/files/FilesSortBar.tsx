@@ -1,7 +1,7 @@
 import { ScrollView, View } from "react-native";
 import { Chip, Separator } from "heroui-native";
 import { useI18n } from "../../i18n/useI18n";
-import type { FitsSortBy, FitsSortOrder } from "../../stores/useFitsStore";
+import type { FitsSortBy, FitsSortOrder } from "../../stores/files/useFitsStore";
 
 const FILE_LIST_GRID_COLUMNS: Array<2 | 3 | 4> = [2, 3, 4];
 

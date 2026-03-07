@@ -11,14 +11,14 @@ type StackResultLike = {
   }>;
 };
 
-jest.mock("../../lib/image/scientificImageLoader", () => ({
+jest.mock("../../../lib/image/scientificImageLoader", () => ({
   loadScientificImageFromPath: jest.fn(),
 }));
-jest.mock("../../lib/utils/pixelMath", () => ({
+jest.mock("../../../lib/utils/pixelMath", () => ({
   computeAutoStretch: jest.fn(),
 }));
-jest.mock("../../lib/stacking/integration", () => {
-  const actual = jest.requireActual("../../lib/stacking/integration") as Record<string, unknown>;
+jest.mock("../../../lib/stacking/integration", () => {
+  const actual = jest.requireActual("../../../lib/stacking/integration") as Record<string, unknown>;
   return {
     ...actual,
     integrateFrames: jest.fn(
@@ -29,14 +29,17 @@ jest.mock("../../lib/stacking/integration", () => {
     ),
   };
 });
-jest.mock("../../lib/stacking/normalization", () => {
-  const actual = jest.requireActual("../../lib/stacking/normalization") as Record<string, unknown>;
+jest.mock("../../../lib/stacking/normalization", () => {
+  const actual = jest.requireActual("../../../lib/stacking/normalization") as Record<
+    string,
+    unknown
+  >;
   return { ...actual };
 });
-jest.mock("../../lib/converter/formatConverter", () => ({
+jest.mock("../../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(),
 }));
-jest.mock("../../lib/stacking/calibration", () => ({
+jest.mock("../../../lib/stacking/calibration", () => ({
   calibrateFrame: jest.fn((p: Float32Array) => p),
   createMasterDark: jest.fn((frames: Float32Array[]) => frames[0]),
   createMasterFlat: jest.fn((frames: Float32Array[]) => frames[0]),
@@ -68,7 +71,7 @@ jest.mock("../../lib/stacking/calibration", () => ({
     };
   }),
 }));
-jest.mock("../../lib/stacking/alignment", () => ({
+jest.mock("../../../lib/stacking/alignment", () => ({
   alignFrameAsync: jest.fn(async (ref: Float32Array, cur: Float32Array) => ({
     aligned: cur,
     transform: {
@@ -79,7 +82,7 @@ jest.mock("../../lib/stacking/alignment", () => ({
     },
   })),
 }));
-jest.mock("../../lib/stacking/frameQuality", () => ({
+jest.mock("../../../lib/stacking/frameQuality", () => ({
   evaluateFrameQualityAsync: jest.fn(async () => ({
     backgroundMedian: 0,
     backgroundNoise: 1,
@@ -92,8 +95,8 @@ jest.mock("../../lib/stacking/frameQuality", () => ({
   })),
   qualityToWeights: jest.fn(() => [0.7, 0.3]),
 }));
-jest.mock("../../lib/logger", () => {
-  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+jest.mock("../../../lib/logger", () => {
+  const actual = jest.requireActual("../../../lib/logger") as typeof import("../../../lib/logger");
   return {
     ...actual,
     Logger: {
@@ -106,26 +109,26 @@ jest.mock("../../lib/logger", () => {
   };
 });
 
-const loaderLib = jest.requireMock("../../lib/image/scientificImageLoader") as {
+const loaderLib = jest.requireMock("../../../lib/image/scientificImageLoader") as {
   loadScientificImageFromPath: jest.Mock;
 };
-const mathLib = jest.requireMock("../../lib/utils/pixelMath") as {
+const mathLib = jest.requireMock("../../../lib/utils/pixelMath") as {
   computeAutoStretch: jest.Mock;
 };
-const integrationLib = jest.requireMock("../../lib/stacking/integration") as {
+const integrationLib = jest.requireMock("../../../lib/stacking/integration") as {
   integrateFrames: jest.Mock;
 };
-const converterLib = jest.requireMock("../../lib/converter/formatConverter") as {
+const converterLib = jest.requireMock("../../../lib/converter/formatConverter") as {
   fitsToRGBA: jest.Mock;
 };
-const qualityLib = jest.requireMock("../../lib/stacking/frameQuality") as {
+const qualityLib = jest.requireMock("../../../lib/stacking/frameQuality") as {
   evaluateFrameQualityAsync: jest.Mock;
   qualityToWeights: jest.Mock;
 };
-const alignLib = jest.requireMock("../../lib/stacking/alignment") as {
+const alignLib = jest.requireMock("../../../lib/stacking/alignment") as {
   alignFrameAsync: jest.Mock;
 };
-const calibrationLib = jest.requireMock("../../lib/stacking/calibration") as {
+const calibrationLib = jest.requireMock("../../../lib/stacking/calibration") as {
   scaleFrameByExposure: jest.Mock;
 };
 

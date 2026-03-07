@@ -5,7 +5,7 @@ import { FontProvider, useFontFamily } from "../FontProvider";
 
 let mockFontSettings = { fontFamily: "system", monoFontFamily: "system-mono" };
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (s: any) => any) => selector(mockFontSettings),
 }));
 

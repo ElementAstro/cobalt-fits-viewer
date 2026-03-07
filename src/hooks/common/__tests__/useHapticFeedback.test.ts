@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react-native";
 import * as Haptics from "expo-haptics";
 import { useHapticFeedback } from "../useHapticFeedback";
-import { flushPromises } from "./helpers/testUtils";
+import { flushPromises } from "../../__test-helpers__/testUtils";
 
 jest.mock("expo-haptics", () => ({
   selectionAsync: jest.fn(),
@@ -17,11 +17,11 @@ jest.mock("expo-haptics", () => ({
   },
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: jest.fn(),
 }));
 
-const { useSettingsStore } = jest.requireMock("../../stores/useSettingsStore") as {
+const { useSettingsStore } = jest.requireMock("../../../stores/app/useSettingsStore") as {
   useSettingsStore: jest.Mock;
 };
 const selectionAsyncMock = Haptics.selectionAsync as jest.Mock;

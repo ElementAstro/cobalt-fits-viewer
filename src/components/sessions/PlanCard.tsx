@@ -6,7 +6,7 @@ import type { ObservationPlan } from "../../lib/fits/types";
 import { useI18n } from "../../i18n/useI18n";
 import { formatDuration, formatTimeHHMM } from "../../lib/sessions/format";
 import { normalizePlanStatus, toLocalDateKey } from "../../lib/sessions/planUtils";
-import { useTargetStore } from "../../stores/useTargetStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import { resolveTargetName } from "../../lib/targets/targetRefs";
 
 interface PlanCardProps {

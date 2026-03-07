@@ -20,8 +20,8 @@ import { FlashList, FlashListRef } from "@shopify/flash-list";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
-import { useLogViewer } from "../../hooks/useLogger";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useLogViewer } from "../../hooks/common/useLogger";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 import type { LogLevel, LogEntry, LogExportOptions } from "../../lib/logger";
 
 // Log-level colors are intentionally hardcoded as semantic constants (not theme-dependent)

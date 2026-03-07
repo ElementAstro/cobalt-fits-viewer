@@ -15,7 +15,7 @@ import {
   DashPathEffect,
 } from "@shopify/react-native-skia";
 import type { CanvasTransform } from "./FitsCanvas";
-import type { MeasurementLine, MeasurementPoint } from "../../hooks/useMeasurement";
+import type { MeasurementLine, MeasurementPoint } from "../../hooks/viewer/useMeasurement";
 import { imageToScreenPoint, remapPointBetweenSpaces } from "../../lib/viewer/transform";
 
 interface MeasurementOverlayProps {

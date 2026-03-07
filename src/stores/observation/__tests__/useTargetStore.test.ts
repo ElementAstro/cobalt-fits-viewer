@@ -1,7 +1,7 @@
 import { useTargetStore } from "../useTargetStore";
-import type { Target } from "../../lib/fits/types";
+import type { Target } from "../../../lib/fits/types";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockReturnValue(null),
     setItem: jest.fn(),

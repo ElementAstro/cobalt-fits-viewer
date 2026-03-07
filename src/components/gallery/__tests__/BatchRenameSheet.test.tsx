@@ -31,7 +31,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useFileManager", () => ({
+jest.mock("../../../hooks/files/useFileManager", () => ({
   useFileManager: jest.fn(),
 }));
 
@@ -155,7 +155,7 @@ describe("BatchRenameSheet", () => {
   });
 
   it("does not instantiate file manager hook inside component", () => {
-    const { useFileManager } = require("../../../hooks/useFileManager") as {
+    const { useFileManager } = require("../../../hooks/files/useFileManager") as {
       useFileManager: jest.Mock;
     };
 

@@ -2,7 +2,7 @@ import { ScrollView, View, Text } from "react-native";
 import { BottomSheet, Button, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { ImportResult } from "../../hooks/useFileManager";
+import type { ImportResult } from "../../hooks/files/useFileManager";
 
 export interface ImportFailureDisplayEntry {
   name: string;

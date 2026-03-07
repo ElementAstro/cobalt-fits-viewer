@@ -1,7 +1,7 @@
 import React from "react";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react-native";
 import MapScreen from "../index";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 import type { FitsMetadata } from "../../../lib/fits/types";
 import type { MapClusterAction } from "../../../lib/map/types";
 
@@ -17,12 +17,12 @@ const mockEnsurePermission = jest.fn().mockResolvedValue(true);
 const mockRouterPush = jest.fn();
 const mockRouterBack = jest.fn();
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof mockSettingsState) => unknown) =>
     selector(mockSettingsState),
 }));
 
-jest.mock("../../../hooks/useLocation", () => ({
+jest.mock("../../../hooks/sessions/useLocation", () => ({
   LocationService: {
     ensurePermission: (...args: unknown[]) => mockEnsurePermission(...args),
   },
@@ -160,7 +160,7 @@ jest.mock("../../../components/gallery/LocationMarkerSheet", () => {
   };
 });
 
-jest.mock("../../../hooks/useScreenOrientation", () => ({
+jest.mock("../../../hooks/common/useScreenOrientation", () => ({
   useScreenOrientation: () => ({
     isLandscape: false,
     isPortrait: true,

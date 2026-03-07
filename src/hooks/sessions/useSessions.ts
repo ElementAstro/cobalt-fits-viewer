@@ -3,35 +3,35 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useSessionStore } from "../stores/useSessionStore";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useTargetStore } from "../stores/useTargetStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import {
   detectSessions,
   findMatchingSession,
   getDatesWithObservations,
-} from "../lib/sessions/sessionDetector";
-import { generateLogFromFiles } from "../lib/sessions/observationLog";
+} from "../../lib/sessions/sessionDetector";
+import { generateLogFromFiles } from "../../lib/sessions/observationLog";
 import {
   exportToCSV,
   exportToText,
   exportSessionToJSON,
   exportAllSessionsToJSON,
-} from "../lib/sessions/observationLog";
-import { calculateObservationStats, getMonthlyTrend } from "../lib/sessions/statsCalculator";
-import { LOG_TAGS, Logger } from "../lib/logger";
+} from "../../lib/sessions/observationLog";
+import { calculateObservationStats, getMonthlyTrend } from "../../lib/sessions/statsCalculator";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 import {
   buildMissingLogEntries,
   deriveSessionMetadataFromFiles,
-} from "../lib/sessions/sessionLinking";
-import { mergeSessionLike } from "../lib/sessions/sessionNormalization";
+} from "../../lib/sessions/sessionLinking";
+import { mergeSessionLike } from "../../lib/sessions/sessionNormalization";
 import {
   reconcileSessionsFromLinkedFilesGraph,
   type SessionReconcileSummary,
-} from "../lib/sessions/sessionReconciliation";
-import { dedupeTargetRefs, toTargetRef } from "../lib/targets/targetRefs";
-import type { ObservationSession, SessionEquipment } from "../lib/fits/types";
+} from "../../lib/sessions/sessionReconciliation";
+import { dedupeTargetRefs, toTargetRef } from "../../lib/targets/targetRefs";
+import type { ObservationSession, SessionEquipment } from "../../lib/fits/types";
 
 interface EndLiveSessionWithIntegrationResult {
   session: ObservationSession | null;

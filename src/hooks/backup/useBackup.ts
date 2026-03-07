@@ -5,49 +5,49 @@
 import { useCallback, useEffect, useRef } from "react";
 import * as Network from "expo-network";
 import { Platform } from "react-native";
-import { useBackupStore } from "../stores/useBackupStore";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useAlbumStore } from "../stores/useAlbumStore";
-import { useTargetStore } from "../stores/useTargetStore";
-import { useTargetGroupStore } from "../stores/useTargetGroupStore";
-import { useSessionStore } from "../stores/useSessionStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useFileGroupStore } from "../stores/useFileGroupStore";
-import { useAstrometryStore } from "../stores/useAstrometryStore";
-import { useTrashStore } from "../stores/useTrashStore";
+import { useBackupStore } from "../../stores/app/useBackupStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
+import { useTargetGroupStore } from "../../stores/observation/useTargetGroupStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useFileGroupStore } from "../../stores/files/useFileGroupStore";
+import { useAstrometryStore } from "../../stores/processing/useAstrometryStore";
+import { useTrashStore } from "../../stores/files/useTrashStore";
 import {
   performBackup,
   performRestore,
   getBackupInfo as getBackupInfoService,
   verifyBackupIntegrity,
-} from "../lib/backup/backupService";
-import type { BackupVerifyResult } from "../lib/backup/backupService";
+} from "../../lib/backup/backupService";
+import type { BackupVerifyResult } from "../../lib/backup/backupService";
 import {
   exportLocalBackup,
   importLocalBackup,
   previewLocalBackup,
   type LocalBackupPreview,
-} from "../lib/backup/localBackup";
-import { authenticateOneDrive, authenticateDropbox } from "../lib/backup/oauthHelper";
-import type { ICloudProvider } from "../lib/backup/cloudProvider";
-import { GoogleDriveProvider } from "../lib/backup/providers/googleDrive";
-import { OneDriveProvider } from "../lib/backup/providers/onedrive";
-import { DropboxProvider } from "../lib/backup/providers/dropbox";
-import { WebDAVProvider } from "../lib/backup/providers/webdav";
-import { SFTPProvider } from "../lib/backup/providers/sftp";
+} from "../../lib/backup/localBackup";
+import { authenticateOneDrive, authenticateDropbox } from "../../lib/backup/oauthHelper";
+import type { ICloudProvider } from "../../lib/backup/cloudProvider";
+import { GoogleDriveProvider } from "../../lib/backup/providers/googleDrive";
+import { OneDriveProvider } from "../../lib/backup/providers/onedrive";
+import { DropboxProvider } from "../../lib/backup/providers/dropbox";
+import { WebDAVProvider } from "../../lib/backup/providers/webdav";
+import { SFTPProvider } from "../../lib/backup/providers/sftp";
 import type {
   CloudProvider,
   BackupOptions,
   BackupProgress,
   CloudProviderConfig,
   BackupInfo,
-} from "../lib/backup/types";
-import { DEFAULT_BACKUP_OPTIONS } from "../lib/backup/types";
-import type { BackupDataSource, RestoreTarget } from "../lib/backup/backupService";
-import { reconcileAllStores } from "../lib/targets/targetIntegrity";
-import { computeAlbumFileConsistencyPatches } from "../lib/gallery/albumSync";
-import { createDataSource } from "../lib/backup/dataSourceFactory";
-import { createRestoreTarget } from "../lib/backup/restoreTargetFactory";
+} from "../../lib/backup/types";
+import { DEFAULT_BACKUP_OPTIONS } from "../../lib/backup/types";
+import type { BackupDataSource, RestoreTarget } from "../../lib/backup/backupService";
+import { reconcileAllStores } from "../../lib/targets/targetIntegrity";
+import { computeAlbumFileConsistencyPatches } from "../../lib/gallery/albumSync";
+import { createDataSource } from "../../lib/backup/dataSourceFactory";
+import { createRestoreTarget } from "../../lib/backup/restoreTargetFactory";
 
 const providers: Partial<Record<CloudProvider, ICloudProvider>> = {};
 let hasAttemptedProviderRehydrate = false;

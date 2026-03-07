@@ -4,7 +4,7 @@ import {
   generateVideoThumbnailToCache,
   pruneThumbnailCache,
 } from "./thumbnailCache";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 
 const DEFAULT_PRUNE_THROTTLE_MS = 30_000;
 const MB = 1024 * 1024;

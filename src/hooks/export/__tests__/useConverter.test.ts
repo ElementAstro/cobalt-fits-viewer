@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react-native";
 import { useConverter } from "../useConverter";
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: unknown) => unknown) =>
     selector({
       defaultConverterFormat: "png",
@@ -15,29 +15,29 @@ jest.mock("zustand/react/shallow", () => ({
   useShallow: <T>(fn: (state: unknown) => T) => fn,
 }));
 
-jest.mock("../../stores/useConverterStore", () => ({
+jest.mock("../../../stores/viewer/useConverterStore", () => ({
   useConverterStore: jest.fn(),
 }));
 
-jest.mock("../../lib/converter/formatConverter", () => ({
+jest.mock("../../../lib/converter/formatConverter", () => ({
   fitsToRGBA: jest.fn(() => new Uint8ClampedArray([1, 2, 3, 4])),
   estimateFileSize: jest.fn(() => 1234),
 }));
 
-jest.mock("../../lib/converter/batchProcessor", () => ({
+jest.mock("../../../lib/converter/batchProcessor", () => ({
   createBatchTask: jest.fn(() => ({ id: "task-1" })),
   generateOutputFilename: jest.fn(() => "out.png"),
   executeBatchConvert: jest.fn(() => Promise.resolve()),
 }));
 
-jest.mock("../../lib/converter/convertPresets", () => ({
+jest.mock("../../../lib/converter/convertPresets", () => ({
   getAllPresets: jest.fn(() => ["p1"]),
   getDefaultOptionsForFormat: jest.fn(() => ({ format: "png", quality: 90 })),
   supportsQuality: jest.fn(() => true),
   getSupportedBitDepths: jest.fn(() => [8, 16]),
 }));
 
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     Converter: "Converter",
   },
@@ -49,19 +49,19 @@ jest.mock("../../lib/logger", () => ({
   },
 }));
 
-const { useConverterStore } = jest.requireMock("../../stores/useConverterStore") as {
+const { useConverterStore } = jest.requireMock("../../../stores/viewer/useConverterStore") as {
   useConverterStore: jest.Mock;
 };
-const formatLib = jest.requireMock("../../lib/converter/formatConverter") as {
+const formatLib = jest.requireMock("../../../lib/converter/formatConverter") as {
   fitsToRGBA: jest.Mock;
   estimateFileSize: jest.Mock;
 };
-const batchLib = jest.requireMock("../../lib/converter/batchProcessor") as {
+const batchLib = jest.requireMock("../../../lib/converter/batchProcessor") as {
   createBatchTask: jest.Mock;
   generateOutputFilename: jest.Mock;
   executeBatchConvert: jest.Mock;
 };
-const presetLib = jest.requireMock("../../lib/converter/convertPresets") as {
+const presetLib = jest.requireMock("../../../lib/converter/convertPresets") as {
   getAllPresets: jest.Mock;
   getDefaultOptionsForFormat: jest.Mock;
   supportsQuality: jest.Mock;

@@ -8,15 +8,15 @@ jest.mock("heroui-native", () => ({
   useToast: () => ({ toast: { show: mockToastShow } }),
 }));
 
-jest.mock("../useExport", () => ({
+jest.mock("../../export/useExport", () => ({
   useExport: jest.fn(),
 }));
 
-jest.mock("../useHapticFeedback", () => ({
+jest.mock("../../common/useHapticFeedback", () => ({
   useHapticFeedback: jest.fn(),
 }));
 
-jest.mock("../../i18n/useI18n", () => ({
+jest.mock("../../../i18n/useI18n", () => ({
   useI18n: jest.fn(() => ({
     t: (key: string) => key,
   })),
@@ -30,10 +30,10 @@ jest.mock("expo-haptics", () => ({
   },
 }));
 
-const { useExport } = jest.requireMock("../useExport") as {
+const { useExport } = jest.requireMock("../../export/useExport") as {
   useExport: jest.Mock;
 };
-const { useHapticFeedback } = jest.requireMock("../useHapticFeedback") as {
+const { useHapticFeedback } = jest.requireMock("../../common/useHapticFeedback") as {
   useHapticFeedback: jest.Mock;
 };
 const notifyMock = jest.fn();

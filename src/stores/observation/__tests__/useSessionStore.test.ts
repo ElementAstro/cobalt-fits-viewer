@@ -1,13 +1,13 @@
 import { useSessionStore } from "../useSessionStore";
-import { useFitsStore } from "../useFitsStore";
+import { useFitsStore } from "../../files/useFitsStore";
 import type {
   ObservationSession,
   ObservationLogEntry,
   ObservationPlan,
-} from "../../lib/fits/types";
+} from "../../../lib/fits/types";
 
 // Mock storage
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),

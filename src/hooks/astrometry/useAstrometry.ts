@@ -6,14 +6,14 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import * as Crypto from "expo-crypto";
-import { useAstrometryStore } from "../stores/useAstrometryStore";
-import { useFitsStore } from "../stores/useFitsStore";
-import * as service from "../lib/astrometry/astrometryService";
-import * as clientApi from "../lib/astrometry/astrometryClient";
+import { useAstrometryStore } from "../../stores/processing/useAstrometryStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import * as service from "../../lib/astrometry/astrometryService";
+import * as clientApi from "../../lib/astrometry/astrometryClient";
 import * as Haptics from "expo-haptics";
-import { useHapticFeedback } from "./useHapticFeedback";
-import type { AstrometryJob } from "../lib/astrometry/types";
-import { LOG_TAGS, Logger } from "../lib/logger";
+import { useHapticFeedback } from "../common/useHapticFeedback";
+import type { AstrometryJob } from "../../lib/astrometry/types";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 function generateId(): string {
   return Crypto.randomUUID();

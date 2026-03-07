@@ -22,10 +22,10 @@ import { SessionActionSheet } from "../../components/sessions/SessionActionSheet
 import { PlanActionSheet } from "../../components/sessions/PlanActionSheet";
 import { SessionSelectionBar } from "../../components/sessions/SessionSelectionBar";
 import { SessionDateSummary } from "../../components/sessions/SessionDateSummary";
-import { useCalendar } from "../../hooks/useCalendar";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useSessions } from "../../hooks/useSessions";
-import { usePageLogger } from "../../hooks/useLogger";
+import { useCalendar } from "../../hooks/sessions/useCalendar";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useSessions } from "../../hooks/sessions/useSessions";
+import { usePageLogger } from "../../hooks/common/useLogger";
 import { useI18n } from "../../i18n/useI18n";
 import type { ObservationPlan, ObservationSession } from "../../lib/fits/types";
 import { formatDuration } from "../../lib/sessions/format";
@@ -36,9 +36,9 @@ import {
   type PlanSortBy,
   type PlanStatusFilter,
 } from "../../lib/sessions/planUtils";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSessionStore } from "../../stores/useSessionStore";
-import { useTargetStore } from "../../stores/useTargetStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
 import { resolveTargetName } from "../../lib/targets/targetRefs";
 import { resolveSessionTargetNames } from "../../lib/sessions/sessionLinking";
 

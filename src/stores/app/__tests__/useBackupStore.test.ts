@@ -3,7 +3,7 @@
  */
 
 import { useBackupStore } from "../useBackupStore";
-import type { ProviderConnectionState } from "../../lib/backup/types";
+import type { ProviderConnectionState } from "../../../lib/backup/types";
 
 // Reset store before each test
 beforeEach(() => {

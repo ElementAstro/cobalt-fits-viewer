@@ -1,13 +1,13 @@
 import { useCallback } from "react";
 import * as Haptics from "expo-haptics";
 import { useToast } from "heroui-native";
-import { useI18n } from "../i18n/useI18n";
+import { useI18n } from "../../i18n/useI18n";
 import { useExport } from "../export/useExport";
 import { useHapticFeedback } from "../common/useHapticFeedback";
-import type { ExportFormat } from "../lib/fits/types";
+import type { ExportFormat } from "../../lib/fits/types";
 import type { ExportSourceContext } from "../export/useExport";
-import type { ExportActionOptions } from "../lib/converter/exportActionOptions";
-import { ShareNotAvailableError, MediaPermissionDeniedError } from "../lib/utils/imageExport";
+import type { ExportActionOptions } from "../../lib/converter/exportActionOptions";
+import { ShareNotAvailableError, MediaPermissionDeniedError } from "../../lib/utils/imageExport";
 
 type ViewerExportOptions = ExportActionOptions;
 

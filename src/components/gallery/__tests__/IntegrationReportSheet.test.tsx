@@ -41,11 +41,11 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (s: any) => any) => selector({ files: [] }),
 }));
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (s: any) => any) =>
     selector({
       frameClassificationConfig: { customTypes: [] },
@@ -53,7 +53,7 @@ jest.mock("../../../stores/useSettingsStore", () => ({
     }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     notify: jest.fn(),
   }),

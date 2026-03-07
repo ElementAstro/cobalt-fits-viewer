@@ -6,7 +6,7 @@ import { View, Text } from "react-native";
 import { Button, Chip, Popover, PressableFeedback, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { AlbumSortBy } from "../../stores/useAlbumStore";
+import type { AlbumSortBy } from "../../stores/gallery/useAlbumStore";
 
 interface AlbumSortControlProps {
   sortBy: AlbumSortBy;

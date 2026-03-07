@@ -2,7 +2,7 @@ import { View, ScrollView } from "react-native";
 import { SettingsHeader } from "../../components/settings";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
 import {
   ProcessingEditorSection,
   ProcessingStackingSection,

@@ -13,11 +13,13 @@ import type {
 } from "./types";
 import { LOG_LEVEL_PRIORITY } from "./types";
 
+const IS_TEST_ENV = process.env.NODE_ENV === "test";
+
 const DEFAULT_CONFIG: LoggerConfig = {
   maxEntries: 2000,
   minLevel: __DEV__ ? "debug" : "info",
-  consoleOutput: __DEV__,
-  persistEnabled: true,
+  consoleOutput: __DEV__ && !IS_TEST_ENV,
+  persistEnabled: !IS_TEST_ENV,
   persistKey: "cobalt_logger_entries_v1",
   persistDebounceMs: 500,
 };
@@ -543,5 +545,17 @@ export function createLogger(tag: string) {
     info: (message: string, data?: unknown) => Logger.info(tag, message, data),
     warn: (message: string, data?: unknown) => Logger.warn(tag, message, data),
     error: (message: string, data?: unknown) => Logger.error(tag, message, data),
+  };
+}
+
+export function resetLoggerForTests(): void {
+  clearPersistTimer();
+  entries = [];
+  idCounter = 0;
+  hydrationPromise = null;
+  config = {
+    ...DEFAULT_CONFIG,
+    consoleOutput: false,
+    persistEnabled: false,
   };
 }

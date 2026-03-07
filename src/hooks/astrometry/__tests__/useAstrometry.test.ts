@@ -4,13 +4,13 @@ import { useAstrometry } from "../useAstrometry";
 jest.mock("expo-crypto", () => ({
   randomUUID: jest.fn(),
 }));
-jest.mock("../../stores/useAstrometryStore", () => ({
+jest.mock("../../../stores/processing/useAstrometryStore", () => ({
   useAstrometryStore: Object.assign(jest.fn(), { getState: jest.fn() }),
 }));
-jest.mock("../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: Object.assign(jest.fn(), { getState: jest.fn() }),
 }));
-jest.mock("../../lib/astrometry/astrometryService", () => ({
+jest.mock("../../../lib/astrometry/astrometryService", () => ({
   solveFile: jest.fn(),
   solveUrl: jest.fn(),
   cancelJob: jest.fn(),
@@ -19,19 +19,19 @@ jest.mock("../../lib/astrometry/astrometryService", () => ({
   getServerUrl: jest.fn(() => "https://server"),
   clearSession: jest.fn(),
 }));
-jest.mock("../../lib/astrometry/astrometryClient", () => ({
+jest.mock("../../../lib/astrometry/astrometryClient", () => ({
   getApiKey: jest.fn(),
   testConnection: jest.fn(),
   saveApiKey: jest.fn(),
 }));
-jest.mock("../useHapticFeedback", () => ({
+jest.mock("../../common/useHapticFeedback", () => ({
   useHapticFeedback: jest.fn(),
 }));
 jest.mock("expo-haptics", () => ({
   notificationAsync: jest.fn(),
   NotificationFeedbackType: { Success: "Success" },
 }));
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     useAstrometry: "useAstrometry",
   },
@@ -46,13 +46,15 @@ jest.mock("../../lib/logger", () => ({
 const cryptoLib = jest.requireMock("expo-crypto") as {
   randomUUID: jest.Mock;
 };
-const { useAstrometryStore } = jest.requireMock("../../stores/useAstrometryStore") as {
+const { useAstrometryStore } = jest.requireMock(
+  "../../../stores/processing/useAstrometryStore",
+) as {
   useAstrometryStore: jest.Mock & { getState: jest.Mock };
 };
-const { useFitsStore } = jest.requireMock("../../stores/useFitsStore") as {
+const { useFitsStore } = jest.requireMock("../../../stores/files/useFitsStore") as {
   useFitsStore: jest.Mock & { getState: jest.Mock };
 };
-const serviceLib = jest.requireMock("../../lib/astrometry/astrometryService") as {
+const serviceLib = jest.requireMock("../../../lib/astrometry/astrometryService") as {
   solveFile: jest.Mock;
   solveUrl: jest.Mock;
   cancelJob: jest.Mock;
@@ -61,12 +63,12 @@ const serviceLib = jest.requireMock("../../lib/astrometry/astrometryService") as
   getServerUrl: jest.Mock;
   clearSession: jest.Mock;
 };
-const clientLib = jest.requireMock("../../lib/astrometry/astrometryClient") as {
+const clientLib = jest.requireMock("../../../lib/astrometry/astrometryClient") as {
   getApiKey: jest.Mock;
   testConnection: jest.Mock;
   saveApiKey: jest.Mock;
 };
-const { useHapticFeedback } = jest.requireMock("../useHapticFeedback") as {
+const { useHapticFeedback } = jest.requireMock("../../common/useHapticFeedback") as {
   useHapticFeedback: jest.Mock;
 };
 

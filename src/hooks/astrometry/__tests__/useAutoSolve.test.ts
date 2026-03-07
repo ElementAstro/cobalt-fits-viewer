@@ -5,16 +5,16 @@ jest.mock("../useAstrometry", () => ({
   useAstrometry: jest.fn(),
 }));
 
-jest.mock("../../stores/useAstrometryStore", () => ({
+jest.mock("../../../stores/processing/useAstrometryStore", () => ({
   useAstrometryStore: jest.fn(),
 }));
 
-jest.mock("../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: jest.fn(),
 }));
 
-jest.mock("../../lib/logger", () => {
-  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+jest.mock("../../../lib/logger", () => {
+  const actual = jest.requireActual("../../../lib/logger") as typeof import("../../../lib/logger");
   return {
     ...actual,
     Logger: {
@@ -30,13 +30,15 @@ jest.mock("../../lib/logger", () => {
 const { useAstrometry } = jest.requireMock("../useAstrometry") as {
   useAstrometry: jest.Mock;
 };
-const { useAstrometryStore } = jest.requireMock("../../stores/useAstrometryStore") as {
+const { useAstrometryStore } = jest.requireMock(
+  "../../../stores/processing/useAstrometryStore",
+) as {
   useAstrometryStore: jest.Mock;
 };
-const { useFitsStore } = jest.requireMock("../../stores/useFitsStore") as {
+const { useFitsStore } = jest.requireMock("../../../stores/files/useFitsStore") as {
   useFitsStore: jest.Mock;
 };
-const loggerLib = jest.requireMock("../../lib/logger") as {
+const loggerLib = jest.requireMock("../../../lib/logger") as {
   Logger: { info: jest.Mock };
 };
 

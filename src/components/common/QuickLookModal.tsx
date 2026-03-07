@@ -14,9 +14,9 @@ import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import { isVideoFile, isAudioFile, isMediaWorkspaceFile } from "../../lib/media/routing";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useAlbumStore } from "../../stores/useAlbumStore";
-import { useFileGroupStore } from "../../stores/useFileGroupStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import { useFileGroupStore } from "../../stores/files/useFileGroupStore";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { InfoRow } from "./InfoRow";
 

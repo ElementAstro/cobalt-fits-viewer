@@ -4,12 +4,12 @@ import { Button, Card, Dialog, Popover, Separator, Tabs, useThemeColor } from "h
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useTargets } from "../../hooks/useTargets";
-import { useTargetStatistics } from "../../hooks/useTargetStatistics";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useTargetGroupStore } from "../../stores/useTargetGroupStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useTargets } from "../../hooks/targets/useTargets";
+import { useTargetStatistics } from "../../hooks/targets/useTargetStatistics";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useTargetGroupStore } from "../../stores/observation/useTargetGroupStore";
 import { TargetCard } from "../../components/targets/TargetCard";
 import { ExposureProgress } from "../../components/targets/ExposureProgress";
 import { ObservationTimeline } from "../../components/targets/ObservationTimeline";

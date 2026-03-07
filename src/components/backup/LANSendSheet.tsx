@@ -7,7 +7,7 @@ import { View, Text } from "react-native";
 import { Button, Dialog, Spinner, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import type { LANSendStatus } from "../../hooks/useLANTransfer";
+import type { LANSendStatus } from "../../hooks/backup/useLANTransfer";
 import type { LANServerInfo } from "../../lib/backup/lanTransfer";
 
 interface LANSendSheetProps {

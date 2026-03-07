@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { File as FSFile } from "expo-file-system";
-import { generateFileId } from "../lib/utils/fileManager";
-import { saveThumbnailFromRGBA } from "../lib/gallery/thumbnailWorkflow";
+import { generateFileId } from "../../lib/utils/fileManager";
+import { saveThumbnailFromRGBA } from "../../lib/gallery/thumbnailWorkflow";
 import { useExport } from "../export/useExport";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { registerCompositeLayers } from "../lib/composite/registrationAdapter";
-import { renderComposite } from "../lib/composite/renderer";
-import { loadScientificImageFromPath } from "../lib/image/scientificImageLoader";
-import { parseImageBuffer } from "../lib/import/imageParsePipeline";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { registerCompositeLayers } from "../../lib/composite/registrationAdapter";
+import { renderComposite } from "../../lib/composite/renderer";
+import { loadScientificImageFromPath } from "../../lib/image/scientificImageLoader";
+import { parseImageBuffer } from "../../lib/import/imageParsePipeline";
 import type {
   CompositeLayer,
   PixelMathValidationError,
@@ -16,7 +16,7 @@ import type {
   CompositeProgress,
   CompositeProject,
   CompositeRenderResult,
-} from "../lib/composite/types";
+} from "../../lib/composite/types";
 
 const MAX_LAYERS = 8;
 

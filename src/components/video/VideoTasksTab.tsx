@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 import { Button, Card, Chip, useThemeColor } from "heroui-native";
-import type { VideoTaskRecord } from "../../stores/useVideoTaskStore";
+import type { VideoTaskRecord } from "../../stores/processing/useVideoTaskStore";
 import type { VideoProcessingCapabilities } from "../../lib/video/engine";
 import { translateEngineError, taskStatusColor, translateTaskStatus } from "../../lib/video/format";
 import { AnimatedProgressBar } from "../common/AnimatedProgressBar";

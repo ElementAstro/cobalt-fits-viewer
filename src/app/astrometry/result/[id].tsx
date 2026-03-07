@@ -10,10 +10,10 @@ import * as Haptics from "expo-haptics";
 import * as Clipboard from "expo-clipboard";
 import { useState, useCallback, useMemo } from "react";
 import { useI18n } from "../../../i18n/useI18n";
-import { useResponsiveLayout } from "../../../hooks/useResponsiveLayout";
-import { useHapticFeedback } from "../../../hooks/useHapticFeedback";
-import { useAstrometryStore } from "../../../stores/useAstrometryStore";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useResponsiveLayout } from "../../../hooks/common/useResponsiveLayout";
+import { useHapticFeedback } from "../../../hooks/common/useHapticFeedback";
+import { useAstrometryStore } from "../../../stores/processing/useAstrometryStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 import { AstrometryResultView } from "../../../components/astrometry/AstrometryResultView";
 import {
   shareWCS,
@@ -23,7 +23,7 @@ import {
 } from "../../../lib/astrometry/wcsExport";
 import { formatDuration } from "../../../lib/astrometry/formatUtils";
 import { createTargetFromResult } from "../../../lib/astrometry/syncToTarget";
-import { useTargets } from "../../../hooks/useTargets";
+import { useTargets } from "../../../hooks/targets/useTargets";
 
 export default function AstrometryResultScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();

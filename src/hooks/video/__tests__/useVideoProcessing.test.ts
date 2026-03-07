@@ -7,15 +7,15 @@ jest.mock("expo", () => ({
   isRunningInExpoGo: jest.fn(() => false),
 }));
 
-jest.mock("../../i18n/useI18n", () => ({
+jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { useVideoProcessing } from "../useVideoProcessing";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useVideoTaskStore } from "../../stores/useVideoTaskStore";
-import type { VideoProcessingRequest } from "../../lib/video/engine";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
+import { useVideoTaskStore } from "../../../stores/processing/useVideoTaskStore";
+import type { VideoProcessingRequest } from "../../../lib/video/engine";
 
 const mockEngine = {
   isAvailable: jest.fn(async () => true),
@@ -45,22 +45,22 @@ const mockSettings = {
   },
 };
 
-jest.mock("../../lib/video/engine", () => ({
+jest.mock("../../../lib/video/engine", () => ({
   getVideoProcessingEngine: () => mockEngine,
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof mockSettings) => unknown) => selector(mockSettings),
 }));
 
 let mockIdSeq = 1;
-jest.mock("../../lib/utils/fileManager", () => ({
+jest.mock("../../../lib/utils/fileManager", () => ({
   importFile: (_uri: string, _name: string) => ({ uri: `file:///managed/out_${mockIdSeq}.mp4` }),
   generateFileId: () => `generated_${mockIdSeq++}`,
 }));
 
 const mockGetFreeDiskBytes = jest.fn() as jest.Mock<Promise<number | null>>;
-jest.mock("../../lib/utils/diskSpace", () => ({
+jest.mock("../../../lib/utils/diskSpace", () => ({
   getFreeDiskBytes: () => mockGetFreeDiskBytes(),
 }));
 
@@ -68,15 +68,15 @@ const mockEstimateOutputSizeBytes = jest.fn() as jest.Mock<
   number | null,
   [number | undefined, number | undefined]
 >;
-jest.mock("../../lib/video/format", () => {
-  const actual = jest.requireActual("../../lib/video/format");
+jest.mock("../../../lib/video/format", () => {
+  const actual = jest.requireActual("../../../lib/video/format");
   return {
     ...actual,
     estimateOutputSizeBytes: (d?: number, b?: number) => mockEstimateOutputSizeBytes(d, b),
   };
 });
 
-jest.mock("../../lib/video/metadata", () => ({
+jest.mock("../../../lib/video/metadata", () => ({
   extractVideoMetadata: jest.fn(async () => ({
     durationMs: 4000,
     frameRate: 24,
@@ -89,17 +89,17 @@ jest.mock("../../lib/video/metadata", () => ({
   })),
 }));
 
-jest.mock("../../lib/import/fileFormat", () => ({
+jest.mock("../../../lib/import/fileFormat", () => ({
   detectSupportedMediaFormat: () => ({ id: "mp4", sourceType: "video" }),
   toImageSourceFormat: () => "mp4",
 }));
 
-jest.mock("../../lib/gallery/thumbnailWorkflow", () => ({
+jest.mock("../../../lib/gallery/thumbnailWorkflow", () => ({
   saveThumbnailFromExternalUri: () => "file:///thumb.jpg",
   saveThumbnailFromRGBA: () => "file:///thumb.jpg",
 }));
 
-jest.mock("../../lib/import/imageParsePipeline", () => ({
+jest.mock("../../../lib/import/imageParsePipeline", () => ({
   parseImageBuffer: jest.fn(async () => ({
     detectedFormat: { id: "jpeg", sourceType: "raster" },
     sourceType: "raster",
@@ -154,7 +154,7 @@ jest.mock("expo-file-system", () => ({
   },
 }));
 
-const imageParsePipelineMock = require("../../lib/import/imageParsePipeline") as {
+const imageParsePipelineMock = require("../../../lib/import/imageParsePipeline") as {
   parseImageBuffer: jest.Mock;
 };
 

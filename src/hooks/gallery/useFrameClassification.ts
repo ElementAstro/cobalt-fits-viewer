@@ -1,17 +1,17 @@
 import { useCallback, useMemo, useState } from "react";
 import { Alert } from "react-native";
 import { useShallow } from "zustand/react/shallow";
-import { useI18n } from "../i18n/useI18n";
+import { useI18n } from "../../i18n/useI18n";
 import { useFileManager } from "../files/useFileManager";
-import { useSettingsStore } from "../stores/useSettingsStore";
-import { useFitsStore } from "../stores/useFitsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
 import type {
   FrameClassificationRule,
   FrameClassificationRuleHeaderField,
   FrameClassificationRuleMatchType,
   FrameClassificationRuleTarget,
-} from "../lib/fits/types";
-import { classifyWithDetail, getFrameTypeDefinitions } from "../lib/gallery/frameClassifier";
+} from "../../lib/fits/types";
+import { classifyWithDetail, getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
 
 export function useFrameClassification() {
   const { t } = useI18n();

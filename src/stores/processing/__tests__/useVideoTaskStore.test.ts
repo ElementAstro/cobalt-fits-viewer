@@ -1,5 +1,5 @@
 import { useVideoTaskStore, MAX_TASK_HISTORY, MAX_VIDEO_RETRIES } from "../useVideoTaskStore";
-import type { VideoProcessingRequest } from "../../lib/video/engine";
+import type { VideoProcessingRequest } from "../../../lib/video/engine";
 
 const baseRequest: VideoProcessingRequest = {
   sourceId: "src_1",

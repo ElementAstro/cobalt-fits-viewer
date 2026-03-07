@@ -10,14 +10,14 @@ import {
   fitsToRGBAChunked,
   downsamplePixels,
   getExtent,
-} from "../lib/converter/formatConverter";
+} from "../../lib/converter/formatConverter";
 import {
   calculateStats,
   calculateHistogram,
   calculateRegionStats,
   calculateRegionHistogram,
   calculateChannelHistograms,
-} from "../lib/utils/pixelMath";
+} from "../../lib/utils/pixelMath";
 import type {
   ColormapType,
   ProcessingAlgorithmProfile,
@@ -25,9 +25,9 @@ import type {
   StretchType,
   ViewerCurvePreset,
   ChannelHistogramData,
-} from "../lib/fits/types";
-import { executeProcessingPipeline } from "../lib/processing/executor";
-import { normalizeProcessingPipelineSnapshot } from "../lib/processing/recipe";
+} from "../../lib/fits/types";
+import { executeProcessingPipeline } from "../../lib/processing/executor";
+import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
 
 const PREVIEW_MAX_DIM = 512;
 const LARGE_IMAGE_THRESHOLD = 2_000_000;

@@ -1,8 +1,8 @@
 import { Alert } from "react-native";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 import { FileGroupSheet } from "../FileGroupSheet";
-import { useFileGroupStore } from "../../../stores/useFileGroupStore";
-import { useFitsStore } from "../../../stores/useFitsStore";
+import { useFileGroupStore } from "../../../stores/files/useFileGroupStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
 
 jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({

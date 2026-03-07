@@ -1,8 +1,8 @@
-import { Logger, collectSystemInfo } from "../../lib/logger";
+import { Logger, collectSystemInfo } from "../../../lib/logger";
 import { useLogStore } from "../useLogStore";
 
-jest.mock("../../lib/logger", () => {
-  const actual = jest.requireActual("../../lib/logger");
+jest.mock("../../../lib/logger", () => {
+  const actual = jest.requireActual("../../../lib/logger");
   return {
     ...actual,
     collectSystemInfo: jest.fn(),

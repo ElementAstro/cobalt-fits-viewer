@@ -3,34 +3,34 @@
  */
 
 import { useCallback, useMemo } from "react";
-import { useTargetStore } from "../stores/useTargetStore";
-import { useTargetGroupStore } from "../stores/useTargetGroupStore";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useSessionStore } from "../stores/useSessionStore";
-import { calculateTargetExposure, createTarget } from "../lib/targets/targetManager";
-import { findKnownAliases } from "../lib/targets/targetMatcher";
+import { useTargetStore } from "../../stores/observation/useTargetStore";
+import { useTargetGroupStore } from "../../stores/observation/useTargetGroupStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useSessionStore } from "../../stores/observation/useSessionStore";
+import { calculateTargetExposure, createTarget } from "../../lib/targets/targetManager";
+import { findKnownAliases } from "../../lib/targets/targetMatcher";
 import {
   calculateExposureStats,
   calculateCompletionRate,
   formatExposureTime,
-} from "../lib/targets/exposureStats";
-import { computeMergeRelinkPatch, normalizeTargetMatch } from "../lib/targets/targetRelations";
+} from "../../lib/targets/exposureStats";
+import { computeMergeRelinkPatch, normalizeTargetMatch } from "../../lib/targets/targetRelations";
 import {
   applyIntegrityPatch,
   reconcileAll,
   reconcileAllStores,
   type TargetIntegrityInput,
   type TargetIntegrityPatch,
-} from "../lib/targets/targetIntegrity";
-import { buildTargetIndexes } from "../lib/targets/targetIndexes";
-import { dedupeTargetRefs, normalizeSessionTargetRefs } from "../lib/targets/targetRefs";
+} from "../../lib/targets/targetIntegrity";
+import { buildTargetIndexes } from "../../lib/targets/targetIndexes";
+import { dedupeTargetRefs, normalizeSessionTargetRefs } from "../../lib/targets/targetRefs";
 import type {
   FitsMetadata,
   RecommendedEquipment,
   Target,
   TargetStatus,
   TargetType,
-} from "../lib/fits/types";
+} from "../../lib/fits/types";
 
 export type TargetLinkSource = "import" | "scan" | "astrometry" | "manual" | "backup" | "unknown";
 

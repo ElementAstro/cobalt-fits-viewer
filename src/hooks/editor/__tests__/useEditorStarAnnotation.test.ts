@@ -1,6 +1,6 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { useEditorStarAnnotation } from "../useEditorStarAnnotation";
-import type { StarAnnotationBundleV2, StarAnnotationPoint } from "../../lib/fits/types";
+import type { StarAnnotationBundleV2, StarAnnotationPoint } from "../../../lib/fits/types";
 import type { EditorOperationEvent } from "../useImageEditor";
 
 const mockDetectionSettings = {
@@ -26,11 +26,11 @@ const mockDetectionSettings = {
   stackingDetectSnrMin: 5,
 };
 
-jest.mock("../../i18n/useI18n", () => ({
+jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof mockDetectionSettings) => unknown) =>
     selector(mockDetectionSettings),
 }));

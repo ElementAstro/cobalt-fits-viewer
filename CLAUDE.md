@@ -69,7 +69,7 @@ graph TD
     end
 
     subgraph Core["Core Modules"]
-        A --> D["hooks/ (29 hooks)"]
+        A --> D["hooks/ (61 hooks, 12 subdirs)"]
         A --> E["stores/ (10 stores)"]
         A --> F["lib/ (Business Logic)"]
         A --> G["i18n/ (Translations)"]
@@ -100,27 +100,27 @@ graph TD
 
 ## Module Index
 
-| Path                                         | Type      | Description                                                    | Entry/Key Files                               |
-| -------------------------------------------- | --------- | -------------------------------------------------------------- | --------------------------------------------- |
-| [src/app](./src/app/CLAUDE.md)               | Routing   | File-based routing, 5 tabs + detail screens                    | `_layout.tsx`, `(tabs)/_layout.tsx`           |
-| [src/components](./src/components/CLAUDE.md) | UI        | Reusable components (common, fits, gallery, targets, sessions) | 13 subdirectories, 100+ components            |
-| [src/hooks](./src/hooks/)                    | Hooks     | 50 custom hooks (FITS, gallery, stacking, location, etc)       | `useFitsFile.ts`, `useGallery.ts`             |
-| [src/stores](./src/stores/)                  | State     | 18 Zustand stores with MMKV persistence                        | `useFitsStore.ts`, `useTargetStore.ts`        |
-| [src/lib/fits](./src/lib/fits/)              | Logic     | FITS file parsing, metadata extraction, header manipulation    | `parser.ts`, `types.ts`, `writer.ts`          |
-| [src/lib/stacking](./src/lib/stacking/)      | Logic     | Image stacking (alignment, calibration, star detection)        | `alignment.ts`, `calibration.ts`              |
-| [src/lib/gallery](./src/lib/gallery/)        | Logic     | Gallery logic (albums, thumbnails, duplicates, classification) | `albumManager.ts`, `frameClassifier.ts`       |
-| [src/lib/targets](./src/lib/targets/)        | Logic     | Target management (coordinates, exposure stats, matching)      | `targetManager.ts`, `targetMatcher.ts`        |
-| [src/lib/sessions](./src/lib/sessions/)      | Logic     | Session management (detection, observation logs, stats)        | `sessionDetector.ts`, `observationLog.ts`     |
-| [src/lib/converter](./src/lib/converter/)    | Logic     | Format conversion (PNG, JPEG, TIFF, WebP, BMP)                 | `formatConverter.ts`, `batchProcessor.ts`     |
-| [src/lib/backup](./src/lib/backup/)          | Logic     | Cloud backup (Google Drive, OneDrive, Dropbox, WebDAV)         | `backupService.ts`, `cloudProvider.ts`        |
-| [src/lib/astrometry](./src/lib/astrometry/)  | Logic     | Astrometry.net integration (plate solving, WCS export)         | `astrometryService.ts`, `astrometryClient.ts` |
-| [src/lib/calendar](./src/lib/calendar/)      | Logic     | Calendar integration for observation planning                  | `calendarService.ts`                          |
-| [src/lib/logger](./src/lib/logger/)          | Logic     | Logging system with export capabilities                        | `logger.ts`, `systemInfo.ts`                  |
-| [src/lib/map](./src/lib/map/)                | Logic     | Map overlays, styles, and clustering                           | `overlays.ts`, `clustering.ts`                |
-| [src/lib/theme](./src/lib/theme/)            | Logic     | Theme configuration and font presets                           | `fonts.ts`, `presets.ts`                      |
-| [src/lib/utils](./src/lib/utils/)            | Logic     | Utility functions (file manager, pixel math, image export)     | `fileManager.ts`, `pixelMath.ts`              |
-| [src/i18n](./src/i18n/CLAUDE.md)             | i18n      | Internationalization with i18n-js, supports en/zh locales      | `index.ts`, `useI18n.ts`                      |
-| [src/utils](./src/utils/)                    | Utilities | Utility functions including className helper                   | `cn.ts`                                       |
+| Path                                         | Type      | Description                                                                                                                            | Entry/Key Files                                    |
+| -------------------------------------------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| [src/app](./src/app/CLAUDE.md)               | Routing   | File-based routing, 5 tabs + detail screens                                                                                            | `_layout.tsx`, `(tabs)/_layout.tsx`                |
+| [src/components](./src/components/CLAUDE.md) | UI        | Reusable components (common, fits, gallery, targets, sessions)                                                                         | 13 subdirectories, 100+ components                 |
+| [src/hooks](./src/hooks/)                    | Hooks     | 61 custom hooks in 12 subdirs (viewer, editor, stacking, gallery, files, export, targets, sessions, backup, astrometry, video, common) | `viewer/useFitsFile.ts`, `files/useFileManager.ts` |
+| [src/stores](./src/stores/)                  | State     | 18 Zustand stores with MMKV persistence                                                                                                | `useFitsStore.ts`, `useTargetStore.ts`             |
+| [src/lib/fits](./src/lib/fits/)              | Logic     | FITS file parsing, metadata extraction, header manipulation                                                                            | `parser.ts`, `types.ts`, `writer.ts`               |
+| [src/lib/stacking](./src/lib/stacking/)      | Logic     | Image stacking (alignment, calibration, star detection)                                                                                | `alignment.ts`, `calibration.ts`                   |
+| [src/lib/gallery](./src/lib/gallery/)        | Logic     | Gallery logic (albums, thumbnails, duplicates, classification)                                                                         | `albumManager.ts`, `frameClassifier.ts`            |
+| [src/lib/targets](./src/lib/targets/)        | Logic     | Target management (coordinates, exposure stats, matching)                                                                              | `targetManager.ts`, `targetMatcher.ts`             |
+| [src/lib/sessions](./src/lib/sessions/)      | Logic     | Session management (detection, observation logs, stats)                                                                                | `sessionDetector.ts`, `observationLog.ts`          |
+| [src/lib/converter](./src/lib/converter/)    | Logic     | Format conversion (PNG, JPEG, TIFF, WebP, BMP)                                                                                         | `formatConverter.ts`, `batchProcessor.ts`          |
+| [src/lib/backup](./src/lib/backup/)          | Logic     | Cloud backup (Google Drive, OneDrive, Dropbox, WebDAV)                                                                                 | `backupService.ts`, `cloudProvider.ts`             |
+| [src/lib/astrometry](./src/lib/astrometry/)  | Logic     | Astrometry.net integration (plate solving, WCS export)                                                                                 | `astrometryService.ts`, `astrometryClient.ts`      |
+| [src/lib/calendar](./src/lib/calendar/)      | Logic     | Calendar integration for observation planning                                                                                          | `calendarService.ts`                               |
+| [src/lib/logger](./src/lib/logger/)          | Logic     | Logging system with export capabilities                                                                                                | `logger.ts`, `systemInfo.ts`                       |
+| [src/lib/map](./src/lib/map/)                | Logic     | Map overlays, styles, and clustering                                                                                                   | `overlays.ts`, `clustering.ts`                     |
+| [src/lib/theme](./src/lib/theme/)            | Logic     | Theme configuration and font presets                                                                                                   | `fonts.ts`, `presets.ts`                           |
+| [src/lib/utils](./src/lib/utils/)            | Logic     | Utility functions (file manager, pixel math, image export)                                                                             | `fileManager.ts`, `pixelMath.ts`                   |
+| [src/i18n](./src/i18n/CLAUDE.md)             | i18n      | Internationalization with i18n-js, supports en/zh locales                                                                              | `index.ts`, `useI18n.ts`                           |
+| [src/utils](./src/utils/)                    | Utilities | Utility functions including className helper                                                                                           | `cn.ts`                                            |
 
 ## Run & Develop
 
@@ -206,7 +206,19 @@ src/
 |   |-- video/            # Video player components
 |   |-- map/              # Map component
 |   `-- settings/         # Settings components
-|-- hooks/                # 50 custom React hooks
+|-- hooks/                # 61 custom React hooks (12 subdirectories)
+|   |-- viewer/           # FITS viewing (9 hooks)
+|   |-- editor/           # Image editing (5 hooks)
+|   |-- stacking/         # Stacking & compose (3 hooks)
+|   |-- gallery/          # Gallery & thumbnails (6 hooks)
+|   |-- files/            # File management (5 hooks)
+|   |-- export/           # Export & conversion (3 hooks)
+|   |-- targets/          # Target management (3 hooks)
+|   |-- sessions/         # Sessions, calendar, location (5 hooks)
+|   |-- backup/           # Backup & transfer (5 hooks)
+|   |-- astrometry/       # Plate solving (2 hooks)
+|   |-- video/            # Video processing (4 hooks)
+|   `-- common/           # Shared UI utilities (11 hooks)
 |-- stores/               # 18 Zustand state stores
 |-- lib/                  # Core business logic (13 modules)
 |   |-- fits/             # FITS parsing (4 files)

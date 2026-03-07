@@ -1,7 +1,7 @@
 import { View, Text } from "react-native";
 import { Card, PressableFeedback, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 
 export interface SettingsCategoryCardProps {
   icon: keyof typeof Ionicons.glyphMap;

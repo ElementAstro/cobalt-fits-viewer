@@ -3,8 +3,8 @@ import { ScrollView, View, Text } from "react-native";
 import { BottomSheet, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
-import { useFitsStore } from "../../stores/useFitsStore";
-import { useFileGroupStore } from "../../stores/useFileGroupStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useFileGroupStore } from "../../stores/files/useFileGroupStore";
 import { analyzeStorage, getDiskUsage } from "../../lib/gallery/storageAnalytics";
 import { formatFileSize } from "../../lib/utils/fileManager";
 

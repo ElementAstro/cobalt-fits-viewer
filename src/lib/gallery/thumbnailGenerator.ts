@@ -9,7 +9,7 @@ import {
   saveThumbnailFromVideo,
   type ThumbnailPolicyOverrides,
 } from "./thumbnailWorkflow";
-import { useSettingsStore } from "../../stores/useSettingsStore";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import { fitsToRGBA } from "../converter/formatConverter";
 import type { FitsMetadata } from "../fits/types";
 import { parseImageBuffer } from "../import/imageParsePipeline";

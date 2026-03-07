@@ -7,8 +7,9 @@ import {
   suggestMergeStrategy,
 } from "../duplicateDetector";
 
+const DEFAULT_TIMESTAMP = 1_700_000_000_000;
+
 const makeTarget = (overrides: Partial<Target> = {}): Target => {
-  const now = Date.now();
   return {
     id: "t1",
     name: "M42",
@@ -23,8 +24,8 @@ const makeTarget = (overrides: Partial<Target> = {}): Target => {
     plannedExposure: {},
     imageRatings: {},
     changeLog: [],
-    createdAt: now,
-    updatedAt: now,
+    createdAt: DEFAULT_TIMESTAMP,
+    updatedAt: DEFAULT_TIMESTAMP,
     ...overrides,
   };
 };

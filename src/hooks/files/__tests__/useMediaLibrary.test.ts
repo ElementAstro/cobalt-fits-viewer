@@ -8,8 +8,8 @@ jest.mock("expo-media-library", () => ({
   getAlbumsAsync: jest.fn(),
 }));
 
-jest.mock("../../lib/logger", () => {
-  const actual = jest.requireActual("../../lib/logger") as typeof import("../../lib/logger");
+jest.mock("../../../lib/logger", () => {
+  const actual = jest.requireActual("../../../lib/logger") as typeof import("../../../lib/logger");
   return {
     ...actual,
     Logger: {

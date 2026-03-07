@@ -24,28 +24,28 @@ const mockSettingsState = {
   advancedComposePixelMathB: "b",
 };
 
-jest.mock("../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (state: typeof mockFitsStoreState) => unknown) =>
     selector(mockFitsStoreState),
 }));
 
-jest.mock("../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: typeof mockSettingsState) => unknown) =>
     selector(mockSettingsState),
 }));
 
-jest.mock("../useExport", () => ({
+jest.mock("../../export/useExport", () => ({
   useExport: () => ({
     exportImage: jest.fn(async () => "file:///tmp/composite.fits"),
     shareImage: jest.fn(async () => undefined),
   }),
 }));
 
-jest.mock("../../lib/image/scientificImageLoader", () => ({
+jest.mock("../../../lib/image/scientificImageLoader", () => ({
   loadScientificImageFromPath: (...args: any[]) => mockLoadScientificImageFromPath(...args),
 }));
 
-jest.mock("../../lib/composite/registrationAdapter", () => ({
+jest.mock("../../../lib/composite/registrationAdapter", () => ({
   registerCompositeLayers: jest.fn(async () => ({
     width: 2,
     height: 2,
@@ -53,15 +53,15 @@ jest.mock("../../lib/composite/registrationAdapter", () => ({
   })),
 }));
 
-jest.mock("../../lib/composite/renderer", () => ({
+jest.mock("../../../lib/composite/renderer", () => ({
   renderComposite: (...args: any[]) => mockRenderComposite(...args),
 }));
 
-jest.mock("../../lib/gallery/thumbnailWorkflow", () => ({
+jest.mock("../../../lib/gallery/thumbnailWorkflow", () => ({
   saveThumbnailFromRGBA: jest.fn(() => "file:///thumb.png"),
 }));
 
-jest.mock("../../lib/import/imageParsePipeline", () => ({
+jest.mock("../../../lib/import/imageParsePipeline", () => ({
   parseImageBuffer: jest.fn(),
 }));
 

@@ -4,7 +4,7 @@
  */
 
 import { useFonts } from "expo-font";
-import { FONT_LOAD_MAP } from "../lib/theme/fonts";
+import { FONT_LOAD_MAP } from "../../lib/theme/fonts";
 
 export function useFontLoader() {
   const [fontsLoaded, fontError] = useFonts(FONT_LOAD_MAP);

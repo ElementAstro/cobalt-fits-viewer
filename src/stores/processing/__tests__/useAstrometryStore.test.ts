@@ -1,9 +1,9 @@
 import { useAstrometryStore } from "../useAstrometryStore";
-import type { AstrometryJob } from "../../lib/astrometry/types";
-import { DEFAULT_ASTROMETRY_CONFIG } from "../../lib/astrometry/types";
+import type { AstrometryJob } from "../../../lib/astrometry/types";
+import { DEFAULT_ASTROMETRY_CONFIG } from "../../../lib/astrometry/types";
 
 // Mock storage
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),

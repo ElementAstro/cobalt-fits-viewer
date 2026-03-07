@@ -107,26 +107,26 @@ jest.mock("../../../i18n/useI18n", () => ({
   useI18n: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock("../../../hooks/useImageComparison", () => ({
+jest.mock("../../../hooks/viewer/useImageComparison", () => ({
   useImageComparison: (args: unknown) => mockUseImageComparison(args),
 }));
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (
     selector: (state: { files: typeof mockFiles; updateFile: typeof mockUpdateFile }) => unknown,
   ) => selector({ files: mockFiles, updateFile: mockUpdateFile }),
 }));
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector(mockSettingsState),
 }));
 
-jest.mock("../../../hooks/useFitsFile", () => ({
+jest.mock("../../../hooks/viewer/useFitsFile", () => ({
   useFitsFile: () => mockUseFitsFile(),
 }));
 
-jest.mock("../../../hooks/useImageProcessing", () => ({
+jest.mock("../../../hooks/viewer/useImageProcessing", () => ({
   useImageProcessing: () => mockUseImageProcessing(),
 }));
 
@@ -140,7 +140,7 @@ jest.mock("../../../lib/import/imageParsePipeline", () => ({
     file?.decodeStatus !== "failed",
 }));
 
-jest.mock("../../../hooks/useScreenOrientation", () => ({
+jest.mock("../../../hooks/common/useScreenOrientation", () => ({
   useScreenOrientation: () => ({
     isLandscape: false,
     isPortrait: true,

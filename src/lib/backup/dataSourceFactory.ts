@@ -4,17 +4,17 @@
  */
 
 import type { BackupDataSource } from "./backupService";
-import type { useFitsStore } from "../../stores/useFitsStore";
-import type { useAlbumStore } from "../../stores/useAlbumStore";
-import type { useTargetStore } from "../../stores/useTargetStore";
-import type { useTargetGroupStore } from "../../stores/useTargetGroupStore";
-import type { useSessionStore } from "../../stores/useSessionStore";
-import type { useSettingsStore } from "../../stores/useSettingsStore";
-import type { useFileGroupStore } from "../../stores/useFileGroupStore";
-import type { useAstrometryStore } from "../../stores/useAstrometryStore";
-import type { useTrashStore } from "../../stores/useTrashStore";
-import type { useBackupStore } from "../../stores/useBackupStore";
-import { getSettingsBackupData } from "../../stores/useSettingsStore";
+import type { useFitsStore } from "../../stores/files/useFitsStore";
+import type { useAlbumStore } from "../../stores/gallery/useAlbumStore";
+import type { useTargetStore } from "../../stores/observation/useTargetStore";
+import type { useTargetGroupStore } from "../../stores/observation/useTargetGroupStore";
+import type { useSessionStore } from "../../stores/observation/useSessionStore";
+import type { useSettingsStore } from "../../stores/app/useSettingsStore";
+import type { useFileGroupStore } from "../../stores/files/useFileGroupStore";
+import type { useAstrometryStore } from "../../stores/processing/useAstrometryStore";
+import type { useTrashStore } from "../../stores/files/useTrashStore";
+import type { useBackupStore } from "../../stores/app/useBackupStore";
+import { getSettingsBackupData } from "../../stores/app/useSettingsStore";
 
 interface DataSourceStores {
   fitsStore: typeof useFitsStore;

@@ -1,6 +1,6 @@
 import { useFavoriteSitesStore } from "../useFavoriteSitesStore";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),

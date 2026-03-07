@@ -93,6 +93,153 @@ jest.mock("expo-linear-gradient", () => {
   };
 });
 
+if (process.env.DEBUG_ACTIVE_HANDLES === "1" && !global.__codexHandleDebugRegistered) {
+  global.__codexHandleDebugRegistered = true;
+  const logHandles = (label) => {
+    const getActiveHandles = process._getActiveHandles;
+    if (typeof getActiveHandles !== "function") return;
+    const handles = getActiveHandles.call(process).map((handle) => ({
+      type: handle?.constructor?.name ?? typeof handle,
+      hasRef: typeof handle?.hasRef === "function" ? handle.hasRef() : undefined,
+    }));
+    console.log(`[process-${label}] pid=${process.pid}`, handles);
+  };
+
+  process.on("beforeExit", () => logHandles("beforeExit"));
+  process.on("exit", () => logHandles("exit"));
+}
+
+// Mock @shopify/flash-list to avoid internal async timers leaking across Jest workers
+jest.mock("@shopify/flash-list", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  const renderSlot = (slot) => {
+    if (!slot) return null;
+    if (React.isValidElement(slot)) return slot;
+    if (typeof slot === "function") return React.createElement(slot);
+    return null;
+  };
+
+  const FlashList = React.forwardRef((props, ref) => {
+    const {
+      data = [],
+      renderItem,
+      keyExtractor,
+      ListHeaderComponent,
+      ListEmptyComponent,
+      ListFooterComponent,
+      testID,
+    } = props;
+
+    React.useImperativeHandle(ref, () => ({
+      scrollToOffset: jest.fn(),
+      scrollToEnd: jest.fn(),
+      scrollToIndex: jest.fn(),
+      recordInteraction: jest.fn(),
+      getScrollableNode: jest.fn(),
+    }));
+
+    const items =
+      data.length > 0 && typeof renderItem === "function"
+        ? data.map((item, index) =>
+            React.createElement(
+              View,
+              {
+                key: keyExtractor ? keyExtractor(item, index) : (item?.id ?? String(index)),
+                testID: "flash-list-item",
+              },
+              renderItem({ item, index }),
+            ),
+          )
+        : renderSlot(ListEmptyComponent);
+
+    return React.createElement(
+      View,
+      { testID: testID ?? "flash-list" },
+      renderSlot(ListHeaderComponent),
+      items,
+      renderSlot(ListFooterComponent),
+    );
+  });
+
+  FlashList.displayName = "FlashList";
+
+  return {
+    FlashList,
+    FlashListRef: {},
+  };
+});
+
+jest.mock("react-native/Libraries/Lists/FlatList", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  const renderSlot = (slot) => {
+    if (!slot) return null;
+    if (React.isValidElement(slot)) return slot;
+    if (typeof slot === "function") return React.createElement(slot);
+    return null;
+  };
+
+  const FlatList = React.forwardRef((props, ref) => {
+    const {
+      data = [],
+      renderItem,
+      ListItemComponent,
+      keyExtractor,
+      ListHeaderComponent,
+      ListEmptyComponent,
+      ListFooterComponent,
+      testID,
+    } = props;
+
+    React.useImperativeHandle(ref, () => ({
+      scrollToOffset: jest.fn(),
+      scrollToEnd: jest.fn(),
+      scrollToIndex: jest.fn(),
+      recordInteraction: jest.fn(),
+      getScrollableNode: jest.fn(),
+    }));
+
+    const items =
+      data.length > 0
+        ? data.map((item, index) => {
+            const content =
+              typeof ListItemComponent === "function"
+                ? React.createElement(ListItemComponent, { item, index })
+                : typeof renderItem === "function"
+                  ? renderItem({ item, index, separators: {} })
+                  : null;
+
+            return React.createElement(
+              View,
+              {
+                key: keyExtractor ? keyExtractor(item, index) : (item?.id ?? String(index)),
+                testID: "flat-list-item",
+              },
+              content,
+            );
+          })
+        : renderSlot(ListEmptyComponent);
+
+    return React.createElement(
+      View,
+      { testID: testID ?? "flat-list" },
+      renderSlot(ListHeaderComponent),
+      items,
+      renderSlot(ListFooterComponent),
+    );
+  });
+
+  FlatList.displayName = "FlatList";
+
+  return {
+    __esModule: true,
+    default: FlatList,
+  };
+});
+
 // Mock expo-video
 jest.mock("expo-video", () => {
   const React = require("react");

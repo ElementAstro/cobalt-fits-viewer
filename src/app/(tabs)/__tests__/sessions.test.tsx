@@ -48,7 +48,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useResponsiveLayout", () => ({
+jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
     isLandscape: false,
     isLandscapeTablet: false,
@@ -57,7 +57,7 @@ jest.mock("../../../hooks/useResponsiveLayout", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useSessions", () => ({
+jest.mock("../../../hooks/sessions/useSessions", () => ({
   useSessions: () => ({
     sessions: [
       {
@@ -97,7 +97,7 @@ jest.mock("../../../hooks/useSessions", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useCalendar", () => ({
+jest.mock("../../../hooks/sessions/useCalendar", () => ({
   useCalendar: () => ({
     calendarSyncEnabled: true,
     syncSession: jest.fn(),
@@ -126,14 +126,14 @@ jest.mock("../../../hooks/useCalendar", () => ({
   }),
 }));
 
-jest.mock("../../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (state: { files: unknown[] }) => unknown) =>
     selector({
       files: [],
     }),
 }));
 
-jest.mock("../../../stores/useSessionStore", () => ({
+jest.mock("../../../stores/observation/useSessionStore", () => ({
   useSessionStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       getPlannedDates: () => [],
@@ -143,7 +143,7 @@ jest.mock("../../../stores/useSessionStore", () => ({
     }),
 }));
 
-jest.mock("../../../stores/useTargetStore", () => ({
+jest.mock("../../../stores/observation/useTargetStore", () => ({
   useTargetStore: (selector: (state: { targets: unknown[] }) => unknown) =>
     selector({
       targets: [],

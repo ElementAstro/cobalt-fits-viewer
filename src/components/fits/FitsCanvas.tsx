@@ -23,7 +23,7 @@ import {
   vec,
   rect,
 } from "@shopify/react-native-skia";
-import { useSkImage } from "../../hooks/useSkImage";
+import { useSkImage } from "../../hooks/viewer/useSkImage";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   useSharedValue,

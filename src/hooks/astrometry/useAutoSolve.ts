@@ -4,10 +4,10 @@
  */
 
 import { useEffect, useRef } from "react";
-import { useFitsStore } from "../stores/useFitsStore";
-import { useAstrometryStore } from "../stores/useAstrometryStore";
+import { useFitsStore } from "../../stores/files/useFitsStore";
+import { useAstrometryStore } from "../../stores/processing/useAstrometryStore";
 import { useAstrometry } from "./useAstrometry";
-import { LOG_TAGS, Logger } from "../lib/logger";
+import { LOG_TAGS, Logger } from "../../lib/logger";
 
 const TAG = LOG_TAGS.useAutoSolve;
 

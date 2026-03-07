@@ -22,7 +22,7 @@ jest.mock("../../../i18n/useI18n", () => ({
   }),
 }));
 
-jest.mock("../../../hooks/useHapticFeedback", () => ({
+jest.mock("../../../hooks/common/useHapticFeedback", () => ({
   useHapticFeedback: () => ({
     selection: jest.fn(),
     impact: jest.fn(),
@@ -43,7 +43,7 @@ jest.mock("expo-haptics", () => ({
   },
 }));
 
-jest.mock("../../../stores/useSettingsStore", () => ({
+jest.mock("../../../stores/app/useSettingsStore", () => ({
   useSettingsStore: (selector: (s: any) => any) => selector({ autoCheckUpdates: false }),
 }));
 
@@ -54,7 +54,7 @@ const mockUseAppUpdate = {
   applyUpdate: jest.fn(),
 };
 
-jest.mock("../../../hooks/useAppUpdate", () => ({
+jest.mock("../../../hooks/common/useAppUpdate", () => ({
   useAppUpdate: () => mockUseAppUpdate,
 }));
 

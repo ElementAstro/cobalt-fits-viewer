@@ -1,10 +1,10 @@
 import { act, renderHook, waitFor } from "@testing-library/react-native";
 import { useAlbums } from "../useAlbums";
-import { useAlbumStore } from "../../stores/useAlbumStore";
-import { useFitsStore } from "../../stores/useFitsStore";
-import type { Album, FitsMetadata } from "../../lib/fits/types";
+import { useAlbumStore } from "../../../stores/gallery/useAlbumStore";
+import { useFitsStore } from "../../../stores/files/useFitsStore";
+import type { Album, FitsMetadata } from "../../../lib/fits/types";
 
-jest.mock("../../lib/storage", () => ({
+jest.mock("../../../lib/storage", () => ({
   zustandAsyncStorage: {
     getItem: jest.fn().mockResolvedValue(null),
     setItem: jest.fn().mockResolvedValue(undefined),

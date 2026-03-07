@@ -6,17 +6,17 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
-import { useResponsiveLayout } from "../../hooks/useResponsiveLayout";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
-import { useSettingsStore } from "../../stores/useSettingsStore";
-import { useOnboardingStore } from "../../stores/useOnboardingStore";
+import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
+import { useSettingsStore } from "../../stores/app/useSettingsStore";
+import { useOnboardingStore } from "../../stores/app/useOnboardingStore";
 import { SettingsSection } from "../../components/settings";
 import { SettingsRow } from "../../components/common/SettingsRow";
 import { OptionPickerModal } from "../../components/common/OptionPickerModal";
 import { UpdateChecker } from "../../components/common/UpdateChecker";
 import { SystemInfoCard } from "../../components/common/SystemInfoCard";
 import { LogViewer } from "../../components/common/LogViewer";
-import { useSettingsPicker } from "../../hooks/useSettingsPicker";
+import { useSettingsPicker } from "../../hooks/common/useSettingsPicker";
 import type { LogLevel } from "../../lib/logger";
 
 export default function AboutSettingsScreen() {

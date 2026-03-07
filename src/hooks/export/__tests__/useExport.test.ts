@@ -40,17 +40,17 @@ jest.mock("expo-print", () => ({
   },
 }));
 
-jest.mock("../../lib/utils/imageExport", () => ({
+jest.mock("../../../lib/utils/imageExport", () => ({
   shareFile: (...args: any[]) => (mockShareFile as any)(...args),
   saveToMediaLibrary: (...args: any[]) => (mockSaveToMediaLibrary as any)(...args),
   getExportDir: () => mockGetExportDir(),
 }));
 
-jest.mock("../../lib/converter/exportCore", () => ({
+jest.mock("../../../lib/converter/exportCore", () => ({
   encodeExportRequest: (...args: any[]) => (mockEncodeExportRequest as any)(...args),
 }));
 
-jest.mock("../../lib/import/fileFormat", () => ({
+jest.mock("../../../lib/import/fileFormat", () => ({
   splitFilenameExtension: (filename: string) => {
     const fitGz = filename.toLowerCase().endsWith(".fits.gz");
     if (fitGz) {
@@ -70,7 +70,7 @@ jest.mock("expo-clipboard", () => ({
   setImageAsync: (...args: any[]) => (mockSetImageAsync as any)(...args),
 }));
 
-jest.mock("../../lib/logger", () => ({
+jest.mock("../../../lib/logger", () => ({
   LOG_TAGS: {
     Export: "export",
   },

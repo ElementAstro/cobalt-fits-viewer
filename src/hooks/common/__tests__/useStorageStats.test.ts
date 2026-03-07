@@ -16,50 +16,50 @@ const mockClearRuntimeCaches = jest.fn();
 let mockFiles = [{ id: "f1", fileSize: 100 }];
 let mockTrashItems = [{ file: { fileSize: 20 } }];
 
-jest.mock("../../lib/utils/fileManager", () => ({
+jest.mock("../../../lib/utils/fileManager", () => ({
   getStorageStats: () => mockGetStorageStats(),
 }));
 
-jest.mock("../../lib/utils/diskSpace", () => ({
+jest.mock("../../../lib/utils/diskSpace", () => ({
   getFreeDiskBytes: () => mockGetFreeDiskBytes(),
 }));
 
-jest.mock("../../lib/gallery/thumbnailCache", () => ({
+jest.mock("../../../lib/gallery/thumbnailCache", () => ({
   getThumbnailCacheSize: () => mockGetThumbnailCacheSize(),
 }));
 
-jest.mock("../../lib/utils/imageExport", () => ({
+jest.mock("../../../lib/utils/imageExport", () => ({
   getExportCacheSize: () => mockGetExportCacheSize(),
   cleanExpiredExports: () => mockCleanExpiredExports(),
 }));
 
-jest.mock("../../lib/video/engine/ffmpegAdapter", () => ({
+jest.mock("../../../lib/video/engine/ffmpegAdapter", () => ({
   getVideoProcessingCacheSize: () => mockGetVideoProcessingCacheSize(),
   clearVideoProcessingCache: () => mockClearVideoProcessingCache(),
 }));
 
-jest.mock("../../lib/cache/pixelCache", () => ({
+jest.mock("../../../lib/cache/pixelCache", () => ({
   getPixelCacheStats: () => mockGetPixelCacheStats(),
 }));
 
-jest.mock("../../lib/cache/imageLoadCache", () => ({
+jest.mock("../../../lib/cache/imageLoadCache", () => ({
   getImageLoadCacheStats: () => mockGetImageLoadCacheStats(),
 }));
 
-jest.mock("../../lib/cache/runtimeDiskCache", () => ({
+jest.mock("../../../lib/cache/runtimeDiskCache", () => ({
   getRuntimeDiskCacheStats: () => mockGetRuntimeDiskCacheStats(),
 }));
 
-jest.mock("../../lib/cache/runtimeCaches", () => ({
+jest.mock("../../../lib/cache/runtimeCaches", () => ({
   clearRuntimeCaches: () => mockClearRuntimeCaches(),
 }));
 
-jest.mock("../../stores/useFitsStore", () => ({
+jest.mock("../../../stores/files/useFitsStore", () => ({
   useFitsStore: (selector: (s: { files: typeof mockFiles }) => unknown) =>
     selector({ files: mockFiles }),
 }));
 
-jest.mock("../../stores/useTrashStore", () => ({
+jest.mock("../../../stores/files/useTrashStore", () => ({
   useTrashStore: (selector: (s: { items: typeof mockTrashItems }) => unknown) =>
     selector({ items: mockTrashItems }),
 }));

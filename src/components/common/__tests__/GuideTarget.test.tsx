@@ -13,7 +13,7 @@ let mockCurrentStep = 0;
 let mockTotalSteps = 2;
 let mockIsLastStep = false;
 
-jest.mock("../../../hooks/useTooltipGuide", () => ({
+jest.mock("../../../hooks/common/useTooltipGuide", () => ({
   useGuideStep: () => ({
     isActive: mockIsActive,
     stepConfig: mockStepConfig,

@@ -4,14 +4,14 @@
  */
 
 import { useState, useCallback, useMemo } from "react";
-import type { AstrometryCalibration } from "../lib/astrometry/types";
-import { pixelToRaDec } from "../lib/astrometry/wcsProjection";
+import type { AstrometryCalibration } from "../../lib/astrometry/types";
+import { pixelToRaDec } from "../../lib/astrometry/wcsProjection";
 import {
   angularSeparationVincenty,
   pixelDistance,
   formatAngularDistance,
-} from "../lib/astrometry/measurementUtils";
-import { formatRA, formatDec } from "../lib/astrometry/formatUtils";
+} from "../../lib/astrometry/measurementUtils";
+import { formatRA, formatDec } from "../../lib/astrometry/formatUtils";
 
 export interface MeasurementPoint {
   x: number;

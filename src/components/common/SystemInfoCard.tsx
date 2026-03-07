@@ -8,8 +8,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import * as Haptics from "expo-haptics";
 import { useI18n } from "../../i18n/useI18n";
-import { useSystemInfo } from "../../hooks/useLogger";
-import { useHapticFeedback } from "../../hooks/useHapticFeedback";
+import { useSystemInfo } from "../../hooks/common/useLogger";
+import { useHapticFeedback } from "../../hooks/common/useHapticFeedback";
 import { formatBytes } from "../../lib/logger";
 import { InfoRow } from "./InfoRow";
 

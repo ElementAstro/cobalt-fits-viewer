@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { ImageEditOperation } from "../lib/utils/imageOperations";
+import type { ImageEditOperation } from "../../lib/utils/imageOperations";
 
 export type EditorTool =
   | "crop"
