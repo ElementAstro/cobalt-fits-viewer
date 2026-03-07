@@ -29,6 +29,9 @@
       "expo-secure-store",
       "expo-updates",
       "expo-font",
+      "expo-image",
+      "expo-router",
+      "expo-sharing",
       [
         "expo-splash-screen",
         {
