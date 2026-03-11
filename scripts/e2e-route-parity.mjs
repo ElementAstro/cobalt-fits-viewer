@@ -4,6 +4,14 @@ import path from "node:path";
 const ROOT = process.cwd();
 const APP_DIR = path.join(ROOT, "src", "app");
 const FLOWS_DIR = path.join(ROOT, ".maestro", "flows", "pages");
+const LANDSCAPE_SENSITIVE_ROUTES = [
+  "(tabs)/index.tsx",
+  "(tabs)/gallery.tsx",
+  "(tabs)/sessions.tsx",
+  "(tabs)/targets.tsx",
+  "viewer/[id].tsx",
+  "video/[id].tsx",
+];
 
 function walk(dir, out = []) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -76,7 +84,24 @@ for (const flow of actualFlowSet) {
   }
 }
 
-if (missing.length > 0 || extra.length > 0) {
+const missingLandscapeRouteEntries = LANDSCAPE_SENSITIVE_ROUTES.filter(
+  (route) => !expected.has(route),
+);
+const missingLandscapeFlows = [];
+for (const route of LANDSCAPE_SENSITIVE_ROUTES) {
+  const flow = expected.get(route);
+  if (!flow) continue;
+  if (!actualFlowSet.has(flow)) {
+    missingLandscapeFlows.push({ route, flow });
+  }
+}
+
+if (
+  missing.length > 0 ||
+  extra.length > 0 ||
+  missingLandscapeRouteEntries.length > 0 ||
+  missingLandscapeFlows.length > 0
+) {
   if (missing.length > 0) {
     console.error("Missing page flows:");
     for (const item of missing) {
@@ -87,6 +112,18 @@ if (missing.length > 0 || extra.length > 0) {
     console.error("Unexpected flow files:");
     for (const flow of extra) {
       console.error(`- ${flow}`);
+    }
+  }
+  if (missingLandscapeRouteEntries.length > 0) {
+    console.error("Missing landscape-sensitive routes in route map:");
+    for (const route of missingLandscapeRouteEntries) {
+      console.error(`- ${route}`);
+    }
+  }
+  if (missingLandscapeFlows.length > 0) {
+    console.error("Missing landscape-sensitive page flows:");
+    for (const item of missingLandscapeFlows) {
+      console.error(`- ${item.route} -> ${item.flow}`);
     }
   }
   process.exit(1);

@@ -13,6 +13,8 @@ interface PlanActionSheetProps {
   onRefreshFromCalendar?: (plan: ObservationPlan) => void;
   onEditInCalendar?: (plan: ObservationPlan) => void;
   onCreateViaSystemCalendar?: (plan: ObservationPlan) => void;
+  onDuplicate?: (plan: ObservationPlan) => void;
+  onRollover?: (plan: ObservationPlan) => void;
   onCreateSession?: (plan: ObservationPlan) => void;
   onStatusChange?: (plan: ObservationPlan, status: "planned" | "completed" | "cancelled") => void;
   onEdit?: (plan: ObservationPlan) => void;
@@ -29,6 +31,8 @@ export function PlanActionSheet({
   onRefreshFromCalendar,
   onEditInCalendar,
   onCreateViaSystemCalendar,
+  onDuplicate,
+  onRollover,
   onCreateSession,
   onStatusChange,
   onEdit,
@@ -86,6 +90,18 @@ export function PlanActionSheet({
           _visible: !!onCreateSession,
         },
         {
+          label: t("sessions.duplicatePlan"),
+          icon: "copy-outline",
+          onPress: () => onDuplicate?.(plan),
+          _visible: !!onDuplicate,
+        },
+        {
+          label: t("sessions.rolloverPlan"),
+          icon: "return-up-forward-outline",
+          onPress: () => onRollover?.(plan),
+          _visible: !!onRollover,
+        },
+        {
           label: t("sessions.status.planned"),
           icon: "refresh-outline",
           onPress: () => onStatusChange?.(plan, "planned"),
@@ -129,6 +145,8 @@ export function PlanActionSheet({
     onEditInCalendar,
     onUnsyncFromCalendar,
     onCreateSession,
+    onDuplicate,
+    onRollover,
     onStatusChange,
     onEdit,
     onDelete,

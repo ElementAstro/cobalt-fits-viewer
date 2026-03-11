@@ -14,6 +14,15 @@ import {
   calculateCompletionRate,
   formatExposureTime,
 } from "../../lib/targets/exposureStats";
+import {
+  buildTargetCreationPlan,
+  buildTargetMergePlan,
+  resolveTargetResolution,
+  type TargetLinkOutcome,
+  type TargetResolutionCandidate,
+  type TargetResolutionMetadata,
+  type TargetResolutionReasonCode,
+} from "../../lib/targets/targetResolution";
 import { computeMergeRelinkPatch, normalizeTargetMatch } from "../../lib/targets/targetRelations";
 import {
   applyIntegrityPatch,
@@ -34,35 +43,20 @@ import type {
 
 export type TargetLinkSource = "import" | "scan" | "astrometry" | "manual" | "backup" | "unknown";
 
-export interface UpsertTargetMetadata {
-  object?: string;
-  aliases?: string[];
-  ra?: number;
-  dec?: number;
-  type?: TargetType;
-  status?: TargetStatus;
-  category?: string;
-  tags?: string[];
-  notes?: string;
-}
+export type UpsertTargetMetadata = TargetResolutionMetadata;
 
 export interface UpsertAndLinkResult {
-  target: Target;
-  targetId: string;
-  isNew: boolean;
   source: TargetLinkSource;
+  outcome: TargetLinkOutcome;
+  reasonCode: TargetResolutionReasonCode;
+  target?: Target;
+  targetId?: string;
+  isNew?: boolean;
+  candidates?: TargetResolutionCandidate[];
 }
-
-const COORDINATE_MATCH_RADIUS_DEG = 0.5;
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
-}
-
-function isCoordinateMatch(ra1: number, dec1: number, ra2: number, dec2: number): boolean {
-  const dRa = (ra1 - ra2) * Math.cos((dec1 * Math.PI) / 180);
-  const dDec = dec1 - dec2;
-  return Math.sqrt(dRa * dRa + dDec * dDec) <= COORDINATE_MATCH_RADIUS_DEG;
 }
 
 function getTargetGraphSnapshot(): TargetIntegrityInput {
@@ -134,128 +128,160 @@ export function useTargets() {
       fileId: string,
       metadata: UpsertTargetMetadata = {},
       source: TargetLinkSource = "unknown",
-    ): UpsertAndLinkResult | null => {
-      let targetId: string | null = null;
-      let isNew = false;
+    ): UpsertAndLinkResult => {
+      let resolution: UpsertAndLinkResult = {
+        source,
+        outcome: "skipped",
+        reasonCode: "file-not-found",
+      };
 
       const patch = commitTargetGraphMutation((snapshot) => {
         const file = snapshot.files.find((item) => item.id === fileId);
         if (!file) return snapshot;
 
-        const targetName = metadata.object?.trim() || file.object?.trim();
-        const aliasInputs = uniqueStrings(
-          (metadata.aliases ?? []).map((alias) => alias.trim()).filter((alias) => alias.length > 0),
-        );
-
-        let matched = normalizeTargetMatch({
-          name: targetName,
-          aliases: aliasInputs,
+        const decision = resolveTargetResolution({
+          file,
           targets: snapshot.targets,
+          metadata,
         });
 
-        if (!matched && metadata.ra !== undefined && metadata.dec !== undefined) {
-          matched =
-            snapshot.targets.find(
-              (candidate) =>
-                candidate.ra !== undefined &&
-                candidate.dec !== undefined &&
-                isCoordinateMatch(metadata.ra!, metadata.dec!, candidate.ra, candidate.dec),
-            ) ?? null;
+        if (decision.outcome === "ambiguous") {
+          resolution = {
+            source,
+            outcome: "ambiguous",
+            reasonCode: decision.reasonCode,
+            candidates: decision.candidates,
+          };
+          return snapshot;
         }
 
-        let nextTargets = [...snapshot.targets];
+        if (decision.outcome === "skipped") {
+          resolution = {
+            source,
+            outcome: "skipped",
+            reasonCode: decision.reasonCode,
+          };
+          return snapshot;
+        }
 
-        if (!matched) {
-          if (!targetName) {
+        if (decision.outcome === "created-new") {
+          const creation = buildTargetCreationPlan(
+            metadata,
+            decision.identity,
+            decision.resolvedRa,
+            decision.resolvedDec,
+          );
+          if (!creation) {
+            resolution = {
+              source,
+              outcome: "skipped",
+              reasonCode: "insufficient-metadata",
+            };
             return snapshot;
           }
-          const nextTarget = createTarget(targetName, metadata.type ?? "other");
-          nextTarget.ra = metadata.ra ?? nextTarget.ra;
-          nextTarget.dec = metadata.dec ?? nextTarget.dec;
-          nextTarget.status = metadata.status ?? nextTarget.status;
-          nextTarget.category = metadata.category ?? nextTarget.category;
-          nextTarget.tags = metadata.tags ? uniqueStrings(metadata.tags) : nextTarget.tags;
-          nextTarget.notes = metadata.notes ?? nextTarget.notes;
-          const knownAliases = findKnownAliases(targetName);
-          nextTarget.aliases = uniqueStrings(
-            [...nextTarget.aliases, ...aliasInputs, ...knownAliases].filter(
-              (alias) => alias.toLowerCase() !== targetName.toLowerCase(),
-            ),
-          );
-          nextTarget.imageIds = uniqueStrings([...nextTarget.imageIds, fileId]);
-          nextTargets = [...nextTargets, nextTarget];
-          targetId = nextTarget.id;
-          isNew = true;
-        } else {
-          const updates: Partial<Target> = {};
-          if (metadata.ra !== undefined && matched.ra !== metadata.ra) {
-            updates.ra = metadata.ra;
-          }
-          if (metadata.dec !== undefined && matched.dec !== metadata.dec) {
-            updates.dec = metadata.dec;
-          }
-          if (metadata.status && matched.status !== metadata.status) {
-            updates.status = metadata.status;
-          }
-          if (metadata.category && matched.category !== metadata.category) {
-            updates.category = metadata.category;
-          }
-          if (metadata.notes && !matched.notes) {
-            updates.notes = metadata.notes;
-          }
-          if (metadata.type && matched.type === "other") {
-            updates.type = metadata.type;
-          }
-          if (metadata.tags && metadata.tags.length > 0) {
-            updates.tags = uniqueStrings([...(matched.tags ?? []), ...metadata.tags]);
-          }
-          if (targetName) {
-            const knownAliases = findKnownAliases(targetName);
-            const mergedAliases = uniqueStrings([
-              ...matched.aliases,
-              ...aliasInputs,
-              ...knownAliases,
-              ...(targetName.toLowerCase() === matched.name.toLowerCase() ? [] : [targetName]),
-            ]);
-            if (
-              mergedAliases.length !== matched.aliases.length ||
-              mergedAliases.some((alias, idx) => alias !== matched.aliases[idx])
-            ) {
-              updates.aliases = mergedAliases;
-            }
-          }
-          updates.imageIds = uniqueStrings([...(matched.imageIds ?? []), fileId]);
 
-          nextTargets = nextTargets.map((target) =>
-            target.id === matched!.id ? { ...target, ...updates, updatedAt: Date.now() } : target,
-          );
-          targetId = matched.id;
+          const nextTarget = createTarget(creation.name, creation.type);
+          nextTarget.ra = creation.ra ?? nextTarget.ra;
+          nextTarget.dec = creation.dec ?? nextTarget.dec;
+          nextTarget.status = creation.status ?? nextTarget.status;
+          nextTarget.category = creation.category ?? nextTarget.category;
+          nextTarget.tags = creation.tags.length > 0 ? creation.tags : nextTarget.tags;
+          nextTarget.notes = creation.notes ?? nextTarget.notes;
+          nextTarget.aliases = creation.aliases;
+          nextTarget.imageIds = uniqueStrings([...nextTarget.imageIds, fileId]);
+
+          resolution = {
+            source,
+            outcome: "created-new",
+            reasonCode: decision.reasonCode,
+            targetId: nextTarget.id,
+            target: nextTarget,
+            isNew: true,
+          };
+
+          return {
+            ...snapshot,
+            targets: [...snapshot.targets, nextTarget],
+            files: snapshot.files.map((item) =>
+              item.id === fileId ? { ...item, targetId: nextTarget.id } : item,
+            ),
+          };
         }
 
-        if (!targetId) return snapshot;
-
-        const nextFiles = snapshot.files.map((item) =>
-          item.id === fileId ? { ...item, targetId: targetId ?? undefined } : item,
+        const matched = snapshot.targets.find(
+          (target) => target.id === decision.candidate.targetId,
         );
+        if (!matched) {
+          resolution = {
+            source,
+            outcome: "skipped",
+            reasonCode: "no-candidate",
+          };
+          return snapshot;
+        }
+
+        const mergePlan = buildTargetMergePlan({
+          target: matched,
+          fileId,
+          metadata,
+          canonicalObjectName: decision.identity.canonicalObjectName,
+          expandedAliases: decision.identity.expandedAliases,
+          resolvedRa: decision.resolvedRa,
+          resolvedDec: decision.resolvedDec,
+        });
+
+        const hasUpdates = Object.keys(mergePlan.updates).length > 0;
+        const updatedTarget = hasUpdates
+          ? { ...matched, ...mergePlan.updates, updatedAt: Date.now() }
+          : matched;
+        const outcome: TargetLinkOutcome = mergePlan.metadataChanged
+          ? "updated-existing"
+          : "linked-existing";
+
+        resolution = {
+          source,
+          outcome,
+          reasonCode: decision.reasonCode,
+          targetId: matched.id,
+          target: updatedTarget,
+          isNew: false,
+        };
 
         return {
           ...snapshot,
-          targets: nextTargets,
-          files: nextFiles,
+          targets: snapshot.targets.map((target) =>
+            target.id === matched.id ? updatedTarget : target,
+          ),
+          files: snapshot.files.map((item) =>
+            item.id === fileId ? { ...item, targetId: matched.id } : item,
+          ),
         };
       });
 
-      if (!patch || !targetId) return null;
+      if (!patch) {
+        return {
+          source,
+          outcome: "skipped",
+          reasonCode: "invalid-state",
+        };
+      }
+
+      if (!resolution.targetId) return resolution;
+
       const linkedTarget =
-        patch.targets.find((item) => item.id === targetId) ??
-        useTargetStore.getState().targets.find((item) => item.id === targetId);
-      if (!linkedTarget) return null;
+        patch.targets.find((item) => item.id === resolution.targetId) ??
+        useTargetStore.getState().targets.find((item) => item.id === resolution.targetId);
+      if (!linkedTarget) {
+        return {
+          source,
+          outcome: "skipped",
+          reasonCode: "invalid-state",
+        };
+      }
 
       return {
+        ...resolution,
         target: linkedTarget,
-        targetId,
-        isNew,
-        source,
       };
     },
     [],
@@ -381,11 +407,13 @@ export function useTargets() {
   const scanAndAutoDetect = useCallback((): {
     newCount: number;
     updatedCount: number;
+    ambiguousCount: number;
     scannedCount: number;
     skippedCount: number;
   } => {
     let newCount = 0;
     let updatedCount = 0;
+    let ambiguousCount = 0;
     let scannedCount = 0;
     let skippedCount = 0;
     const fileList = useFitsStore.getState().files;
@@ -407,18 +435,18 @@ export function useTargets() {
         },
         "scan",
       );
-      if (!result) {
-        skippedCount++;
-        continue;
-      }
-      if (result.isNew) {
+      if (result.outcome === "created-new") {
         newCount++;
-      } else {
+      } else if (result.outcome === "linked-existing" || result.outcome === "updated-existing") {
         updatedCount++;
+      } else if (result.outcome === "ambiguous") {
+        ambiguousCount++;
+      } else {
+        skippedCount++;
       }
     }
 
-    return { newCount, updatedCount, scannedCount, skippedCount };
+    return { newCount, updatedCount, ambiguousCount, scannedCount, skippedCount };
   }, [upsertAndLinkFileTarget]);
 
   const getTargetGroupIds = useCallback(

@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useI18n } from "../../i18n/useI18n";
 import { useScreenOrientation } from "../../hooks/common/useScreenOrientation";
 import { formatTimeHHMM } from "../../lib/sessions/format";
-import { toLocalDateKey } from "../../lib/sessions/planUtils";
+import { findOverlappingPlans, toLocalDateKey } from "../../lib/sessions/planUtils";
 import { useCalendar } from "../../hooks/sessions/useCalendar";
 import { useEquipmentFields } from "../../hooks/sessions/useEquipmentFields";
 import { useLocationFields } from "../../hooks/sessions/useLocationFields";
@@ -45,6 +45,13 @@ const REMINDER_OPTIONS = [
   { value: 120, labelKey: "hour2" as const },
 ];
 
+const DURATION_PRESETS = [
+  { value: 60, labelKey: "h1" as const },
+  { value: 120, labelKey: "h2" as const },
+  { value: 180, labelKey: "h3" as const },
+  { value: 240, labelKey: "h4" as const },
+];
+
 export function PlanObservationSheet({
   visible,
   onClose,
@@ -57,7 +64,7 @@ export function PlanObservationSheet({
   const mutedColor = useThemeColor("muted");
   const { isLandscape } = useScreenOrientation();
   const compact = isLandscape;
-  const { createObservationPlan, updateObservationPlan, syncing } = useCalendar();
+  const { createObservationPlan, updateObservationPlan, plans, syncing } = useCalendar();
   const defaultReminderMinutes = useSettingsStore((s) => s.defaultReminderMinutes);
   const targetCatalog = useTargetStore((s) => s.targets);
   const isEditMode = !!existingPlan;
@@ -156,6 +163,33 @@ export function PlanObservationSheet({
     [],
   );
 
+  const shiftPlanDays = useCallback((deltaDays: number) => {
+    setStartDate((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + deltaDays);
+      return next;
+    });
+    setEndDate((prev) => {
+      const next = new Date(prev);
+      next.setDate(next.getDate() + deltaDays);
+      return next;
+    });
+  }, []);
+
+  const applyDurationPreset = useCallback(
+    (durationMinutes: number) => {
+      setEndDate((prev) => {
+        const next = new Date(startDate);
+        next.setMinutes(next.getMinutes() + durationMinutes);
+        if (next.getTime() <= startDate.getTime()) {
+          return prev;
+        }
+        return next;
+      });
+    },
+    [startDate],
+  );
+
   const resetForm = () => {
     setTargetName("");
     setSelectedTargetId(undefined);
@@ -202,8 +236,38 @@ export function PlanObservationSheet({
       targetCatalog,
     );
 
-    if (isEditMode && existingPlan) {
-      const success = await updateObservationPlan(existingPlan.id, {
+    const draftPlanId = existingPlan?.id ?? "__draft__";
+    const pendingConflicts = findOverlappingPlans(
+      {
+        id: draftPlanId,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        status,
+      },
+      plans,
+    );
+    const savePlan = async () => {
+      if (isEditMode && existingPlan) {
+        const success = await updateObservationPlan(existingPlan.id, {
+          title: title.trim() || resolvedTargetName,
+          targetId: resolvedTargetId,
+          targetName: resolvedTargetName,
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          notes: notes.trim() || undefined,
+          status,
+          reminderMinutes,
+          equipment: Object.keys(equipment).length > 0 ? equipment : undefined,
+          location: location || undefined,
+        });
+        if (success) {
+          Alert.alert(t("common.success"), t("sessions.planUpdated"));
+          onClose();
+        }
+        return;
+      }
+
+      const success = await createObservationPlan({
         title: title.trim() || resolvedTargetName,
         targetId: resolvedTargetId,
         targetName: resolvedTargetName,
@@ -215,31 +279,38 @@ export function PlanObservationSheet({
         equipment: Object.keys(equipment).length > 0 ? equipment : undefined,
         location: location || undefined,
       });
+
       if (success) {
-        Alert.alert(t("common.success"), t("sessions.planUpdated"));
+        Alert.alert(t("common.success"), t("sessions.planCreated"));
+        resetForm();
         onClose();
       }
+    };
+
+    if (pendingConflicts.length === 0) {
+      await savePlan();
       return;
     }
-
-    const success = await createObservationPlan({
-      title: title.trim() || resolvedTargetName,
-      targetId: resolvedTargetId,
-      targetName: resolvedTargetName,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      notes: notes.trim() || undefined,
-      status,
-      reminderMinutes,
-      equipment: Object.keys(equipment).length > 0 ? equipment : undefined,
-      location: location || undefined,
-    });
-
-    if (success) {
-      Alert.alert(t("common.success"), t("sessions.planCreated"));
-      resetForm();
-      onClose();
-    }
+    const conflictNames = pendingConflicts
+      .slice(0, 3)
+      .map((conflict) => conflict.title || conflict.targetName)
+      .join(", ");
+    const moreCount = Math.max(0, pendingConflicts.length - 3);
+    const summary = moreCount > 0 ? `${conflictNames} +${moreCount}` : conflictNames;
+    Alert.alert(
+      t("sessions.planConflictTitle"),
+      `${t("sessions.planConflictSavePrompt")} (${summary})`,
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("sessions.planConflictSaveAnyway"),
+          style: "destructive",
+          onPress: () => {
+            void savePlan();
+          },
+        },
+      ],
+    );
   };
 
   const targetSuggestions = useMemo(() => {
@@ -257,6 +328,19 @@ export function PlanObservationSheet({
   const selectedTargetName = selectedTargetId
     ? targetCatalog.find((target) => target.id === selectedTargetId)?.name
     : undefined;
+  const draftConflicts = useMemo(
+    () =>
+      findOverlappingPlans(
+        {
+          id: existingPlan?.id ?? "__draft__",
+          startDate: startDate.toISOString(),
+          endDate: endDate.toISOString(),
+          status,
+        },
+        plans,
+      ),
+    [existingPlan?.id, plans, startDate, endDate, status],
+  );
 
   return (
     <BottomSheet
@@ -346,9 +430,29 @@ export function PlanObservationSheet({
                     <Ionicons name="calendar-outline" size={14} color={mutedColor} />
                     <Text className="text-xs text-muted">{t("sessions.plannedDate")}</Text>
                   </View>
-                  <Text className="text-xs font-medium text-foreground">
-                    {toLocalDateKey(startDate)}
-                  </Text>
+                  <View className="flex-row items-center gap-1">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => shiftPlanDays(-1)}
+                      accessibilityLabel={t("sessions.shiftDayBackward")}
+                    >
+                      <Ionicons name="chevron-back-outline" size={12} color={mutedColor} />
+                    </Button>
+                    <Text className="text-xs font-medium text-foreground">
+                      {toLocalDateKey(startDate)}
+                    </Text>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      isIconOnly
+                      onPress={() => shiftPlanDays(1)}
+                      accessibilityLabel={t("sessions.shiftDayForward")}
+                    >
+                      <Ionicons name="chevron-forward-outline" size={12} color={mutedColor} />
+                    </Button>
+                  </View>
                 </View>
                 <Separator className="my-1.5" />
                 <View className="flex-row items-center justify-between">
@@ -438,8 +542,36 @@ export function PlanObservationSheet({
                     </Button>
                   </View>
                 </View>
+                <Separator className="my-1.5" />
+                <View className="flex-row items-start justify-between gap-2">
+                  <Text className="text-xs text-muted">{t("sessions.quickDuration")}</Text>
+                  <View className="flex-row flex-wrap justify-end gap-1.5">
+                    {DURATION_PRESETS.map((preset) => (
+                      <Chip
+                        key={preset.value}
+                        size="sm"
+                        variant="secondary"
+                        onPress={() => applyDurationPreset(preset.value)}
+                      >
+                        <Chip.Label className="text-[9px]">
+                          {t(`sessions.durationPresets.${preset.labelKey}`)}
+                        </Chip.Label>
+                      </Chip>
+                    ))}
+                  </View>
+                </View>
               </Card.Body>
             </Card>
+            {draftConflicts.length > 0 && (
+              <Card variant="secondary" className="mb-3 border border-danger/40">
+                <Card.Body className="flex-row items-center gap-2 px-3 py-2">
+                  <Ionicons name="warning-outline" size={14} color="#ef4444" />
+                  <Text className="text-xs text-danger">
+                    {t("sessions.planConflictDetected")} ({draftConflicts.length})
+                  </Text>
+                </Card.Body>
+              </Card>
+            )}
 
             {/* Equipment & Location */}
             <View className={compact ? "flex-row gap-3 mb-3" : ""}>

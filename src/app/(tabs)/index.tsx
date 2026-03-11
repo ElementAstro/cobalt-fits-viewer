@@ -38,6 +38,10 @@ import {
 import { GuideTarget } from "../../components/common/GuideTarget";
 import { buildMetadataIndex } from "../../lib/gallery/metadataIndex";
 import { getFrameTypeDefinitions } from "../../lib/gallery/frameClassifier";
+import {
+  FILES_STACK_ACTIONS_MAX_WIDTH,
+  shouldUseCompactActionLayout,
+} from "../../lib/layout/landscapeRules";
 import { routeForMedia } from "../../lib/media/routing";
 import { pickImageLikeIds } from "../../lib/viewer/compareRouting";
 import type { FitsMetadata } from "../../lib/fits/types";
@@ -84,8 +88,7 @@ export default function FilesScreen() {
   const { logAction, logSuccess, logFailure } = usePageLogger("FilesScreen", { screen: "files" });
 
   const { height: screenHeight, width: screenWidth } = useWindowDimensions();
-  const { isLandscape, isLandscapeTablet, contentPaddingTop, horizontalPadding } =
-    useResponsiveLayout();
+  const { layoutMode, isLandscape, contentPaddingTop, horizontalPadding } = useResponsiveLayout();
 
   const allFiles = useFitsStore((s) => s.files);
   const sortBy = useFitsStore((s) => s.sortBy);
@@ -247,13 +250,15 @@ export default function FilesScreen() {
 
   const isGridStyle = fileListStyle === "grid";
   const listColumns = isGridStyle
-    ? isLandscapeTablet
+    ? layoutMode === "landscape-tablet"
       ? Math.min(fileListGridColumns + 2, 6)
-      : isLandscape
+      : layoutMode === "landscape-phone"
         ? Math.min(fileListGridColumns + 1, 5)
         : fileListGridColumns
     : 1;
-  const shouldStackTopActions = isSelectionMode || screenWidth < 420;
+  const shouldStackTopActions =
+    isSelectionMode ||
+    shouldUseCompactActionLayout(layoutMode, screenWidth, FILES_STACK_ACTIONS_MAX_WIDTH);
 
   const mapImportFailureReason = useCallback(
     (reason: string | undefined): string => {

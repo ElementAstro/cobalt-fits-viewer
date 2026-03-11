@@ -3,6 +3,42 @@ jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
 );
 
+// Mock react-native-worklets before any reanimated mocks are loaded.
+jest.mock("react-native-worklets", () => {
+  const noOp = () => {};
+  const identity = (value) => value;
+  const base = {
+    __esModule: true,
+    default: {},
+    WorkletsError: class WorkletsError extends Error {},
+    RuntimeKind: { ReactNative: "react-native", UI: "ui" },
+    runOnUI: (fn) => fn,
+    runOnJS: (fn) => fn,
+    scheduleOnUI: (fn) => fn(),
+    isWorkletFunction: () => true,
+    createWorkletRuntime: jest.fn(() => ({})),
+    createSerializable: identity,
+    makeShareable: identity,
+    makeMutable: (value) => ({ value }),
+    serializableMappingCache: new Map(),
+    executeOnUIRuntimeSync: noOp,
+    registerEventHandler: noOp,
+    unregisterEventHandler: noOp,
+  };
+  return new Proxy(base, {
+    get(target, prop) {
+      if (prop in target) return target[prop];
+      return (...args) => args[0];
+    },
+  });
+});
+
+jest.mock("react-native-reanimated", () => {
+  const Reanimated = require("react-native-reanimated/mock");
+  Reanimated.default.call = () => {};
+  return Reanimated;
+});
+
 // Mock @gorhom/bottom-sheet
 jest.mock("@gorhom/bottom-sheet", () => {
   const React = require("react");

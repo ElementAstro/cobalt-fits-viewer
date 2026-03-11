@@ -77,13 +77,15 @@ import { canUseScientificFitsExport } from "../../lib/converter/exportCore";
 import { normalizeProcessingPipelineSnapshot } from "../../lib/processing/recipe";
 import { isVideoFile } from "../../lib/media/routing";
 import { resolveComparePair } from "../../lib/viewer/compareRouting";
+import { shouldUseLandscapeSplitPane } from "../../lib/layout/landscapeRules";
 
 export default function ViewerDetailScreen() {
   useKeepAwake();
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { t } = useI18n();
-  const { isLandscape, sidePanelWidth } = useResponsiveLayout();
+  const { layoutMode, isLandscape, sidePanelWidth } = useResponsiveLayout();
+  const useLandscapeSplitLayout = shouldUseLandscapeSplitPane(layoutMode);
   const insets = useSafeAreaInsets();
 
   const file = useFitsStore((s) => s.files.find((f) => f.id === (id ?? "")));
@@ -1713,7 +1715,7 @@ export default function ViewerDetailScreen() {
         />
       )}
 
-      {isLandscape ? (
+      {useLandscapeSplitLayout ? (
         <View className="flex-1 flex-row">
           {canvasArea}
           {showControls && !isFullscreen && sidePanel}

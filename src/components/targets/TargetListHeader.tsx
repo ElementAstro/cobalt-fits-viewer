@@ -93,7 +93,7 @@ interface HeaderAction {
 
 const TargetHeaderActions = React.memo(function TargetHeaderActions({
   actions,
-  compact: _compact,
+  compact,
   gapClassName,
   buttonSize,
   iconSize,
@@ -130,9 +130,17 @@ const TargetHeaderActions = React.memo(function TargetHeaderActions({
 
   return (
     <View className="flex-row items-center justify-between">
-      <View className="flex-1 pr-2">
-        <Text className="text-2xl font-bold text-foreground">{title}</Text>
-        <Text className="mt-1 text-sm text-muted">{subtitle}</Text>
+      <View className={`flex-1 pr-2 ${compact ? "max-w-[70%]" : ""}`}>
+        <Text
+          className={
+            compact ? "text-xl font-bold text-foreground" : "text-2xl font-bold text-foreground"
+          }
+        >
+          {title}
+        </Text>
+        <Text className={compact ? "mt-0.5 text-xs text-muted" : "mt-1 text-sm text-muted"}>
+          {subtitle}
+        </Text>
       </View>
       <View className={`flex-row items-center ${gapClassName}`}>
         {secondaryActions.length > 0 && (

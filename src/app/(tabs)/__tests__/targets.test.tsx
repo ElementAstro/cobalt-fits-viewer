@@ -4,10 +4,19 @@ import Screen from "../targets";
 
 const mockPush = jest.fn();
 const mockAddTarget = jest.fn();
+const mockTargetListHeaderProps = jest.fn();
+const mockResponsiveLayout = {
+  layoutMode: "landscape-tablet",
+  isLandscapeTablet: true,
+  contentPaddingTop: 0,
+  horizontalPadding: 0,
+  sidePanelWidth: 320,
+};
 const mockScanAndAutoDetect = jest.fn(() => ({
   scannedCount: 12,
   newCount: 3,
   updatedCount: 4,
+  ambiguousCount: 1,
   skippedCount: 5,
 }));
 const mockSummaryDialogProps = jest.fn();
@@ -49,12 +58,7 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
-  useResponsiveLayout: () => ({
-    isLandscapeTablet: true,
-    contentPaddingTop: 0,
-    horizontalPadding: 0,
-    sidePanelWidth: 320,
-  }),
+  useResponsiveLayout: () => mockResponsiveLayout,
 }));
 
 jest.mock("../../../hooks/targets/useTargets", () => ({
@@ -157,8 +161,9 @@ jest.mock("../../../components/targets/TargetListHeader", () => {
   const RN = require("react-native");
   const { View, Pressable, Text } = RN;
   return {
-    TargetListHeader: (props: Record<string, unknown>) =>
-      R.createElement(
+    TargetListHeader: (props: Record<string, unknown>) => {
+      mockTargetListHeaderProps(props);
+      return R.createElement(
         View,
         { testID: "mock-target-list-header" },
         R.createElement(
@@ -174,7 +179,8 @@ jest.mock("../../../components/targets/TargetListHeader", () => {
           },
           R.createElement(Text, null, "add"),
         ),
-      ),
+      );
+    },
     TargetSearchBar: () => R.createElement(View, { testID: "mock-search-bar" }),
   };
 });
@@ -204,6 +210,9 @@ jest.mock("../../../components/common/OperationSummaryDialog", () => ({
 describe("(tabs)/targets.tsx", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockResponsiveLayout.layoutMode = "landscape-tablet";
+    mockResponsiveLayout.isLandscapeTablet = true;
+    mockTargetListHeaderProps.mockClear();
   });
 
   it("opens add sheet and submits typed coordinates payload", () => {
@@ -239,8 +248,35 @@ describe("(tabs)/targets.tsx", () => {
         expect.objectContaining({ label: "targets.scanSummaryScanned", value: 12 }),
         expect.objectContaining({ label: "targets.scanSummaryAdded", value: 3 }),
         expect.objectContaining({ label: "targets.scanSummaryUpdated", value: 4 }),
+        expect.objectContaining({ label: "targets.scanSummaryAmbiguous", value: 1 }),
         expect.objectContaining({ label: "targets.scanSummarySkipped", value: 5 }),
       ]),
     );
+  });
+
+  it("disables compact header and filter layout on landscape-tablet", () => {
+    render(<Screen />);
+    const lastCall = mockTargetListHeaderProps.mock.calls.at(-1)?.[0];
+    expect(lastCall?.useCompactHeaderActions).toBe(false);
+    expect(lastCall?.useCompactFilterLayout).toBe(false);
+  });
+
+  it("enables compact header and filter layout on narrow landscape-phone", () => {
+    const reactNative = require("react-native");
+    const dimensionsSpy = jest.spyOn(reactNative, "useWindowDimensions").mockReturnValue({
+      width: 390,
+      height: 844,
+      scale: 2,
+      fontScale: 1,
+    });
+    mockResponsiveLayout.layoutMode = "landscape-phone";
+    mockResponsiveLayout.isLandscapeTablet = false;
+
+    render(<Screen />);
+
+    const lastCall = mockTargetListHeaderProps.mock.calls.at(-1)?.[0];
+    expect(lastCall?.useCompactHeaderActions).toBe(true);
+    expect(lastCall?.useCompactFilterLayout).toBe(true);
+    dimensionsSpy.mockRestore();
   });
 });

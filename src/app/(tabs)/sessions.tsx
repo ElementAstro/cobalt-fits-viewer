@@ -30,8 +30,15 @@ import { useI18n } from "../../i18n/useI18n";
 import type { ObservationPlan, ObservationSession } from "../../lib/fits/types";
 import { formatDuration } from "../../lib/sessions/format";
 import {
+  isLandscapeLayoutMode,
+  shouldUseLandscapeSplitPane,
+} from "../../lib/layout/landscapeRules";
+import {
+  buildPlanConflictCountMap,
   buildSessionFromPlan,
+  duplicatePlanToDraft,
   filterObservationPlans,
+  rolloverPlanToNextDay,
   sortObservationPlans,
   type PlanSortBy,
   type PlanStatusFilter,
@@ -52,8 +59,9 @@ export default function SessionsScreen() {
     screen: "sessions",
   });
   const mutedColor = useThemeColor("muted");
-  const { isLandscape, isLandscapeTablet, contentPaddingTop, sidePanelWidth } =
-    useResponsiveLayout();
+  const { layoutMode, contentPaddingTop, sidePanelWidth } = useResponsiveLayout();
+  const isLandscapeLayout = isLandscapeLayoutMode(layoutMode);
+  const useLandscapeSplitLayout = shouldUseLandscapeSplitPane(layoutMode);
 
   const {
     sessions,
@@ -82,6 +90,7 @@ export default function SessionsScreen() {
     editPlanInCalendar,
     createSessionViaSystemCalendar,
     createPlanViaSystemCalendar,
+    createObservationPlan,
     deleteObservationPlan,
     updateObservationPlan,
     syncObservationPlan,
@@ -340,6 +349,7 @@ export default function SessionsScreen() {
     if (!selectedDate) return [];
     return sortObservationPlans(filterObservationPlans(plans, { selectedDate }), "startAsc");
   }, [plans, selectedDate]);
+  const planConflictMap = useMemo(() => buildPlanConflictCountMap(plans), [plans]);
 
   const handleDeleteSession = useCallback(
     (session: ObservationSession) => {
@@ -478,19 +488,62 @@ export default function SessionsScreen() {
   );
 
   const handleCreateSessionFromPlan = useCallback(
-    async (plan: ObservationPlan) => {
-      try {
-        const session = buildSessionFromPlan(plan);
-        addSession(session);
-        await updateObservationPlan(plan.id, { status: "completed" });
-        logSuccess("create_session_from_plan", { planId: plan.id, sessionId: session.id });
-        Alert.alert(t("common.success"), t("sessions.planConverted"));
-      } catch (error) {
-        logFailure("create_session_from_plan", error, { planId: plan.id });
-        Alert.alert(t("common.error"), t("sessions.invalidTimeRange"));
+    (plan: ObservationPlan) => {
+      const performConversion = async () => {
+        try {
+          const session = buildSessionFromPlan(plan);
+          addSession(session);
+          await updateObservationPlan(plan.id, { status: "completed" });
+          logSuccess("create_session_from_plan", { planId: plan.id, sessionId: session.id });
+          Alert.alert(t("common.success"), t("sessions.planConverted"));
+        } catch (error) {
+          logFailure("create_session_from_plan", error, { planId: plan.id });
+          Alert.alert(t("common.error"), t("sessions.invalidTimeRange"));
+        }
+      };
+
+      const alreadyConverted = sessions.some((session) =>
+        session.id.startsWith(`from_plan_${plan.id}_`),
+      );
+      if (!alreadyConverted) {
+        void performConversion();
+        return;
       }
+
+      Alert.alert(
+        t("sessions.planAlreadyConvertedTitle"),
+        t("sessions.planAlreadyConvertedMessage"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.confirm"),
+            style: "destructive",
+            onPress: () => {
+              void performConversion();
+            },
+          },
+        ],
+      );
     },
-    [addSession, logFailure, logSuccess, t, updateObservationPlan],
+    [addSession, logFailure, logSuccess, sessions, t, updateObservationPlan],
+  );
+
+  const handleDuplicatePlan = useCallback(
+    async (plan: ObservationPlan, mode: "duplicate" | "rollover") => {
+      const draft = mode === "rollover" ? rolloverPlanToNextDay(plan) : duplicatePlanToDraft(plan);
+      const success = await createObservationPlan(draft);
+      if (!success) return;
+      Alert.alert(
+        t("common.success"),
+        mode === "rollover"
+          ? t("sessions.rolloverPlanSuccess")
+          : t("sessions.duplicatePlanSuccess"),
+      );
+      logSuccess(mode === "rollover" ? "rollover_plan" : "duplicate_plan", {
+        sourcePlanId: plan.id,
+      });
+    },
+    [createObservationPlan, logSuccess, t],
   );
 
   const sortedSessions = useMemo(() => {
@@ -613,7 +666,7 @@ export default function SessionsScreen() {
         )}
         <SessionCard
           session={session}
-          compact={isLandscape}
+          compact={isLandscapeLayout}
           isSelected={isSelectionMode && selectedIds.has(session.id)}
           onPress={() => {
             if (isSelectionMode) {
@@ -626,7 +679,7 @@ export default function SessionsScreen() {
         />
       </View>
     ),
-    [isLandscape, isSelectionMode, selectedIds, mutedColor, toggleSelect, router],
+    [isLandscapeLayout, isSelectionMode, selectedIds, mutedColor, toggleSelect, router],
   );
 
   const dateSummarySection = selectedDate ? (
@@ -652,7 +705,7 @@ export default function SessionsScreen() {
           value={planSearchQuery}
           onChangeText={setPlanSearchQuery}
           placeholder={t("sessions.searchSessions")}
-          compact={isLandscape}
+          compact={isLandscapeLayout}
         />
       </View>
       <View className="mb-2 flex-row flex-wrap gap-2">
@@ -753,7 +806,8 @@ export default function SessionsScreen() {
             <PlanCard
               key={plan.id}
               plan={plan}
-              compact={isLandscape}
+              compact={isLandscapeLayout}
+              conflictCount={planConflictMap[plan.id] ?? 0}
               onPress={() => {
                 setEditingPlan(plan);
                 setShowPlanSheet(true);
@@ -804,7 +858,7 @@ export default function SessionsScreen() {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder={t("sessions.searchSessions")}
-            compact={isLandscape}
+            compact={isLandscapeLayout}
           />
         </View>
       )}
@@ -974,7 +1028,7 @@ export default function SessionsScreen() {
       selectedCount={selectedIds.size}
       calendarSyncEnabled={calendarSyncEnabled}
       syncing={syncing}
-      isLandscape={isLandscape}
+      isLandscape={isLandscapeLayout}
       onClose={exitSelectionMode}
       onToggleSelectAll={() => {
         if (selectedIds.size === sortedSessions.length) {
@@ -997,10 +1051,10 @@ export default function SessionsScreen() {
       style={{ paddingTop: contentPaddingTop }}
     >
       {selectionBar}
-      {isLandscape ? (
+      {useLandscapeSplitLayout ? (
         <View className="flex-1 flex-row">
           <ScrollView
-            style={isLandscapeTablet ? { width: sidePanelWidth } : { flex: 1 }}
+            style={{ width: sidePanelWidth }}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ padding: 16 }}
           >
@@ -1185,6 +1239,8 @@ export default function SessionsScreen() {
         onRefreshFromCalendar={calendarSyncEnabled ? refreshPlanFromCalendar : undefined}
         onEditInCalendar={calendarSyncEnabled ? editPlanInCalendar : undefined}
         onCreateViaSystemCalendar={calendarSyncEnabled ? createPlanViaSystemCalendar : undefined}
+        onDuplicate={(p) => void handleDuplicatePlan(p, "duplicate")}
+        onRollover={(p) => void handleDuplicatePlan(p, "rollover")}
         onCreateSession={handleCreateSessionFromPlan}
         onStatusChange={(p, status) => updateObservationPlan(p.id, { status })}
         onEdit={(p) => {

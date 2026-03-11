@@ -87,6 +87,7 @@ jest.mock("../../../hooks/common/useScreenOrientation", () => ({
 
 jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
   useResponsiveLayout: () => ({
+    layoutMode: "portrait",
     isLandscape: false,
     isLandscapeTablet: false,
     contentPaddingTop: 0,

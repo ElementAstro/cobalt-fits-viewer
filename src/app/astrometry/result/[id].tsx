@@ -101,17 +101,47 @@ export default function AstrometryResultScreen() {
       "astrometry",
     );
 
-    if (!syncResult) {
-      Alert.alert(t("common.error"), "Failed to sync target data.");
+    if (syncResult.outcome === "ambiguous") {
+      Alert.alert(t("common.error"), t("astrometry.targetSyncAmbiguous"));
+      return;
+    }
+
+    if (syncResult.outcome === "skipped") {
+      let reasonKey = "astrometry.targetSyncSkipped";
+      if (syncResult.reasonCode === "insufficient-metadata") {
+        reasonKey = "astrometry.targetSyncReasonInsufficientMetadata";
+      } else if (syncResult.reasonCode === "no-candidate") {
+        reasonKey = "astrometry.targetSyncReasonNoCandidate";
+      }
+      Alert.alert(t("common.error"), t(reasonKey));
+      return;
+    }
+
+    if (!syncResult.target) {
+      Alert.alert(t("common.error"), t("astrometry.targetSyncFailed"));
       return;
     }
 
     haptics.notify(Haptics.NotificationFeedbackType.Success);
+    if (syncResult.outcome === "created-new") {
+      Alert.alert(
+        t("common.success"),
+        t("astrometry.targetSyncCreated", { name: syncResult.target.name }),
+      );
+      return;
+    }
+
+    if (syncResult.outcome === "updated-existing") {
+      Alert.alert(
+        t("common.success"),
+        t("astrometry.targetSyncUpdated", { name: syncResult.target.name }),
+      );
+      return;
+    }
+
     Alert.alert(
       t("common.success"),
-      syncResult.isNew
-        ? `Created new target "${syncResult.target.name}".`
-        : `Updated target "${syncResult.target.name}" with plate solve coordinates.`,
+      t("astrometry.targetSyncLinked", { name: syncResult.target.name }),
     );
   }, [id, t, upsertAndLinkFileTarget, haptics]);
 

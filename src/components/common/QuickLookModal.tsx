@@ -11,7 +11,7 @@ import { useVideoPlayer, VideoView } from "expo-video";
 import { useI18n } from "../../i18n/useI18n";
 import { formatBytes } from "../../lib/utils/format";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
-import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
+import { enqueueThumbnailRegeneration } from "../../lib/gallery/thumbnailScheduler";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import { isVideoFile, isAudioFile, isMediaWorkspaceFile } from "../../lib/media/routing";
 import { useFitsStore } from "../../stores/files/useFitsStore";
@@ -60,7 +60,10 @@ export function QuickLookModal({
     if (!file || isRegenerating) return;
     setIsRegenerating(true);
     try {
-      const result = await regenerateFileThumbnail(file);
+      const result = await enqueueThumbnailRegeneration(file, {
+        priority: "visible",
+        reason: "quick-look",
+      });
       if (result.uri) {
         updateFile(result.fileId, { thumbnailUri: result.uri });
       }

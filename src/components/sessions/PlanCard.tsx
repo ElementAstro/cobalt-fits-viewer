@@ -15,6 +15,7 @@ interface PlanCardProps {
   onLongPress?: () => void;
   /** Compact layout for landscape mode */
   compact?: boolean;
+  conflictCount?: number;
 }
 
 const STATUS_COLOR_CLASS: Record<"planned" | "completed" | "cancelled", string> = {
@@ -28,6 +29,7 @@ export const PlanCard = memo(function PlanCard({
   onPress,
   onLongPress,
   compact = false,
+  conflictCount = 0,
 }: PlanCardProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
@@ -59,6 +61,7 @@ export const PlanCard = memo(function PlanCard({
                 {plan.title || displayTargetName}
               </Text>
               {plan.calendarEventId && <Ionicons name="calendar" size={11} color={mutedColor} />}
+              {conflictCount > 0 && <Ionicons name="warning-outline" size={11} color="#ef4444" />}
             </View>
             <Chip size="sm" variant="secondary">
               <Chip.Label className={`text-[9px] ${STATUS_COLOR_CLASS[status]}`}>
@@ -91,6 +94,14 @@ export const PlanCard = memo(function PlanCard({
               <Ionicons name="notifications-outline" size={10} color={mutedColor} />
               <Text className="text-[9px] text-muted">
                 {formatDuration(plan.reminderMinutes * 60)}
+              </Text>
+            </View>
+          )}
+          {conflictCount > 0 && (
+            <View className="flex-row items-center gap-1">
+              <Ionicons name="warning-outline" size={10} color="#ef4444" />
+              <Text className="text-[9px] text-danger">
+                {t("sessions.planConflictDetected")} ({conflictCount})
               </Text>
             </View>
           )}

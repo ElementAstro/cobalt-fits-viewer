@@ -3,6 +3,7 @@ import type { GeoLocation, ObservationPlan, ObservationSession } from "../fits/t
 export type PlanStatus = NonNullable<ObservationPlan["status"]>;
 export type PlanStatusFilter = PlanStatus | "all";
 export type PlanSortBy = "startAsc" | "startDesc" | "target" | "status";
+export type ObservationPlanDraft = Omit<ObservationPlan, "id" | "calendarEventId" | "createdAt">;
 
 const PLAN_STATUS_ORDER: Record<PlanStatus, number> = {
   planned: 0,
@@ -14,12 +15,111 @@ export function normalizePlanStatus(status?: ObservationPlan["status"]): PlanSta
   return status ?? "planned";
 }
 
+function parsePlanTime(plan: Pick<ObservationPlan, "startDate" | "endDate">): {
+  start: number;
+  end: number;
+} {
+  return {
+    start: new Date(plan.startDate).getTime(),
+    end: new Date(plan.endDate).getTime(),
+  };
+}
+
+function isValidPlanTimeRange(plan: Pick<ObservationPlan, "startDate" | "endDate">): boolean {
+  const { start, end } = parsePlanTime(plan);
+  return Number.isFinite(start) && Number.isFinite(end) && end > start;
+}
+
+function cloneEquipment(plan: ObservationPlan): ObservationPlanDraft["equipment"] {
+  if (!plan.equipment) return undefined;
+  return {
+    ...plan.equipment,
+    filters: plan.equipment.filters ? [...plan.equipment.filters] : undefined,
+  };
+}
+
+function cloneLocation(plan: ObservationPlan): ObservationPlanDraft["location"] {
+  if (!plan.location) return undefined;
+  return { ...plan.location };
+}
+
 export function toLocalDateKey(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 export function getPlanDateKey(plan: ObservationPlan): string {
   return toLocalDateKey(new Date(plan.startDate));
+}
+
+export function planTimeRangesOverlap(
+  a: Pick<ObservationPlan, "startDate" | "endDate">,
+  b: Pick<ObservationPlan, "startDate" | "endDate">,
+): boolean {
+  if (!isValidPlanTimeRange(a) || !isValidPlanTimeRange(b)) {
+    return false;
+  }
+  const ar = parsePlanTime(a);
+  const br = parsePlanTime(b);
+  return ar.start < br.end && br.start < ar.end;
+}
+
+export function findOverlappingPlans(
+  draft: Pick<ObservationPlan, "id" | "startDate" | "endDate" | "status">,
+  plans: ObservationPlan[],
+): ObservationPlan[] {
+  return plans.filter((existing) => {
+    if (existing.id === draft.id) return false;
+    if (normalizePlanStatus(existing.status) === "cancelled") return false;
+    if (normalizePlanStatus(draft.status) === "cancelled") return false;
+    return planTimeRangesOverlap(draft, existing);
+  });
+}
+
+export function buildPlanConflictCountMap(plans: ObservationPlan[]): Record<string, number> {
+  const activePlans = plans.filter((plan) => normalizePlanStatus(plan.status) !== "cancelled");
+  const counts: Record<string, number> = {};
+
+  for (let i = 0; i < activePlans.length; i += 1) {
+    for (let j = i + 1; j < activePlans.length; j += 1) {
+      const a = activePlans[i];
+      const b = activePlans[j];
+      if (!planTimeRangesOverlap(a, b)) continue;
+      counts[a.id] = (counts[a.id] ?? 0) + 1;
+      counts[b.id] = (counts[b.id] ?? 0) + 1;
+    }
+  }
+
+  return counts;
+}
+
+function shiftIsoByLocalDays(isoString: string, days: number): string {
+  const date = new Date(isoString);
+  if (!Number.isFinite(date.getTime())) return isoString;
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
+export function duplicatePlanToDraft(
+  plan: ObservationPlan,
+  options: { shiftDays?: number; status?: PlanStatus } = {},
+): ObservationPlanDraft {
+  const { shiftDays = 0, status = "planned" } = options;
+  return {
+    title: plan.title,
+    targetId: plan.targetId,
+    targetName: plan.targetName,
+    startDate: shiftIsoByLocalDays(plan.startDate, shiftDays),
+    endDate: shiftIsoByLocalDays(plan.endDate, shiftDays),
+    location: cloneLocation(plan),
+    equipment: cloneEquipment(plan),
+    notes: plan.notes,
+    reminderMinutes: plan.reminderMinutes,
+    status,
+  };
+}
+
+export function rolloverPlanToNextDay(plan: ObservationPlan): ObservationPlanDraft {
+  return duplicatePlanToDraft(plan, { shiftDays: 1, status: "planned" });
 }
 
 export function filterObservationPlans(

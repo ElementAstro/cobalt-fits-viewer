@@ -7,6 +7,7 @@ import * as Crypto from "expo-crypto";
 import { LOG_TAGS, Logger } from "../logger";
 import type { AstrometryResult } from "./types";
 import type { Target, TargetType } from "../fits/types";
+import { isCoordinateMatch as isCoordinateMatchInRadius } from "../targets/targetResolution";
 
 const TAG = LOG_TAGS.SyncToTarget;
 
@@ -118,10 +119,7 @@ export function isCoordinateMatch(
   dec2: number,
   radiusDeg: number = 0.5,
 ): boolean {
-  const dRa = (ra1 - ra2) * Math.cos((dec1 * Math.PI) / 180);
-  const dDec = dec1 - dec2;
-  const dist = Math.sqrt(dRa * dRa + dDec * dDec);
-  return dist <= radiusDeg;
+  return isCoordinateMatchInRadius(ra1, dec1, ra2, dec2, radiusDeg);
 }
 
 /**

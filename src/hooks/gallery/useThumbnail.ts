@@ -11,7 +11,7 @@ import {
   getThumbnailCacheSize,
 } from "../../lib/gallery/thumbnailCache";
 import { saveThumbnailFromRGBA, saveThumbnailFromVideo } from "../../lib/gallery/thumbnailWorkflow";
-import { regenerateFileThumbnail } from "../../lib/gallery/thumbnailGenerator";
+import { enqueueThumbnailRegeneration } from "../../lib/gallery/thumbnailScheduler";
 import { useSettingsStore } from "../../stores/app/useSettingsStore";
 import type { FitsMetadata } from "../../lib/fits/types";
 
@@ -120,7 +120,11 @@ export function useThumbnail() {
   }, []);
 
   const regenerateOneThumbnail = useCallback(
-    (file: FitsMetadata) => regenerateFileThumbnail(file),
+    (file: FitsMetadata) =>
+      enqueueThumbnailRegeneration(file, {
+        priority: "background",
+        reason: "manual-regenerate",
+      }),
     [],
   );
 

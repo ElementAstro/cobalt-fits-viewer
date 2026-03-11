@@ -8,7 +8,7 @@ const mockClearThumbnailCache = jest.fn();
 const mockGetThumbnailCacheSize = jest.fn();
 const mockSaveThumbnailFromRGBA = jest.fn();
 const mockSaveThumbnailFromVideo = jest.fn();
-const mockRegenerateFileThumbnail = jest.fn();
+const mockEnqueueThumbnailRegeneration = jest.fn();
 
 jest.mock("../../../lib/gallery/thumbnailCache", () => ({
   hasThumbnail: (...args: unknown[]) => mockHasThumbnail(...args),
@@ -22,8 +22,8 @@ jest.mock("../../../lib/gallery/thumbnailWorkflow", () => ({
   saveThumbnailFromVideo: (...args: unknown[]) => mockSaveThumbnailFromVideo(...args),
 }));
 
-jest.mock("../../../lib/gallery/thumbnailGenerator", () => ({
-  regenerateFileThumbnail: (...args: unknown[]) => mockRegenerateFileThumbnail(...args),
+jest.mock("../../../lib/gallery/thumbnailScheduler", () => ({
+  enqueueThumbnailRegeneration: (...args: unknown[]) => mockEnqueueThumbnailRegeneration(...args),
 }));
 
 jest.mock("../../../stores/app/useSettingsStore", () => ({
@@ -64,7 +64,7 @@ describe("useThumbnail", () => {
     mockGetThumbnailCacheSize.mockReturnValue(1024);
     mockSaveThumbnailFromRGBA.mockImplementation((id: string) => `file:///thumb/${id}.jpg`);
     mockSaveThumbnailFromVideo.mockImplementation((id: string) => `file:///thumb/${id}.jpg`);
-    mockRegenerateFileThumbnail.mockImplementation((file: FitsMetadata) =>
+    mockEnqueueThumbnailRegeneration.mockImplementation((file: FitsMetadata) =>
       Promise.resolve({ fileId: file.id, uri: `file:///thumb/${file.id}.jpg` }),
     );
   });
@@ -90,7 +90,7 @@ describe("useThumbnail", () => {
       makeFile({ id: "f-ok", filepath: "/tmp/f-ok.fits", sourceType: "fits" }),
       makeFile({ id: "f-skip", filepath: "/tmp/f-skip.fits", sourceType: "fits" }),
     ];
-    mockRegenerateFileThumbnail
+    mockEnqueueThumbnailRegeneration
       .mockResolvedValueOnce({ fileId: "f-ok", uri: "file:///thumb/f-ok.jpg" })
       .mockResolvedValueOnce({ fileId: "f-skip", uri: null });
 
@@ -104,12 +104,12 @@ describe("useThumbnail", () => {
       expect(out.results).toHaveLength(2);
     });
 
-    expect(mockRegenerateFileThumbnail).toHaveBeenCalledTimes(2);
+    expect(mockEnqueueThumbnailRegeneration).toHaveBeenCalledTimes(2);
     expect(result.current.regenerateProgress).toBeNull();
     expect(result.current.isGenerating).toBe(false);
   });
 
-  it("regenerateOneThumbnail delegates to regenerateFileThumbnail", async () => {
+  it("regenerateOneThumbnail delegates to thumbnail scheduler", async () => {
     const file = makeFile({ id: "single", filepath: "/tmp/single.fits" });
 
     const { result } = renderHook(() => useThumbnail());
@@ -119,7 +119,10 @@ describe("useThumbnail", () => {
       output = await result.current.regenerateOneThumbnail(file);
     });
 
-    expect(mockRegenerateFileThumbnail).toHaveBeenCalledWith(file);
+    expect(mockEnqueueThumbnailRegeneration).toHaveBeenCalledWith(file, {
+      priority: "background",
+      reason: "manual-regenerate",
+    });
     expect(output?.fileId).toBe("single");
     expect(output?.uri).toBe("file:///thumb/single.jpg");
   });

@@ -18,6 +18,7 @@ module.exports = {
   ],
   moduleNameMapper: {
     "\\.css$": "<rootDir>/__mocks__/styleMock.js",
+    "^react-native-reanimated/mock$": "<rootDir>/__mocks__/react-native-reanimated-mock.js",
   },
   collectCoverageFrom: ["src/**/*.{ts,tsx}", "!src/**/*.d.ts", "!src/**/index.ts"],
   coverageDirectory: "coverage",

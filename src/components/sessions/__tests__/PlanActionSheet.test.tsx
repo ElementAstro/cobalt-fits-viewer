@@ -65,4 +65,14 @@ describe("PlanActionSheet", () => {
     expect(screen.getByText("sessions.status.cancelled")).toBeTruthy();
     expect(screen.queryByText("sessions.status.planned")).toBeNull();
   });
+
+  it("shows duplicate action when onDuplicate is provided", () => {
+    render(<PlanActionSheet visible plan={makePlan()} onClose={onClose} onDuplicate={jest.fn()} />);
+    expect(screen.getByText("sessions.duplicatePlan")).toBeTruthy();
+  });
+
+  it("shows rollover action when onRollover is provided", () => {
+    render(<PlanActionSheet visible plan={makePlan()} onClose={onClose} onRollover={jest.fn()} />);
+    expect(screen.getByText("sessions.rolloverPlan")).toBeTruthy();
+  });
 });

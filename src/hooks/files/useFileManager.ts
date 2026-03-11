@@ -373,7 +373,7 @@ export function useFileManager() {
 
       for (const file of restoredFiles) {
         try {
-          upsertAndLinkFileTarget(
+          const syncResult = upsertAndLinkFileTarget(
             file.id,
             {
               object: file.object,
@@ -382,6 +382,15 @@ export function useFileManager() {
             },
             "import",
           );
+          if (
+            syncResult &&
+            (syncResult.outcome === "ambiguous" || syncResult.outcome === "skipped")
+          ) {
+            Logger.info(
+              LOG_TAGS.FileManager,
+              `Target relink skipped for restored file ${file.filename} (${syncResult.outcome}:${syncResult.reasonCode})`,
+            );
+          }
         } catch (error) {
           Logger.warn(
             LOG_TAGS.FileManager,
@@ -710,7 +719,7 @@ export function useFileManager() {
 
         if (autoGroupByObject) {
           try {
-            upsertAndLinkFileTarget(
+            const resolution = upsertAndLinkFileTarget(
               fileId,
               {
                 object: fullMeta.object,
@@ -719,6 +728,15 @@ export function useFileManager() {
               },
               "import",
             );
+            if (
+              resolution &&
+              (resolution.outcome === "ambiguous" || resolution.outcome === "skipped")
+            ) {
+              Logger.info(
+                LOG_TAGS.FileManager,
+                `Auto target resolution ${resolution.outcome} for ${finalName} (${resolution.reasonCode})`,
+              );
+            }
           } catch (e) {
             Logger.warn(LOG_TAGS.FileManager, `Auto target detection failed for ${finalName}`, e);
           }

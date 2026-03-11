@@ -1,0 +1,7 @@
+---
+# group__param_id: Target group detail route with members, overview and timeline tabs.
+- runFlow: ../common/bootstrap.yaml
+- openLink: cobalt://group/target-group-001
+
+# 1. Assert seeded group is visible
+- assertVisible: E2E Group

@@ -24,6 +24,43 @@ const mockUnsyncSessionsBatch = jest.fn(async () => ({
   skipped: 0,
   failed: 0,
 }));
+const mockObservationCalendarProps = jest.fn();
+const mockAddSession = jest.fn();
+const mockRemoveSession = jest.fn();
+const mockRemoveMultipleSessions = jest.fn();
+const mockCreateObservationPlan = jest.fn(async () => true);
+let mockPlans: Array<Record<string, unknown>> = [];
+let mockSessions: Array<Record<string, unknown>> = [
+  {
+    id: "s1",
+    date: "2026-01-01",
+    startTime: 1,
+    endTime: 2,
+    duration: 1,
+    targetRefs: [],
+    imageIds: [],
+    equipment: {},
+    createdAt: 1,
+  },
+  {
+    id: "s2",
+    date: "2026-01-02",
+    startTime: 3,
+    endTime: 4,
+    duration: 1,
+    targetRefs: [],
+    imageIds: [],
+    equipment: {},
+    createdAt: 2,
+  },
+];
+const mockResponsiveLayout = {
+  layoutMode: "portrait",
+  isLandscape: false,
+  isLandscapeTablet: false,
+  contentPaddingTop: 0,
+  sidePanelWidth: 320,
+};
 const mockReconcileSessionsFromLinkedFiles = jest.fn(() => ({
   requested: 2,
   processed: 2,
@@ -49,40 +86,12 @@ jest.mock("../../../i18n/useI18n", () => ({
 }));
 
 jest.mock("../../../hooks/common/useResponsiveLayout", () => ({
-  useResponsiveLayout: () => ({
-    isLandscape: false,
-    isLandscapeTablet: false,
-    contentPaddingTop: 0,
-    sidePanelWidth: 320,
-  }),
+  useResponsiveLayout: () => mockResponsiveLayout,
 }));
 
 jest.mock("../../../hooks/sessions/useSessions", () => ({
   useSessions: () => ({
-    sessions: [
-      {
-        id: "s1",
-        date: "2026-01-01",
-        startTime: 1,
-        endTime: 2,
-        duration: 1,
-        targetRefs: [],
-        imageIds: [],
-        equipment: {},
-        createdAt: 1,
-      },
-      {
-        id: "s2",
-        date: "2026-01-02",
-        startTime: 3,
-        endTime: 4,
-        duration: 1,
-        targetRefs: [],
-        imageIds: [],
-        equipment: {},
-        createdAt: 2,
-      },
-    ],
+    sessions: mockSessions,
     autoDetectSessions: jest.fn(() => ({
       totalDetected: 0,
       newCount: 0,
@@ -117,11 +126,12 @@ jest.mock("../../../hooks/sessions/useCalendar", () => ({
     editPlanInCalendar: jest.fn(),
     createSessionViaSystemCalendar: jest.fn(),
     createPlanViaSystemCalendar: jest.fn(),
+    createObservationPlan: mockCreateObservationPlan,
     deleteObservationPlan: jest.fn(),
     updateObservationPlan: jest.fn(),
     syncObservationPlan: jest.fn(),
     unsyncObservationPlan: jest.fn(),
-    plans: [],
+    plans: mockPlans,
     syncing: false,
   }),
 }));
@@ -137,9 +147,9 @@ jest.mock("../../../stores/observation/useSessionStore", () => ({
   useSessionStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       getPlannedDates: () => [],
-      addSession: jest.fn(),
-      removeSession: jest.fn(),
-      removeMultipleSessions: jest.fn(),
+      addSession: mockAddSession,
+      removeSession: mockRemoveSession,
+      removeMultipleSessions: mockRemoveMultipleSessions,
     }),
 }));
 
@@ -167,11 +177,25 @@ jest.mock("../../../components/sessions/MonthlyActivityChart", () => ({
 }));
 
 jest.mock("../../../components/sessions/ObservationCalendar", () => ({
-  ObservationCalendar: () => null,
+  ObservationCalendar: (props: Record<string, unknown>) => {
+    mockObservationCalendarProps(props);
+    return null;
+  },
 }));
 
 jest.mock("../../../components/sessions/PlanCard", () => ({
-  PlanCard: () => null,
+  PlanCard: ({ plan, onLongPress }: { plan: { id: string }; onLongPress?: () => void }) => {
+    const ReactLocal = require("react");
+    const { Pressable, Text } = require("react-native");
+    return ReactLocal.createElement(
+      Pressable,
+      {
+        testID: `plan-card-${plan.id}`,
+        onLongPress,
+      },
+      ReactLocal.createElement(Text, null, plan.id),
+    );
+  },
 }));
 
 jest.mock("../../../components/sessions/PlanObservationSheet", () => ({
@@ -206,7 +230,27 @@ jest.mock("../../../components/sessions/SessionActionSheet", () => ({
 }));
 
 jest.mock("../../../components/sessions/PlanActionSheet", () => ({
-  PlanActionSheet: () => null,
+  PlanActionSheet: ({
+    visible,
+    plan,
+    onCreateSession,
+  }: {
+    visible: boolean;
+    plan: { id: string } | null;
+    onCreateSession?: (plan: { id: string }) => void;
+  }) => {
+    if (!visible || !plan) return null;
+    const ReactLocal = require("react");
+    const { Pressable, Text } = require("react-native");
+    return ReactLocal.createElement(
+      Pressable,
+      {
+        testID: "plan-action-create-session",
+        onPress: () => onCreateSession?.(plan),
+      },
+      ReactLocal.createElement(Text, null, "create-session"),
+    );
+  },
 }));
 
 jest.mock("../../../components/sessions/SessionSelectionBar", () => ({
@@ -283,6 +327,35 @@ describe("(tabs)/sessions.tsx", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPlans = [];
+    mockSessions = [
+      {
+        id: "s1",
+        date: "2026-01-01",
+        startTime: 1,
+        endTime: 2,
+        duration: 1,
+        targetRefs: [],
+        imageIds: [],
+        equipment: {},
+        createdAt: 1,
+      },
+      {
+        id: "s2",
+        date: "2026-01-02",
+        startTime: 3,
+        endTime: 4,
+        duration: 1,
+        targetRefs: [],
+        imageIds: [],
+        equipment: {},
+        createdAt: 2,
+      },
+    ];
+    mockResponsiveLayout.layoutMode = "portrait";
+    mockResponsiveLayout.isLandscape = false;
+    mockResponsiveLayout.isLandscapeTablet = false;
+    mockObservationCalendarProps.mockClear();
     consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
     alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
   });
@@ -328,5 +401,68 @@ describe("(tabs)/sessions.tsx", () => {
       ]),
     );
     expect(lastCall?.footnote).toBe("sessions.reconcileNoChanges");
+  });
+
+  it("uses split-pane compact calendar in landscape-tablet mode", () => {
+    mockResponsiveLayout.layoutMode = "landscape-tablet";
+    mockResponsiveLayout.isLandscape = true;
+    mockResponsiveLayout.isLandscapeTablet = true;
+
+    render(<Screen />);
+
+    expect(mockObservationCalendarProps).toHaveBeenCalledWith(
+      expect.objectContaining({ compact: true }),
+    );
+  });
+
+  it("keeps non-split calendar in landscape-phone mode", () => {
+    mockResponsiveLayout.layoutMode = "landscape-phone";
+    mockResponsiveLayout.isLandscape = true;
+    mockResponsiveLayout.isLandscapeTablet = false;
+
+    render(<Screen />);
+
+    expect(mockObservationCalendarProps).not.toHaveBeenCalledWith(
+      expect.objectContaining({ compact: true }),
+    );
+  });
+
+  it("warns before converting a plan that already has a converted session", () => {
+    mockPlans = [
+      {
+        id: "plan-dup",
+        title: "Plan Dup",
+        targetName: "M42",
+        startDate: "2026-01-01T20:00:00.000Z",
+        endDate: "2026-01-01T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 10,
+        status: "planned",
+      },
+    ];
+    mockSessions = [
+      {
+        id: "from_plan_plan-dup_100",
+        date: "2026-01-01",
+        startTime: 1,
+        endTime: 2,
+        duration: 1,
+        targetRefs: [],
+        imageIds: [],
+        equipment: {},
+        createdAt: 1,
+      },
+    ];
+
+    render(<Screen />);
+    fireEvent(screen.getByTestId("plan-card-plan-dup"), "onLongPress");
+    fireEvent.press(screen.getByTestId("plan-action-create-session"));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "sessions.planAlreadyConvertedTitle",
+      "sessions.planAlreadyConvertedMessage",
+      expect.any(Array),
+    );
+    expect(mockAddSession).not.toHaveBeenCalled();
   });
 });

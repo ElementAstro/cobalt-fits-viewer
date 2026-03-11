@@ -29,6 +29,11 @@ import { TagInput } from "../../components/targets/TagInput";
 import type { SearchConditions } from "../../lib/targets/targetSearch";
 import type { TargetType, TargetStatus } from "../../lib/fits/types";
 import {
+  TARGETS_COMPACT_ACTIONS_MAX_WIDTH,
+  shouldUseCompactActionLayout,
+  shouldUseLandscapeSplitPane,
+} from "../../lib/layout/landscapeRules";
+import {
   TARGET_STATUSES,
   targetStatusI18nKey,
   STATUS_COLORS,
@@ -43,7 +48,7 @@ export default function TargetsScreen() {
   });
   const { width: screenWidth, fontScale } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const { isLandscapeTablet, contentPaddingTop, horizontalPadding, sidePanelWidth } =
+  const { layoutMode, contentPaddingTop, horizontalPadding, sidePanelWidth } =
     useResponsiveLayout();
   const [showAddSheet, setShowAddSheet] = useState(false);
   const [showStats, setShowStats] = useState(false);
@@ -326,8 +331,17 @@ export default function TargetsScreen() {
       }),
     [targetActionSizePreset, targetActionAutoScaleFromFont, fontScale],
   );
-  const useCompactHeaderActions = !isLandscapeTablet && screenWidth < 430;
-  const useCompactFilterLayout = !isLandscapeTablet && screenWidth < 430;
+  const useLandscapeSplitLayout = shouldUseLandscapeSplitPane(layoutMode);
+  const useCompactHeaderActions = shouldUseCompactActionLayout(
+    layoutMode,
+    screenWidth,
+    TARGETS_COMPACT_ACTIONS_MAX_WIDTH,
+  );
+  const useCompactFilterLayout = shouldUseCompactActionLayout(
+    layoutMode,
+    screenWidth,
+    TARGETS_COMPACT_ACTIONS_MAX_WIDTH,
+  );
 
   const handleAdvancedSearch = useCallback(
     (conditions: SearchConditions) => {
@@ -370,6 +384,12 @@ export default function TargetsScreen() {
             value: result.updatedCount,
             color: "accent",
             icon: "create-outline",
+          },
+          {
+            label: t("targets.scanSummaryAmbiguous"),
+            value: result.ambiguousCount,
+            color: "warning",
+            icon: "help-circle-outline",
           },
           {
             label: t("targets.scanSummarySkipped"),
@@ -559,7 +579,7 @@ export default function TargetsScreen() {
           </View>
         </GuideTarget>
       )}
-      {isLandscapeTablet ? (
+      {useLandscapeSplitLayout ? (
         <View className="flex-1 flex-row">
           <View style={{ width: sidePanelWidth, paddingHorizontal: horizontalPadding }}>
             <StatisticsDashboard statistics={statistics} monthlyStats={monthlyStats} />
@@ -640,7 +660,7 @@ export default function TargetsScreen() {
         onNavigateToGroup={(groupId) => router.push(`/group/${groupId}`)}
       />
 
-      {!isLandscapeTablet && (
+      {!useLandscapeSplitLayout && (
         <BottomSheet
           isOpen={showStats}
           onOpenChange={(open) => {

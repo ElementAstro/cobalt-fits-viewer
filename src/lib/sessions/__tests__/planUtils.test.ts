@@ -1,9 +1,14 @@
 import type { ObservationPlan } from "../../fits/types";
 import {
+  buildPlanConflictCountMap,
   buildSessionFromPlan,
+  duplicatePlanToDraft,
   filterObservationPlans,
+  findOverlappingPlans,
   getPlanDateKey,
   normalizePlanStatus,
+  planTimeRangesOverlap,
+  rolloverPlanToNextDay,
   sortObservationPlans,
   toLocalDateKey,
 } from "../planUtils";
@@ -148,6 +153,89 @@ describe("planUtils", () => {
         endDate: "2025-03-10T20:00:00.000Z",
       });
       expect(() => buildSessionFromPlan(plan)).toThrow("Invalid plan time range");
+    });
+  });
+
+  describe("plan overlap helpers", () => {
+    const p1 = makePlan({
+      id: "p1",
+      startDate: "2025-03-10T20:00:00.000Z",
+      endDate: "2025-03-10T22:00:00.000Z",
+      status: "planned",
+    });
+    const p2 = makePlan({
+      id: "p2",
+      startDate: "2025-03-10T21:00:00.000Z",
+      endDate: "2025-03-10T23:00:00.000Z",
+      status: "completed",
+    });
+    const p3 = makePlan({
+      id: "p3",
+      startDate: "2025-03-10T22:00:00.000Z",
+      endDate: "2025-03-10T23:00:00.000Z",
+      status: "planned",
+    });
+    const p4 = makePlan({
+      id: "p4",
+      startDate: "2025-03-10T21:15:00.000Z",
+      endDate: "2025-03-10T22:15:00.000Z",
+      status: "cancelled",
+    });
+
+    it("detects true overlap only when time ranges intersect", () => {
+      expect(planTimeRangesOverlap(p1, p2)).toBe(true);
+      expect(planTimeRangesOverlap(p1, p3)).toBe(false);
+    });
+
+    it("finds overlaps while excluding self and cancelled plans", () => {
+      const conflicts = findOverlappingPlans(p1, [p1, p2, p3, p4]);
+      expect(conflicts.map((item) => item.id)).toEqual(["p2"]);
+    });
+
+    it("builds conflict count map for overlapping active plans", () => {
+      const map = buildPlanConflictCountMap([p1, p2, p3, p4]);
+      expect(map).toEqual({ p1: 1, p2: 2, p3: 1 });
+    });
+  });
+
+  describe("plan duplication helpers", () => {
+    const source = makePlan({
+      id: "p-source",
+      status: "completed",
+      notes: "copy me",
+      reminderMinutes: 15,
+      equipment: {
+        telescope: "C8",
+        camera: "ASI2600",
+        filters: ["Ha", "OIII"],
+      },
+      location: {
+        latitude: 39.9,
+        longitude: 116.4,
+        placeName: "Dark Site",
+      },
+      startDate: "2025-03-10T20:00:00.000Z",
+      endDate: "2025-03-10T22:00:00.000Z",
+    });
+
+    it("duplicates plan into draft with planned status by default", () => {
+      const draft = duplicatePlanToDraft(source);
+      expect(draft.status).toBe("planned");
+      expect(draft.targetName).toBe(source.targetName);
+      expect(draft.equipment?.filters).toEqual(["Ha", "OIII"]);
+      expect(draft.location?.placeName).toBe("Dark Site");
+      expect(draft.startDate).toBe(source.startDate);
+      expect(draft.endDate).toBe(source.endDate);
+    });
+
+    it("rolls plan forward by one day", () => {
+      const rolled = rolloverPlanToNextDay(source);
+      const startDelta =
+        new Date(rolled.startDate).getTime() - new Date(source.startDate).getTime();
+      const endDelta = new Date(rolled.endDate).getTime() - new Date(source.endDate).getTime();
+      expect(startDelta).toBe(24 * 60 * 60 * 1000);
+      expect(endDelta).toBe(24 * 60 * 60 * 1000);
+      expect(rolled.status).toBe("planned");
     });
   });
 });

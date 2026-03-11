@@ -32,6 +32,7 @@ import { useScreenOrientation } from "../../hooks/common/useScreenOrientation";
 import { useVideoKeyboard } from "../../hooks/video/useVideoKeyboard";
 import * as VideoThumbnails from "expo-video-thumbnails";
 import { saveThumbnailFromExternalUri } from "../../lib/gallery/thumbnailWorkflow";
+import { shouldUseLandscapeSplitPane } from "../../lib/layout/landscapeRules";
 
 function toMediaExportFormat(
   format?: string,
@@ -67,7 +68,8 @@ export default function VideoDetailScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const [mutedColor, separatorColor] = useThemeColor(["muted", "separator"]);
-  const { isLandscape, sidePanelWidth } = useResponsiveLayout();
+  const { layoutMode, isLandscape, sidePanelWidth } = useResponsiveLayout();
+  const useLandscapeSplitLayout = shouldUseLandscapeSplitPane(layoutMode);
   const insets = useSafeAreaInsets();
   const haptics = useHapticFeedback();
   const { lockOrientation, unlockOrientation } = useScreenOrientation();
@@ -221,6 +223,37 @@ export default function VideoDetailScreen() {
     abLoopB,
     errorFallbackMessage: t("settings.videoPlaybackError"),
   });
+  type SelectableTrack = { id: string; label?: string; language?: string };
+  const selectableAudioTracks = useMemo(
+    () =>
+      availableAudioTracks.flatMap((track) =>
+        typeof track.id === "string" && track.id.length > 0
+          ? [
+              {
+                id: track.id,
+                label: track.label,
+                language: track.language,
+              } satisfies SelectableTrack,
+            ]
+          : [],
+      ),
+    [availableAudioTracks],
+  );
+  const selectableSubtitleTracks = useMemo(
+    () =>
+      availableSubtitleTracks.flatMap((track) =>
+        typeof track.id === "string" && track.id.length > 0
+          ? [
+              {
+                id: track.id,
+                label: track.label,
+                language: track.language,
+              } satisfies SelectableTrack,
+            ]
+          : [],
+      ),
+    [availableSubtitleTracks],
+  );
 
   const resumeAppliedRef = useRef(false);
   useEffect(() => {
@@ -424,7 +457,7 @@ export default function VideoDetailScreen() {
         }}
       />
 
-      {isLandscape ? (
+      {useLandscapeSplitLayout ? (
         <View className="flex-1 flex-row">
           <ScrollView
             className="flex-1"
@@ -483,8 +516,8 @@ export default function VideoDetailScreen() {
               isSaving={isSaving}
               videoProcessingEnabled={videoProcessingEnabled}
               isEngineAvailable={isEngineAvailable}
-              availableAudioTracks={availableAudioTracks}
-              availableSubtitleTracks={availableSubtitleTracks}
+              availableAudioTracks={selectableAudioTracks}
+              availableSubtitleTracks={selectableSubtitleTracks}
               activeAudioTrackId={activeAudioTrackId}
               activeSubtitleTrackId={activeSubtitleTrackId}
               onToggleLoop={handleToggleLoop}
@@ -575,8 +608,8 @@ export default function VideoDetailScreen() {
             isSaving={isSaving}
             videoProcessingEnabled={videoProcessingEnabled}
             isEngineAvailable={isEngineAvailable}
-            availableAudioTracks={availableAudioTracks}
-            availableSubtitleTracks={availableSubtitleTracks}
+            availableAudioTracks={selectableAudioTracks}
+            availableSubtitleTracks={selectableSubtitleTracks}
             activeAudioTrackId={activeAudioTrackId}
             activeSubtitleTrackId={activeSubtitleTrackId}
             onToggleLoop={handleToggleLoop}

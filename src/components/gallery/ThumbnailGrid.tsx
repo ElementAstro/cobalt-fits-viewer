@@ -6,6 +6,7 @@ import { Skeleton, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { resolveThumbnailUri } from "../../lib/gallery/thumbnailCache";
 import { useThumbnailOnDemand } from "../../hooks/gallery/useThumbnailOnDemand";
+import type { ThumbnailRequestPriority } from "../../lib/gallery/thumbnailScheduler";
 import { formatVideoDuration, formatVideoResolution } from "../../lib/video/format";
 import type { FitsMetadata } from "../../lib/fits/types";
 import { isVideoFile, isAudioFile } from "../../lib/media/routing";
@@ -19,6 +20,8 @@ import {
 } from "./thumbnailLoading";
 import { ThumbnailProgressOverlay } from "./ThumbnailProgressOverlay";
 import { MediaTypeBadge } from "./MediaTypeBadge";
+
+const NEARBY_PREFETCH_ROWS = 2;
 
 interface ThumbnailGridProps {
   files: FitsMetadata[];
@@ -36,6 +39,12 @@ interface ThumbnailGridProps {
   showExposure?: boolean;
   showLoadProgress?: boolean;
   onLoadingSummaryChange?: (summary: ThumbnailLoadingSummary) => void;
+}
+
+interface FlashListViewableItem {
+  item: FitsMetadata;
+  index?: number | null;
+  isViewable?: boolean;
 }
 
 const ThumbnailItem = memo(function ThumbnailItem({
@@ -71,7 +80,7 @@ const ThumbnailItem = memo(function ThumbnailItem({
   showExposure?: boolean;
   showLoadProgress?: boolean;
   onSnapshotChange: (snapshot: ThumbnailLoadSnapshot) => void;
-  onRequestThumbnail?: (file: FitsMetadata) => void;
+  onRequestThumbnail?: (file: FitsMetadata, priority?: ThumbnailRequestPriority) => void;
 }) {
   const thumbnailUri = useMemo(
     () => resolveThumbnailUri(file.id, file.thumbnailUri),
@@ -92,7 +101,7 @@ const ThumbnailItem = memo(function ThumbnailItem({
   useEffect(() => {
     if (!thumbnailUri) {
       setSnapshot((prev) => withStage(prev, "ready"));
-      onRequestThumbnail?.(file);
+      onRequestThumbnail?.(file, "background");
     }
   }, [thumbnailUri, file, onRequestThumbnail]);
 
@@ -267,6 +276,7 @@ export function ThumbnailGrid({
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const [snapshots, setSnapshots] = useState<Record<string, ThumbnailLoadSnapshot>>({});
   const prevFileIdsRef = useRef<Set<string>>(new Set());
+  const lastViewWindowRef = useRef<string>("");
 
   useEffect(() => {
     const currentIds = new Set(files.map((file) => file.id));
@@ -310,6 +320,64 @@ export function ThumbnailGrid({
       };
     });
   }, []);
+
+  const requestWithPriority = useCallback(
+    (file: FitsMetadata, priority: ThumbnailRequestPriority) => {
+      if (file.sourceType === "audio") return;
+      if (resolveThumbnailUri(file.id, file.thumbnailUri)) return;
+      void requestThumbnail(file, priority);
+    },
+    [requestThumbnail],
+  );
+
+  const handleViewableItemsChanged = useCallback(
+    ({ viewableItems }: { viewableItems: FlashListViewableItem[] }) => {
+      if (!files.length || !viewableItems?.length) return;
+
+      const visibleIndices = viewableItems
+        .filter(
+          (entry): entry is FlashListViewableItem & { index: number } =>
+            (entry.isViewable ?? true) && typeof entry.index === "number",
+        )
+        .map((entry) => entry.index)
+        .sort((a, b) => a - b);
+
+      if (!visibleIndices.length) return;
+
+      const nearbySpan = Math.max(columns * NEARBY_PREFETCH_ROWS, columns);
+      const minVisible = visibleIndices[0];
+      const maxVisible = visibleIndices[visibleIndices.length - 1];
+      const nearbyStart = Math.max(0, minVisible - nearbySpan);
+      const nearbyEnd = Math.min(files.length - 1, maxVisible + nearbySpan);
+
+      const signature = `${nearbyStart}:${nearbyEnd}:${visibleIndices.join(",")}`;
+      if (signature === lastViewWindowRef.current) return;
+      lastViewWindowRef.current = signature;
+
+      const visibleSet = new Set(visibleIndices);
+
+      for (const index of visibleIndices) {
+        const file = files[index];
+        if (!file) continue;
+        requestWithPriority(file, "visible");
+      }
+
+      for (let index = nearbyStart; index <= nearbyEnd; index++) {
+        if (visibleSet.has(index)) continue;
+        const file = files[index];
+        if (!file) continue;
+        requestWithPriority(file, "nearby");
+      }
+
+      for (let index = 0; index < files.length; index++) {
+        if (index >= nearbyStart && index <= nearbyEnd) continue;
+        const file = files[index];
+        if (!file) continue;
+        requestWithPriority(file, "background");
+      }
+    },
+    [columns, files, requestWithPriority],
+  );
 
   const renderItem = useCallback(
     ({ item }: { item: FitsMetadata }) => (
@@ -360,6 +428,7 @@ export function ThumbnailGrid({
       keyExtractor={keyExtractor}
       numColumns={columns}
       drawDistance={itemSize * 3}
+      onViewableItemsChanged={handleViewableItemsChanged}
       scrollEnabled={scrollEnabled}
       showsVerticalScrollIndicator={false}
       ListHeaderComponent={ListHeaderComponent}
