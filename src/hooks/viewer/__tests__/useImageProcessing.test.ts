@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react-native";
-import { InteractionManager } from "react-native";
+import { InteractionManager } from "../../../lib/utils/interactionManager";
 import { useImageProcessing } from "../useImageProcessing";
 import { createDeferred, flushPromises } from "../../__test-helpers__/testUtils";
 import type { ProcessingPipelineSnapshot } from "../../../lib/fits/types";

@@ -616,34 +616,111 @@ export function useCalendar() {
     [calendarSyncEnabled, plans, updatePlan, ensurePermission, notifyHaptic, targets],
   );
 
-  const syncAllObservationPlans = useCallback(
-    async (targetPlans: ObservationPlan[] = plans): Promise<number> => {
-      if (!calendarSyncEnabled) return 0;
-      const permitted = await ensurePermission(true);
-      if (!permitted) return 0;
+  const syncObservationPlansBatch = useCallback(
+    async (targetPlans: ObservationPlan[]): Promise<CalendarBatchSummary> => {
+      const summary: CalendarBatchSummary = {
+        total: targetPlans.length,
+        success: 0,
+        skipped: 0,
+        failed: 0,
+      };
 
-      let count = 0;
+      if (!calendarSyncEnabled) {
+        return { ...summary, permissionDenied: true };
+      }
+
+      const permitted = await ensurePermission(true);
+      if (!permitted) {
+        return { ...summary, permissionDenied: true };
+      }
+
       try {
         setSyncing(true);
         for (const plan of targetPlans) {
-          if (plan.calendarEventId) continue;
+          if (plan.calendarEventId) {
+            summary.skipped++;
+            continue;
+          }
+
           try {
             const eventId = await createPlanEvent(plan, targets);
             updatePlan(plan.id, { calendarEventId: eventId });
-            count++;
+            summary.success++;
           } catch {
-            // 跳过失败的单个计划
+            summary.failed++;
           }
         }
-        if (count > 0) {
+
+        if (summary.success > 0) {
           notifyHaptic(Haptics.NotificationFeedbackType.Success);
+        } else if (summary.failed > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
         }
       } finally {
         setSyncing(false);
       }
-      return count;
+
+      return summary;
     },
-    [calendarSyncEnabled, plans, ensurePermission, updatePlan, notifyHaptic, targets],
+    [calendarSyncEnabled, ensurePermission, notifyHaptic, targets, updatePlan],
+  );
+
+  const unsyncObservationPlansBatch = useCallback(
+    async (targetPlans: ObservationPlan[]): Promise<CalendarBatchSummary> => {
+      const summary: CalendarBatchSummary = {
+        total: targetPlans.length,
+        success: 0,
+        skipped: 0,
+        failed: 0,
+      };
+
+      try {
+        setSyncing(true);
+        for (const plan of targetPlans) {
+          const eventId = plan.calendarEventId;
+          if (!eventId) {
+            summary.skipped++;
+            continue;
+          }
+
+          let deleted = false;
+          if (calendarSyncEnabled) {
+            try {
+              await deleteCalendarEvent(eventId);
+              deleted = true;
+            } catch {
+              deleted = false;
+            }
+          }
+
+          updatePlan(plan.id, { calendarEventId: undefined });
+          if (deleted || !calendarSyncEnabled) {
+            summary.success++;
+          } else {
+            summary.failed++;
+          }
+        }
+
+        if (summary.success > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Success);
+        } else if (summary.failed > 0) {
+          notifyHaptic(Haptics.NotificationFeedbackType.Warning);
+        }
+      } finally {
+        setSyncing(false);
+      }
+
+      return summary;
+    },
+    [calendarSyncEnabled, notifyHaptic, updatePlan],
+  );
+
+  const syncAllObservationPlans = useCallback(
+    async (targetPlans: ObservationPlan[] = plans): Promise<number> => {
+      const summary = await syncObservationPlansBatch(targetPlans);
+      return summary.success;
+    },
+    [plans, syncObservationPlansBatch],
   );
 
   const refreshSessionFromCalendar = useCallback(
@@ -1076,7 +1153,9 @@ export function useCalendar() {
     createObservationPlan,
     updateObservationPlan,
     syncObservationPlan,
+    syncObservationPlansBatch,
     syncAllObservationPlans,
+    unsyncObservationPlansBatch,
     refreshSessionFromCalendar,
     refreshPlanFromCalendar,
     refreshAllFromCalendar,

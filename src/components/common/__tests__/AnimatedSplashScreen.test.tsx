@@ -1,5 +1,5 @@
 import React from "react";
-import { render, screen } from "@testing-library/react-native";
+import { act, render, screen } from "@testing-library/react-native";
 import { AnimatedSplashScreen } from "../AnimatedSplashScreen";
 
 jest.mock("react-native-reanimated", () => {
@@ -96,7 +96,9 @@ describe("AnimatedSplashScreen", () => {
     expect(screen.toJSON()).toBeTruthy();
 
     // Advance timers past the MIN_DISPLAY_MS (1500ms)
-    jest.advanceTimersByTime(2500);
+    act(() => {
+      jest.advanceTimersByTime(2500);
+    });
   });
 
   it("applies custom font family when getFontFamily returns a value", () => {

@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback, useRef, useMemo, useEffect } from "react";
-import { InteractionManager } from "react-native";
+import { InteractionManager } from "../../lib/utils/interactionManager";
 import * as DocumentPicker from "expo-document-picker";
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";

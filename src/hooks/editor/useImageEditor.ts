@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { InteractionManager } from "react-native";
+import { InteractionManager } from "../../lib/utils/interactionManager";
 import type {
   ColormapType,
   ProcessingAlgorithmProfile,

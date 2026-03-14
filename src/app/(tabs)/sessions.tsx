@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, FlatList, ScrollView, Text, View } from "react-native";
 import { Button, Card, Chip, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -22,6 +22,7 @@ import { SessionActionSheet } from "../../components/sessions/SessionActionSheet
 import { PlanActionSheet } from "../../components/sessions/PlanActionSheet";
 import { SessionSelectionBar } from "../../components/sessions/SessionSelectionBar";
 import { SessionDateSummary } from "../../components/sessions/SessionDateSummary";
+import { PlanSelectionBar } from "../../components/sessions/PlanSelectionBar";
 import { useCalendar } from "../../hooks/sessions/useCalendar";
 import { useResponsiveLayout } from "../../hooks/common/useResponsiveLayout";
 import { useSessions } from "../../hooks/sessions/useSessions";
@@ -35,11 +36,15 @@ import {
 } from "../../lib/layout/landscapeRules";
 import {
   buildPlanConflictCountMap,
+  buildPlanMaintenanceFlags,
   buildSessionFromPlan,
   duplicatePlanToDraft,
   filterObservationPlans,
+  isPlanOverdue,
+  previewBatchPlanShiftConflicts,
   rolloverPlanToNextDay,
   sortObservationPlans,
+  type PlanMaintenanceFilter,
   type PlanSortBy,
   type PlanStatusFilter,
 } from "../../lib/sessions/planUtils";
@@ -50,6 +55,12 @@ import { resolveTargetName } from "../../lib/targets/targetRefs";
 import { resolveSessionTargetNames } from "../../lib/sessions/sessionLinking";
 
 const PLAN_STATUS_FILTERS: PlanStatusFilter[] = ["all", "planned", "completed", "cancelled"];
+const PLAN_MAINTENANCE_FILTERS: PlanMaintenanceFilter[] = [
+  "all",
+  "overdue",
+  "unsynced",
+  "conflict",
+];
 const PLAN_SORT_OPTIONS: PlanSortBy[] = ["startAsc", "startDesc", "target", "status"];
 
 export default function SessionsScreen() {
@@ -95,6 +106,8 @@ export default function SessionsScreen() {
     updateObservationPlan,
     syncObservationPlan,
     unsyncObservationPlan,
+    syncObservationPlansBatch,
+    unsyncObservationPlansBatch,
     plans,
     syncing,
   } = useCalendar();
@@ -108,10 +121,13 @@ export default function SessionsScreen() {
 
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isPlanSelectionMode, setIsPlanSelectionMode] = useState(false);
+  const [selectedPlanIds, setSelectedPlanIds] = useState<Set<string>>(new Set());
 
   const [searchQuery, setSearchQuery] = useState("");
   const [planSearchQuery, setPlanSearchQuery] = useState("");
   const [planStatusFilter, setPlanStatusFilter] = useState<PlanStatusFilter>("all");
+  const [planMaintenanceFilter, setPlanMaintenanceFilter] = useState<PlanMaintenanceFilter>("all");
   const [planSortBy, setPlanSortBy] = useState<PlanSortBy>("startAsc");
 
   const now = new Date();
@@ -143,6 +159,7 @@ export default function SessionsScreen() {
       resolveTargetName({ targetId: plan.targetId, name: plan.targetName }, targetCatalog),
     [targetCatalog],
   );
+  const nowTimestamp = Date.now();
 
   const toggleSelect = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -157,6 +174,30 @@ export default function SessionsScreen() {
     setIsSelectionMode(false);
     setSelectedIds(new Set());
   }, []);
+
+  const togglePlanSelect = useCallback((id: string) => {
+    setSelectedPlanIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const exitPlanSelectionMode = useCallback(() => {
+    setIsPlanSelectionMode(false);
+    setSelectedPlanIds(new Set());
+  }, []);
+
+  const openSessionSelectionMode = useCallback(() => {
+    exitPlanSelectionMode();
+    setIsSelectionMode(true);
+  }, [exitPlanSelectionMode]);
+
+  const openPlanSelectionMode = useCallback(() => {
+    exitSelectionMode();
+    setIsPlanSelectionMode(true);
+  }, [exitSelectionMode]);
 
   const handleBatchDelete = useCallback(() => {
     if (selectedIds.size === 0) return;
@@ -323,14 +364,35 @@ export default function SessionsScreen() {
     return result;
   }, [sessions, searchQuery, selectedDate, getSessionTargetNames]);
 
+  const planConflictMap = useMemo(() => buildPlanConflictCountMap(plans), [plans]);
+  const getPlanFlags = useCallback(
+    (plan: ObservationPlan) =>
+      buildPlanMaintenanceFlags(plan, {
+        now: nowTimestamp,
+        conflictCountMap: planConflictMap,
+      }),
+    [nowTimestamp, planConflictMap],
+  );
+
   const filteredPlans = useMemo(
     () =>
       filterObservationPlans(plans, {
         selectedDate,
         statusFilter: planStatusFilter,
+        maintenanceFilter: planMaintenanceFilter,
         query: planSearchQuery,
+        now: nowTimestamp,
+        conflictCountMap: planConflictMap,
       }),
-    [plans, selectedDate, planStatusFilter, planSearchQuery],
+    [
+      plans,
+      selectedDate,
+      planStatusFilter,
+      planMaintenanceFilter,
+      planSearchQuery,
+      nowTimestamp,
+      planConflictMap,
+    ],
   );
 
   const sortedPlans = useMemo(
@@ -347,9 +409,69 @@ export default function SessionsScreen() {
 
   const plansOnSelectedDate = useMemo(() => {
     if (!selectedDate) return [];
-    return sortObservationPlans(filterObservationPlans(plans, { selectedDate }), "startAsc");
-  }, [plans, selectedDate]);
-  const planConflictMap = useMemo(() => buildPlanConflictCountMap(plans), [plans]);
+    return sortObservationPlans(
+      filterObservationPlans(plans, {
+        selectedDate,
+        now: nowTimestamp,
+        conflictCountMap: planConflictMap,
+      }),
+      "startAsc",
+    );
+  }, [plans, selectedDate, nowTimestamp, planConflictMap]);
+  const selectedPlans = useMemo(
+    () => sortedPlans.filter((plan) => selectedPlanIds.has(plan.id)),
+    [selectedPlanIds, sortedPlans],
+  );
+  const visibleSelectedPlanIds = useMemo(
+    () => selectedPlans.map((plan) => plan.id),
+    [selectedPlans],
+  );
+  const overduePlanDates = useMemo(() => {
+    const days = new Set<number>();
+    for (const plan of plans) {
+      if (!isPlanOverdue(plan, nowTimestamp)) continue;
+      const date = new Date(plan.startDate);
+      if (date.getFullYear() === calYear && date.getMonth() === calMonth) {
+        days.add(date.getDate());
+      }
+    }
+    return [...days];
+  }, [plans, nowTimestamp, calYear, calMonth]);
+  const planMaintenanceSummary = useMemo(
+    () => ({
+      overdue: plans.filter((plan) => getPlanFlags(plan).overdue).length,
+      unsynced: plans.filter((plan) => getPlanFlags(plan).unsynced).length,
+      conflict: plans.filter((plan) => getPlanFlags(plan).conflict).length,
+    }),
+    [getPlanFlags, plans],
+  );
+
+  useEffect(() => {
+    if (!isPlanSelectionMode || selectedPlanIds.size === 0) {
+      return;
+    }
+
+    const visibleIds = new Set(sortedPlans.map((plan) => plan.id));
+    let changed = false;
+    const nextSelectedPlanIds = new Set<string>();
+
+    for (const id of selectedPlanIds) {
+      if (visibleIds.has(id)) {
+        nextSelectedPlanIds.add(id);
+      } else {
+        changed = true;
+      }
+    }
+
+    if (!changed) {
+      return;
+    }
+
+    setSelectedPlanIds(nextSelectedPlanIds);
+    if (nextSelectedPlanIds.size === 0) {
+      setIsPlanSelectionMode(false);
+    }
+  }, [isPlanSelectionMode, selectedPlanIds, sortedPlans]);
 
   const handleDeleteSession = useCallback(
     (session: ObservationSession) => {
@@ -650,6 +772,236 @@ export default function SessionsScreen() {
     });
   }, [logAction, logFailure, logSuccess, refreshSessionsBatch, selectedSessions, t]);
 
+  const handleBatchSyncPlans = useCallback(async () => {
+    if (selectedPlans.length === 0) {
+      Alert.alert(t("common.error"), t("sessions.noSelectedPlans"));
+      return;
+    }
+
+    logAction("batch_sync_selected_plans", { selectedCount: selectedPlans.length });
+    const summary = await syncObservationPlansBatch(selectedPlans);
+    if (summary.permissionDenied) {
+      logFailure("batch_sync_selected_plans", new Error("permissionDenied"), {
+        selectedCount: selectedPlans.length,
+      });
+      Alert.alert(t("common.error"), t("sessions.permissionDenied"));
+      return;
+    }
+
+    logSuccess("batch_sync_selected_plans", { ...summary });
+    setSummaryDialog({
+      title: t("sessions.batchSyncPlans"),
+      icon: "sync-outline",
+      status: summary.failed > 0 ? "warning" : "success",
+      items: [
+        { label: t("sessions.batchSummaryTotal"), value: summary.total, color: "accent" },
+        { label: t("sessions.batchSummarySuccess"), value: summary.success, color: "success" },
+        { label: t("sessions.batchSummarySkipped"), value: summary.skipped, color: "default" },
+        { label: t("sessions.batchSummaryFailed"), value: summary.failed, color: "danger" },
+      ],
+    });
+  }, [logAction, logFailure, logSuccess, selectedPlans, syncObservationPlansBatch, t]);
+
+  const handleBatchUnsyncPlans = useCallback(async () => {
+    if (selectedPlans.length === 0) {
+      Alert.alert(t("common.error"), t("sessions.noSelectedPlans"));
+      return;
+    }
+
+    logAction("batch_unsync_selected_plans", { selectedCount: selectedPlans.length });
+    const summary = await unsyncObservationPlansBatch(selectedPlans);
+    logSuccess("batch_unsync_selected_plans", { ...summary });
+    setSummaryDialog({
+      title: t("sessions.batchUnsyncPlans"),
+      icon: "unlink-outline",
+      status: summary.failed > 0 ? "warning" : "success",
+      items: [
+        { label: t("sessions.batchSummaryTotal"), value: summary.total, color: "accent" },
+        { label: t("sessions.batchSummarySuccess"), value: summary.success, color: "success" },
+        { label: t("sessions.batchSummarySkipped"), value: summary.skipped, color: "default" },
+        { label: t("sessions.batchSummaryFailed"), value: summary.failed, color: "danger" },
+      ],
+    });
+  }, [logAction, logSuccess, selectedPlans, t, unsyncObservationPlansBatch]);
+
+  const handleBatchPlanStatusChange = useCallback(
+    async (status: "planned" | "completed" | "cancelled") => {
+      if (selectedPlans.length === 0) {
+        Alert.alert(t("common.error"), t("sessions.noSelectedPlans"));
+        return;
+      }
+
+      logAction("batch_update_selected_plans_status", {
+        selectedCount: selectedPlans.length,
+        status,
+      });
+
+      let success = 0;
+      let skipped = 0;
+      let failed = 0;
+
+      for (const plan of selectedPlans) {
+        if ((plan.status ?? "planned") === status) {
+          skipped += 1;
+          continue;
+        }
+        const ok = await updateObservationPlan(plan.id, { status });
+        if (ok) success += 1;
+        else failed += 1;
+      }
+
+      logSuccess("batch_update_selected_plans_status", {
+        total: selectedPlans.length,
+        success,
+        skipped,
+        failed,
+        status,
+      });
+      setSummaryDialog({
+        title: t("sessions.batchUpdatePlans"),
+        icon: "layers-outline",
+        status: failed > 0 ? "warning" : "success",
+        items: [
+          { label: t("sessions.batchSummaryTotal"), value: selectedPlans.length, color: "accent" },
+          { label: t("sessions.batchSummarySuccess"), value: success, color: "success" },
+          { label: t("sessions.batchSummarySkipped"), value: skipped, color: "default" },
+          { label: t("sessions.batchSummaryFailed"), value: failed, color: "danger" },
+        ],
+      });
+      exitPlanSelectionMode();
+    },
+    [exitPlanSelectionMode, logAction, logSuccess, selectedPlans, t, updateObservationPlan],
+  );
+
+  const handleBatchPlanReschedule = useCallback(
+    (shiftDays: number) => {
+      if (selectedPlans.length === 0) {
+        Alert.alert(t("common.error"), t("sessions.noSelectedPlans"));
+        return;
+      }
+
+      const preview = previewBatchPlanShiftConflicts(plans, visibleSelectedPlanIds, shiftDays);
+      const performShift = async () => {
+        logAction("batch_reschedule_selected_plans", {
+          selectedCount: selectedPlans.length,
+          shiftDays,
+          conflictPlans: preview.totalConflictingPlans,
+        });
+
+        let success = 0;
+        let failed = 0;
+
+        for (const item of preview.shiftedPlans) {
+          const ok = await updateObservationPlan(item.planId, {
+            startDate: item.startDate,
+            endDate: item.endDate,
+          });
+          if (ok) success += 1;
+          else failed += 1;
+        }
+
+        logSuccess("batch_reschedule_selected_plans", {
+          selectedCount: selectedPlans.length,
+          shiftDays,
+          success,
+          failed,
+          conflictPlans: preview.totalConflictingPlans,
+          conflictLinks: preview.totalConflictLinks,
+        });
+        setSummaryDialog({
+          title: t("sessions.batchReschedulePlans"),
+          icon: "calendar-outline",
+          status: failed > 0 ? "warning" : "success",
+          items: [
+            {
+              label: t("sessions.batchSummaryTotal"),
+              value: selectedPlans.length,
+              color: "accent",
+            },
+            { label: t("sessions.batchSummaryUpdated"), value: success, color: "success" },
+            {
+              label: t("sessions.planQueueConflict"),
+              value: preview.totalConflictingPlans,
+              color: preview.totalConflictingPlans > 0 ? "warning" : "default",
+            },
+            { label: t("sessions.batchSummaryFailed"), value: failed, color: "danger" },
+          ],
+        });
+        exitPlanSelectionMode();
+      };
+
+      if (preview.totalConflictingPlans === 0) {
+        void performShift();
+        return;
+      }
+
+      Alert.alert(
+        t("sessions.planBatchConflictTitle"),
+        `${t("sessions.planBatchConflictMessage")} (${preview.totalConflictingPlans}/${selectedPlans.length})`,
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("sessions.planBatchConflictContinue"),
+            style: "destructive",
+            onPress: () => {
+              void performShift();
+            },
+          },
+        ],
+      );
+    },
+    [
+      exitPlanSelectionMode,
+      logAction,
+      logSuccess,
+      plans,
+      selectedPlans,
+      t,
+      updateObservationPlan,
+      visibleSelectedPlanIds,
+    ],
+  );
+
+  const handleBatchDeletePlans = useCallback(() => {
+    if (selectedPlans.length === 0) {
+      Alert.alert(t("common.error"), t("sessions.noSelectedPlans"));
+      return;
+    }
+
+    Alert.alert(
+      t("common.delete"),
+      `${t("sessions.planBatchDeleteConfirm")} (${selectedPlans.length})`,
+      [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("common.delete"),
+          style: "destructive",
+          onPress: () => {
+            void (async () => {
+              for (const plan of selectedPlans) {
+                await deleteObservationPlan(plan.id);
+              }
+              logSuccess("batch_delete_plans", { selectedCount: selectedPlans.length });
+              setSummaryDialog({
+                title: t("sessions.batchDeletePlans"),
+                icon: "trash-outline",
+                status: "success",
+                items: [
+                  {
+                    label: t("sessions.batchSummarySuccess"),
+                    value: selectedPlans.length,
+                    color: "success",
+                  },
+                ],
+              });
+              exitPlanSelectionMode();
+            })();
+          },
+        },
+      ],
+    );
+  }, [deleteObservationPlan, exitPlanSelectionMode, logSuccess, selectedPlans, t]);
+
   const renderSessionItem = useCallback(
     ({ item: session }: { item: ObservationSession }) => (
       <View
@@ -695,6 +1047,7 @@ export default function SessionsScreen() {
       }}
       getSessionTargetNames={getSessionTargetNames}
       getPlanTargetName={getPlanTargetName}
+      getPlanMaintenanceFlags={getPlanFlags}
     />
   ) : null;
 
@@ -718,6 +1071,26 @@ export default function SessionsScreen() {
           >
             <Chip.Label>
               {status === "all" ? t("sessions.allStatuses") : t(`sessions.status.${status}`)}
+            </Chip.Label>
+          </Chip>
+        ))}
+      </View>
+      <View className="mb-2 flex-row flex-wrap gap-2">
+        {PLAN_MAINTENANCE_FILTERS.map((filter) => (
+          <Chip
+            key={filter}
+            size="sm"
+            variant={planMaintenanceFilter === filter ? "primary" : "secondary"}
+            onPress={() => setPlanMaintenanceFilter(filter)}
+          >
+            <Chip.Label>
+              {filter === "all"
+                ? t("sessions.planQueueAll")
+                : filter === "overdue"
+                  ? t("sessions.planQueueOverdue")
+                  : filter === "unsynced"
+                    ? t("sessions.planQueueUnsynced")
+                    : t("sessions.planQueueConflict")}
             </Chip.Label>
           </Chip>
         ))}
@@ -753,6 +1126,17 @@ export default function SessionsScreen() {
           {t("sessions.planObservation")} ({sortedPlans.length}/{plans.length})
         </Text>
         <View className="flex-row flex-wrap justify-end gap-2">
+          {plans.length > 0 && (
+            <Button
+              testID="e2e-action-tabs__plans-open-selection"
+              size="sm"
+              variant="outline"
+              onPress={openPlanSelectionMode}
+            >
+              <Ionicons name="checkbox-outline" size={12} color={mutedColor} />
+              <Button.Label className="text-[10px]">{t("sessions.planMaintenance")}</Button.Label>
+            </Button>
+          )}
           <Button
             size="sm"
             variant="outline"
@@ -791,7 +1175,11 @@ export default function SessionsScreen() {
       {plans.length > 0 && (
         <View className="mb-2 rounded-lg bg-surface-secondary px-3 py-2">
           <Text className="text-[10px] text-muted">
-            {t("sessions.syncAllPlans")} · {plans.filter((p) => !p.calendarEventId).length}
+            {t("sessions.planQueueOverdue")} · {planMaintenanceSummary.overdue}
+            {"  "}
+            {t("sessions.planQueueUnsynced")} · {planMaintenanceSummary.unsynced}
+            {"  "}
+            {t("sessions.planQueueConflict")} · {planMaintenanceSummary.conflict}
           </Text>
         </View>
       )}
@@ -803,17 +1191,35 @@ export default function SessionsScreen() {
       ) : (
         <View className="mb-2 gap-2">
           {sortedPlans.map((plan) => (
-            <PlanCard
+            <View
               key={plan.id}
-              plan={plan}
-              compact={isLandscapeLayout}
-              conflictCount={planConflictMap[plan.id] ?? 0}
-              onPress={() => {
-                setEditingPlan(plan);
-                setShowPlanSheet(true);
-              }}
-              onLongPress={() => setActionPlan(plan)}
-            />
+              className={`${isPlanSelectionMode && selectedPlanIds.has(plan.id) ? "opacity-80" : ""}`}
+            >
+              {isPlanSelectionMode && (
+                <View className="absolute left-2 top-2 z-10">
+                  <Ionicons
+                    name={selectedPlanIds.has(plan.id) ? "checkbox" : "square-outline"}
+                    size={20}
+                    color={selectedPlanIds.has(plan.id) ? "#3b82f6" : mutedColor}
+                  />
+                </View>
+              )}
+              <PlanCard
+                plan={plan}
+                compact={isLandscapeLayout}
+                conflictCount={planConflictMap[plan.id] ?? 0}
+                overdue={getPlanFlags(plan).overdue}
+                onPress={() => {
+                  if (isPlanSelectionMode) {
+                    togglePlanSelect(plan.id);
+                    return;
+                  }
+                  setEditingPlan(plan);
+                  setShowPlanSheet(true);
+                }}
+                onLongPress={isPlanSelectionMode ? undefined : () => setActionPlan(plan)}
+              />
+            </View>
           ))}
         </View>
       )}
@@ -911,7 +1317,7 @@ export default function SessionsScreen() {
               testID="e2e-action-tabs__sessions-open-selection"
               size="sm"
               variant="outline"
-              onPress={() => setIsSelectionMode(true)}
+              onPress={openSessionSelectionMode}
             >
               <Ionicons name="checkbox-outline" size={14} color={mutedColor} />
             </Button>
@@ -997,6 +1403,7 @@ export default function SessionsScreen() {
       <ObservationCalendar
         datesWithData={observationDates}
         plannedDates={plannedDates}
+        overdueDates={overduePlanDates}
         sessionCountByDate={sessionCountByDate}
         year={calYear}
         month={calMonth}
@@ -1042,6 +1449,29 @@ export default function SessionsScreen() {
       onBatchUnsync={() => void handleBatchUnsyncSelected()}
       onBatchDelete={handleBatchDelete}
     />
+  ) : isPlanSelectionMode ? (
+    <PlanSelectionBar
+      selectedCount={selectedPlans.length}
+      calendarSyncEnabled={calendarSyncEnabled}
+      syncing={syncing}
+      isLandscape={isLandscapeLayout}
+      onClose={exitPlanSelectionMode}
+      onToggleSelectAll={() => {
+        if (selectedPlans.length === sortedPlans.length) {
+          setSelectedPlanIds(new Set());
+        } else {
+          setSelectedPlanIds(new Set(sortedPlans.map((plan) => plan.id)));
+        }
+      }}
+      onShiftOneDay={() => handleBatchPlanReschedule(1)}
+      onShiftOneWeek={() => handleBatchPlanReschedule(7)}
+      onMarkPlanned={() => void handleBatchPlanStatusChange("planned")}
+      onMarkCompleted={() => void handleBatchPlanStatusChange("completed")}
+      onMarkCancelled={() => void handleBatchPlanStatusChange("cancelled")}
+      onBatchSync={() => void handleBatchSyncPlans()}
+      onBatchUnsync={() => void handleBatchUnsyncPlans()}
+      onBatchDelete={handleBatchDeletePlans}
+    />
   ) : null;
 
   return (
@@ -1082,7 +1512,7 @@ export default function SessionsScreen() {
                     testID="e2e-action-tabs__sessions-open-selection"
                     size="sm"
                     variant="outline"
-                    onPress={() => setIsSelectionMode(true)}
+                    onPress={openSessionSelectionMode}
                   >
                     <Ionicons name="checkbox-outline" size={14} color={mutedColor} />
                   </Button>
@@ -1155,6 +1585,7 @@ export default function SessionsScreen() {
               compact
               datesWithData={observationDates}
               plannedDates={plannedDates}
+              overdueDates={overduePlanDates}
               sessionCountByDate={sessionCountByDate}
               year={calYear}
               month={calMonth}

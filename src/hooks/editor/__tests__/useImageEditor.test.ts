@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react-native";
-import { InteractionManager } from "react-native";
+import { InteractionManager } from "../../../lib/utils/interactionManager";
 import { useImageEditor } from "../useImageEditor";
 import type { ProcessingPipelineSnapshot } from "../../../lib/fits/types";
 

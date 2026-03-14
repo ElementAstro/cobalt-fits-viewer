@@ -48,6 +48,7 @@ describe("ObservationCalendar", () => {
     render(<ObservationCalendar {...defaultProps} />);
     expect(screen.getByText("sessions.session")).toBeTruthy();
     expect(screen.getByText("sessions.plans")).toBeTruthy();
+    expect(screen.getByText("sessions.planOverdue")).toBeTruthy();
   });
 
   it("renders correct number of day cells for March 2025", () => {

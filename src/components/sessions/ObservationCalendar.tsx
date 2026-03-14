@@ -7,6 +7,7 @@ import { useI18n } from "../../i18n/useI18n";
 interface ObservationCalendarProps {
   datesWithData: number[];
   plannedDates?: number[];
+  overdueDates?: number[];
   sessionCountByDate?: Map<number, number>;
   year: number;
   month: number;
@@ -37,6 +38,7 @@ const MONTH_KEYS = [
 export const ObservationCalendar = memo(function ObservationCalendar({
   datesWithData,
   plannedDates = [],
+  overdueDates = [],
   sessionCountByDate,
   year,
   month,
@@ -125,6 +127,10 @@ export const ObservationCalendar = memo(function ObservationCalendar({
           <View className="h-2 w-2 rounded-full bg-accent" />
           <Text className="text-[8px] text-muted">{t("sessions.plans")}</Text>
         </View>
+        <View className="flex-row items-center gap-1">
+          <View className="h-2 w-2 rounded-full bg-warning" />
+          <Text className="text-[8px] text-muted">{t("sessions.planOverdue")}</Text>
+        </View>
         {isCurrentMonth && (
           <View className="flex-row items-center gap-1">
             <View className="h-2 w-2 rounded-full border border-primary/50" />
@@ -138,6 +144,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
         {calendarDays.map((day, i) => {
           const hasData = day !== null && datesWithData.includes(day);
           const hasPlanned = day !== null && plannedDates.includes(day);
+          const hasOverdue = day !== null && overdueDates.includes(day);
           const isToday = isCurrentMonth && day === todayDate;
           const isSelected =
             day !== null &&
@@ -174,11 +181,13 @@ export const ObservationCalendar = memo(function ObservationCalendar({
                         ? "font-bold text-primary-foreground"
                         : hasData
                           ? "font-bold text-success"
-                          : hasPlanned
-                            ? "font-medium text-accent"
-                            : isToday
-                              ? "font-bold text-primary"
-                              : "text-foreground"
+                          : hasOverdue
+                            ? "font-bold text-warning"
+                            : hasPlanned
+                              ? "font-medium text-accent"
+                              : isToday
+                                ? "font-bold text-primary"
+                                : "text-foreground"
                     }`}
                   >
                     {day}
@@ -186,6 +195,7 @@ export const ObservationCalendar = memo(function ObservationCalendar({
                   <View className="absolute bottom-0.5 flex-row gap-0.5">
                     {hasData && <View className="h-1 w-1 rounded-full bg-success" />}
                     {hasPlanned && <View className="h-1 w-1 rounded-full bg-accent" />}
+                    {hasOverdue && <View className="h-1 w-1 rounded-full bg-warning" />}
                     {sessionCount > 1 && (
                       <Text className="text-[6px] font-bold text-success">{sessionCount}</Text>
                     )}

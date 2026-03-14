@@ -40,6 +40,7 @@ describe("SessionDateSummary", () => {
     onPlanPress: jest.fn(),
     getSessionTargetNames: () => ["M42"],
     getPlanTargetName: () => "M31",
+    getPlanMaintenanceFlags: () => ({ overdue: false, unsynced: false, conflict: false }),
   };
 
   beforeEach(() => jest.clearAllMocks());
@@ -60,5 +61,15 @@ describe("SessionDateSummary", () => {
     render(<SessionDateSummary {...defaultProps} />);
     fireEvent.press(screen.getByText("sessions.clearDateFilter"));
     expect(defaultProps.onClearDate).toHaveBeenCalledTimes(1);
+  });
+
+  it("marks overdue plans in the date summary row", () => {
+    render(
+      <SessionDateSummary
+        {...defaultProps}
+        getPlanMaintenanceFlags={() => ({ overdue: true, unsynced: true, conflict: false })}
+      />,
+    );
+    expect(screen.getByText(/sessions\.planOverdue/)).toBeTruthy();
   });
 });

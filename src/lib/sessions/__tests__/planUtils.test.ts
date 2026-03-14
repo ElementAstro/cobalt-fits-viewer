@@ -1,14 +1,18 @@
 import type { ObservationPlan } from "../../fits/types";
 import {
+  buildPlanMaintenanceFlags,
   buildPlanConflictCountMap,
   buildSessionFromPlan,
   duplicatePlanToDraft,
   filterObservationPlans,
   findOverlappingPlans,
   getPlanDateKey,
+  isPlanOverdue,
   normalizePlanStatus,
   planTimeRangesOverlap,
+  previewBatchPlanShiftConflicts,
   rolloverPlanToNextDay,
+  shiftPlanScheduleByDays,
   sortObservationPlans,
   toLocalDateKey,
 } from "../planUtils";
@@ -56,6 +60,7 @@ describe("planUtils", () => {
         targetName: "M42",
         status: "planned",
         startDate: "2025-06-10T20:00:00.000Z",
+        endDate: "2025-06-10T22:00:00.000Z",
       }),
       makePlan({
         id: "p2",
@@ -64,6 +69,8 @@ describe("planUtils", () => {
         status: "completed",
         notes: "excellent seeing",
         startDate: "2025-06-11T20:00:00.000Z",
+        endDate: "2025-06-11T22:00:00.000Z",
+        calendarEventId: "event-2",
       }),
       makePlan({
         id: "p3",
@@ -71,6 +78,16 @@ describe("planUtils", () => {
         targetName: "NGC 7000",
         status: "cancelled",
         startDate: "2025-06-11T23:00:00.000Z",
+        endDate: "2025-06-12T01:00:00.000Z",
+      }),
+      makePlan({
+        id: "p4",
+        title: "IC 434",
+        targetName: "Horsehead",
+        status: "planned",
+        startDate: "2025-06-10T21:00:00.000Z",
+        endDate: "2025-06-10T23:00:00.000Z",
+        calendarEventId: "event-4",
       }),
     ];
 
@@ -90,6 +107,30 @@ describe("planUtils", () => {
       const result = filterObservationPlans(plans, { selectedDate });
       expect(result.length).toBeGreaterThan(0);
       expect(result.every((plan) => getPlanDateKey(plan) === selectedDate)).toBe(true);
+    });
+
+    it("supports maintenance filter for overdue plans", () => {
+      const result = filterObservationPlans(plans, {
+        maintenanceFilter: "overdue",
+        now: new Date("2025-06-10T23:30:00.000Z").getTime(),
+      });
+      expect(result.map((plan) => plan.id)).toEqual(["p1", "p4"]);
+    });
+
+    it("supports maintenance filter for unsynced plans", () => {
+      const result = filterObservationPlans(plans, {
+        maintenanceFilter: "unsynced",
+      });
+      expect(result.map((plan) => plan.id)).toEqual(["p1", "p3"]);
+    });
+
+    it("supports maintenance filter for conflict plans", () => {
+      const conflictCountMap = buildPlanConflictCountMap(plans);
+      const result = filterObservationPlans(plans, {
+        maintenanceFilter: "conflict",
+        conflictCountMap,
+      });
+      expect(result.map((plan) => plan.id)).toEqual(["p1", "p4"]);
     });
   });
 
@@ -198,6 +239,42 @@ describe("planUtils", () => {
     });
   });
 
+  describe("plan maintenance helpers", () => {
+    it("detects overdue only for planned items past end time", () => {
+      const overduePlan = makePlan({
+        status: "planned",
+        endDate: "2025-03-10T21:00:00.000Z",
+      });
+      const completedPlan = makePlan({
+        status: "completed",
+        endDate: "2025-03-10T21:00:00.000Z",
+      });
+      const now = new Date("2025-03-10T21:30:00.000Z").getTime();
+
+      expect(isPlanOverdue(overduePlan, now)).toBe(true);
+      expect(isPlanOverdue(completedPlan, now)).toBe(false);
+    });
+
+    it("builds maintenance flags from overdue, unsynced, and conflict inputs", () => {
+      const plan = makePlan({
+        id: "p-overdue",
+        status: "planned",
+        endDate: "2025-03-10T21:00:00.000Z",
+      });
+
+      expect(
+        buildPlanMaintenanceFlags(plan, {
+          now: new Date("2025-03-10T21:30:00.000Z").getTime(),
+          conflictCountMap: { "p-overdue": 2 },
+        }),
+      ).toEqual({
+        overdue: true,
+        unsynced: true,
+        conflict: true,
+      });
+    });
+  });
+
   describe("plan duplication helpers", () => {
     const source = makePlan({
       id: "p-source",
@@ -236,6 +313,78 @@ describe("planUtils", () => {
       expect(startDelta).toBe(24 * 60 * 60 * 1000);
       expect(endDelta).toBe(24 * 60 * 60 * 1000);
       expect(rolled.status).toBe("planned");
+    });
+
+    it("shifts a plan schedule by arbitrary day counts", () => {
+      const shifted = shiftPlanScheduleByDays(source, 7);
+      expect(new Date(shifted.startDate).getTime() - new Date(source.startDate).getTime()).toBe(
+        7 * 24 * 60 * 60 * 1000,
+      );
+      expect(new Date(shifted.endDate).getTime() - new Date(source.endDate).getTime()).toBe(
+        7 * 24 * 60 * 60 * 1000,
+      );
+    });
+  });
+
+  describe("batch plan shift preview", () => {
+    it("previews conflicts created by shifting selected plans", () => {
+      const plans = [
+        makePlan({
+          id: "p1",
+          startDate: "2025-03-10T20:00:00.000Z",
+          endDate: "2025-03-10T22:00:00.000Z",
+        }),
+        makePlan({
+          id: "p2",
+          startDate: "2025-03-11T20:30:00.000Z",
+          endDate: "2025-03-11T22:30:00.000Z",
+        }),
+        makePlan({
+          id: "p3",
+          startDate: "2025-03-10T21:30:00.000Z",
+          endDate: "2025-03-10T23:30:00.000Z",
+        }),
+      ];
+
+      const preview = previewBatchPlanShiftConflicts(plans, ["p1", "p3"], 1);
+
+      expect(preview.totalConflictingPlans).toBe(2);
+      expect(preview.totalConflictLinks).toBe(4);
+      expect(preview.shiftedPlans).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ planId: "p1", conflictIds: ["p2", "p3"] }),
+          expect.objectContaining({ planId: "p3", conflictIds: ["p1", "p2"] }),
+        ]),
+      );
+    });
+
+    it("includes selected cancelled plans in shifted results", () => {
+      const plans = [
+        makePlan({
+          id: "p-cancelled",
+          status: "cancelled",
+          startDate: "2025-03-10T20:00:00.000Z",
+          endDate: "2025-03-10T22:00:00.000Z",
+        }),
+        makePlan({
+          id: "p-active",
+          startDate: "2025-03-11T20:30:00.000Z",
+          endDate: "2025-03-11T22:30:00.000Z",
+        }),
+      ];
+
+      const preview = previewBatchPlanShiftConflicts(plans, ["p-cancelled"], 1);
+
+      expect(preview.totalConflictingPlans).toBe(0);
+      expect(preview.totalConflictLinks).toBe(0);
+      expect(preview.shiftedPlans).toEqual([
+        {
+          planId: "p-cancelled",
+          startDate: "2025-03-11T20:00:00.000Z",
+          endDate: "2025-03-11T22:00:00.000Z",
+          conflictIds: [],
+        },
+      ]);
     });
   });
 });

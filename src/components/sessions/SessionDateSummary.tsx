@@ -4,7 +4,7 @@ import { Button, Card, Separator, useThemeColor } from "heroui-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useI18n } from "../../i18n/useI18n";
 import type { ObservationPlan, ObservationSession } from "../../lib/fits/types";
-import { normalizePlanStatus } from "../../lib/sessions/planUtils";
+import { normalizePlanStatus, type PlanMaintenanceFlags } from "../../lib/sessions/planUtils";
 
 interface SessionDateSummaryProps {
   selectedDate: string;
@@ -15,6 +15,7 @@ interface SessionDateSummaryProps {
   onPlanPress: (plan: ObservationPlan) => void;
   getSessionTargetNames: (session: ObservationSession) => string[];
   getPlanTargetName: (plan: ObservationPlan) => string;
+  getPlanMaintenanceFlags: (plan: ObservationPlan) => PlanMaintenanceFlags;
 }
 
 export const SessionDateSummary = memo(function SessionDateSummary({
@@ -26,6 +27,7 @@ export const SessionDateSummary = memo(function SessionDateSummary({
   onPlanPress,
   getSessionTargetNames,
   getPlanTargetName,
+  getPlanMaintenanceFlags,
 }: SessionDateSummaryProps) {
   const { t } = useI18n();
   const mutedColor = useThemeColor("muted");
@@ -80,35 +82,37 @@ export const SessionDateSummary = memo(function SessionDateSummary({
                 </Button.Label>
               </Button>
             ))}
-            {plansOnDate.slice(0, 3).map((plan) => (
-              <Button
-                key={plan.id}
-                size="sm"
-                variant="ghost"
-                onPress={() => onPlanPress(plan)}
-                className="justify-start"
-              >
-                <Ionicons
-                  name={
-                    normalizePlanStatus(plan.status) === "completed"
-                      ? "checkmark-circle-outline"
-                      : normalizePlanStatus(plan.status) === "cancelled"
-                        ? "close-circle-outline"
-                        : "calendar-outline"
-                  }
-                  size={12}
-                  color={mutedColor}
-                />
-                <Button.Label className="text-[10px]">
-                  {new Date(plan.startDate).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
-                  {" · "}
-                  {getPlanTargetName(plan)}
-                </Button.Label>
-              </Button>
-            ))}
+            {plansOnDate.slice(0, 3).map((plan) => {
+              const flags = getPlanMaintenanceFlags(plan);
+              const iconName = flags.overdue
+                ? "warning-outline"
+                : normalizePlanStatus(plan.status) === "completed"
+                  ? "checkmark-circle-outline"
+                  : normalizePlanStatus(plan.status) === "cancelled"
+                    ? "close-circle-outline"
+                    : "calendar-outline";
+
+              return (
+                <Button
+                  key={plan.id}
+                  size="sm"
+                  variant="ghost"
+                  onPress={() => onPlanPress(plan)}
+                  className="justify-start"
+                >
+                  <Ionicons name={iconName} size={12} color={mutedColor} />
+                  <Button.Label className="text-[10px]">
+                    {new Date(plan.startDate).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {" · "}
+                    {getPlanTargetName(plan)}
+                    {flags.overdue ? ` · ${t("sessions.planOverdue")}` : ""}
+                  </Button.Label>
+                </Button>
+              );
+            })}
           </View>
         )}
       </View>

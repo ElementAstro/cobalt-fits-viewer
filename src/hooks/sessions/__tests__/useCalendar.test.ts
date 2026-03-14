@@ -219,6 +219,34 @@ describe("useCalendar", () => {
     expect(statePlans.find((p) => p.id === "p3")?.calendarEventId).toBe("event-p3");
   });
 
+  it("syncObservationPlansBatch returns success/skipped/failed summary", async () => {
+    const plans = [
+      makePlan({ id: "p-batch-1", calendarEventId: undefined }),
+      makePlan({ id: "p-batch-2", calendarEventId: "existing-event" }),
+      makePlan({ id: "p-batch-3", calendarEventId: undefined }),
+    ];
+    useSessionStore.setState({ plans });
+    calendarApi.createPlanEvent
+      .mockResolvedValueOnce("event-batch-1")
+      .mockRejectedValueOnce(new Error("create failed"));
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const summary = await result.current.syncObservationPlansBatch(plans);
+      expect(summary).toEqual({
+        total: 3,
+        success: 1,
+        skipped: 1,
+        failed: 1,
+      });
+    });
+
+    const statePlans = useSessionStore.getState().plans;
+    expect(statePlans.find((p) => p.id === "p-batch-1")?.calendarEventId).toBe("event-batch-1");
+    expect(statePlans.find((p) => p.id === "p-batch-2")?.calendarEventId).toBe("existing-event");
+    expect(statePlans.find((p) => p.id === "p-batch-3")?.calendarEventId).toBeUndefined();
+  });
+
   it("cleanupMissingCalendarLinks clears missing session and plan event ids", async () => {
     const sessions = [
       makeSession({ id: "s1", calendarEventId: "ok-session-event" }),
@@ -456,6 +484,34 @@ describe("useCalendar", () => {
 
     expect(calendarApi.deleteCalendarEvent).toHaveBeenCalledWith("event-plan-unsync");
     expect(useSessionStore.getState().plans[0].calendarEventId).toBeUndefined();
+  });
+
+  it("unsyncObservationPlansBatch returns success/skipped/failed summary", async () => {
+    const plans = [
+      makePlan({ id: "plan-unsync-1", calendarEventId: "event-unsync-1" }),
+      makePlan({ id: "plan-unsync-2", calendarEventId: undefined }),
+      makePlan({ id: "plan-unsync-3", calendarEventId: "event-unsync-3" }),
+    ];
+    useSessionStore.setState({ plans });
+    calendarApi.deleteCalendarEvent
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("delete failed"));
+
+    const { result } = renderHook(() => useCalendar());
+    await act(async () => {
+      const summary = await result.current.unsyncObservationPlansBatch(plans);
+      expect(summary).toEqual({
+        total: 3,
+        success: 1,
+        skipped: 1,
+        failed: 1,
+      });
+    });
+
+    const statePlans = useSessionStore.getState().plans;
+    expect(statePlans.find((p) => p.id === "plan-unsync-1")?.calendarEventId).toBeUndefined();
+    expect(statePlans.find((p) => p.id === "plan-unsync-2")?.calendarEventId).toBeUndefined();
+    expect(statePlans.find((p) => p.id === "plan-unsync-3")?.calendarEventId).toBeUndefined();
   });
 
   it("editSessionInCalendar refreshes local session when action is done", async () => {

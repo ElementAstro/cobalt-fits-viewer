@@ -39,4 +39,9 @@ describe("PlanCard", () => {
     render(<PlanCard plan={makePlan()} conflictCount={0} />);
     expect(screen.queryByText("sessions.planConflictDetected")).toBeNull();
   });
+
+  it("shows overdue marker when plan is overdue", () => {
+    render(<PlanCard plan={makePlan()} overdue />);
+    expect(screen.getByText("sessions.planOverdue")).toBeTruthy();
+  });
 });

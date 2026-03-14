@@ -16,6 +16,7 @@ interface PlanCardProps {
   /** Compact layout for landscape mode */
   compact?: boolean;
   conflictCount?: number;
+  overdue?: boolean;
 }
 
 const STATUS_COLOR_CLASS: Record<"planned" | "completed" | "cancelled", string> = {
@@ -30,9 +31,10 @@ export const PlanCard = memo(function PlanCard({
   onLongPress,
   compact = false,
   conflictCount = 0,
+  overdue = false,
 }: PlanCardProps) {
   const { t } = useI18n();
-  const mutedColor = useThemeColor("muted");
+  const [mutedColor, warningColor] = useThemeColor(["muted", "warning"]);
   const targets = useTargetStore((s) => s.targets);
 
   const startDate = new Date(plan.startDate);
@@ -44,18 +46,25 @@ export const PlanCard = memo(function PlanCard({
   );
 
   const isPast = endDate.getTime() < Date.now();
+  const shouldFade = isPast && !overdue;
 
   return (
     <PressableFeedback onPress={onPress} onLongPress={onLongPress}>
       <PressableFeedback.Highlight />
-      <Card variant="secondary" className={isPast ? "opacity-60" : ""}>
+      <Card variant="secondary" className={shouldFade ? "opacity-60" : ""}>
         <Card.Body className={compact ? "gap-1 p-2" : "gap-1.5 p-3"}>
           <View className="flex-row items-center justify-between">
             <View className="flex-1 flex-row items-center gap-2">
               <Ionicons
-                name={isPast ? "checkmark-circle-outline" : "calendar-outline"}
+                name={
+                  overdue
+                    ? "warning-outline"
+                    : isPast
+                      ? "checkmark-circle-outline"
+                      : "calendar-outline"
+                }
                 size={14}
-                color={mutedColor}
+                color={overdue ? warningColor : mutedColor}
               />
               <Text className="text-xs font-semibold text-foreground" numberOfLines={1}>
                 {plan.title || displayTargetName}
@@ -95,6 +104,12 @@ export const PlanCard = memo(function PlanCard({
               <Text className="text-[9px] text-muted">
                 {formatDuration(plan.reminderMinutes * 60)}
               </Text>
+            </View>
+          )}
+          {overdue && (
+            <View className="flex-row items-center gap-1">
+              <Ionicons name="warning-outline" size={10} color={warningColor} />
+              <Text className="text-[9px] text-warning">{t("sessions.planOverdue")}</Text>
             </View>
           )}
           {conflictCount > 0 && (

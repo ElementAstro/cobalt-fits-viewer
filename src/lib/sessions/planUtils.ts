@@ -2,8 +2,27 @@ import type { GeoLocation, ObservationPlan, ObservationSession } from "../fits/t
 
 export type PlanStatus = NonNullable<ObservationPlan["status"]>;
 export type PlanStatusFilter = PlanStatus | "all";
+export type PlanMaintenanceFilter = "all" | "overdue" | "unsynced" | "conflict";
 export type PlanSortBy = "startAsc" | "startDesc" | "target" | "status";
 export type ObservationPlanDraft = Omit<ObservationPlan, "id" | "calendarEventId" | "createdAt">;
+export interface PlanMaintenanceFlags {
+  overdue: boolean;
+  unsynced: boolean;
+  conflict: boolean;
+}
+
+export interface BatchPlanShiftPreviewItem {
+  planId: string;
+  startDate: string;
+  endDate: string;
+  conflictIds: string[];
+}
+
+export interface BatchPlanShiftPreview {
+  shiftedPlans: BatchPlanShiftPreviewItem[];
+  totalConflictingPlans: number;
+  totalConflictLinks: number;
+}
 
 const PLAN_STATUS_ORDER: Record<PlanStatus, number> = {
   planned: 0,
@@ -92,6 +111,29 @@ export function buildPlanConflictCountMap(plans: ObservationPlan[]): Record<stri
   return counts;
 }
 
+export function isPlanOverdue(plan: ObservationPlan, now: number = Date.now()): boolean {
+  if (normalizePlanStatus(plan.status) !== "planned") {
+    return false;
+  }
+  const endTime = new Date(plan.endDate).getTime();
+  return Number.isFinite(endTime) && endTime < now;
+}
+
+export function buildPlanMaintenanceFlags(
+  plan: ObservationPlan,
+  options: {
+    now?: number;
+    conflictCountMap?: Record<string, number>;
+  } = {},
+): PlanMaintenanceFlags {
+  const { now = Date.now(), conflictCountMap } = options;
+  return {
+    overdue: isPlanOverdue(plan, now),
+    unsynced: !plan.calendarEventId,
+    conflict: (conflictCountMap?.[plan.id] ?? 0) > 0,
+  };
+}
+
 function shiftIsoByLocalDays(isoString: string, days: number): string {
   const date = new Date(isoString);
   if (!Number.isFinite(date.getTime())) return isoString;
@@ -99,17 +141,28 @@ function shiftIsoByLocalDays(isoString: string, days: number): string {
   return date.toISOString();
 }
 
+export function shiftPlanScheduleByDays(
+  plan: Pick<ObservationPlan, "startDate" | "endDate">,
+  shiftDays: number,
+): Pick<ObservationPlan, "startDate" | "endDate"> {
+  return {
+    startDate: shiftIsoByLocalDays(plan.startDate, shiftDays),
+    endDate: shiftIsoByLocalDays(plan.endDate, shiftDays),
+  };
+}
+
 export function duplicatePlanToDraft(
   plan: ObservationPlan,
   options: { shiftDays?: number; status?: PlanStatus } = {},
 ): ObservationPlanDraft {
   const { shiftDays = 0, status = "planned" } = options;
+  const schedule = shiftPlanScheduleByDays(plan, shiftDays);
   return {
     title: plan.title,
     targetId: plan.targetId,
     targetName: plan.targetName,
-    startDate: shiftIsoByLocalDays(plan.startDate, shiftDays),
-    endDate: shiftIsoByLocalDays(plan.endDate, shiftDays),
+    startDate: schedule.startDate,
+    endDate: schedule.endDate,
     location: cloneLocation(plan),
     equipment: cloneEquipment(plan),
     notes: plan.notes,
@@ -127,10 +180,22 @@ export function filterObservationPlans(
   options: {
     selectedDate?: string | null;
     statusFilter?: PlanStatusFilter;
+    maintenanceFilter?: PlanMaintenanceFilter;
     query?: string;
+    now?: number;
+    conflictCountMap?: Record<string, number>;
   } = {},
 ): ObservationPlan[] {
-  const { selectedDate, statusFilter = "all", query = "" } = options;
+  const {
+    selectedDate,
+    statusFilter = "all",
+    maintenanceFilter = "all",
+    query = "",
+    now = Date.now(),
+    conflictCountMap = maintenanceFilter === "conflict"
+      ? buildPlanConflictCountMap(plans)
+      : undefined,
+  } = options;
   const normalizedQuery = query.trim().toLowerCase();
 
   return plans.filter((plan) => {
@@ -140,6 +205,13 @@ export function filterObservationPlans(
 
     if (statusFilter !== "all" && normalizePlanStatus(plan.status) !== statusFilter) {
       return false;
+    }
+
+    if (maintenanceFilter !== "all") {
+      const flags = buildPlanMaintenanceFlags(plan, { now, conflictCountMap });
+      if (!flags[maintenanceFilter]) {
+        return false;
+      }
     }
 
     if (!normalizedQuery) {
@@ -152,6 +224,76 @@ export function filterObservationPlans(
       (plan.notes?.toLowerCase().includes(normalizedQuery) ?? false)
     );
   });
+}
+
+export function previewBatchPlanShiftConflicts(
+  plans: ObservationPlan[],
+  selectedPlanIds: Iterable<string>,
+  shiftDays: number,
+): BatchPlanShiftPreview {
+  const selectedIdSet = new Set(selectedPlanIds);
+  const selectedPlans = plans.filter((plan) => selectedIdSet.has(plan.id));
+  const activePlans = plans.filter((plan) => normalizePlanStatus(plan.status) !== "cancelled");
+  const shiftedPlans = selectedPlans.map((plan) => {
+    const schedule = shiftPlanScheduleByDays(plan, shiftDays);
+    return {
+      originalPlan: plan,
+      planId: plan.id,
+      startDate: schedule.startDate,
+      endDate: schedule.endDate,
+    };
+  });
+
+  const shiftedById = new Map(
+    shiftedPlans
+      .filter((item) => normalizePlanStatus(item.originalPlan.status) !== "cancelled")
+      .map((item) => [
+        item.planId,
+        {
+          ...item.originalPlan,
+          startDate: item.startDate,
+          endDate: item.endDate,
+        },
+      ]),
+  );
+
+  const previewItems = shiftedPlans.map((item) => {
+    if (normalizePlanStatus(item.originalPlan.status) === "cancelled") {
+      return {
+        planId: item.planId,
+        startDate: item.startDate,
+        endDate: item.endDate,
+        conflictIds: [],
+      };
+    }
+
+    const candidate = shiftedById.get(item.planId);
+    const conflictIds =
+      candidate == null
+        ? []
+        : activePlans
+            .filter((other) => other.id !== item.planId)
+            .filter((other) => {
+              const comparison = shiftedById.get(other.id) ?? other;
+              return planTimeRangesOverlap(candidate, comparison);
+            })
+            .map((other) => other.id);
+
+    return {
+      planId: item.planId,
+      startDate: item.startDate,
+      endDate: item.endDate,
+      conflictIds,
+    };
+  });
+
+  const totalConflictLinks = previewItems.reduce((sum, item) => sum + item.conflictIds.length, 0);
+
+  return {
+    shiftedPlans: previewItems,
+    totalConflictingPlans: previewItems.filter((item) => item.conflictIds.length > 0).length,
+    totalConflictLinks,
+  };
 }
 
 export function sortObservationPlans(

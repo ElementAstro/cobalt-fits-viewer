@@ -24,11 +24,25 @@ const mockUnsyncSessionsBatch = jest.fn(async () => ({
   skipped: 0,
   failed: 0,
 }));
+const mockSyncObservationPlansBatch = jest.fn(async () => ({
+  total: 1,
+  success: 1,
+  skipped: 0,
+  failed: 0,
+}));
+const mockUnsyncObservationPlansBatch = jest.fn(async () => ({
+  total: 1,
+  success: 1,
+  skipped: 0,
+  failed: 0,
+}));
 const mockObservationCalendarProps = jest.fn();
 const mockAddSession = jest.fn();
 const mockRemoveSession = jest.fn();
 const mockRemoveMultipleSessions = jest.fn();
 const mockCreateObservationPlan = jest.fn(async () => true);
+const mockUpdateObservationPlan = jest.fn(async () => true);
+const mockDeleteObservationPlan = jest.fn(async () => undefined);
 let mockPlans: Array<Record<string, unknown>> = [];
 let mockSessions: Array<Record<string, unknown>> = [
   {
@@ -115,6 +129,8 @@ jest.mock("../../../hooks/sessions/useCalendar", () => ({
     syncAllSessions: jest.fn(),
     unsyncSessionsBatch: mockUnsyncSessionsBatch,
     refreshSessionsBatch: mockRefreshSessionsBatch,
+    syncObservationPlansBatch: mockSyncObservationPlansBatch,
+    unsyncObservationPlansBatch: mockUnsyncObservationPlansBatch,
     syncAllObservationPlans: jest.fn(),
     refreshSessionFromCalendar: jest.fn(),
     refreshPlanFromCalendar: jest.fn(),
@@ -127,8 +143,8 @@ jest.mock("../../../hooks/sessions/useCalendar", () => ({
     createSessionViaSystemCalendar: jest.fn(),
     createPlanViaSystemCalendar: jest.fn(),
     createObservationPlan: mockCreateObservationPlan,
-    deleteObservationPlan: jest.fn(),
-    updateObservationPlan: jest.fn(),
+    deleteObservationPlan: mockDeleteObservationPlan,
+    updateObservationPlan: mockUpdateObservationPlan,
     syncObservationPlan: jest.fn(),
     unsyncObservationPlan: jest.fn(),
     plans: mockPlans,
@@ -184,13 +200,22 @@ jest.mock("../../../components/sessions/ObservationCalendar", () => ({
 }));
 
 jest.mock("../../../components/sessions/PlanCard", () => ({
-  PlanCard: ({ plan, onLongPress }: { plan: { id: string }; onLongPress?: () => void }) => {
+  PlanCard: ({
+    plan,
+    onPress,
+    onLongPress,
+  }: {
+    plan: { id: string };
+    onPress?: () => void;
+    onLongPress?: () => void;
+  }) => {
     const ReactLocal = require("react");
     const { Pressable, Text } = require("react-native");
     return ReactLocal.createElement(
       Pressable,
       {
         testID: `plan-card-${plan.id}`,
+        onPress,
         onLongPress,
       },
       ReactLocal.createElement(Text, null, plan.id),
@@ -306,6 +331,79 @@ jest.mock("../../../components/sessions/SessionDateSummary", () => ({
   SessionDateSummary: () => null,
 }));
 
+jest.mock("../../../components/sessions/PlanSelectionBar", () => ({
+  PlanSelectionBar: ({
+    onClose,
+    onToggleSelectAll,
+    onShiftOneDay,
+    onShiftOneWeek,
+    onMarkPlanned,
+    onMarkCompleted,
+    onMarkCancelled,
+    onBatchSync,
+    onBatchUnsync,
+    onBatchDelete,
+  }: {
+    onClose: () => void;
+    onToggleSelectAll: () => void;
+    onShiftOneDay: () => void;
+    onShiftOneWeek: () => void;
+    onMarkPlanned: () => void;
+    onMarkCompleted: () => void;
+    onMarkCancelled: () => void;
+    onBatchSync: () => void;
+    onBatchUnsync: () => void;
+    onBatchDelete: () => void;
+  }) => {
+    const ReactLocal = require("react");
+    const { Pressable } = require("react-native");
+    return ReactLocal.createElement(
+      ReactLocal.Fragment,
+      null,
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-close",
+        onPress: onClose,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-select-all",
+        onPress: onToggleSelectAll,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-shift-day",
+        onPress: onShiftOneDay,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-shift-week",
+        onPress: onShiftOneWeek,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-status-planned",
+        onPress: onMarkPlanned,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-status-completed",
+        onPress: onMarkCompleted,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-status-cancelled",
+        onPress: onMarkCancelled,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-batch-sync",
+        onPress: onBatchSync,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-batch-unsync",
+        onPress: onBatchUnsync,
+      }),
+      ReactLocal.createElement(Pressable, {
+        testID: "e2e-action-tabs__plans-selection-delete",
+        onPress: onBatchDelete,
+      }),
+    );
+  },
+}));
+
 const mockSummaryDialogProps = jest.fn();
 jest.mock("../../../components/common/OperationSummaryDialog", () => ({
   OperationSummaryDialog: (props: Record<string, unknown>) => {
@@ -327,6 +425,20 @@ describe("(tabs)/sessions.tsx", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUpdateObservationPlan.mockResolvedValue(true);
+    mockDeleteObservationPlan.mockResolvedValue(undefined);
+    mockSyncObservationPlansBatch.mockResolvedValue({
+      total: 1,
+      success: 1,
+      skipped: 0,
+      failed: 0,
+    });
+    mockUnsyncObservationPlansBatch.mockResolvedValue({
+      total: 1,
+      success: 1,
+      skipped: 0,
+      failed: 0,
+    });
     mockPlans = [];
     mockSessions = [
       {
@@ -424,6 +536,205 @@ describe("(tabs)/sessions.tsx", () => {
 
     expect(mockObservationCalendarProps).not.toHaveBeenCalledWith(
       expect.objectContaining({ compact: true }),
+    );
+  });
+
+  it("filters plans by maintenance queue", () => {
+    mockPlans = [
+      {
+        id: "plan-overdue",
+        title: "Overdue Plan",
+        targetName: "M42",
+        startDate: "2025-01-01T20:00:00.000Z",
+        endDate: "2025-01-01T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 1,
+        status: "planned",
+      },
+      {
+        id: "plan-future",
+        title: "Future Plan",
+        targetName: "M31",
+        startDate: "2099-01-02T20:00:00.000Z",
+        endDate: "2099-01-02T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 2,
+        status: "planned",
+        calendarEventId: "event-future",
+      },
+    ];
+
+    render(<Screen />);
+
+    fireEvent.press(screen.getByText("sessions.planQueueOverdue"));
+
+    expect(screen.getByTestId("plan-card-plan-overdue")).toBeTruthy();
+    expect(screen.queryByTestId("plan-card-plan-future")).toBeNull();
+  });
+
+  it("supports plan multi-select and batch status updates", async () => {
+    mockPlans = [
+      {
+        id: "plan-status",
+        title: "Status Plan",
+        targetName: "M42",
+        startDate: "2026-01-01T20:00:00.000Z",
+        endDate: "2026-01-01T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 1,
+        status: "planned",
+      },
+    ];
+
+    render(<Screen />);
+
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-open-selection"));
+    fireEvent.press(screen.getByTestId("plan-card-plan-status"));
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-selection-status-completed"));
+
+    await waitFor(() => {
+      expect(mockUpdateObservationPlan).toHaveBeenCalledWith("plan-status", {
+        status: "completed",
+      });
+    });
+    expect(screen.getByTestId("summary-dialog-title").props.children).toBe(
+      "sessions.batchUpdatePlans",
+    );
+  });
+
+  it("clears plan selection when filters hide all selected plans", async () => {
+    mockPlans = [
+      {
+        id: "plan-selected",
+        title: "Future Plan",
+        targetName: "M31",
+        startDate: "2099-01-02T20:00:00.000Z",
+        endDate: "2099-01-02T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 1,
+        status: "planned",
+      },
+      {
+        id: "plan-overdue",
+        title: "Overdue Plan",
+        targetName: "M42",
+        startDate: "2025-01-01T20:00:00.000Z",
+        endDate: "2025-01-01T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 2,
+        status: "planned",
+      },
+    ];
+
+    render(<Screen />);
+
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-open-selection"));
+    fireEvent.press(screen.getByTestId("plan-card-plan-selected"));
+    expect(screen.getByTestId("e2e-action-tabs__plans-selection-batch-sync")).toBeTruthy();
+
+    fireEvent.press(screen.getByText("sessions.planQueueOverdue"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("plan-card-plan-selected")).toBeNull();
+      expect(screen.queryByTestId("e2e-action-tabs__plans-selection-batch-sync")).toBeNull();
+    });
+  });
+
+  it("warns before batch reschedule when shifted plans would conflict", () => {
+    mockPlans = [
+      {
+        id: "plan-shift",
+        title: "Shift Plan",
+        targetName: "M42",
+        startDate: "2026-01-01T20:00:00.000Z",
+        endDate: "2026-01-01T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 1,
+        status: "planned",
+      },
+      {
+        id: "plan-existing",
+        title: "Existing Plan",
+        targetName: "M31",
+        startDate: "2026-01-02T21:00:00.000Z",
+        endDate: "2026-01-02T23:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 2,
+        status: "planned",
+      },
+    ];
+
+    render(<Screen />);
+
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-open-selection"));
+    fireEvent.press(screen.getByTestId("plan-card-plan-shift"));
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-selection-shift-day"));
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      "sessions.planBatchConflictTitle",
+      expect.stringContaining("sessions.planBatchConflictMessage"),
+      expect.any(Array),
+    );
+  });
+
+  it("reschedules selected cancelled plans in batch mode", async () => {
+    mockPlans = [
+      {
+        id: "plan-cancelled",
+        title: "Cancelled Plan",
+        targetName: "M42",
+        startDate: "2026-01-01T20:00:00.000Z",
+        endDate: "2026-01-01T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 1,
+        status: "cancelled",
+      },
+    ];
+
+    render(<Screen />);
+
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-open-selection"));
+    fireEvent.press(screen.getByTestId("plan-card-plan-cancelled"));
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-selection-shift-day"));
+
+    await waitFor(() => {
+      expect(mockUpdateObservationPlan).toHaveBeenCalledWith("plan-cancelled", {
+        startDate: "2026-01-02T20:00:00.000Z",
+        endDate: "2026-01-02T22:00:00.000Z",
+      });
+    });
+    expect(screen.getByTestId("summary-dialog-title").props.children).toBe(
+      "sessions.batchReschedulePlans",
+    );
+  });
+
+  it("shows summary dialog for batch plan sync actions", async () => {
+    mockPlans = [
+      {
+        id: "plan-sync",
+        title: "Sync Plan",
+        targetName: "M42",
+        startDate: "2026-01-01T20:00:00.000Z",
+        endDate: "2026-01-01T22:00:00.000Z",
+        reminderMinutes: 30,
+        createdAt: 1,
+        status: "planned",
+      },
+    ];
+
+    render(<Screen />);
+
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-open-selection"));
+    fireEvent.press(screen.getByTestId("plan-card-plan-sync"));
+    fireEvent.press(screen.getByTestId("e2e-action-tabs__plans-selection-batch-sync"));
+
+    await waitFor(() => {
+      expect(mockSyncObservationPlansBatch).toHaveBeenCalledWith([
+        expect.objectContaining({ id: "plan-sync" }),
+      ]);
+    });
+    expect(screen.getByTestId("summary-dialog-title").props.children).toBe(
+      "sessions.batchSyncPlans",
     );
   });
 

@@ -7,6 +7,16 @@ type GlobalAppConfigWarnings = typeof globalThis & {
   __cobaltAppConfigMissingEnvWarned?: Set<string>;
 };
 
+function isAndroidBuildTarget(): boolean {
+  const easPlatform = process.env.EAS_BUILD_PLATFORM?.toLowerCase();
+  if (easPlatform === "android") return true;
+
+  const expoOs = process.env.EXPO_OS?.toLowerCase();
+  if (expoOs === "android") return true;
+
+  return process.argv.some((arg) => arg.toLowerCase().includes("android"));
+}
+
 function warnMissingEnvOnce(envKey: string, message: string): void {
   const globalWithWarnings = globalThis as GlobalAppConfigWarnings;
   const warnedKeys = (globalWithWarnings.__cobaltAppConfigMissingEnvWarned ??= new Set<string>());
@@ -16,7 +26,7 @@ function warnMissingEnvOnce(envKey: string, message: string): void {
   console.warn(message);
 }
 
-if (!googleMapsApiKey) {
+if (!googleMapsApiKey && isAndroidBuildTarget()) {
   // Keep this visible in CI/dev logs for easier diagnosis.
   warnMissingEnvOnce(
     "GOOGLE_MAPS_API_KEY",

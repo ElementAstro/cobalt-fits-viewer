@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react-native";
+import { act, render, screen, waitFor } from "@testing-library/react-native";
 import { AlbumExportSheet } from "../AlbumExportSheet";
 import type { Album, FitsMetadata } from "../../../lib/fits/types";
 
@@ -82,10 +82,30 @@ const makeFile = (id: string): FitsMetadata => ({
   albumIds: [],
 });
 
+async function renderSheet(props: {
+  visible?: boolean;
+  album?: Album | null;
+  files?: FitsMetadata[];
+  onClose?: () => void;
+}) {
+  render(
+    <AlbumExportSheet
+      visible={props.visible ?? true}
+      album={props.album ?? makeAlbum()}
+      files={props.files ?? [makeFile("f1")]}
+      onClose={props.onClose ?? jest.fn()}
+    />,
+  );
+  await act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
+}
+
 describe("AlbumExportSheet", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockExportAlbum.mockResolvedValue(null);
+    mockExportAlbum.mockResolvedValue("/tmp/export.zip");
     mockShareAlbumExport.mockResolvedValue(false);
     mockCleanupExport.mockResolvedValue(undefined);
   });
@@ -98,18 +118,15 @@ describe("AlbumExportSheet", () => {
     expect(toJSON()).toBeNull();
   });
 
-  it("renders album name and image count", () => {
-    mockExportAlbum.mockResolvedValue(null);
+  it("renders album name and image count", async () => {
+    await renderSheet({
+      album: makeAlbum(),
+      files: [makeFile("f1"), makeFile("f2")],
+    });
 
-    render(
-      <AlbumExportSheet
-        visible
-        album={makeAlbum()}
-        files={[makeFile("f1"), makeFile("f2")]}
-        onClose={jest.fn()}
-      />,
-    );
-
+    await waitFor(() => {
+      expect(mockExportAlbum).toHaveBeenCalledTimes(1);
+    });
     expect(screen.getByText("Orion Nebula")).toBeTruthy();
     expect(screen.getByText("2 images")).toBeTruthy();
   });
@@ -117,20 +134,25 @@ describe("AlbumExportSheet", () => {
   it("starts export when visible with album", async () => {
     mockExportAlbum.mockResolvedValue("/tmp/export.zip");
 
-    render(
-      <AlbumExportSheet visible album={makeAlbum()} files={[makeFile("f1")]} onClose={jest.fn()} />,
-    );
+    await renderSheet({
+      album: makeAlbum(),
+      files: [makeFile("f1")],
+    });
 
     await waitFor(() => {
       expect(mockExportAlbum).toHaveBeenCalled();
     });
   });
 
-  it("shows done button", () => {
-    render(
-      <AlbumExportSheet visible album={makeAlbum()} files={[makeFile("f1")]} onClose={jest.fn()} />,
-    );
+  it("shows done button", async () => {
+    await renderSheet({
+      album: makeAlbum(),
+      files: [makeFile("f1")],
+    });
 
+    await waitFor(() => {
+      expect(mockExportAlbum).toHaveBeenCalledTimes(1);
+    });
     expect(screen.getByText("Done")).toBeTruthy();
   });
 });
